@@ -2,7 +2,7 @@
 // @name         SCR Mgr Assistant Toolbar BETA
 // @namespace    scrmgrassistant
 // @copyright    Copyright © 2024 by Ryan Morrissey
-// @version      27.0.0.1B
+// @version      27.0.0.3B
 // @description  Adds an Assistant Toolbar with interactive buttons to all SC Request forms.
 // @icon         https://cdn0.iconfinder.com/data/icons/phosphor-bold-vol-3-1/256/lifebuoy-duotone-512.png
 // @tag          productivity
@@ -28,6 +28,7 @@
 // @grant        GM.setValue
 // @grant        GM_registerMenuCommand
 // @grant        GM_setClipboard
+// @grant        GM_openInTab
 // @run-at       document-idle
 // @downloadURL  https://github.com/mcanderson14/ns_scm_tools_fy27/raw/main/scm-toolbar.js
 // @updateURL    https://github.com/mcanderson14/ns_scm_tools_fy27/raw/main/scm-toolbar.js
@@ -35,7 +36,7 @@
 // ==/UserScript==
 
 /* globals $, jQuery */
-/* globals GM_config, GM_SuperValue, waitForKeyElements, GM_setClipboard */
+/* globals GM_config, GM_SuperValue, waitForKeyElements, GM_setClipboard, GM_openInTab */
 /* globals nlapiSearchRecord, nlapiGetFieldValue, nlapiSetFieldValue, nlapiGetFieldValues, nlapiSetFieldValues, nlapiGetUser, nlobjSearchFilter, nlobjSearchColumn, nlapiStringToDate */
 
 /**
@@ -58,6 +59,8 @@ const SCRIPT_ID = `${SCRIPT_PREFIX}assistant_config`;
 const SCRIPT_CACHE_ID = `${SCRIPT_PREFIX}people_cache`;
 const SCRIPT_VERSION = GM_info.script.version;
 const CONFIG_TITLE = `${GM_info.script.name} (v${SCRIPT_VERSION})`;
+const CALENDAR_DASHBOARD_DEFAULT_URL =
+	"file:///Users/michaean/Documents/Outlook%20Calendar%20Project%20-%20JPK/staffing-dashboard.html";
 
 /**
  * Simple wrapper for console logging
@@ -214,6 +217,13 @@ var shout = (function () {
 			label: "AI Staffing",
 			type: "checkbox",
 			default: false,
+		},
+		calendarDashboardUrl: {
+			label: "Calendar dashboard URL",
+			type: "text",
+			size: 100,
+			default: CALENDAR_DASHBOARD_DEFAULT_URL,
+			section: ["Integrations", "Configure external tools launched from the assistant bar."],
 		},
 		forceRefreshCache: {
 			label: "Force cache refresh",
@@ -643,6 +653,7 @@ var shout = (function () {
 			cacheRefreshDelay: gmc.get("cacheRefreshDelay"),
 			forceRefreshCache: gmc.get("forceRefreshCache"),
 			aiStaffing: gmc.get("aiStaffing"),
+			calendarDashboardUrl: gmc.get("calendarDashboardUrl"),
 			cacheDateTime: gmc.get("cacheDateTime"),
 			hashtags: gmc.get("hashtags"),
 		};
@@ -1267,6 +1278,10 @@ var shout = (function () {
                                     <button type="button" class="ui tiny blue labeled icon button" id="copycalendarprompt">
                                         <i class="calendar alternate outline icon"></i>
                                         Copy Outlook Availability Prompt
+                                    </button>
+                                    <button type="button" class="ui tiny teal labeled icon button" id="opencalendardashboard">
+                                        <i class="calendar check outline icon"></i>
+                                        Open Calendar Dashboard
                                     </button>
                                     <span id="calendarpromptstatus" style="margin-left:8px;color:#666;"></span>
                                 </div>
@@ -2511,10 +2526,13 @@ var shout = (function () {
 			// Calculate the stack rank percentage for each employee
 			let rankedEmployees = Object.entries(aggregatedScores).map(([employee, data]) => {
 				const percentage = (data.weightedRating / maxRating) * 100;
+				const cachedSc = getCachedScById(data.employeeId);
+				const cachedScByName = !cachedSc.email ? getCachedScByName(employee) : {};
 
 				return {
 					employee: employee,
 					employeeId: data.employeeId,
+					email: cachedSc.email || cachedScByName.email || "",
 					manager: data.manager,
 					availability: data.availability,
 					availabilityRanking: availabilityRanking(data.availability),
@@ -2731,12 +2749,21 @@ var shout = (function () {
 				const row = /* syntax: html */ `
                     <tr>
                         <td class="center aligned tableSkillsAssign">
-                            <button class="ui mini primary icon button" data-eid="${
+                            <button class="ui mini primary icon button tableSkillsAssignButton" data-eid="${
 															data[i]["employeeId"]
 														}" data-ename="${
 															data[i]["employee"]
 														}" data-tooltip="Assign user to request" data-position="right center">
                                 <i class="plus icon"></i>
+                            </button>
+                            <button class="ui mini teal icon button tableSkillsCalendarButton" data-eid="${
+															data[i]["employeeId"]
+														}" data-ename="${
+															data[i]["employee"]
+														}" data-email="${
+															data[i]["email"] || ""
+														}" data-tooltip="Open calendar dashboard" data-position="right center">
+                                <i class="calendar check outline icon"></i>
                             </button>
                         </td>
                         <td>
@@ -2828,6 +2855,10 @@ var shout = (function () {
 		}
 
 		function convertNameFormat(name) {
+			if (!name || !String(name).includes(",")) {
+				return String(name || "").trim();
+			}
+
 			// Split the string by the comma and trim any extra spaces
 			let [lastname, firstname] = name.split(",").map((part) => part.trim());
 
@@ -2868,7 +2899,7 @@ var shout = (function () {
 				$(".ui.rating").rating();
 
 				// Update link events
-				$(".tableSkillsAssign button").click(function (event) {
+				$(".tableSkillsAssignButton").click(function (event) {
 					event.preventDefault();
 
 					var eid = $(this).data("eid");
@@ -2889,6 +2920,22 @@ var shout = (function () {
 					$("#solutionconsultant").dropdown("set selected", eid);
 
 					shout("Add employee to dropdown:", `${ename} (${eid})`);
+				});
+
+				$(".tableSkillsCalendarButton").click(function (event) {
+					event.preventDefault();
+
+					var eid = $(this).data("eid");
+					var ename = convertNameFormat($(this).data("ename"));
+					var email = $(this).data("email") || "";
+					var cachedSc = getCachedScById(eid);
+					var cachedScByName = !email && !cachedSc.email ? getCachedScByName(ename) : {};
+
+					openCalendarDashboard({
+						id: eid,
+						name: ename,
+						email: email || cachedSc.email || cachedScByName.email || "",
+					});
 				});
 
 				sleep(1000, function () {
@@ -3542,6 +3589,28 @@ var shout = (function () {
 			$("#scr-modal-request-form").modal("show");
 		}
 
+		function getCachedScById(id) {
+			const cache = getPeopleCache() || [];
+			return cache.find((sc) => String(sc.value) === String(id)) || {};
+		}
+
+		function getCachedScByName(name) {
+			const cache = getPeopleCache() || [];
+			const cleanName = String(name || "").toLowerCase();
+
+			return (
+				cache.find((sc) => {
+					const candidateName = $("<div>")
+						.html(String(sc.name || ""))
+						.text()
+						.replace(/\s*\(based in .*?\)\s*$/i, "")
+						.trim()
+						.toLowerCase();
+					return candidateName === cleanName;
+				}) || {}
+			);
+		}
+
 		function getSelectedScForCalendar() {
 			const value = $("#solutionconsultant").dropdown("get value");
 
@@ -3553,8 +3622,7 @@ var shout = (function () {
 				};
 			}
 
-			const cache = getPeopleCache() || [];
-			const match = cache.find((sc) => String(sc.value) === String(value)) || {};
+			const match = getCachedScById(value);
 			const displayText = match.name || $("#solutionconsultant").dropdown("get text") || "";
 			const cleanName = $("<div>")
 				.html(String(displayText))
@@ -3567,6 +3635,36 @@ var shout = (function () {
 				name: cleanName,
 				email: match.email || "",
 			};
+		}
+
+		function dateToDashboardIso(dateObj) {
+			if (!(dateObj instanceof Date) || isNaN(dateObj.valueOf())) {
+				return "";
+			}
+
+			return [
+				dateObj.getFullYear(),
+				("0" + (dateObj.getMonth() + 1)).slice(-2),
+				("0" + dateObj.getDate()).slice(-2),
+			].join("-");
+		}
+
+		function getDateNeededIsoForDashboard() {
+			const dateObj = $("#dateneeded").calendar("get date");
+			const calendarDate = dateToDashboardIso(dateObj);
+
+			if (calendarDate) {
+				return calendarDate;
+			}
+
+			const dateText = $("#dateneeded input").val() || getDateNeeded() || "";
+			const match = String(dateText).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+
+			if (!match) {
+				return "";
+			}
+
+			return [match[3], ("0" + match[1]).slice(-2), ("0" + match[2]).slice(-2)].join("-");
 		}
 
 		function getDateNeededForPrompt() {
@@ -3626,6 +3724,67 @@ var shout = (function () {
 			}
 
 			return navigator.clipboard.writeText(text);
+		}
+
+		function buildCalendarDashboardUrl(context) {
+			const baseUrl = settings.calendarDashboardUrl || CALENDAR_DASHBOARD_DEFAULT_URL;
+			const normalizedBaseUrl = /^[a-z][a-z\d+.-]*:/i.test(baseUrl)
+				? baseUrl
+				: `file://${baseUrl}`;
+			let url;
+
+			try {
+				url = new URL(normalizedBaseUrl, window.location.href);
+			} catch (error) {
+				shout("Invalid calendar dashboard URL configured:", baseUrl);
+				url = new URL(CALENDAR_DASHBOARD_DEFAULT_URL);
+			}
+
+			const date = context.date || getDateNeededIsoForDashboard();
+
+			if (context.email) {
+				url.searchParams.set("consultant", context.email);
+			}
+			if (context.name) {
+				url.searchParams.set("consultantName", context.name);
+			}
+			if (date) {
+				url.searchParams.set("date", date);
+			}
+			if (context.skill) {
+				url.searchParams.set("skill", context.skill);
+			}
+			url.searchParams.set("duration", context.duration || "60");
+			url.searchParams.set("source", "scr-assistant");
+
+			return url.toString();
+		}
+
+		function openUrlInNewTab(url) {
+			if (typeof GM_openInTab === "function") {
+				GM_openInTab(url, {
+					active: true,
+					insert: true,
+					setParent: true,
+				});
+				return;
+			}
+
+			window.open(url, "_blank", "noopener,noreferrer");
+		}
+
+		function openCalendarDashboard(context, statusSelector) {
+			const url = buildCalendarDashboardUrl(context || {});
+			openUrlInNewTab(url);
+
+			if (statusSelector) {
+				const msg = context && (context.email || context.name)
+					? "Opened calendar dashboard."
+					: "Opened dashboard without consultant filter.";
+				$(statusSelector).text(msg);
+			}
+
+			shout("Open calendar dashboard:", url);
 		}
 
 		/**
@@ -3707,6 +3866,18 @@ var shout = (function () {
 					$("#calendarpromptstatus").text("Copy failed; prompt logged to console.");
 					shout("Outlook availability prompt:", prompt);
 				});
+		});
+		$("#opencalendardashboard").click(function (event) {
+			event.preventDefault();
+
+			const sc = getSelectedScForCalendar();
+
+			if (!sc.id) {
+				$("#calendarpromptstatus").text("Choose an SC first.");
+				return;
+			}
+
+			openCalendarDashboard(sc, "#calendarpromptstatus");
 		});
 		$("#_searchindustrylink").click(function (event) {
 			event.preventDefault();
