@@ -2,7 +2,7 @@
 // @name         SCR Mgr Assistant Toolbar BETA
 // @namespace    scrmgrassistant
 // @copyright    Copyright © 2024 by Ryan Morrissey
-// @version      27.0.0.13B
+// @version      27.0.0.14B
 // @description  Adds an Assistant Toolbar with interactive buttons to all SC Request forms.
 // @icon         https://cdn0.iconfinder.com/data/icons/phosphor-bold-vol-3-1/256/lifebuoy-duotone-512.png
 // @tag          productivity
@@ -4440,6 +4440,54 @@ window.DIRECT_CONNECTOR_AVAILABILITY.push(${JSON.stringify({ email: focusEmail, 
       });
       document.getElementById("copyDebugButton")?.addEventListener("click", copyDebugConsole);`,
 			);
+			if (!html.includes("function addCalendarDataRosterEntries")) {
+				html = html.replace(
+					"function parseLaunchStart(value) {",
+					`function inferRosterNameFromEmail(email) {
+      const knownNames = {
+        "eric.baghdasarian@oracle.com": "Eric Baghdasarian"
+      };
+      const normalized = String(email || "").trim().toLowerCase();
+      if (knownNames[normalized]) return knownNames[normalized];
+
+      const localPart = normalized.split("@")[0] || normalized;
+      return localPart
+        .split(/[._-]+/)
+        .filter(Boolean)
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ") || normalized;
+    }
+
+    function addCalendarDataRosterEntries() {
+      const emails = new Set();
+
+      DIRECT_CONNECTOR_LOADED_EMAILS.forEach(email => emails.add(String(email || "").trim().toLowerCase()));
+      DIRECT_CONNECTOR_AVAILABILITY.forEach(snapshot => emails.add(String(snapshot.email || "").trim().toLowerCase()));
+      DIRECT_CONNECTOR_EVENTS.forEach(event => emails.add(String(event.email || "").trim().toLowerCase()));
+      embeddedEvents.forEach(event => emails.add(String(event.email || "").trim().toLowerCase()));
+
+      emails.forEach(email => {
+        if (!email || rosterByEmail[email]) return;
+
+        addRuntimeRosterPerson({
+          name: inferRosterNameFromEmail(email),
+          email,
+          team: "Calendar Data",
+          legacyOrg: "Direct",
+          source: "Calendar data"
+        });
+      });
+    }
+
+    function parseLaunchStart(value) {`,
+				);
+			}
+			if (!html.includes("addCalendarDataRosterEntries();")) {
+				html = html.replace(
+					"populateTimeOptions();\n    configureDateWindow();\n    populatePersonFilter();",
+					"addCalendarDataRosterEntries();\n    populateTimeOptions();\n    configureDateWindow();\n    populatePersonFilter();",
+				);
+			}
 
 			const launchSearch = new URL(url).search;
 			const dashboardRoster = buildCalendarDashboardRoster(context);

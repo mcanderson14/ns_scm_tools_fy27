@@ -9200,6 +9200,42 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       return normalized;
     }
 
+    function inferRosterNameFromEmail(email) {
+      const knownNames = {
+        "eric.baghdasarian@oracle.com": "Eric Baghdasarian"
+      };
+      const normalized = String(email || "").trim().toLowerCase();
+      if (knownNames[normalized]) return knownNames[normalized];
+
+      const localPart = normalized.split("@")[0] || normalized;
+      return localPart
+        .split(/[._-]+/)
+        .filter(Boolean)
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ") || normalized;
+    }
+
+    function addCalendarDataRosterEntries() {
+      const emails = new Set();
+
+      DIRECT_CONNECTOR_LOADED_EMAILS.forEach(email => emails.add(String(email || "").trim().toLowerCase()));
+      DIRECT_CONNECTOR_AVAILABILITY.forEach(snapshot => emails.add(String(snapshot.email || "").trim().toLowerCase()));
+      DIRECT_CONNECTOR_EVENTS.forEach(event => emails.add(String(event.email || "").trim().toLowerCase()));
+      embeddedEvents.forEach(event => emails.add(String(event.email || "").trim().toLowerCase()));
+
+      emails.forEach(email => {
+        if (!email || rosterByEmail[email]) return;
+
+        addRuntimeRosterPerson({
+          name: inferRosterNameFromEmail(email),
+          email,
+          team: "Calendar Data",
+          legacyOrg: "Direct",
+          source: "Calendar data"
+        });
+      });
+    }
+
     function parseLaunchStart(value) {
       if (!value) return "";
       const text = String(value).trim();
@@ -9325,6 +9361,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       document.getElementById("searchFilter").addEventListener("input", renderEvents);
     }
 
+    addCalendarDataRosterEntries();
     populateTimeOptions();
     configureDateWindow();
     populatePersonFilter();
