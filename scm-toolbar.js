@@ -2,7 +2,7 @@
 // @name         SCR Mgr Assistant Toolbar BETA
 // @namespace    scrmgrassistant
 // @copyright    Copyright © 2024 by Ryan Morrissey
-// @version      27.0.0.8B
+// @version      27.0.0.9B
 // @description  Adds an Assistant Toolbar with interactive buttons to all SC Request forms.
 // @icon         https://cdn0.iconfinder.com/data/icons/phosphor-bold-vol-3-1/256/lifebuoy-duotone-512.png
 // @tag          productivity
@@ -3952,40 +3952,52 @@ var shout = (function () {
 				`<script>\n${eventsScript}\n</script>`,
 			);
 
-			html = html.replace(
-				"new URLSearchParams(window.location.search)",
-				"new URLSearchParams(window.SCR_ASSISTANT_LAUNCH_SEARCH || window.location.search)",
-			);
-			html = html.replace(
-				"DIRECT_CONNECTOR_AVAILABILITY.forEach(snapshot => {",
-				`(window.SCR_ASSISTANT_FOCUS_EMAIL
+			if (!html.includes("SCR_ASSISTANT_LAUNCH_SEARCH || window.location.search")) {
+				html = html.replace(
+					"new URLSearchParams(window.location.search)",
+					"new URLSearchParams(window.SCR_ASSISTANT_LAUNCH_SEARCH || window.location.search)",
+				);
+			}
+			if (!html.includes("DIRECT_CONNECTOR_AVAILABILITY.filter(snapshot => String(snapshot.email")) {
+				html = html.replace(
+					"DIRECT_CONNECTOR_AVAILABILITY.forEach(snapshot => {",
+					`(window.SCR_ASSISTANT_FOCUS_EMAIL
         ? DIRECT_CONNECTOR_AVAILABILITY.filter(snapshot => String(snapshot.email || "").toLowerCase() === window.SCR_ASSISTANT_FOCUS_EMAIL)
         : DIRECT_CONNECTOR_AVAILABILITY
       ).forEach(snapshot => {`,
-			);
-			html = html.replace(
-				"return [...embeddedEvents, ...DIRECT_CONNECTOR_EVENTS, ...expandConnectorAvailability()]",
-				`const focusEmail = window.SCR_ASSISTANT_FOCUS_EMAIL || "";
+				);
+			}
+			if (!html.includes(".filter(event => !focusEmail || String(event.email")) {
+				html = html.replace(
+					"return [...embeddedEvents, ...DIRECT_CONNECTOR_EVENTS, ...expandConnectorAvailability()]",
+					`const focusEmail = window.SCR_ASSISTANT_FOCUS_EMAIL || "";
       return [...embeddedEvents, ...DIRECT_CONNECTOR_EVENTS, ...expandConnectorAvailability()]
         .filter(event => !focusEmail || String(event.email || "").toLowerCase() === focusEmail)`,
-			);
-			html = html.replace(
-				"rawEvents = cached.events;",
-				`const focusEmail = window.SCR_ASSISTANT_FOCUS_EMAIL || "";
+				);
+			}
+			if (!html.includes("cached.events.filter(event => String(event.email")) {
+				html = html.replace(
+					"rawEvents = cached.events;",
+					`const focusEmail = window.SCR_ASSISTANT_FOCUS_EMAIL || "";
         rawEvents = focusEmail
           ? cached.events.filter(event => String(event.email || "").toLowerCase() === focusEmail)
           : cached.events;`,
-			);
-			html = html.replace(
-				"writeCalendarCache(rawEvents, lastRefreshAt.toISOString());",
-				`if (!window.SCR_ASSISTANT_FOCUS_EMAIL) {
+				);
+			}
+			if (!html.includes("if (!window.SCR_ASSISTANT_FOCUS_EMAIL)")) {
+				html = html.replace(
+					"writeCalendarCache(rawEvents, lastRefreshAt.toISOString());",
+					`if (!window.SCR_ASSISTANT_FOCUS_EMAIL) {
           writeCalendarCache(rawEvents, lastRefreshAt.toISOString());
         }`,
-			);
-			html = html.replace(
-				"populatePersonFilter();\n    refreshCalendarData();\n    loadSkillCache();\n    applyLaunchParams();",
-				"populatePersonFilter();\n    loadSkillCache();\n    applyLaunchParams();\n    refreshCalendarData();",
-			);
+				);
+			}
+			if (html.includes("populatePersonFilter();\n    refreshCalendarData();\n    loadSkillCache();\n    applyLaunchParams();")) {
+				html = html.replace(
+					"populatePersonFilter();\n    refreshCalendarData();\n    loadSkillCache();\n    applyLaunchParams();",
+					"populatePersonFilter();\n    loadSkillCache();\n    applyLaunchParams();\n    refreshCalendarData();",
+				);
+			}
 
 			const launchSearch = new URL(url).search;
 			const dashboardRoster = buildCalendarDashboardRoster(context);
