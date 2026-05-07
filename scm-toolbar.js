@@ -2,7 +2,7 @@
 // @name         SCR Mgr Assistant Toolbar BETA
 // @namespace    scrmgrassistant
 // @copyright    Copyright © 2024 by Ryan Morrissey
-// @version      27.0.0.6B
+// @version      27.0.0.7B
 // @description  Adds an Assistant Toolbar with interactive buttons to all SC Request forms.
 // @icon         https://cdn0.iconfinder.com/data/icons/phosphor-bold-vol-3-1/256/lifebuoy-duotone-512.png
 // @tag          productivity
@@ -3801,6 +3801,135 @@ var shout = (function () {
 			return url.toString();
 		}
 
+		function getCleanCalendarRosterName(name) {
+			return $("<div>")
+				.html(String(name || ""))
+				.text()
+				.replace(/\s*\(based in .*?\)\s*$/i, "")
+				.trim();
+		}
+
+		function getCalendarRosterLocation(name) {
+			const match = String(name || "").match(/\(based in ([^)]+)\)/i);
+			return match ? match[1] : "";
+		}
+
+		function guessCalendarTimeZone(location) {
+			const text = String(location || "").toUpperCase();
+
+			if (/(^|[-\s])(CA|WA|OR|NV|AK|HI)(\b|[-\s])/.test(text)) {
+				return "America/Los_Angeles";
+			}
+			if (/(^|[-\s])(TX|IL|WI|MN|IA|MO|KS|NE|ND|SD|OK|AR|LA|MS|AL|TN)(\b|[-\s])/.test(text)) {
+				return "America/Chicago";
+			}
+			if (/(^|[-\s])(AZ|CO|ID|MT|NM|UT|WY)(\b|[-\s])/.test(text)) {
+				return "America/Denver";
+			}
+
+			return "America/New_York";
+		}
+
+		function getCalendarDashboardPeopleData() {
+			var people = [];
+			var filters = [];
+
+			filters.push(new nlobjSearchFilter("custrecord_emproster_rosterstatus", null, "is", 1));
+			filters.push(new nlobjSearchFilter("custrecord_emproster_eminactive", null, "is", "F"));
+			filters.push(new nlobjSearchFilter("custrecord_emproster_sales_qb", null, "is", 25));
+			filters.push(new nlobjSearchFilter("custrecord_emproster_rdept", null, "is", 482));
+
+			var columns = [];
+			columns.push(new nlobjSearchColumn("custrecord_emproster_firstname"));
+			columns.push(new nlobjSearchColumn("custrecord_emproster_lastname"));
+			columns.push(new nlobjSearchColumn("custrecord_emproster_olocation"));
+			columns.push(new nlobjSearchColumn("custrecord_emproster_salesteam"));
+			columns.push(new nlobjSearchColumn("custrecord_emproster_vertical_amo"));
+			columns.push(new nlobjSearchColumn("email", "custrecord_emproster_emp"));
+
+			try {
+				var results = nlapiSearchRecord("customrecord_emproster", null, filters, columns);
+
+				if (!results || results.length < 1) {
+					return people;
+				}
+
+				for (var i = 0; i < results.length; i++) {
+					const first = results[i].getValue("custrecord_emproster_firstname") || "";
+					const last = results[i].getValue("custrecord_emproster_lastname") || "";
+					const location = extractLocationString(results[i].getText("custrecord_emproster_olocation") || "");
+
+					people.push({
+						name: `${first} ${last}`.trim(),
+						email: results[i].getValue("email", "custrecord_emproster_emp"),
+						location: location,
+						team: results[i].getText("custrecord_emproster_salesteam") || "NetSuite SCs",
+						legacyOrg: results[i].getText("custrecord_emproster_vertical_amo") || "NetSuite",
+						timeZone: guessCalendarTimeZone(location),
+					});
+				}
+			} catch (error) {
+				shout("Unable to build full calendar dashboard roster:", error);
+			}
+
+			return people;
+		}
+
+		function buildCalendarDashboardRoster(context = {}) {
+			const roster = [];
+			const seen = new Set();
+
+			function addPerson(person) {
+				const email = String(person.email || "").trim().toLowerCase();
+
+				if (!email || seen.has(email)) {
+					return;
+				}
+
+				const location = person.location || "";
+				seen.add(email);
+				roster.push({
+					name: person.name || email,
+					email: email,
+					team: person.team || "NetSuite SCs",
+					legacyOrg: person.legacyOrg || "NetSuite",
+					location: location || "Unknown",
+					timeZone: person.timeZone || guessCalendarTimeZone(location),
+				});
+			}
+
+			const dashboardPeople = getCalendarDashboardPeopleData();
+
+			dashboardPeople.forEach((person) => {
+				addPerson(person);
+			});
+
+			if (!dashboardPeople.length) {
+				shout("Falling back to filtered SC cache for calendar dashboard roster.");
+			}
+
+			(!dashboardPeople.length ? getPeopleCache() || [] : []).forEach((person) => {
+				const cleanName = getCleanCalendarRosterName(person.name);
+				const location = getCalendarRosterLocation(person.name);
+
+				addPerson({
+					name: cleanName,
+					email: person.email,
+					location: location,
+				});
+			});
+
+			if (context.email) {
+				addPerson({
+					name: context.name || context.email,
+					email: context.email,
+					location: context.location || "",
+				});
+			}
+
+			return roster;
+		}
+
 		function getCalendarDashboardResourceText(resourceName) {
 			try {
 				return GM_getResourceText(resourceName);
@@ -3810,7 +3939,7 @@ var shout = (function () {
 			}
 		}
 
-		function buildEmbeddedCalendarDashboardHtml(url) {
+		function buildEmbeddedCalendarDashboardHtml(url, context = {}) {
 			let html = getCalendarDashboardResourceText("CALENDAR_DASHBOARD_HTML");
 			const eventsScript = getCalendarDashboardResourceText("CALENDAR_DASHBOARD_EVENTS");
 
@@ -3829,7 +3958,54 @@ var shout = (function () {
 			);
 
 			const launchSearch = new URL(url).search;
-			const launchScript = `<script>window.SCR_ASSISTANT_LAUNCH_SEARCH = ${JSON.stringify(launchSearch)};</script>`;
+			const dashboardRoster = buildCalendarDashboardRoster(context);
+			const launchScript = `<script>
+window.SCR_ASSISTANT_LAUNCH_SEARCH = ${JSON.stringify(launchSearch)};
+window.SCR_ASSISTANT_ROSTER = ${JSON.stringify(dashboardRoster)};
+</script>`;
+			const rosterMergeScript = `
+    if (Array.isArray(window.SCR_ASSISTANT_ROSTER)) {
+      const rosterIndexByEmail = new Map(roster.map((person, index) => [String(person.email || "").toLowerCase(), index]));
+      window.SCR_ASSISTANT_ROSTER.forEach(person => {
+        const email = String(person.email || "").trim().toLowerCase();
+        if (!email) return;
+
+        const normalized = {
+          name: person.name || email,
+          email,
+          team: person.team || "NetSuite SCs",
+          legacyOrg: person.legacyOrg || "NetSuite",
+          location: person.location || "Unknown",
+          timeZone: person.timeZone || "America/New_York"
+        };
+        const existingIndex = rosterIndexByEmail.get(email);
+
+        if (existingIndex === undefined) {
+          rosterIndexByEmail.set(email, roster.length);
+          roster.push(normalized);
+        } else {
+          roster[existingIndex] = { ...roster[existingIndex], ...normalized };
+        }
+      });
+
+      const addFilterOption = (id, value, label) => {
+        const select = document.getElementById(id);
+        if (!select || !value || Array.from(select.options).some(option => option.value === value)) return;
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label || value;
+        select.appendChild(option);
+      };
+      [...new Set(roster.map(person => person.team).filter(Boolean))].forEach(team => {
+        addFilterOption("teamFilter", team, team.startsWith("Team ") ? team : "Team " + team);
+      });
+      [...new Set(roster.map(person => person.legacyOrg).filter(Boolean))].forEach(org => {
+        addFilterOption("legacyOrgFilter", org, org);
+      });
+    }
+`;
+
+			html = html.replace(/\n\s*const rosterByEmail =/, `\n${rosterMergeScript}\n    const rosterByEmail =`);
 
 			if (html.includes("</head>")) {
 				return html.replace("</head>", `${launchScript}\n</head>`);
@@ -3839,7 +4015,7 @@ var shout = (function () {
 		}
 
 		function openEmbeddedCalendarDashboard(url, options = {}) {
-			const html = buildEmbeddedCalendarDashboardHtml(url);
+			const html = buildEmbeddedCalendarDashboardHtml(url, options.context || {});
 
 			if (!html) {
 				return false;
@@ -3942,6 +4118,7 @@ var shout = (function () {
 			);
 			const embeddedOpened = openEmbeddedCalendarDashboard(url, {
 				returnToQuickAssign: returnToQuickAssign,
+				context: context || {},
 			});
 
 			if (embeddedOpened) {

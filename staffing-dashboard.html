@@ -8909,6 +8909,47 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       return true;
     }
 
+    function ensureSelectValue(id, value, label) {
+      const select = document.getElementById(id);
+      if (!select || value == null || value === "") return false;
+      const text = String(value);
+
+      if (!Array.from(select.options).some(item => item.value === text)) {
+        const option = document.createElement("option");
+        option.value = text;
+        option.textContent = label || text;
+        select.appendChild(option);
+      }
+
+      select.value = text;
+      return true;
+    }
+
+    function addRuntimeRosterPerson(person) {
+      const email = String(person.email || "").trim().toLowerCase();
+      if (!email) return null;
+
+      const existing = rosterByEmail[email];
+      if (existing) {
+        Object.assign(existing, person, { email });
+        return existing;
+      }
+
+      const normalized = {
+        name: person.name || email,
+        email,
+        team: person.team || "Requested",
+        legacyOrg: person.legacyOrg || "Requested",
+        location: person.location || "Unknown",
+        timeZone: person.timeZone || "America/New_York"
+      };
+      roster.push(normalized);
+      rosterByEmail[email] = normalized;
+      ensureSelectValue("teamFilter", normalized.team, normalized.team.startsWith("Team ") ? normalized.team : `Team ${normalized.team}`);
+      ensureSelectValue("legacyOrgFilter", normalized.legacyOrg, normalized.legacyOrg);
+      return normalized;
+    }
+
     function parseLaunchStart(value) {
       if (!value) return "";
       const text = String(value).trim();
@@ -8934,7 +8975,17 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       }
 
       if (consultantName) {
-        return roster.find(person => canonicalName(person.name) === canonicalName(consultantName));
+        const matchByLaunchName = roster.find(person => canonicalName(person.name) === canonicalName(consultantName));
+        if (matchByLaunchName) return matchByLaunchName;
+      }
+
+      if (consultant && consultant.includes("@")) {
+        return addRuntimeRosterPerson({
+          name: consultantName || consultant,
+          email: consultant,
+          team: "Requested",
+          legacyOrg: "Requested"
+        });
       }
 
       return null;
@@ -8947,14 +8998,14 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const launchedPerson = findLaunchPerson(params);
 
       if (launchedPerson) {
-        document.getElementById("teamFilter").value = launchedPerson.team;
-        document.getElementById("legacyOrgFilter").value = launchedPerson.legacyOrg;
+        ensureSelectValue("teamFilter", launchedPerson.team, launchedPerson.team.startsWith("Team ") ? launchedPerson.team : `Team ${launchedPerson.team}`);
+        ensureSelectValue("legacyOrgFilter", launchedPerson.legacyOrg, launchedPerson.legacyOrg);
         populatePersonFilter();
         document.getElementById("personFilter").value = launchedPerson.email;
         document.getElementById("planningZone").value = launchedPerson.timeZone;
       } else {
-        setSelectValue("teamFilter", params.get("team"));
-        setSelectValue("legacyOrgFilter", params.get("legacyOrg"));
+        ensureSelectValue("teamFilter", params.get("team"), params.get("team"));
+        ensureSelectValue("legacyOrgFilter", params.get("legacyOrg"), params.get("legacyOrg"));
         populatePersonFilter();
         setSelectValue("personFilter", params.get("consultant") || params.get("person") || params.get("email"));
       }
