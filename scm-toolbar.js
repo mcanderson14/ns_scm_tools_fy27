@@ -2,7 +2,7 @@
 // @name         SCR Mgr Assistant Toolbar BETA
 // @namespace    scrmgrassistant
 // @copyright    Copyright © 2024 by Ryan Morrissey
-// @version      27.0.0.26B
+// @version      27.0.0.29B
 // @description  Adds an Assistant Toolbar with interactive buttons to all SC Request forms.
 // @icon         https://cdn0.iconfinder.com/data/icons/phosphor-bold-vol-3-1/256/lifebuoy-duotone-512.png
 // @tag          productivity
@@ -4606,19 +4606,19 @@ window.DIRECT_CONNECTOR_AVAILABILITY.push(${JSON.stringify({ email: focusEmail, 
     }
 
     function missingCalendarLabel(person) {
-      return isFocusedConsultant(person) ? "Getting calendar info" : "Snapshot gap";
+      return isFocusedConsultant(person) ? "Needs connector import" : "Snapshot gap";
     }
 
     function missingCalendarSentence(person) {
       if (isFocusedConsultant(person)) {
-        return \`Getting calendar information for \${person.name || person.email}. This focused refresh only targets this consultant before treating the window as open time.\`;
+        return \`No Outlook connector data has been imported for \${person.name || person.email}. Import this consultant's calendar data before treating this as open time.\`;
       }
 
       return "This consultant still needs 3-week Outlook snapshot data before treating this as open time.";
     }
 
     function missingCalendarSubtle(person) {
-      return isFocusedConsultant(person) ? "getting calendar information" : "calendar not loaded";
+      return isFocusedConsultant(person) ? "connector import needed" : "calendar not loaded";
     }
 
     function refreshCalendarData(options = {}) {`,
@@ -4758,14 +4758,14 @@ window.DIRECT_CONNECTOR_AVAILABILITY.push(${JSON.stringify({ email: focusEmail, 
         logCalendarActivity("no-calendar-records-found", {
           focusEmail: focusEmail || "",
           selectedEmails: selectedEmailList,
-          note: "No bundled snapshot, direct connector event, free/busy availability, or cache records were found for this refresh scope."
+          note: "No local bundled snapshot, imported Outlook connector event, free/busy availability snapshot, or cache records were found for this refresh scope."
         });
       }
       renderRefreshState();`,
 				);
 			html = html.replace(
 				`likelyIssue = "The consultant is in the roster, but no calendar snapshot, direct connector events, free/busy availability, or cache records exist for this email.";`,
-				`likelyIssue = "The consultant is in the roster and the focused refresh ran, but no calendar snapshot, direct connector events, free/busy availability, or cache records exist for this email yet. See activityLog for the refresh steps.";`,
+				`likelyIssue = "The consultant is in the roster, but no local snapshot, imported Outlook connector events, free/busy availability snapshot, or cache records exist for this email yet. Import this consultant's Outlook calendar data and reload the dashboard.";`,
 			);
 			html = html.replace(
 				`const debugEmail = focusEmail || selectedEmail;`,
@@ -4780,6 +4780,123 @@ window.DIRECT_CONNECTOR_AVAILABILITY.push(${JSON.stringify({ email: focusEmail, 
         },
         activityLog: calendarActivityLog,
         likelyIssue`,
+				);
+			}
+			if (!html.includes("missing-selected-consultants")) {
+				html = html.replace(
+					"</body>",
+					`<script>
+(function () {
+  if (typeof normalizeEmail !== "function" || typeof getLaunchSelectedEmails !== "function") return;
+
+  function runtimeSelectedEmails() {
+    return getLaunchSelectedEmails().filter(Boolean);
+  }
+
+  function runtimeRecordCount(records, email) {
+    return typeof countCalendarRecordsForEmail === "function"
+      ? countCalendarRecordsForEmail(records, email)
+      : 0;
+  }
+
+  const originalHasLoadedCalendar = hasLoadedCalendar;
+  hasLoadedCalendar = function (person) {
+    const email = normalizeEmail(person && person.email);
+    return Boolean(email) && (
+      originalHasLoadedCalendar(person)
+      || runtimeRecordCount(embeddedEvents, email) > 0
+      || runtimeRecordCount(DIRECT_CONNECTOR_EVENTS, email) > 0
+      || runtimeRecordCount(DIRECT_CONNECTOR_AVAILABILITY, email) > 0
+      || runtimeRecordCount(rawEvents, email) > 0
+    );
+  };
+
+  function runtimeIsSelectedLaunchConsultant(person) {
+    const email = normalizeEmail(person && person.email);
+    return Boolean(email && runtimeSelectedEmails().includes(email));
+  }
+
+  function runtimeIsPendingSelected(person) {
+    return Boolean(person && !hasLoadedCalendar(person) && (isFocusedConsultant(person) || runtimeIsSelectedLaunchConsultant(person)));
+  }
+
+  const originalMissingCalendarLabel = missingCalendarLabel;
+  missingCalendarLabel = function (person) {
+    return runtimeIsPendingSelected(person) ? "Needs connector import" : originalMissingCalendarLabel(person);
+  };
+
+  const originalMissingCalendarSentence = missingCalendarSentence;
+  missingCalendarSentence = function (person) {
+    return runtimeIsPendingSelected(person)
+      ? \`No Outlook connector data has been imported for \${person.name || person.email}. Import this consultant's calendar data before treating this as open time.\`
+      : originalMissingCalendarSentence(person);
+  };
+
+  const originalMissingCalendarSubtle = missingCalendarSubtle;
+  missingCalendarSubtle = function (person) {
+    return runtimeIsPendingSelected(person) ? "connector import needed" : originalMissingCalendarSubtle(person);
+  };
+
+  function runtimeSelectedConsultants() {
+    const cached = readCalendarCache();
+    return runtimeSelectedEmails().map(email => {
+      const person = rosterByEmail[email] || { name: email, email };
+      return {
+        name: person.name || email,
+        email,
+        manager: person.manager || "",
+        team: person.team || "",
+        legacyOrg: person.legacyOrg || "",
+        location: person.location || "",
+        timeZone: person.timeZone || "",
+        source: typeof getConsultantSource === "function" ? getConsultantSource(person) : "",
+        calendarLoaded: hasLoadedCalendar(person),
+        snapshotLoadedFlag: SNAPSHOT_LOADED_EMAILS.has(email),
+        directConnectorLoadedFlag: DIRECT_CONNECTOR_LOADED_EMAILS.has(email),
+        calendarData: {
+          embeddedEvents: runtimeRecordCount(embeddedEvents, email),
+          directConnectorEvents: runtimeRecordCount(DIRECT_CONNECTOR_EVENTS, email),
+          directConnectorAvailabilitySnapshots: runtimeRecordCount(DIRECT_CONNECTOR_AVAILABILITY, email),
+          cacheEvents: cached ? runtimeRecordCount(cached.events, email) : 0,
+          rawEventsAfterRefresh: runtimeRecordCount(rawEvents, email),
+          normalizedEventsAfterRefresh: runtimeRecordCount(normalizedEvents, email)
+        }
+      };
+    });
+  }
+
+  const originalRefreshCalendarData = refreshCalendarData;
+  refreshCalendarData = function (options = {}) {
+    originalRefreshCalendarData(options);
+    const missing = runtimeSelectedConsultants().filter(item => !item.calendarLoaded);
+    if (missing.length && typeof logCalendarActivity === "function") {
+      logCalendarActivity("missing-selected-consultants", {
+        missingConsultants: missing,
+        note: "One or more selected consultants still have no calendar data even though other selected consultants may have returned records."
+      });
+    }
+  };
+
+  const originalGetCalendarDebugData = getCalendarDebugData;
+  getCalendarDebugData = function () {
+    const debug = originalGetCalendarDebugData();
+    const selectedConsultants = runtimeSelectedConsultants();
+    const missingSelectedConsultants = selectedConsultants.filter(item => !item.calendarLoaded);
+    debug.selectedConsultants = selectedConsultants;
+    debug.missingSelectedConsultants = missingSelectedConsultants;
+    if (!debug.effectiveDebugEmail && selectedConsultants.length) {
+      debug.likelyIssue = missingSelectedConsultants.length
+        ? \`\${missingSelectedConsultants.length} of \${selectedConsultants.length} selected consultants still need calendar data: \${missingSelectedConsultants.map(item => item.name || item.email).join(", ")}. See activityLog for the refresh steps.\`
+        : "Calendar data is present for all selected consultants.";
+    }
+    return debug;
+  };
+
+  refreshCalendarData();
+  renderAll();
+})();
+</script>
+</body>`,
 				);
 			}
 			html = html.replace("Object.assign(existing, person, { email });", `Object.assign(existing, person, { email, source: person.source || existing.source || "Launch parameters" });`);
@@ -4852,10 +4969,10 @@ window.DIRECT_CONNECTOR_AVAILABILITY.push(${JSON.stringify({ email: focusEmail, 
 				html = html.replace(
 					`function missingCalendarSubtle(person) {
       return isFocusedConsultant(person) ? "getting calendar information" : "calendar not loaded";
-    }`,
-					`function missingCalendarSubtle(person) {
-      return isFocusedConsultant(person) ? "getting calendar information" : "calendar not loaded";
-    }
+	    }`,
+						`function missingCalendarSubtle(person) {
+	      return isFocusedConsultant(person) ? "connector import needed" : "calendar not loaded";
+	    }
 
     function countCalendarRecordsForEmail(records, email) {
       const normalized = normalizeEmail(email);
@@ -4894,9 +5011,9 @@ window.DIRECT_CONNECTOR_AVAILABILITY.push(${JSON.stringify({ email: focusEmail, 
         if (!rosterByEmail[debugEmail]) {
           likelyIssue = "The consultant email is not in the dashboard roster.";
         } else if (!snapshotLoaded && !directLoaded && embeddedCount === 0 && directEventCount === 0 && availabilityCount === 0 && cacheCount === 0) {
-          likelyIssue = "The consultant is in the roster, but no calendar snapshot, direct connector events, free/busy availability, or cache records exist for this email.";
-        } else if (!snapshotLoaded && !directLoaded && rawCount === 0) {
-          likelyIssue = "Calendar data exists elsewhere, but the focused refresh did not load records for this email.";
+	          likelyIssue = "The consultant is in the roster, but no local snapshot, imported Outlook connector events, free/busy availability snapshot, or cache records exist for this email yet. Import this consultant's Outlook calendar data and reload the dashboard.";
+	        } else if (!snapshotLoaded && !directLoaded && rawCount === 0) {
+	          likelyIssue = "Calendar data exists elsewhere, but the current local refresh scope did not load records for this email.";
         } else {
           likelyIssue = "Calendar data is present for this consultant.";
         }
@@ -5004,26 +5121,38 @@ window.DIRECT_CONNECTOR_AVAILABILITY.push(${JSON.stringify({ email: focusEmail, 
       if (!label || !status) return;
 
       const cacheMinutes = Math.round(CACHE_TTL_MS / 60000);
-      const focusPerson = getCalendarFocusPerson({ includeSelected: true });
+      const launchSelectedEmails = getLaunchSelectedEmails();
+      const focusPerson = getCalendarFocusPerson({ includeSelected: true })
+        || (launchSelectedEmails.length === 1 ? rosterByEmail[launchSelectedEmails[0]] : null);
+      const visibleRoster = selectedRoster();
+      const pendingSelected = visibleRoster.filter(person => !hasLoadedCalendar(person) && (isFocusedConsultant(person) || launchSelectedEmails.includes(normalizeEmail(person.email))));
+      const focusMissing = focusPerson && !hasLoadedCalendar(focusPerson);
+      const importNeededNames = (focusMissing ? [focusPerson] : pendingSelected)
+        .map(person => person.name || person.email)
+        .filter(Boolean);
+      const importNeededText = importNeededNames.join(", ");
+      const importNeeded = importNeededNames.length > 0;
       const sourceLabel = focusPerson
-        ? (refreshSource === "cache" ? "using cached data for selected consultant" : "focused consultant refresh")
+        ? (importNeeded ? "local calendar sources checked; connector import missing" : refreshSource === "cache" ? "using cached data for selected consultant" : "focused consultant refresh")
         : refreshSource === "cache"
         ? "using cached calendar data"
         : "calendar data refreshed";
-      const focusMissing = focusPerson && !hasLoadedCalendar(focusPerson);
-      label.textContent = focusMissing
-        ? \`Getting calendar information for \${focusPerson.name || focusPerson.email}\`
+      label.textContent = importNeeded
+        ? \`Calendar import needed for \${importNeededText}\`
         : lastRefreshAt
         ? \`Last refreshed: \${formatRefreshTimestamp(lastRefreshAt)} \${getZoneLabel(document.getElementById("planningZone").value)}\`
         : "Last refresh pending";
-      const visibleRoster = selectedRoster();
       const loadedCount = visibleRoster.filter(person => hasLoadedCalendar(person)).length;
       const partialCount = visibleRoster.length - loadedCount;
       if (focusPerson) {
         const focusState = focusMissing
-          ? \`getting calendar information for \${focusPerson.name || focusPerson.email}\`
+          ? \`connector import needed for \${focusPerson.name || focusPerson.email}\`
           : \`calendar loaded for \${focusPerson.name || focusPerson.email}\`;
         status.textContent = \`Time zone: \${getZoneLabel(document.getElementById("planningZone").value)}; 3-week staffing snapshot: \${formatStaffingWindow()}; \${focusState}; \${sourceLabel}; cache \${cacheMinutes} min\`;
+        return;
+      }
+      if (pendingSelected.length) {
+        status.textContent = \`Time zone: \${getZoneLabel(document.getElementById("planningZone").value)}; 3-week staffing snapshot: \${formatStaffingWindow()}; connector import needed for \${importNeededText}; \${loadedCount} loaded calendars in current filter; \${partialCount} gaps; local calendar sources checked; cache \${cacheMinutes} min\`;
         return;
       }
       status.textContent = \`Time zone: \${getZoneLabel(document.getElementById("planningZone").value)}; 3-week staffing snapshot: \${formatStaffingWindow()}; \${loadedCount} loaded calendars in current filter; \${partialCount} snapshot gaps; \${sourceLabel}; cache \${cacheMinutes} min\`;
