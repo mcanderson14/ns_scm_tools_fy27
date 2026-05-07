@@ -2,7 +2,7 @@
 // @name         SCR Mgr Assistant Toolbar BETA
 // @namespace    scrmgrassistant
 // @copyright    Copyright © 2024 by Ryan Morrissey
-// @version      27.0.0.15B
+// @version      27.0.0.16B
 // @description  Adds an Assistant Toolbar with interactive buttons to all SC Request forms.
 // @icon         https://cdn0.iconfinder.com/data/icons/phosphor-bold-vol-3-1/256/lifebuoy-duotone-512.png
 // @tag          productivity
@@ -3996,30 +3996,30 @@ var shout = (function () {
 
 		function buildEmbeddedCalendarDashboardHtml(url, context = {}) {
 			let html = getCalendarDashboardResourceText("CALENDAR_DASHBOARD_HTML");
-			const eventsScript = getCalendarDashboardResourceText("CALENDAR_DASHBOARD_EVENTS");
+			let eventsScript = getCalendarDashboardResourceText("CALENDAR_DASHBOARD_EVENTS");
 
 			if (!html) {
 				return "";
 			}
 
-			html = html.replace(
-				/<script\s+src=["']direct-connector-events\.js["']>\s*<\/script>/i,
-				`<script>\n${eventsScript}\n</script>`,
-			);
 			const focusEmail = context.email ? String(context.email).trim().toLowerCase() : "";
 			const focusedAvailabilityOverride = CALENDAR_FOCUSED_AVAILABILITY_OVERRIDES[focusEmail] || null;
 
 			if (focusedAvailabilityOverride) {
-				const overrideScript = `<script>
+				eventsScript += `
 window.DIRECT_CONNECTOR_LOADED_EMAILS = Array.isArray(window.DIRECT_CONNECTOR_LOADED_EMAILS) ? window.DIRECT_CONNECTOR_LOADED_EMAILS : [];
 if (!window.DIRECT_CONNECTOR_LOADED_EMAILS.includes(${JSON.stringify(focusEmail)})) {
   window.DIRECT_CONNECTOR_LOADED_EMAILS.push(${JSON.stringify(focusEmail)});
 }
 window.DIRECT_CONNECTOR_AVAILABILITY = Array.isArray(window.DIRECT_CONNECTOR_AVAILABILITY) ? window.DIRECT_CONNECTOR_AVAILABILITY : [];
 window.DIRECT_CONNECTOR_AVAILABILITY.push(${JSON.stringify({ email: focusEmail, ...focusedAvailabilityOverride })});
-</script>`;
-				html = html.replace("</head>", `${overrideScript}\n</head>`);
+`;
 			}
+
+			html = html.replace(
+				/<script\s+src=["']direct-connector-events\.js["']>\s*<\/script>/i,
+				`<script>\n${eventsScript}\n</script>`,
+			);
 
 			if (!html.includes("SCR_ASSISTANT_LAUNCH_SEARCH || window.location.search")) {
 				html = html.replace(
@@ -4688,16 +4688,22 @@ window.SCR_ASSISTANT_FOCUS_EMAIL = ${JSON.stringify(focusEmail)};
 		}
 
 		async function openCalendarDashboard(context, statusSelector) {
-			const url = buildCalendarDashboardUrl(context || {});
+			const normalizedContext = { ...(context || {}) };
+
+			if (!normalizedContext.email && normalizedContext.name) {
+				normalizedContext.email = inferCalendarEmailFromName(normalizedContext.name);
+			}
+
+			const url = buildCalendarDashboardUrl(normalizedContext);
 			await copyDashboardUrlFallback(url);
 			const returnToQuickAssign = Boolean(
-				context?.returnToQuickAssign ||
+				normalizedContext?.returnToQuickAssign ||
 					$("#scr-modal-request-form").hasClass("active") ||
 					$("#scr-modal-request-form").is(":visible"),
 			);
 			const embeddedOpened = openEmbeddedCalendarDashboard(url, {
 				returnToQuickAssign: returnToQuickAssign,
-				context: context || {},
+				context: normalizedContext,
 			});
 
 			if (embeddedOpened) {
@@ -4716,7 +4722,7 @@ window.SCR_ASSISTANT_FOCUS_EMAIL = ${JSON.stringify(focusEmail)};
 				if (result.opened && url.startsWith("file:")) {
 					msg = "Dashboard URL copied. If no tab opened, enable Tampermonkey file URL access or use an http:// dashboard URL.";
 				} else if (result.opened) {
-					msg = context && (context.email || context.name)
+					msg = normalizedContext && (normalizedContext.email || normalizedContext.name)
 						? "Opened calendar dashboard. URL copied as fallback."
 						: "Opened dashboard without consultant filter. URL copied as fallback.";
 				} else {
