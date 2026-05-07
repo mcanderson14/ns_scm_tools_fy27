@@ -2,7 +2,7 @@
 // @name         SCR Mgr Assistant Toolbar BETA
 // @namespace    scrmgrassistant
 // @copyright    Copyright © 2024 by Ryan Morrissey
-// @version      27.0.0.5B
+// @version      27.0.0.6B
 // @description  Adds an Assistant Toolbar with interactive buttons to all SC Request forms.
 // @icon         https://cdn0.iconfinder.com/data/icons/phosphor-bold-vol-3-1/256/lifebuoy-duotone-512.png
 // @tag          productivity
@@ -1675,6 +1675,7 @@ var shout = (function () {
                     ></iframe>
                 </div>
                 <div class="actions">
+                    <div class="ui teal button" id="scr-calendar-dashboard-back">Back to Quick Assign</div>
                     <a class="ui blue button" id="scr-calendar-dashboard-open-tab" href="#" target="_blank" rel="noopener noreferrer">Open in New Tab</a>
                     <div class="ui black deny button">Dismiss</div>
                 </div>
@@ -3627,6 +3628,8 @@ var shout = (function () {
 			$("#scr-modal-request-form").modal("show");
 		}
 
+		let calendarDashboardReturnToQuickAssign = false;
+
 		function getCachedScById(id) {
 			const cache = getPeopleCache() || [];
 			return cache.find((sc) => String(sc.value) === String(id)) || {};
@@ -3835,12 +3838,14 @@ var shout = (function () {
 			return `${launchScript}\n${html}`;
 		}
 
-		function openEmbeddedCalendarDashboard(url) {
+		function openEmbeddedCalendarDashboard(url, options = {}) {
 			const html = buildEmbeddedCalendarDashboardHtml(url);
 
 			if (!html) {
 				return false;
 			}
+
+			calendarDashboardReturnToQuickAssign = Boolean(options.returnToQuickAssign);
 
 			$("#scr-calendar-dashboard-frame").attr("srcdoc", html);
 			$("#scr-calendar-dashboard-open-tab").attr("href", url);
@@ -3848,8 +3853,16 @@ var shout = (function () {
 				.modal({
 					inverted: true,
 					closable: true,
+					allowMultiple: true,
 					onHidden: function () {
 						$("#scr-calendar-dashboard-frame").attr("srcdoc", "");
+
+						if (calendarDashboardReturnToQuickAssign) {
+							calendarDashboardReturnToQuickAssign = false;
+							setTimeout(() => {
+								openRequestModal();
+							}, 150);
+						}
 					},
 				})
 				.modal("setting", "transition", "scale")
@@ -3922,7 +3935,14 @@ var shout = (function () {
 		async function openCalendarDashboard(context, statusSelector) {
 			const url = buildCalendarDashboardUrl(context || {});
 			await copyDashboardUrlFallback(url);
-			const embeddedOpened = openEmbeddedCalendarDashboard(url);
+			const returnToQuickAssign = Boolean(
+				context?.returnToQuickAssign ||
+					$("#scr-modal-request-form").hasClass("active") ||
+					$("#scr-modal-request-form").is(":visible"),
+			);
+			const embeddedOpened = openEmbeddedCalendarDashboard(url, {
+				returnToQuickAssign: returnToQuickAssign,
+			});
 
 			if (embeddedOpened) {
 				if (statusSelector) {
@@ -4016,6 +4036,11 @@ var shout = (function () {
 		$("#_staffmyteam").click(function (event) {
 			event.preventDefault();
 			openRequestModal();
+		});
+		$("#scr-calendar-dashboard-back").click(function (event) {
+			event.preventDefault();
+			calendarDashboardReturnToQuickAssign = true;
+			$("#scr-modal-calendar-dashboard").modal("hide");
 		});
 		$("#copycalendarprompt").click(function (event) {
 			event.preventDefault();
@@ -4135,6 +4160,7 @@ var shout = (function () {
 		$("#scr-modal-request-form")
 			.modal({
 				inverted: true,
+				allowMultiple: true,
 			})
 			.modal("setting", "transition", "scale")
 			.modal("attach events", "#_staffmyteam", "show");
