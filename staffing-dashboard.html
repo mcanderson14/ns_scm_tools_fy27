@@ -7988,6 +7988,16 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     let lastRefreshAt = null;
     let refreshSource = "snapshot";
     let lastDebugText = "";
+    let calendarActivityLog = [];
+
+    function logCalendarActivity(step, details = {}) {
+      calendarActivityLog.unshift({
+        at: new Date().toISOString(),
+        step,
+        ...details
+      });
+      calendarActivityLog = calendarActivityLog.slice(0, 25);
+    }
 
     function escapeHtml(value) {
       return String(value).replace(/[&<>"']/g, character => ({
@@ -8147,6 +8157,28 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       return records.filter(record => normalizeEmail(record.email) === normalized).length;
     }
 
+    function getScopedRecordCounts(email, selectedEmails = getLaunchSelectedEmailSet()) {
+      const normalized = normalizeEmail(email);
+      const selected = selectedEmails instanceof Set ? selectedEmails : new Set(selectedEmails || []);
+      const inScope = record => {
+        const recordEmail = normalizeEmail(record.email);
+        if (normalized) return recordEmail === normalized;
+        if (selected.size) return selected.has(recordEmail);
+        return true;
+      };
+
+      return {
+        scope: normalized || (selected.size ? [...selected] : "all"),
+        embeddedEvents: embeddedEvents.filter(inScope).length,
+        directConnectorEvents: DIRECT_CONNECTOR_EVENTS.filter(inScope).length,
+        directConnectorAvailabilitySnapshots: DIRECT_CONNECTOR_AVAILABILITY.filter(inScope).length,
+        cacheEvents: (() => {
+          const cached = readCalendarCache();
+          return cached ? cached.events.filter(inScope).length : 0;
+        })()
+      };
+    }
+
     function getSelectedConsultantEmail() {
       const selected = normalizeEmail(document.getElementById("personFilter")?.value);
       return selected && selected !== "all" ? selected : "";
@@ -8222,6 +8254,16 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const selectedEmails = getLaunchSelectedEmailSet();
       const cached = readCalendarCache();
       const cacheIsFresh = cached && Date.now() - Number(cached.cachedAt || cached.refreshedAt) < CACHE_TTL_MS;
+      const selectedEmailList = [...selectedEmails];
+
+      logCalendarActivity("refresh-start", {
+        force,
+        focusEmail: focusEmail || "",
+        selectedEmails: selectedEmailList,
+        cacheAvailable: Boolean(cached),
+        cacheIsFresh: Boolean(cacheIsFresh),
+        scopedRecordCountsBeforeRefresh: getScopedRecordCounts(focusEmail, selectedEmails)
+      });
 
       if (!force && cacheIsFresh) {
         rawEvents = focusEmail
@@ -8231,6 +8273,12 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
           : cached.events;
         lastRefreshAt = new Date(cached.refreshedAt);
         refreshSource = "cache";
+        logCalendarActivity("cache-hit", {
+          refreshSource,
+          rawEvents: rawEvents.length,
+          cachedAt: cached.cachedAt ? new Date(cached.cachedAt).toISOString() : null,
+          refreshedAt: cached.refreshedAt || null
+        });
       } else {
         rawEvents = cloneEmbeddedEvents(focusEmail, selectedEmails);
         lastRefreshAt = new Date();
@@ -8239,12 +8287,34 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
           : selectedEmails.size
           ? (force ? "selected manual refresh" : "selected snapshot refresh")
           : (force ? "manual refresh" : "snapshot refresh");
+        logCalendarActivity("snapshot-refresh", {
+          refreshSource,
+          rawEvents: rawEvents.length,
+          focusedRefresh: Boolean(focusEmail),
+          selectedRefresh: Boolean(selectedEmails.size)
+        });
         if (!focusEmail && !selectedEmails.size) {
           writeCalendarCache(rawEvents, lastRefreshAt.toISOString());
+          logCalendarActivity("cache-write", {
+            eventsCached: rawEvents.length,
+            refreshedAt: lastRefreshAt.toISOString()
+          });
         }
       }
 
       normalizedEvents = normalizeEvents(rawEvents);
+      logCalendarActivity("normalize-complete", {
+        rawEvents: rawEvents.length,
+        normalizedEvents: normalizedEvents.length,
+        scopedRecordCountsAfterRefresh: getScopedRecordCounts(focusEmail, selectedEmails)
+      });
+      if ((focusEmail || selectedEmails.size) && rawEvents.length === 0) {
+        logCalendarActivity("no-calendar-records-found", {
+          focusEmail: focusEmail || "",
+          selectedEmails: selectedEmailList,
+          note: "No bundled snapshot, direct connector event, free/busy availability, or cache records were found for this refresh scope."
+        });
+      }
       renderRefreshState();
     }
 
@@ -8293,7 +8363,8 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     function getCalendarDebugData() {
       const selectedEmail = getSelectedConsultantEmail();
       const focusEmail = getCalendarFocusEmail({ includeSelected: true });
-      const debugEmail = focusEmail || selectedEmail;
+      const launchSelectedEmails = getLaunchSelectedEmails();
+      const debugEmail = focusEmail || selectedEmail || (launchSelectedEmails.length === 1 ? launchSelectedEmails[0] : "");
       const person = debugEmail ? rosterByEmail[debugEmail] || { name: debugEmail, email: debugEmail } : null;
       const cached = readCalendarCache();
       const rawCount = countCalendarRecordsForEmail(rawEvents, debugEmail);
@@ -8310,7 +8381,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         if (!rosterByEmail[debugEmail]) {
           likelyIssue = "The consultant email is not in the dashboard roster.";
         } else if (!snapshotLoaded && !directLoaded && embeddedCount === 0 && directEventCount === 0 && availabilityCount === 0 && cacheCount === 0) {
-          likelyIssue = "The consultant is in the roster, but no calendar snapshot, direct connector events, free/busy availability, or cache records exist for this email.";
+          likelyIssue = "The consultant is in the roster and the focused refresh ran, but no calendar snapshot, direct connector events, free/busy availability, or cache records exist for this email yet. See activityLog for the refresh steps.";
         } else if (!snapshotLoaded && !directLoaded && rawCount === 0) {
           likelyIssue = "Calendar data exists elsewhere, but the focused refresh did not load records for this email.";
         } else {
@@ -8351,6 +8422,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
           refreshSource,
           lastRefreshAt: lastRefreshAt ? lastRefreshAt.toISOString() : null
         },
+        activityLog: calendarActivityLog,
         likelyIssue
       };
     }

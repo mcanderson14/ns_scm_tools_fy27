@@ -2,7 +2,7 @@
 // @name         SCR Mgr Assistant Toolbar BETA
 // @namespace    scrmgrassistant
 // @copyright    Copyright © 2024 by Ryan Morrissey
-// @version      27.0.0.25B
+// @version      27.0.0.26B
 // @description  Adds an Assistant Toolbar with interactive buttons to all SC Request forms.
 // @icon         https://cdn0.iconfinder.com/data/icons/phosphor-bold-vol-3-1/256/lifebuoy-duotone-512.png
 // @tag          productivity
@@ -4659,6 +4659,128 @@ window.DIRECT_CONNECTOR_AVAILABILITY.push(${JSON.stringify({ email: focusEmail, 
 			if (!html.includes("let lastDebugText")) {
 				html = html.replace("let skillsByEmail = new Map();", `let skillsByEmail = new Map();
     let lastDebugText = "";`);
+			}
+			if (!html.includes("calendarActivityLog")) {
+				html = html.replace(
+					`let lastDebugText = "";`,
+					`let lastDebugText = "";
+    let calendarActivityLog = [];
+
+    function logCalendarActivity(step, details = {}) {
+      calendarActivityLog.unshift({
+        at: new Date().toISOString(),
+        step,
+        ...details
+      });
+      calendarActivityLog = calendarActivityLog.slice(0, 25);
+    }`,
+				);
+				html = html.replace(
+					`function getSelectedConsultantEmail() {`,
+					`function getScopedRecordCounts(email, selectedEmails = getLaunchSelectedEmailSet()) {
+      const normalized = normalizeEmail(email);
+      const selected = selectedEmails instanceof Set ? selectedEmails : new Set(selectedEmails || []);
+      const inScope = record => {
+        const recordEmail = normalizeEmail(record.email);
+        if (normalized) return recordEmail === normalized;
+        if (selected.size) return selected.has(recordEmail);
+        return true;
+      };
+
+      return {
+        scope: normalized || (selected.size ? [...selected] : "all"),
+        embeddedEvents: embeddedEvents.filter(inScope).length,
+        directConnectorEvents: DIRECT_CONNECTOR_EVENTS.filter(inScope).length,
+        directConnectorAvailabilitySnapshots: DIRECT_CONNECTOR_AVAILABILITY.filter(inScope).length,
+        cacheEvents: (() => {
+          const cached = readCalendarCache();
+          return cached ? cached.events.filter(inScope).length : 0;
+        })()
+      };
+    }
+
+    function getSelectedConsultantEmail() {`,
+				);
+				html = html.replace(
+					`const cacheIsFresh = cached && Date.now() - Number(cached.cachedAt || cached.refreshedAt) < CACHE_TTL_MS;`,
+					`const cacheIsFresh = cached && Date.now() - Number(cached.cachedAt || cached.refreshedAt) < CACHE_TTL_MS;
+      const selectedEmailList = [...selectedEmails];
+
+      logCalendarActivity("refresh-start", {
+        force,
+        focusEmail: focusEmail || "",
+        selectedEmails: selectedEmailList,
+        cacheAvailable: Boolean(cached),
+        cacheIsFresh: Boolean(cacheIsFresh),
+        scopedRecordCountsBeforeRefresh: getScopedRecordCounts(focusEmail, selectedEmails)
+      });`,
+				);
+				html = html.replace(
+					`refreshSource = "cache";`,
+					`refreshSource = "cache";
+        logCalendarActivity("cache-hit", {
+          refreshSource,
+          rawEvents: rawEvents.length,
+          cachedAt: cached.cachedAt ? new Date(cached.cachedAt).toISOString() : null,
+          refreshedAt: cached.refreshedAt || null
+        });`,
+				);
+				html = html.replace(
+					`: (force ? "manual refresh" : "snapshot refresh");
+        if (!focusEmail && !selectedEmails.size) {`,
+					`: (force ? "manual refresh" : "snapshot refresh");
+        logCalendarActivity("snapshot-refresh", {
+          refreshSource,
+          rawEvents: rawEvents.length,
+          focusedRefresh: Boolean(focusEmail),
+          selectedRefresh: Boolean(selectedEmails.size)
+        });
+        if (!focusEmail && !selectedEmails.size) {`,
+				);
+				html = html.replace(
+					`writeCalendarCache(rawEvents, lastRefreshAt.toISOString());`,
+					`writeCalendarCache(rawEvents, lastRefreshAt.toISOString());
+          logCalendarActivity("cache-write", {
+            eventsCached: rawEvents.length,
+            refreshedAt: lastRefreshAt.toISOString()
+          });`,
+				);
+				html = html.replace(
+					`normalizedEvents = normalizeEvents(rawEvents);
+      renderRefreshState();`,
+					`normalizedEvents = normalizeEvents(rawEvents);
+      logCalendarActivity("normalize-complete", {
+        rawEvents: rawEvents.length,
+        normalizedEvents: normalizedEvents.length,
+        scopedRecordCountsAfterRefresh: getScopedRecordCounts(focusEmail, selectedEmails)
+      });
+      if ((focusEmail || selectedEmails.size) && rawEvents.length === 0) {
+        logCalendarActivity("no-calendar-records-found", {
+          focusEmail: focusEmail || "",
+          selectedEmails: selectedEmailList,
+          note: "No bundled snapshot, direct connector event, free/busy availability, or cache records were found for this refresh scope."
+        });
+      }
+      renderRefreshState();`,
+				);
+			html = html.replace(
+				`likelyIssue = "The consultant is in the roster, but no calendar snapshot, direct connector events, free/busy availability, or cache records exist for this email.";`,
+				`likelyIssue = "The consultant is in the roster and the focused refresh ran, but no calendar snapshot, direct connector events, free/busy availability, or cache records exist for this email yet. See activityLog for the refresh steps.";`,
+			);
+			html = html.replace(
+				`const debugEmail = focusEmail || selectedEmail;`,
+				`const launchSelectedEmails = getLaunchSelectedEmails();
+      const debugEmail = focusEmail || selectedEmail || (launchSelectedEmails.length === 1 ? launchSelectedEmails[0] : "");`,
+			);
+			html = html.replace(
+				`lastRefreshAt: lastRefreshAt ? lastRefreshAt.toISOString() : null
+        },
+        likelyIssue`,
+					`lastRefreshAt: lastRefreshAt ? lastRefreshAt.toISOString() : null
+        },
+        activityLog: calendarActivityLog,
+        likelyIssue`,
+				);
 			}
 			html = html.replace("Object.assign(existing, person, { email });", `Object.assign(existing, person, { email, source: person.source || existing.source || "Launch parameters" });`);
 			html = html.replace(
