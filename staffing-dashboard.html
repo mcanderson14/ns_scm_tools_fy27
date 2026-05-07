@@ -593,20 +593,12 @@
         </select>
       </div>
       <div class="control">
-        <label for="skillFilter">Product Skill</label>
-        <input id="skillFilter" type="search" list="skillOptions" placeholder="WMS, Advanced Inventory..." />
-        <datalist id="skillOptions"></datalist>
-      </div>
-      <div class="control">
-        <label for="skillsFileInput">Skills CSV</label>
-        <button class="secondary-button" id="loadSkillsButton" type="button">Load skills CSV</button>
-        <input id="skillsFileInput" type="file" accept=".csv,text/csv" hidden />
-      </div>
-      <div class="control">
         <label for="planningZone">Time Zone</label>
         <select id="planningZone">
           <option value="America/Chicago">Central (CT)</option>
           <option value="America/New_York">Eastern (ET)</option>
+          <option value="America/Denver">Mountain (MT)</option>
+          <option value="America/Los_Angeles">Pacific (PT)</option>
         </select>
       </div>
       <div class="control">
@@ -689,7 +681,6 @@
         <div class="recommendation-title">Protected window</div>
         <div class="recommendation-main" id="protectedWindowLabel">-</div>
         <div class="subtle" id="protectedWindowDetail"></div>
-        <div class="subtle" id="skillStatusLabel">No skill matrix loaded.</div>
       </div>
     </section>
 
@@ -728,7 +719,6 @@
                 <th>Team</th>
                 <th>Local Time</th>
                 <th>Status</th>
-                <th>Skill Match</th>
                 <th>Overlap</th>
                 <th>Calendar Items</th>
               </tr>
@@ -7991,14 +7981,11 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     const DIRECT_CONNECTOR_AVAILABILITY = Array.isArray(window.DIRECT_CONNECTOR_AVAILABILITY) ? window.DIRECT_CONNECTOR_AVAILABILITY : [];
 
     const CACHE_KEY = "sc-staffing-dashboard-calendar-cache-direct-connector-202605062230";
-    const SKILL_CACHE_KEY = "sc-staffing-dashboard-skills-cache-v1";
     const CACHE_TTL_MS = 5 * 60 * 1000;
     let rawEvents = [];
     let normalizedEvents = [];
     let lastRefreshAt = null;
     let refreshSource = "snapshot";
-    let skillRows = [];
-    let skillsByEmail = new Map();
     let lastDebugText = "";
 
     function escapeHtml(value) {
@@ -8058,7 +8045,10 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       .filter(event => event.person);
     }
 
-    function expandConnectorAvailability(focusEmail = getCalendarFocusEmail({ includeSelected: false })) {
+    function expandConnectorAvailability(
+      focusEmail = getCalendarFocusEmail({ includeSelected: false }),
+      selectedEmails = getLaunchSelectedEmailSet()
+    ) {
       const statusMap = {
         "1": { status: "tentative", subject: "Free/busy: Tentative hold" },
         "2": { status: "busy", subject: "Free/busy: Busy; subject unavailable" },
@@ -8069,6 +8059,8 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
 
       (focusEmail
         ? DIRECT_CONNECTOR_AVAILABILITY.filter(snapshot => String(snapshot.email || "").toLowerCase() === focusEmail)
+        : selectedEmails.size
+        ? DIRECT_CONNECTOR_AVAILABILITY.filter(snapshot => selectedEmails.has(String(snapshot.email || "").toLowerCase()))
         : DIRECT_CONNECTOR_AVAILABILITY
       ).forEach(snapshot => {
         const view = String(snapshot.view || "");
@@ -8101,10 +8093,14 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       return expanded;
     }
 
-    function cloneEmbeddedEvents(focusEmail = getCalendarFocusEmail({ includeSelected: false })) {
+    function cloneEmbeddedEvents(
+      focusEmail = getCalendarFocusEmail({ includeSelected: false }),
+      selectedEmails = getLaunchSelectedEmailSet()
+    ) {
       const seen = new Set();
-      return [...embeddedEvents, ...DIRECT_CONNECTOR_EVENTS, ...expandConnectorAvailability(focusEmail)]
+      return [...embeddedEvents, ...DIRECT_CONNECTOR_EVENTS, ...expandConnectorAvailability(focusEmail, selectedEmails)]
         .filter(event => !focusEmail || String(event.email || "").toLowerCase() === focusEmail)
+        .filter(event => !selectedEmails.size || selectedEmails.has(String(event.email || "").toLowerCase()))
         .filter(event => {
           const key = `${event.email}|${event.status}|${event.subject}|${event.start}|${event.end}`;
           if (seen.has(key)) return false;
@@ -8155,6 +8151,25 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       return selected && selected !== "all" ? selected : "";
     }
 
+    function getLaunchSelectedEmails(params = getLaunchParams()) {
+      const embedded = Array.isArray(window.SCR_ASSISTANT_SELECTED_EMAILS)
+        ? window.SCR_ASSISTANT_SELECTED_EMAILS
+        : [];
+      const fromParams = [
+        params.get("consultants"),
+        params.get("emails")
+      ].filter(Boolean).join(",");
+
+      return [...embedded, ...fromParams.split(/[,;\s]+/)]
+        .map(normalizeEmail)
+        .filter(email => email && email.includes("@"))
+        .filter((email, index, array) => array.indexOf(email) === index);
+    }
+
+    function getLaunchSelectedEmailSet(params = getLaunchParams()) {
+      return new Set(getLaunchSelectedEmails(params));
+    }
+
     function getCalendarFocusEmail(options = {}) {
       return normalizeEmail(
         options.focusEmail ||
@@ -8203,20 +8218,27 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     function refreshCalendarData(options = {}) {
       const force = Boolean(options.force);
       const focusEmail = getCalendarFocusEmail({ focusEmail: options.focusEmail, includeSelected: false });
+      const selectedEmails = getLaunchSelectedEmailSet();
       const cached = readCalendarCache();
       const cacheIsFresh = cached && Date.now() - Number(cached.cachedAt || cached.refreshedAt) < CACHE_TTL_MS;
 
       if (!force && cacheIsFresh) {
         rawEvents = focusEmail
           ? cached.events.filter(event => String(event.email || "").toLowerCase() === focusEmail)
+          : selectedEmails.size
+          ? cached.events.filter(event => selectedEmails.has(String(event.email || "").toLowerCase()))
           : cached.events;
         lastRefreshAt = new Date(cached.refreshedAt);
         refreshSource = "cache";
       } else {
-        rawEvents = cloneEmbeddedEvents(focusEmail);
+        rawEvents = cloneEmbeddedEvents(focusEmail, selectedEmails);
         lastRefreshAt = new Date();
-        refreshSource = focusEmail ? (force ? "focused manual refresh" : "focused snapshot refresh") : (force ? "manual refresh" : "snapshot refresh");
-        if (!focusEmail) {
+        refreshSource = focusEmail
+          ? (force ? "focused manual refresh" : "focused snapshot refresh")
+          : selectedEmails.size
+          ? (force ? "selected manual refresh" : "selected snapshot refresh")
+          : (force ? "manual refresh" : "snapshot refresh");
+        if (!focusEmail && !selectedEmails.size) {
           writeCalendarCache(rawEvents, lastRefreshAt.toISOString());
         }
       }
@@ -8395,7 +8417,13 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     }
 
     function getZoneLabel(zone) {
-      return zone === "America/New_York" ? "Eastern (ET)" : "Central (CT)";
+      const zoneLabels = {
+        "America/New_York": "Eastern (ET)",
+        "America/Chicago": "Central (CT)",
+        "America/Denver": "Mountain (MT)",
+        "America/Los_Angeles": "Pacific (PT)"
+      };
+      return zoneLabels[zone] || zone;
     }
 
     function legacyOrgClass(legacyOrg) {
@@ -8421,205 +8449,8 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         : `<span class="pill unknown">${missingCalendarLabel(row)}</span>`;
     }
 
-    const skillNameAliases = new Map(Object.entries({
-      stephaneazoulay: "stephazoulay",
-      benjaminbrown: "benbrown",
-      peterbgibson: "bengibson",
-      robertkee: "robkee",
-      andrewskravet: "andrewkravet",
-      oliviatmanning: "oliviamanning",
-      rafaelsouzagomesdasilva: "rafaeldasilva",
-      coreymtenanes: "coreytenanes",
-      brettawhite: "brettwhite"
-    }));
-
-    function normalizeSearchText(value) {
-      return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-    }
-
     function canonicalName(value) {
       return String(value || "").toLowerCase().replace(/[^a-z]/g, "");
-    }
-
-    function csvNameToDisplay(value) {
-      const parts = String(value || "").split(",");
-      if (parts.length < 2) return String(value || "").trim();
-      return `${parts[1].trim()} ${parts[0].trim()}`;
-    }
-
-    function parseCsv(text) {
-      const rows = [];
-      let row = [];
-      let cell = "";
-      let quoted = false;
-
-      for (let index = 0; index < text.length; index += 1) {
-        const char = text[index];
-        const next = text[index + 1];
-
-        if (quoted) {
-          if (char === "\"" && next === "\"") {
-            cell += "\"";
-            index += 1;
-          } else if (char === "\"") {
-            quoted = false;
-          } else {
-            cell += char;
-          }
-        } else if (char === "\"") {
-          quoted = true;
-        } else if (char === ",") {
-          row.push(cell);
-          cell = "";
-        } else if (char === "\n") {
-          row.push(cell.replace(/\r$/, ""));
-          rows.push(row);
-          row = [];
-          cell = "";
-        } else {
-          cell += char;
-        }
-      }
-
-      if (cell || row.length) {
-        row.push(cell.replace(/\r$/, ""));
-        rows.push(row);
-      }
-
-      const headers = rows.shift() || [];
-      return rows
-        .filter(item => item.some(Boolean))
-        .map(item => Object.fromEntries(headers.map((header, index) => [header, item[index] || ""])));
-    }
-
-    function ratingNumber(value) {
-      const match = String(value || "").match(/^\d/);
-      return match ? Number(match[0]) : 0;
-    }
-
-    function compactSubsection(value) {
-      return String(value || "").replace(/\s*\(Subsection\)\s*/i, "").trim();
-    }
-
-    function compactSkillRows(rows) {
-      const rosterByName = new Map(roster.map(person => [canonicalName(person.name), person]));
-      const seen = new Set();
-      const compact = [];
-
-      rows.forEach(row => {
-        if (row.Section !== "Product") return;
-        const rating = ratingNumber(row["Current Rating"]);
-        if (rating <= 0) return;
-
-        const csvKey = canonicalName(csvNameToDisplay(row["Solution Consultant"]));
-        const rosterKey = skillNameAliases.get(csvKey) || csvKey;
-        const person = rosterByName.get(rosterKey);
-        if (!person) return;
-
-        const skill = String(row.Skill || "").trim();
-        if (!skill) return;
-
-        const subsection = compactSubsection(row.Subsection);
-        const key = `${person.email}|${skill}|${subsection}`;
-        if (seen.has(key)) return;
-        seen.add(key);
-        compact.push([person.email, skill, rating, subsection]);
-      });
-
-      return compact.sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]));
-    }
-
-    function setSkillRows(rows, sourceLabel = "cache") {
-      skillRows = Array.isArray(rows) ? rows : [];
-      skillsByEmail = new Map();
-
-      skillRows.forEach(([email, skill, rating, subsection]) => {
-        if (!skillsByEmail.has(email)) skillsByEmail.set(email, []);
-        skillsByEmail.get(email).push({
-          skill,
-          rating: Number(rating),
-          subsection,
-          search: normalizeSearchText(`${skill} ${subsection}`)
-        });
-      });
-
-      skillsByEmail.forEach(items => items.sort((a, b) => b.rating - a.rating || a.skill.localeCompare(b.skill)));
-      populateSkillOptions();
-      renderSkillState(sourceLabel);
-    }
-
-    function readSkillCache() {
-      try {
-        if (typeof window === "undefined" || !window.localStorage) return null;
-        const payload = window.localStorage.getItem(SKILL_CACHE_KEY);
-        if (!payload) return null;
-        const parsed = JSON.parse(payload);
-        return Array.isArray(parsed.rows) ? parsed : null;
-      } catch (error) {
-        return null;
-      }
-    }
-
-    function writeSkillCache(rows) {
-      try {
-        if (typeof window === "undefined" || !window.localStorage) return;
-        window.localStorage.setItem(SKILL_CACHE_KEY, JSON.stringify({
-          rows,
-          loadedAt: new Date().toISOString()
-        }));
-      } catch (error) {
-        renderSkillState("storage unavailable");
-      }
-    }
-
-    function loadSkillCache() {
-      const cached = readSkillCache();
-      setSkillRows(cached?.rows || [], cached ? "cache" : "not loaded");
-    }
-
-    function populateSkillOptions() {
-      const options = document.getElementById("skillOptions");
-      if (!options) return;
-      const skills = [...new Set(skillRows.map(row => row[1]))].sort((a, b) => a.localeCompare(b));
-      options.innerHTML = skills.map(skill => `<option value="${escapeHtml(skill)}"></option>`).join("");
-    }
-
-    function renderSkillState(sourceLabel = "cache") {
-      const label = document.getElementById("skillStatusLabel");
-      if (!label) return;
-      const consultantCount = new Set(skillRows.map(row => row[0])).size;
-      if (!skillRows.length) {
-        label.textContent = "No skill matrix loaded. Load the CSV once to enable product skill ranking.";
-        return;
-      }
-      label.textContent = `${skillRows.length.toLocaleString()} rated product skills loaded for ${consultantCount} consultants; source: ${sourceLabel}.`;
-    }
-
-    function getSkillQuery() {
-      return normalizeSearchText(document.getElementById("skillFilter")?.value || "");
-    }
-
-    function getSkillMatches(person, query) {
-      if (!query) return [];
-      const terms = query.split(" ").filter(Boolean);
-      return (skillsByEmail.get(person.email) || [])
-        .filter(item => terms.every(term => item.search.includes(term)))
-        .slice(0, 4);
-    }
-
-    function skillMatchHtml(row) {
-      const query = getSkillQuery();
-      if (!query) return `<span class="subtle">No skill selected.</span>`;
-      if (!skillRows.length) return `<span class="subtle">Load skills CSV to rank skills.</span>`;
-      if (!row.skillMatches.length) return `<span class="subtle">No rated match.</span>`;
-
-      return row.skillMatches.map(match => `
-        <div>
-          <span class="pill rating${match.rating}">${match.rating}</span>
-          <strong>${escapeHtml(match.skill)}</strong>
-          <div class="subtle">${escapeHtml(match.subsection)}</div>
-        </div>
-      `).join("");
     }
 
     function getTimeZoneOffset(date, timeZone) {
@@ -8702,7 +8533,9 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const team = document.getElementById("teamFilter").value;
       const person = document.getElementById("personFilter").value;
       const legacyOrg = document.getElementById("legacyOrgFilter").value;
+      const selectedEmails = getLaunchSelectedEmailSet();
       return roster.filter(item => {
+        if (selectedEmails.size && !selectedEmails.has(normalizeEmail(item.email))) return false;
         if (team !== "all" && item.team !== team) return false;
         if (legacyOrg !== "all" && item.legacyOrg !== legacyOrg) return false;
         if (person !== "all" && item.email !== person) return false;
@@ -8727,12 +8560,20 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const current = select.value || "all";
       const team = document.getElementById("teamFilter").value;
       const legacyOrg = document.getElementById("legacyOrgFilter").value;
-      const people = roster.filter(person => {
+      const selectedEmails = getLaunchSelectedEmailSet();
+      let people = roster.filter(person => {
+        if (selectedEmails.size && !selectedEmails.has(normalizeEmail(person.email))) return false;
         if (team !== "all" && person.team !== team) return false;
         if (legacyOrg !== "all" && person.legacyOrg !== legacyOrg) return false;
         return true;
       });
-      select.innerHTML = `<option value="all">All consultants</option>`;
+
+      const currentPerson = current !== "all" ? rosterByEmail[current] : null;
+      if (currentPerson && !people.some(person => person.email === currentPerson.email)) {
+        people = [...people, currentPerson].sort((a, b) => a.name.localeCompare(b.name));
+      }
+
+      select.innerHTML = `<option value="all">${selectedEmails.size ? "All selected consultants" : "All consultants"}</option>`;
       people.forEach(person => {
         const option = document.createElement("option");
         option.value = person.email;
@@ -8765,7 +8606,6 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
 
     function analyzePerson(person, windowConfig) {
       const softMode = document.getElementById("softMode").value;
-      const skillQuery = getSkillQuery();
       const events = normalizedEvents.filter(event => event.email === person.email);
       const calendarLoaded = hasLoadedCalendar(person);
       const conflicts = events
@@ -8787,8 +8627,6 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const hardBuffer = conflicts.filter(item => item.effectiveSeverity === "hard" && item.meetingOverlap === 0).reduce((sum, item) => sum + item.protectedOverlap, 0);
       const soft = conflicts.filter(item => item.effectiveSeverity === "soft").reduce((sum, item) => sum + item.protectedOverlap, 0);
       const other = conflicts.filter(item => item.effectiveSeverity === "other").reduce((sum, item) => sum + item.protectedOverlap, 0);
-      const skillMatches = getSkillMatches(person, skillQuery);
-      const skillRating = skillMatches[0]?.rating || 0;
 
       let rank = 0;
       let label = "Available";
@@ -8826,8 +8664,6 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         hardBuffer,
         soft,
         other,
-        skillMatches,
-        skillRating,
         rank,
         label,
         pill
@@ -8835,14 +8671,10 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     }
 
     function getAvailabilityRows(windowConfig = getWindow()) {
-      const skillQuery = getSkillQuery();
-      const filterBySkill = Boolean(skillQuery && skillRows.length);
       return selectedRoster()
         .map(person => analyzePerson(person, windowConfig))
-        .filter(row => !filterBySkill || row.skillMatches.length)
         .sort((a, b) => {
           if (a.rank !== b.rank) return a.rank - b.rank;
-          if (filterBySkill && a.skillRating !== b.skillRating) return b.skillRating - a.skillRating;
           if (a.hardMeeting !== b.hardMeeting) return a.hardMeeting - b.hardMeeting;
           if (a.hardBuffer !== b.hardBuffer) return a.hardBuffer - b.hardBuffer;
           if (a.soft !== b.soft) return a.soft - b.soft;
@@ -8863,15 +8695,11 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     function renderRecommendation(rows, windowConfig) {
       const clean = rows.filter(row => row.rank === 0);
       const top = rows.slice(0, 4);
-      const skillQuery = document.getElementById("skillFilter").value.trim();
       const partialCount = rows.filter(row => !row.calendarLoaded).length;
       const unknownCount = rows.filter(row => row.rank === 5).length;
       const title = clean.length
         ? `${clean.length} clean option${clean.length === 1 ? "" : "s"}`
         : "No clean options";
-      const skillDetail = skillQuery
-        ? ` Skill filter: ${skillQuery}.`
-        : "";
       const focusedMissing = rows.find(row => !row.calendarLoaded && isFocusedConsultant(row));
       const coverageDetail = focusedMissing
         ? ` ${missingCalendarSentence(focusedMissing)}`
@@ -8879,8 +8707,8 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         ? ` ${partialCount} consultants still need 3-week Outlook snapshot data; ${unknownCount} are not counted as open for this window.`
         : "";
       const detail = clean.length
-        ? `Best fit starts with ${clean.slice(0, 3).map(row => row.name).join(", ")}.${skillDetail}${coverageDetail}`
-        : `Best fallback is ${top[0]?.name || "none"} with ${top[0]?.label.toLowerCase() || "no recommendation"}.${skillDetail}${coverageDetail}`;
+        ? `Best fit starts with ${clean.slice(0, 3).map(row => row.name).join(", ")}.${coverageDetail}`
+        : `Best fallback is ${top[0]?.name || "none"} with ${top[0]?.label.toLowerCase() || "no recommendation"}.${coverageDetail}`;
 
       document.getElementById("recommendationHeadline").textContent = title;
       document.getElementById("recommendationDetail").textContent = detail;
@@ -8893,7 +8721,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         <div class="top-person">
           <div>
             <div class="person-line"><span class="person-name">${row.name}</span>${legacyOrgBadge(row)}${locationBadge(row)}</div>
-            <div class="subtle">${row.team} - ${getZoneLabel(row.timeZone)}${row.skillRating ? ` - skill ${row.skillRating}` : ""}${row.calendarLoaded ? "" : ` - ${missingCalendarLabel(row).toLowerCase()}`}</div>
+            <div class="subtle">${row.team} - ${getZoneLabel(row.timeZone)}${row.calendarLoaded ? "" : ` - ${missingCalendarLabel(row).toLowerCase()}`}</div>
           </div>
           <span class="pill ${row.pill}">${row.label}</span>
         </div>
@@ -8903,7 +8731,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     function renderAvailabilityTable(rows, windowConfig) {
       const body = document.getElementById("availabilityBody");
       if (!rows.length) {
-        body.innerHTML = `<tr><td colspan="8" class="subtle">No consultants match the current filters.</td></tr>`;
+        body.innerHTML = `<tr><td colspan="7" class="subtle">No consultants match the current filters.</td></tr>`;
         return;
       }
 
@@ -8942,7 +8770,6 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
               <div class="subtle">${getZoneLabel(row.timeZone)}</div>
             </td>
             <td><span class="pill ${row.pill}">${row.label}</span></td>
-            <td>${skillMatchHtml(row)}</td>
             <td>
               <strong>${row.hardMeeting}</strong> hard meeting
               <div class="subtle">${row.hardBuffer} hard buffer; ${row.soft} soft; ${row.other} review</div>
@@ -8956,13 +8783,18 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
 
     function renderAlternateSlots() {
       const selectedStart = Number(document.getElementById("meetingStart").value);
+      const selectedDuration = Number(document.getElementById("meetingDuration").value);
       const container = document.getElementById("alternateSlots");
       const candidates = [];
+      const workdayStart = 8 * 60;
+      const workdayEnd = 17 * 60;
+      const lastStart = Math.max(workdayStart, workdayEnd - selectedDuration);
 
-      for (let start = 8 * 60; start <= 16 * 60 + 30; start += 30) {
+      for (let start = workdayStart; start <= lastStart; start += 30) {
         const windowConfig = getWindow(start);
         const rows = getAvailabilityRows(windowConfig);
         const clean = rows.filter(row => row.rank === 0);
+        if (!clean.length) continue;
         const noHardMeeting = rows.filter(row => row.calendarLoaded && row.hardMeeting === 0);
         const bufferRisk = rows.filter(row => row.rank === 3);
         const soft = rows.filter(row => row.rank === 1);
@@ -8970,22 +8802,21 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         candidates.push({ start, windowConfig, rows, clean, noHardMeeting, bufferRisk, soft, partial });
       }
 
-      candidates.sort((a, b) => {
-        if (b.clean.length !== a.clean.length) return b.clean.length - a.clean.length;
-        if (b.noHardMeeting.length !== a.noHardMeeting.length) return b.noHardMeeting.length - a.noHardMeeting.length;
-        if (a.bufferRisk.length !== b.bufferRisk.length) return a.bufferRisk.length - b.bufferRisk.length;
-        if (a.soft.length !== b.soft.length) return a.soft.length - b.soft.length;
-        return a.start - b.start;
-      });
+      candidates.sort((a, b) => a.start - b.start);
 
-      container.innerHTML = candidates.slice(0, 10).map(candidate => {
-        const names = candidate.clean.slice(0, 3).map(row => row.name).join(", ") || "No clean options";
+      if (!candidates.length) {
+        container.innerHTML = `<div class="subtle">No open ${selectedDuration}-minute slots match the current consultant, date, and buffer.</div>`;
+        return;
+      }
+
+      container.innerHTML = candidates.map(candidate => {
+        const names = candidate.clean.slice(0, 3).map(row => row.name).join(", ");
         const selectedClass = candidate.start === selectedStart ? " selected" : "";
         return `
           <button class="alt-slot${selectedClass}" type="button" data-start="${candidate.start}">
             <div class="alt-top">
               <strong>${formatTimeRange(candidate.windowConfig.meetingStart, candidate.windowConfig.meetingEnd, candidate.windowConfig.timeZone)}</strong>
-              <span class="pill ${candidate.clean.length ? "available" : "busy"}">${candidate.clean.length} clean</span>
+              <span class="pill available">${candidate.clean.length} open</span>
             </div>
             <div class="subtle">${candidate.noHardMeeting.length} loaded without hard meeting conflict; ${candidate.bufferRisk.length} buffer risks; ${candidate.soft.length} soft; ${candidate.partial.length} snapshot gaps</div>
             <div class="subtle">${names}</div>
@@ -9122,32 +8953,6 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       button.disabled = false;
     }
 
-    function handleSkillFileSelected(event) {
-      const file = event.target.files?.[0];
-      if (!file) return;
-
-      const button = document.getElementById("loadSkillsButton");
-      button.textContent = "Loading...";
-      button.disabled = true;
-
-      const reader = new FileReader();
-      reader.onload = () => {
-        const compact = compactSkillRows(parseCsv(String(reader.result || "")));
-        setSkillRows(compact, file.name);
-        writeSkillCache(compact);
-        renderAll();
-        button.textContent = "Load skills CSV";
-        button.disabled = false;
-        event.target.value = "";
-      };
-      reader.onerror = () => {
-        renderSkillState("load failed");
-        button.textContent = "Load skills CSV";
-        button.disabled = false;
-      };
-      reader.readAsText(file);
-    }
-
     function setSelectValue(id, value) {
       const select = document.getElementById(id);
       if (!select || value == null || value === "") return false;
@@ -9190,7 +8995,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         team: person.team || "Requested",
         legacyOrg: person.legacyOrg || "Requested",
         location: person.location || "Unknown",
-        timeZone: person.timeZone || "America/New_York",
+        timeZone: person.timeZone || inferTimeZoneFromAvailabilityStart(email) || "America/New_York",
         source: person.source || "Launch parameters"
       };
       roster.push(normalized);
@@ -9215,6 +9020,47 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         .join(" ") || normalized;
     }
 
+    function inferTimeZoneFromAvailabilityStart(email) {
+      const normalized = normalizeEmail(email);
+      const snapshot = DIRECT_CONNECTOR_AVAILABILITY.find(item => normalizeEmail(item.email) === normalized);
+      if (!snapshot?.start) return "";
+
+      const date = new Date(snapshot.start);
+      if (Number.isNaN(date.valueOf())) return "";
+
+      const zones = [
+        "America/New_York",
+        "America/Chicago",
+        "America/Denver",
+        "America/Los_Angeles"
+      ];
+
+      return zones.find(zone => {
+        const parts = new Intl.DateTimeFormat("en-US", {
+          timeZone: zone,
+          hour12: false,
+          hour: "2-digit",
+          minute: "2-digit"
+        }).formatToParts(date).reduce((acc, part) => {
+          if (part.type !== "literal") acc[part.type] = part.value;
+          return acc;
+        }, {});
+
+        return (parts.hour === "00" || parts.hour === "24") && parts.minute === "00";
+      }) || "";
+    }
+
+    function setPlanningZoneForPerson(person) {
+      if (!person?.timeZone) return false;
+      return setSelectValue("planningZone", person.timeZone);
+    }
+
+    function syncPlanningZoneToSelectedConsultant() {
+      const email = getSelectedConsultantEmail();
+      const person = email ? rosterByEmail[email] : null;
+      return setPlanningZoneForPerson(person);
+    }
+
     function addCalendarDataRosterEntries() {
       const emails = new Set();
 
@@ -9231,9 +9077,62 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
           email,
           team: "Calendar Data",
           legacyOrg: "Direct",
+          timeZone: inferTimeZoneFromAvailabilityStart(email),
           source: "Calendar data"
         });
       });
+    }
+
+    function getLaunchParams() {
+      return new URLSearchParams(window.SCR_ASSISTANT_LAUNCH_SEARCH || window.location.search || "");
+    }
+
+    function getFocusedConsultantName(email) {
+      const params = getLaunchParams();
+      return (params.get("consultantName") || params.get("name") || "").trim() || inferRosterNameFromEmail(email);
+    }
+
+    function ensureLaunchSelectedConsultants(params = getLaunchParams()) {
+      const selectedEmails = getLaunchSelectedEmails(params);
+      if (!selectedEmails.length) return [];
+
+      return selectedEmails.map(email => rosterByEmail[email] || addRuntimeRosterPerson({
+        name: inferRosterNameFromEmail(email),
+        email,
+        team: "Skills Matrix",
+        legacyOrg: "Selected",
+        timeZone: inferTimeZoneFromAvailabilityStart(email),
+        source: "Skills matrix selection"
+      })).filter(Boolean);
+    }
+
+    function ensureFocusedConsultantInFilter(options = {}) {
+      const focusEmail = getCalendarFocusEmail({
+        focusEmail: options.focusEmail,
+        includeSelected: true
+      });
+      if (!focusEmail) return null;
+
+      let person = rosterByEmail[focusEmail];
+      if (!person) {
+        person = addRuntimeRosterPerson({
+          name: options.name || getFocusedConsultantName(focusEmail),
+          email: focusEmail,
+          team: options.team || "Calendar Data",
+          legacyOrg: options.legacyOrg || "Direct",
+          timeZone: options.timeZone || inferTimeZoneFromAvailabilityStart(focusEmail),
+          source: options.source || "Focused consultant"
+        });
+      }
+
+      if (!person) return null;
+
+      ensureSelectValue("teamFilter", person.team, person.team.startsWith("Team ") ? person.team : `Team ${person.team}`);
+      ensureSelectValue("legacyOrgFilter", person.legacyOrg, person.legacyOrg);
+      populatePersonFilter();
+      ensureSelectValue("personFilter", person.email, person.name);
+
+      return person;
     }
 
     function parseLaunchStart(value) {
@@ -9282,22 +9181,31 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     }
 
     function applyLaunchParams() {
-      const params = new URLSearchParams(window.location.search);
+      const params = getLaunchParams();
       if (!Array.from(params.keys()).length) return;
 
+      const selectedPeople = ensureLaunchSelectedConsultants(params);
+      const hasSelectedPeople = selectedPeople.length > 0;
       const launchedPerson = findLaunchPerson(params);
 
-      if (launchedPerson) {
+      if (hasSelectedPeople) {
+        setSelectValue("teamFilter", "all");
+        setSelectValue("legacyOrgFilter", "all");
+        populatePersonFilter();
+        setSelectValue("personFilter", "all");
+        setPlanningZoneForPerson(selectedPeople[0]);
+      } else if (launchedPerson) {
         ensureSelectValue("teamFilter", launchedPerson.team, launchedPerson.team.startsWith("Team ") ? launchedPerson.team : `Team ${launchedPerson.team}`);
         ensureSelectValue("legacyOrgFilter", launchedPerson.legacyOrg, launchedPerson.legacyOrg);
         populatePersonFilter();
         document.getElementById("personFilter").value = launchedPerson.email;
-        document.getElementById("planningZone").value = launchedPerson.timeZone;
+        setPlanningZoneForPerson(launchedPerson);
       } else {
         ensureSelectValue("teamFilter", params.get("team"), params.get("team"));
         ensureSelectValue("legacyOrgFilter", params.get("legacyOrg"), params.get("legacyOrg"));
         populatePersonFilter();
         setSelectValue("personFilter", params.get("consultant") || params.get("person") || params.get("email"));
+        syncPlanningZoneToSelectedConsultant();
       }
 
       const date = params.get("date");
@@ -9314,20 +9222,17 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const start = parseLaunchStart(params.get("start"));
       if (start) setSelectValue("meetingStart", start);
 
-      const skill = params.get("skill");
-      if (skill) document.getElementById("skillFilter").value = skill;
-
       const search = params.get("search");
       if (search) document.getElementById("searchFilter").value = search;
     }
 
     function wireEvents() {
       document.getElementById("refreshButton").addEventListener("click", handleManualRefresh);
-      document.getElementById("loadSkillsButton").addEventListener("click", () => {
-        document.getElementById("skillsFileInput").click();
-      });
       document.getElementById("copyDebugButton")?.addEventListener("click", copyDebugConsole);
-      document.getElementById("skillsFileInput").addEventListener("change", handleSkillFileSelected);
+      document.getElementById("personFilter").addEventListener("change", () => {
+        syncPlanningZoneToSelectedConsultant();
+        renderAll();
+      });
 
       ["teamFilter", "legacyOrgFilter"].forEach(id => {
         document.getElementById(id).addEventListener("change", () => {
@@ -9344,20 +9249,17 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       });
 
       [
-        "personFilter",
         "planningZone",
         "meetingDate",
         "meetingStart",
         "meetingDuration",
         "bufferMinutes",
         "softMode",
-        "skillFilter",
         "eventSeverityFilter"
       ].forEach(id => {
         document.getElementById(id).addEventListener("change", renderAll);
       });
 
-      document.getElementById("skillFilter").addEventListener("input", renderAll);
       document.getElementById("searchFilter").addEventListener("input", renderEvents);
     }
 
@@ -9365,9 +9267,10 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     populateTimeOptions();
     configureDateWindow();
     populatePersonFilter();
-    loadSkillCache();
     applyLaunchParams();
+    ensureFocusedConsultantInFilter();
     refreshCalendarData();
+    ensureFocusedConsultantInFilter();
     wireEvents();
     renderAll();
   </script>

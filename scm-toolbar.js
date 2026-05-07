@@ -2,7 +2,7 @@
 // @name         SCR Mgr Assistant Toolbar BETA
 // @namespace    scrmgrassistant
 // @copyright    Copyright © 2024 by Ryan Morrissey
-// @version      27.0.0.16B
+// @version      27.0.0.22B
 // @description  Adds an Assistant Toolbar with interactive buttons to all SC Request forms.
 // @icon         https://cdn0.iconfinder.com/data/icons/phosphor-bold-vol-3-1/256/lifebuoy-duotone-512.png
 // @tag          productivity
@@ -1552,7 +1552,8 @@ var shout = (function () {
 
                                     </div>
 
-                                    <div class="ui blue button" id="productskillsearch"><i class="icon search"></i>Search Skills</div>
+                                        <div class="ui blue button" id="productskillsearch"><i class="icon search"></i>Search Skills</div>
+                                        <div class="ui teal disabled button" id="openselectedskillcalendars"><i class="calendar check outline icon"></i>Open Selected Calendars</div>
 
                                 </div>
 
@@ -2752,7 +2753,9 @@ var shout = (function () {
 			var tableHead = /* syntax: html */ `
                     <thead>
                         <tr>
-                            <th></th>
+                            <th class="center aligned">
+                                <input type="checkbox" id="tableSkillsCalendarSelectAll" aria-label="Select all skill result calendars">
+                            </th>
                             <th class="single line">SC Name & Mgr</th>
                             <th>Attributes</th>
                             <th class="sorted descending">Availability Notes</th>
@@ -2793,12 +2796,27 @@ var shout = (function () {
 				const row = /* syntax: html */ `
                     <tr>
                         <td class="center aligned tableSkillsAssign">
+                            <input type="checkbox" class="tableSkillsCalendarSelect" data-eid="${
+															data[i]["employeeId"]
+														}" data-ename="${
+															data[i]["employee"]
+														}" data-email="${
+															data[i]["email"] || ""
+														}" data-location="${
+															data[i]["location"] || ""
+														}" data-timezone="${
+															data[i]["timeZone"] || guessCalendarTimeZone(data[i]["location"])
+														}" aria-label="Select ${data[i]["employee"]} calendar">
                             <button type="button" class="ui mini primary icon button tableSkillsAssignButton" data-eid="${
 															data[i]["employeeId"]
 														}" data-ename="${
 															data[i]["employee"]
 														}" data-email="${
 															data[i]["email"] || ""
+														}" data-location="${
+															data[i]["location"] || ""
+														}" data-timezone="${
+															data[i]["timeZone"] || guessCalendarTimeZone(data[i]["location"])
 														}" data-tooltip="Assign user to request" data-position="right center">
                                 <i class="plus icon"></i>
                             </button>
@@ -2808,6 +2826,10 @@ var shout = (function () {
 															data[i]["employee"]
 														}" data-email="${
 															data[i]["email"] || ""
+														}" data-location="${
+															data[i]["location"] || ""
+														}" data-timezone="${
+															data[i]["timeZone"] || guessCalendarTimeZone(data[i]["location"])
 														}" data-tooltip="Open calendar dashboard" data-position="right center">
                                 <i class="calendar check outline icon"></i>
                             </button>
@@ -2944,6 +2966,18 @@ var shout = (function () {
 				// Update ratings
 				$(".ui.rating").rating();
 
+				updateSelectedSkillCalendarsButton();
+				$("#tableSkillsCalendarSelectAll").change(function () {
+					$(".tableSkillsCalendarSelect").prop("checked", this.checked);
+					updateSelectedSkillCalendarsButton();
+				});
+				$(".tableSkillsCalendarSelect").change(function () {
+					const allCount = $(".tableSkillsCalendarSelect").length;
+					const checkedCount = $(".tableSkillsCalendarSelect:checked").length;
+					$("#tableSkillsCalendarSelectAll").prop("checked", allCount > 0 && allCount === checkedCount);
+					updateSelectedSkillCalendarsButton();
+				});
+
 				// Update link events
 				$(".tableSkillsAssignButton").click(function (event) {
 					event.preventDefault();
@@ -2951,6 +2985,8 @@ var shout = (function () {
 					var eid = $(this).data("eid");
 					var ename = convertNameFormat($(this).data("ename"));
 					var email = $(this).data("email") || "";
+					var location = $(this).data("location") || "";
+					var timeZone = $(this).data("timezone") || guessCalendarTimeZone(location);
 					var cachedSc = getCachedScById(eid);
 					var cachedScByName = !email && !cachedSc.email ? getCachedScByName(ename) : {};
 					var resolvedEmail = email || cachedSc.email || cachedScByName.email || inferCalendarEmailFromName(ename);
@@ -2958,6 +2994,8 @@ var shout = (function () {
 					calendarSelectionOverrides[String(eid)] = {
 						name: ename,
 						email: resolvedEmail,
+						location: location,
+						timeZone: timeZone,
 					};
 
 					const newValues = [
@@ -2984,13 +3022,19 @@ var shout = (function () {
 					var eid = $(this).data("eid");
 					var ename = convertNameFormat($(this).data("ename"));
 					var email = $(this).data("email") || "";
+					var location = $(this).data("location") || "";
+					var timeZone = $(this).data("timezone") || guessCalendarTimeZone(location);
 					var cachedSc = getCachedScById(eid);
 					var cachedScByName = !email && !cachedSc.email ? getCachedScByName(ename) : {};
+					var resolvedLocation = location || cachedSc.location || cachedScByName.location || "";
+					var resolvedTimeZone = timeZone || cachedSc.timeZone || cachedScByName.timeZone || guessCalendarTimeZone(resolvedLocation);
 
 					openCalendarDashboard({
 						id: eid,
 						name: ename,
 						email: email || cachedSc.email || cachedScByName.email || "",
+						location: resolvedLocation,
+						timeZone: resolvedTimeZone,
 					}).catch((error) => {
 						shout("Calendar dashboard button error:", error);
 					});
@@ -3660,6 +3704,7 @@ var shout = (function () {
 			const cleanName = getCleanCalendarRosterName(name);
 			const knownEmails = {
 				ericbaghdasarian: "eric.baghdasarian@oracle.com",
+				ericbaghdasrian: "eric.baghdasarian@oracle.com",
 			};
 			const knownEmail = knownEmails[canonicalCalendarName(cleanName)];
 
@@ -3722,11 +3767,14 @@ var shout = (function () {
 				.replace(/\s*\(based in .*?\)\s*$/i, "")
 				.trim();
 			const matchByName = !match.email && !override.email ? getCachedScByName(cleanName) : {};
+			const location = override.location || match.location || matchByName.location || getCalendarRosterLocation(displayText);
 
 			return {
 				id: value,
 				name: cleanName,
 				email: override.email || match.email || matchByName.email || inferCalendarEmailFromName(cleanName),
+				location: location,
+				timeZone: override.timeZone || match.timeZone || matchByName.timeZone || guessCalendarTimeZone(location),
 			};
 		}
 
@@ -3802,6 +3850,60 @@ var shout = (function () {
 			].join("\n");
 		}
 
+		function getSkillCalendarPersonFromElement(element) {
+			const $element = $(element);
+			const eid = $element.data("eid");
+			const name = convertNameFormat($element.data("ename"));
+			const email = $element.data("email") || "";
+			const location = $element.data("location") || "";
+			const timeZone = $element.data("timezone") || guessCalendarTimeZone(location);
+			const cachedSc = getCachedScById(eid);
+			const cachedScByName = !email && !cachedSc.email ? getCachedScByName(name) : {};
+			const resolvedLocation = location || cachedSc.location || cachedScByName.location || "";
+
+			return {
+				id: eid,
+				name: name,
+				email: email || cachedSc.email || cachedScByName.email || inferCalendarEmailFromName(name),
+				location: resolvedLocation,
+				timeZone: timeZone || cachedSc.timeZone || cachedScByName.timeZone || guessCalendarTimeZone(resolvedLocation),
+				team: "Skills Matrix",
+				legacyOrg: "Selected",
+				source: "Skills matrix selection",
+			};
+		}
+
+		function getSelectedSkillCalendarPeople() {
+			const people = [];
+			const seen = new Set();
+
+			$(".tableSkillsCalendarSelect:checked").each(function () {
+				const person = getSkillCalendarPersonFromElement(this);
+				const key = person.email || String(person.id || "");
+
+				if (!key || seen.has(key)) {
+					return;
+				}
+
+				seen.add(key);
+				people.push(person);
+			});
+
+			return people;
+		}
+
+		function updateSelectedSkillCalendarsButton() {
+			const count = $(".tableSkillsCalendarSelect:checked").length;
+			const $button = $("#openselectedskillcalendars");
+
+			if (!$button.length) {
+				return;
+			}
+
+			$button.toggleClass("disabled", count === 0);
+			$button.html(`<i class="calendar check outline icon"></i>${count ? `Open ${count} Selected Calendar${count === 1 ? "" : "s"}` : "Open Selected Calendars"}`);
+		}
+
 		function copyTextToClipboard(text) {
 			if (typeof GM_setClipboard === "function") {
 				try {
@@ -3834,11 +3936,15 @@ var shout = (function () {
 			}
 
 			const date = context.date || getDateNeededIsoForDashboard();
+			const people = Array.isArray(context.people) ? context.people.filter((person) => person && person.email) : [];
+			const peopleEmails = people.map((person) => String(person.email || "").trim().toLowerCase()).filter(Boolean);
 
-			if (context.email) {
+			if (peopleEmails.length > 0) {
+				url.searchParams.set("consultants", peopleEmails.join(","));
+			} else if (context.email) {
 				url.searchParams.set("consultant", context.email);
 			}
-			if (context.name) {
+			if (context.name && peopleEmails.length <= 1) {
 				url.searchParams.set("consultantName", context.name);
 			}
 			if (date) {
@@ -3846,6 +3952,9 @@ var shout = (function () {
 			}
 			if (context.skill) {
 				url.searchParams.set("skill", context.skill);
+			}
+			if (context.timeZone) {
+				url.searchParams.set("zone", context.timeZone);
 			}
 			url.searchParams.set("duration", context.duration || "60");
 			url.searchParams.set("source", "scr-assistant");
@@ -3950,8 +4059,13 @@ var shout = (function () {
 				});
 			}
 
-			const isFocusedLaunch = Boolean(context.email);
+			const contextPeople = Array.isArray(context.people) ? context.people : [];
+			const isFocusedLaunch = Boolean(context.email || contextPeople.length);
 			const dashboardPeople = isFocusedLaunch ? [] : getCalendarDashboardPeopleData();
+
+			contextPeople.forEach((person) => {
+				addPerson(person);
+			});
 
 			dashboardPeople.forEach((person) => {
 				addPerson(person);
@@ -3979,6 +4093,7 @@ var shout = (function () {
 					name: context.name || context.email,
 					email: context.email,
 					location: context.location || "",
+					timeZone: context.timeZone || "",
 				});
 			}
 
@@ -4028,6 +4143,204 @@ window.DIRECT_CONNECTOR_AVAILABILITY.push(${JSON.stringify({ email: focusEmail, 
 				);
 			}
 			html = html.replace('<label for="planningZone">Planning Zone</label>', '<label for="planningZone">Time Zone</label>');
+			if (!html.includes('value="America/Denver"')) {
+				html = html.replace(
+					'<option value="America/New_York">Eastern (ET)</option>',
+					`<option value="America/New_York">Eastern (ET)</option>
+          <option value="America/Denver">Mountain (MT)</option>
+          <option value="America/Los_Angeles">Pacific (PT)</option>`,
+				);
+			}
+			html = html.replace(
+				`function getZoneLabel(zone) {
+      return zone === "America/New_York" ? "Eastern (ET)" : "Central (CT)";
+    }`,
+				`function getZoneLabel(zone) {
+      const zoneLabels = {
+        "America/New_York": "Eastern (ET)",
+        "America/Chicago": "Central (CT)",
+        "America/Denver": "Mountain (MT)",
+        "America/Los_Angeles": "Pacific (PT)"
+      };
+      return zoneLabels[zone] || zone;
+    }`,
+			);
+			html = html
+				.replace(
+					/\s*<div class="control">\s*<label for="skillFilter">Product Skill<\/label>[\s\S]*?<datalist id="skillOptions"><\/datalist>\s*<\/div>/,
+					"",
+				)
+				.replace(
+					/\s*<div class="control">\s*<label for="skillsFileInput">Skills CSV<\/label>[\s\S]*?<input id="skillsFileInput" type="file" accept="\.csv,text\/csv" hidden \/>\s*<\/div>/,
+					"",
+				)
+				.replace(/\s*<div class="subtle" id="skillStatusLabel">[\s\S]*?<\/div>/, "")
+				.replace(/\s*<th>Skill Match<\/th>/, "")
+				.replace(/\s*<td>\$\{skillMatchHtml\(row\)\}<\/td>/, "")
+				.replace('body.innerHTML = `<tr><td colspan="8" class="subtle">No consultants match the current filters.</td></tr>`;', 'body.innerHTML = `<tr><td colspan="7" class="subtle">No consultants match the current filters.</td></tr>`;')
+				.replace('const skillQuery = document.getElementById("skillFilter").value.trim();', 'const skillQuery = "";')
+				.replace('${row.team} - ${getZoneLabel(row.timeZone)}${row.skillRating ? ` - skill ${row.skillRating}` : ""}', '${row.team} - ${getZoneLabel(row.timeZone)}')
+				.replace(
+					`      const skill = params.get("skill");
+      if (skill) document.getElementById("skillFilter").value = skill;
+
+`,
+					"",
+				)
+				.replace(
+					`      document.getElementById("loadSkillsButton").addEventListener("click", () => {
+        document.getElementById("skillsFileInput").click();
+      });
+`,
+					"",
+				)
+					.replace('      document.getElementById("skillsFileInput").addEventListener("change", handleSkillFileSelected);\n', "")
+					.replace('        "skillFilter",\n', "")
+					.replace('      document.getElementById("skillFilter").addEventListener("input", renderAll);\n', "")
+					.replace("    loadSkillCache();\n", "");
+			if (!html.includes("function inferTimeZoneFromAvailabilityStart")) {
+				html = html.replace(
+					"function addCalendarDataRosterEntries() {",
+					`function inferTimeZoneFromAvailabilityStart(email) {
+      const normalized = normalizeEmail(email);
+      const snapshot = DIRECT_CONNECTOR_AVAILABILITY.find(item => normalizeEmail(item.email) === normalized);
+      if (!snapshot?.start) return "";
+
+      const date = new Date(snapshot.start);
+      if (Number.isNaN(date.valueOf())) return "";
+
+      const zones = [
+        "America/New_York",
+        "America/Chicago",
+        "America/Denver",
+        "America/Los_Angeles"
+      ];
+
+      return zones.find(zone => {
+        const parts = new Intl.DateTimeFormat("en-US", {
+          timeZone: zone,
+          hour12: false,
+          hour: "2-digit",
+          minute: "2-digit"
+        }).formatToParts(date).reduce((acc, part) => {
+          if (part.type !== "literal") acc[part.type] = part.value;
+          return acc;
+        }, {});
+
+        return (parts.hour === "00" || parts.hour === "24") && parts.minute === "00";
+      }) || "";
+    }
+
+    function setPlanningZoneForPerson(person) {
+      if (!person?.timeZone) return false;
+      return setSelectValue("planningZone", person.timeZone);
+    }
+
+    function syncPlanningZoneToSelectedConsultant() {
+      const email = getSelectedConsultantEmail();
+      const person = email ? rosterByEmail[email] : null;
+      return setPlanningZoneForPerson(person);
+    }
+
+    function addCalendarDataRosterEntries() {`,
+				);
+			}
+			html = html
+				.replace(
+					'timeZone: person.timeZone || "America/New_York",',
+					'timeZone: person.timeZone || inferTimeZoneFromAvailabilityStart(email) || "America/New_York",',
+				)
+				.replace(
+					`legacyOrg: "Direct",
+          source: "Calendar data"`,
+					`legacyOrg: "Direct",
+          timeZone: inferTimeZoneFromAvailabilityStart(email),
+          source: "Calendar data"`,
+				)
+				.replace(
+					`legacyOrg: options.legacyOrg || "Direct",
+          source: options.source || "Focused consultant"`,
+					`legacyOrg: options.legacyOrg || "Direct",
+          timeZone: options.timeZone || inferTimeZoneFromAvailabilityStart(focusEmail),
+          source: options.source || "Focused consultant"`,
+				)
+				.replace(
+					'document.getElementById("planningZone").value = launchedPerson.timeZone;',
+					"setPlanningZoneForPerson(launchedPerson);",
+				)
+				.replace(
+					`setSelectValue("personFilter", params.get("consultant") || params.get("person") || params.get("email"));
+      }`,
+					`setSelectValue("personFilter", params.get("consultant") || params.get("person") || params.get("email"));
+        syncPlanningZoneToSelectedConsultant();
+      }`,
+				);
+			if (!html.includes('personFilter").addEventListener("change", () => {\n        syncPlanningZoneToSelectedConsultant();')) {
+				html = html.replace(
+					'document.getElementById("copyDebugButton")?.addEventListener("click", copyDebugConsole);',
+					`document.getElementById("copyDebugButton")?.addEventListener("click", copyDebugConsole);
+      document.getElementById("personFilter").addEventListener("change", () => {
+        syncPlanningZoneToSelectedConsultant();
+        renderAll();
+      });`,
+				);
+			}
+			html = html.replace('        "personFilter",\n', "");
+			html = html.replace(
+				/function renderAlternateSlots\(\) \{[\s\S]*?\n    function getDayWindow\(\) \{/,
+				`function renderAlternateSlots() {
+      const selectedStart = Number(document.getElementById("meetingStart").value);
+      const selectedDuration = Number(document.getElementById("meetingDuration").value);
+      const container = document.getElementById("alternateSlots");
+      const candidates = [];
+      const workdayStart = 8 * 60;
+      const workdayEnd = 17 * 60;
+      const lastStart = Math.max(workdayStart, workdayEnd - selectedDuration);
+
+      for (let start = workdayStart; start <= lastStart; start += 30) {
+        const windowConfig = getWindow(start);
+        const rows = getAvailabilityRows(windowConfig);
+        const clean = rows.filter(row => row.rank === 0);
+        if (!clean.length) continue;
+        const noHardMeeting = rows.filter(row => row.calendarLoaded && row.hardMeeting === 0);
+        const bufferRisk = rows.filter(row => row.rank === 3);
+        const soft = rows.filter(row => row.rank === 1);
+        const partial = rows.filter(row => !row.calendarLoaded);
+        candidates.push({ start, windowConfig, rows, clean, noHardMeeting, bufferRisk, soft, partial });
+      }
+
+      candidates.sort((a, b) => a.start - b.start);
+
+      if (!candidates.length) {
+        container.innerHTML = '<div class="subtle">No open ' + selectedDuration + '-minute slots match the current consultant, date, and buffer.</div>';
+        return;
+      }
+
+      container.innerHTML = candidates.map(candidate => {
+        const names = candidate.clean.slice(0, 3).map(row => row.name).join(", ");
+        const selectedClass = candidate.start === selectedStart ? " selected" : "";
+        return [
+          '<button class="alt-slot' + selectedClass + '" type="button" data-start="' + candidate.start + '">',
+          '<div class="alt-top">',
+          '<strong>' + formatTimeRange(candidate.windowConfig.meetingStart, candidate.windowConfig.meetingEnd, candidate.windowConfig.timeZone) + '</strong>',
+          '<span class="pill available">' + candidate.clean.length + ' open</span>',
+          '</div>',
+          '<div class="subtle">' + candidate.noHardMeeting.length + ' loaded without hard meeting conflict; ' + candidate.bufferRisk.length + ' buffer risks; ' + candidate.soft.length + ' soft; ' + candidate.partial.length + ' snapshot gaps</div>',
+          '<div class="subtle">' + names + '</div>',
+          '</button>'
+        ].join("");
+      }).join("");
+
+      container.querySelectorAll("button[data-start]").forEach(button => {
+        button.addEventListener("click", () => {
+          document.getElementById("meetingStart").value = button.dataset.start;
+          renderAll();
+        });
+      });
+    }
+
+    function getDayWindow() {`,
+			);
 			if (!html.includes("DIRECT_CONNECTOR_AVAILABILITY.filter(snapshot => String(snapshot.email")) {
 				html = html.replace(
 					"DIRECT_CONNECTOR_AVAILABILITY.forEach(snapshot => {",
@@ -4476,15 +4789,13 @@ window.DIRECT_CONNECTOR_AVAILABILITY.push(${JSON.stringify({ email: focusEmail, 
     }`,
 			);
 			html = html.replace("renderEvents();\n    }", "renderEvents();\n      renderDebugConsole();\n    }");
-			html = html.replace(
-				`document.getElementById("loadSkillsButton").addEventListener("click", () => {
-        document.getElementById("skillsFileInput").click();
-      });`,
-				`document.getElementById("loadSkillsButton").addEventListener("click", () => {
-        document.getElementById("skillsFileInput").click();
-      });
+			if (!html.includes('copyDebugButton")?.addEventListener')) {
+				html = html.replace(
+					'document.getElementById("refreshButton").addEventListener("click", handleManualRefresh);',
+					`document.getElementById("refreshButton").addEventListener("click", handleManualRefresh);
       document.getElementById("copyDebugButton")?.addEventListener("click", copyDebugConsole);`,
-			);
+				);
+			}
 			if (!html.includes("function addCalendarDataRosterEntries")) {
 				html = html.replace(
 					"function parseLaunchStart(value) {",
@@ -4527,19 +4838,72 @@ window.DIRECT_CONNECTOR_AVAILABILITY.push(${JSON.stringify({ email: focusEmail, 
     function parseLaunchStart(value) {`,
 				);
 			}
+			if (!html.includes("function ensureFocusedConsultantInFilter")) {
+				html = html.replace(
+					"function parseLaunchStart(value) {",
+					`function getLaunchParams() {
+      return new URLSearchParams(window.SCR_ASSISTANT_LAUNCH_SEARCH || window.location.search || "");
+    }
+
+    function getFocusedConsultantName(email) {
+      const params = getLaunchParams();
+      return (params.get("consultantName") || params.get("name") || "").trim() || inferRosterNameFromEmail(email);
+    }
+
+    function ensureFocusedConsultantInFilter(options = {}) {
+      const focusEmail = getCalendarFocusEmail({
+        focusEmail: options.focusEmail,
+        includeSelected: true
+      });
+      if (!focusEmail) return null;
+
+      let person = rosterByEmail[focusEmail];
+      if (!person) {
+        person = addRuntimeRosterPerson({
+          name: options.name || getFocusedConsultantName(focusEmail),
+          email: focusEmail,
+          team: options.team || "Calendar Data",
+          legacyOrg: options.legacyOrg || "Direct",
+          source: options.source || "Focused consultant"
+        });
+      }
+
+      if (!person) return null;
+
+      ensureSelectValue("teamFilter", person.team, person.team.startsWith("Team ") ? person.team : \`Team \${person.team}\`);
+      ensureSelectValue("legacyOrgFilter", person.legacyOrg, person.legacyOrg);
+      populatePersonFilter();
+      ensureSelectValue("personFilter", person.email, person.name);
+
+      return person;
+    }
+
+    function parseLaunchStart(value) {`,
+				);
+			}
 			if (!html.includes("addCalendarDataRosterEntries();")) {
 				html = html.replace(
 					"populateTimeOptions();\n    configureDateWindow();\n    populatePersonFilter();",
 					"addCalendarDataRosterEntries();\n    populateTimeOptions();\n    configureDateWindow();\n    populatePersonFilter();",
 				);
 			}
+			if (!html.includes("ensureFocusedConsultantInFilter();")) {
+				html = html.replace(
+					"applyLaunchParams();\n    refreshCalendarData();",
+					"applyLaunchParams();\n    ensureFocusedConsultantInFilter();\n    refreshCalendarData();\n    ensureFocusedConsultantInFilter();",
+				);
+			}
 
 			const launchSearch = new URL(url).search;
 			const dashboardRoster = buildCalendarDashboardRoster(context);
+			const selectedEmails = Array.isArray(context.people)
+				? context.people.map((person) => String(person.email || "").trim().toLowerCase()).filter(Boolean)
+				: [];
 			const launchScript = `<script>
 window.SCR_ASSISTANT_LAUNCH_SEARCH = ${JSON.stringify(launchSearch)};
 window.SCR_ASSISTANT_ROSTER = ${JSON.stringify(dashboardRoster)};
 window.SCR_ASSISTANT_FOCUS_EMAIL = ${JSON.stringify(focusEmail)};
+window.SCR_ASSISTANT_SELECTED_EMAILS = ${JSON.stringify(selectedEmails)};
 </script>`;
 			const rosterMergeScript = `
     if (Array.isArray(window.SCR_ASSISTANT_ROSTER)) {
@@ -4689,6 +5053,10 @@ window.SCR_ASSISTANT_FOCUS_EMAIL = ${JSON.stringify(focusEmail)};
 
 		async function openCalendarDashboard(context, statusSelector) {
 			const normalizedContext = { ...(context || {}) };
+
+			if (Array.isArray(normalizedContext.people) && normalizedContext.people.length > 0 && !normalizedContext.timeZone) {
+				normalizedContext.timeZone = normalizedContext.people[0].timeZone || "";
+			}
 
 			if (!normalizedContext.email && normalizedContext.name) {
 				normalizedContext.email = inferCalendarEmailFromName(normalizedContext.name);
@@ -4857,6 +5225,27 @@ window.SCR_ASSISTANT_FOCUS_EMAIL = ${JSON.stringify(focusEmail)};
 			const tableFilters = getTableFilters();
 			shout("Table filters:", tableFilters);
 			updateBodyOfWorkTable(skills, industryId, tableFilters);
+		});
+		$("#openselectedskillcalendars").click(function (event) {
+			event.preventDefault();
+
+			if ($(this).hasClass("disabled")) {
+				return;
+			}
+
+			const people = getSelectedSkillCalendarPeople();
+
+			if (!people.length) {
+				updateSelectedSkillCalendarsButton();
+				return;
+			}
+
+			openCalendarDashboard({
+				people: people,
+				timeZone: people[0].timeZone || "",
+			}).catch((error) => {
+				shout("Selected calendar dashboard button error:", error);
+			});
 		});
 
 		$("#ai-request-summary-btn").click(function (event) {
