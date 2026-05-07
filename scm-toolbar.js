@@ -2,7 +2,7 @@
 // @name         SCR Mgr Assistant Toolbar BETA
 // @namespace    scrmgrassistant
 // @copyright    Copyright © 2024 by Ryan Morrissey
-// @version      27.0.0.9B
+// @version      27.0.0.11B
 // @description  Adds an Assistant Toolbar with interactive buttons to all SC Request forms.
 // @icon         https://cdn0.iconfinder.com/data/icons/phosphor-bold-vol-3-1/256/lifebuoy-duotone-512.png
 // @tag          productivity
@@ -3898,26 +3898,29 @@ var shout = (function () {
 				});
 			}
 
-			const dashboardPeople = getCalendarDashboardPeopleData();
+			const isFocusedLaunch = Boolean(context.email);
+			const dashboardPeople = isFocusedLaunch ? [] : getCalendarDashboardPeopleData();
 
 			dashboardPeople.forEach((person) => {
 				addPerson(person);
 			});
 
-			if (!dashboardPeople.length) {
+			if (!isFocusedLaunch && !dashboardPeople.length) {
 				shout("Falling back to filtered SC cache for calendar dashboard roster.");
 			}
 
-			(!dashboardPeople.length ? getPeopleCache() || [] : []).forEach((person) => {
-				const cleanName = getCleanCalendarRosterName(person.name);
-				const location = getCalendarRosterLocation(person.name);
+			if (!isFocusedLaunch && !dashboardPeople.length) {
+				(getPeopleCache() || []).forEach((person) => {
+					const cleanName = getCleanCalendarRosterName(person.name);
+					const location = getCalendarRosterLocation(person.name);
 
-				addPerson({
-					name: cleanName,
-					email: person.email,
-					location: location,
+					addPerson({
+						name: cleanName,
+						email: person.email,
+						location: location,
+					});
 				});
-			});
+			}
 
 			if (context.email) {
 				addPerson({
@@ -3958,6 +3961,7 @@ var shout = (function () {
 					"new URLSearchParams(window.SCR_ASSISTANT_LAUNCH_SEARCH || window.location.search)",
 				);
 			}
+			html = html.replace('<label for="planningZone">Planning Zone</label>', '<label for="planningZone">Time Zone</label>');
 			if (!html.includes("DIRECT_CONNECTOR_AVAILABILITY.filter(snapshot => String(snapshot.email")) {
 				html = html.replace(
 					"DIRECT_CONNECTOR_AVAILABILITY.forEach(snapshot => {",
@@ -3984,7 +3988,7 @@ var shout = (function () {
           : cached.events;`,
 				);
 			}
-			if (!html.includes("if (!window.SCR_ASSISTANT_FOCUS_EMAIL)")) {
+			if (!html.includes("if (!window.SCR_ASSISTANT_FOCUS_EMAIL)") && !html.includes("if (!focusEmail)")) {
 				html = html.replace(
 					"writeCalendarCache(rawEvents, lastRefreshAt.toISOString());",
 					`if (!window.SCR_ASSISTANT_FOCUS_EMAIL) {
@@ -3998,6 +4002,207 @@ var shout = (function () {
 					"populatePersonFilter();\n    loadSkillCache();\n    applyLaunchParams();\n    refreshCalendarData();",
 				);
 			}
+			if (!html.includes("function normalizeEmail(value)")) {
+				html = html.replace(
+					"function refreshCalendarData(options = {}) {",
+					`function normalizeEmail(value) {
+      return String(value || "").trim().toLowerCase();
+    }
+
+    function getSelectedConsultantEmail() {
+      const selected = normalizeEmail(document.getElementById("personFilter")?.value);
+      return selected && selected !== "all" ? selected : "";
+    }
+
+    function getCalendarFocusEmail(options = {}) {
+      return normalizeEmail(
+        options.focusEmail ||
+        window.SCR_ASSISTANT_FOCUS_EMAIL ||
+        (options.includeSelected ? getSelectedConsultantEmail() : "")
+      );
+    }
+
+    function getCalendarFocusPerson(options = {}) {
+      const email = getCalendarFocusEmail(options);
+      return email ? rosterByEmail[email] || { name: email, email } : null;
+    }
+
+    function isFocusedConsultant(person) {
+      const focusEmail = getCalendarFocusEmail({ includeSelected: true });
+      return Boolean(person && focusEmail && normalizeEmail(person.email) === focusEmail);
+    }
+
+    function missingCalendarLabel(person) {
+      return isFocusedConsultant(person) ? "Getting calendar info" : "Snapshot gap";
+    }
+
+    function missingCalendarSentence(person) {
+      if (isFocusedConsultant(person)) {
+        return \`Getting calendar information for \${person.name || person.email}. This focused refresh only targets this consultant before treating the window as open time.\`;
+      }
+
+      return "This consultant still needs 3-week Outlook snapshot data before treating this as open time.";
+    }
+
+    function missingCalendarSubtle(person) {
+      return isFocusedConsultant(person) ? "getting calendar information" : "calendar not loaded";
+    }
+
+    function refreshCalendarData(options = {}) {`,
+				);
+			}
+			if (html.includes("function expandConnectorAvailability() {")) {
+				html = html.replace(
+					"function expandConnectorAvailability() {",
+					"function expandConnectorAvailability(focusEmail = getCalendarFocusEmail({ includeSelected: false })) {",
+				);
+			}
+			html = html.replace(
+				`(window.SCR_ASSISTANT_FOCUS_EMAIL
+        ? DIRECT_CONNECTOR_AVAILABILITY.filter(snapshot => String(snapshot.email || "").toLowerCase() === window.SCR_ASSISTANT_FOCUS_EMAIL)
+        : DIRECT_CONNECTOR_AVAILABILITY
+      ).forEach(snapshot => {`,
+				`(focusEmail
+        ? DIRECT_CONNECTOR_AVAILABILITY.filter(snapshot => String(snapshot.email || "").toLowerCase() === focusEmail)
+        : DIRECT_CONNECTOR_AVAILABILITY
+      ).forEach(snapshot => {`,
+			);
+			html = html.replace(
+				`function cloneEmbeddedEvents() {
+      const seen = new Set();
+      const focusEmail = window.SCR_ASSISTANT_FOCUS_EMAIL || "";
+      return [...embeddedEvents, ...DIRECT_CONNECTOR_EVENTS, ...expandConnectorAvailability()]`,
+				`function cloneEmbeddedEvents(focusEmail = getCalendarFocusEmail({ includeSelected: false })) {
+      const seen = new Set();
+      return [...embeddedEvents, ...DIRECT_CONNECTOR_EVENTS, ...expandConnectorAvailability(focusEmail)]`,
+			);
+			html = html.replace(
+				`const force = Boolean(options.force);
+      const cached = readCalendarCache();`,
+				`const force = Boolean(options.force);
+      const focusEmail = getCalendarFocusEmail({ focusEmail: options.focusEmail, includeSelected: false });
+      const cached = readCalendarCache();`,
+			);
+			html = html.replace(
+				`const focusEmail = window.SCR_ASSISTANT_FOCUS_EMAIL || "";
+        rawEvents = focusEmail`,
+				`rawEvents = focusEmail`,
+			);
+			html = html.replace("rawEvents = cloneEmbeddedEvents();", "rawEvents = cloneEmbeddedEvents(focusEmail);");
+			html = html.replace(
+				`refreshSource = force ? "manual refresh" : "snapshot refresh";`,
+				`refreshSource = focusEmail ? (force ? "focused manual refresh" : "focused snapshot refresh") : (force ? "manual refresh" : "snapshot refresh");`,
+			);
+			html = html.replace("if (!window.SCR_ASSISTANT_FOCUS_EMAIL) {", "if (!focusEmail) {");
+			if (!html.includes("focused consultant refresh")) {
+				html = html.replace(
+					/function renderRefreshState\(\) \{[\s\S]*?\n    function classifyEvent/,
+					`function renderRefreshState() {
+      const label = document.getElementById("lastRefreshLabel");
+      const status = document.getElementById("cacheStatusLabel");
+      if (!label || !status) return;
+
+      const cacheMinutes = Math.round(CACHE_TTL_MS / 60000);
+      const focusPerson = getCalendarFocusPerson({ includeSelected: true });
+      const sourceLabel = focusPerson
+        ? (refreshSource === "cache" ? "using cached data for selected consultant" : "focused consultant refresh")
+        : refreshSource === "cache"
+        ? "using cached calendar data"
+        : "calendar data refreshed";
+      const focusMissing = focusPerson && !hasLoadedCalendar(focusPerson);
+      label.textContent = focusMissing
+        ? \`Getting calendar information for \${focusPerson.name || focusPerson.email}\`
+        : lastRefreshAt
+        ? \`Last refreshed: \${formatRefreshTimestamp(lastRefreshAt)} \${getZoneLabel(document.getElementById("planningZone").value)}\`
+        : "Last refresh pending";
+      const visibleRoster = selectedRoster();
+      const loadedCount = visibleRoster.filter(person => hasLoadedCalendar(person)).length;
+      const partialCount = visibleRoster.length - loadedCount;
+      if (focusPerson) {
+        const focusState = focusMissing
+          ? \`getting calendar information for \${focusPerson.name || focusPerson.email}\`
+          : \`calendar loaded for \${focusPerson.name || focusPerson.email}\`;
+        status.textContent = \`Time zone: \${getZoneLabel(document.getElementById("planningZone").value)}; 3-week staffing snapshot: \${formatStaffingWindow()}; \${focusState}; \${sourceLabel}; cache \${cacheMinutes} min\`;
+        return;
+      }
+      status.textContent = \`Time zone: \${getZoneLabel(document.getElementById("planningZone").value)}; 3-week staffing snapshot: \${formatStaffingWindow()}; \${loadedCount} loaded calendars in current filter; \${partialCount} snapshot gaps; \${sourceLabel}; cache \${cacheMinutes} min\`;
+    }
+
+    function classifyEvent`,
+				);
+			}
+			html = html.replace(
+				`function coverageBadge(row) {
+      return row.calendarLoaded
+        ? \`<span class="pill available">3-week snapshot loaded</span>\`
+        : \`<span class="pill unknown">Snapshot gap</span>\`;
+    }`,
+				`function coverageBadge(row) {
+      return row.calendarLoaded
+        ? \`<span class="pill available">3-week snapshot loaded</span>\`
+        : \`<span class="pill unknown">\${missingCalendarLabel(row)}</span>\`;
+    }`,
+			);
+			html = html.replace(
+				`if (!calendarLoaded && !conflicts.length) {
+        rank = 5;
+        label = "Snapshot gap";
+        pill = "unknown";
+      }`,
+				`if (!calendarLoaded && !conflicts.length) {
+        rank = 5;
+        label = missingCalendarLabel(person);
+        pill = "unknown";
+      }`,
+			);
+			html = html.replace(
+				`const coverageDetail = partialCount
+        ? \` \${partialCount} consultants still need 3-week Outlook snapshot data; \${unknownCount} are not counted as open for this window.\`
+        : "";`,
+				`const focusedMissing = rows.find(row => !row.calendarLoaded && isFocusedConsultant(row));
+      const coverageDetail = focusedMissing
+        ? \` \${missingCalendarSentence(focusedMissing)}\`
+        : partialCount
+        ? \` \${partialCount} consultants still need 3-week Outlook snapshot data; \${unknownCount} are not counted as open for this window.\`
+        : "";`,
+			);
+			html = html.replace(
+				'${row.calendarLoaded ? "" : " - snapshot gap"}',
+				'${row.calendarLoaded ? "" : ` - ${missingCalendarLabel(row).toLowerCase()}`}',
+			);
+			html = html.replace(
+				`<span class="subtle">This consultant still needs 3-week Outlook snapshot data before treating this as open time.</span>`,
+				`<span class="subtle">\${missingCalendarSentence(row)}</span>`,
+			);
+			html = html.replace(
+				'${item.calendarLoaded ? `${(item.open / 60).toFixed(1)}h open` : "not loaded"}',
+				'${item.calendarLoaded ? `${(item.open / 60).toFixed(1)}h open` : missingCalendarLabel(item)}',
+			);
+			html = html.replace(
+				'${item.calendarLoaded ? `${(item.open / 60).toFixed(1)} open` : "calendar not loaded"}',
+				'${item.calendarLoaded ? `${(item.open / 60).toFixed(1)} open` : missingCalendarSubtle(item)}',
+			);
+			html = html.replace(
+				`function handleManualRefresh() {
+      const button = document.getElementById("refreshButton");
+      button.disabled = true;
+      button.textContent = "Refreshing...";
+      refreshCalendarData({ force: true });
+      renderAll();
+      button.textContent = "Refresh now";
+      button.disabled = false;
+    }`,
+				`function handleManualRefresh() {
+      const button = document.getElementById("refreshButton");
+      const focusEmail = getSelectedConsultantEmail() || getCalendarFocusEmail({ includeSelected: false });
+      button.disabled = true;
+      button.textContent = focusEmail ? "Refreshing consultant..." : "Refreshing...";
+      refreshCalendarData({ force: true, focusEmail });
+      renderAll();
+      button.textContent = focusEmail ? "Refresh consultant" : "Refresh now";
+      button.disabled = false;
+    }`,
+			);
 
 			const launchSearch = new URL(url).search;
 			const dashboardRoster = buildCalendarDashboardRoster(context);

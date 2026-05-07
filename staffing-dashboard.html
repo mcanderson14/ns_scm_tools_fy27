@@ -563,7 +563,7 @@
         <input id="skillsFileInput" type="file" accept=".csv,text/csv" hidden />
       </div>
       <div class="control">
-        <label for="planningZone">Planning Zone</label>
+        <label for="planningZone">Time Zone</label>
         <select id="planningZone">
           <option value="America/Chicago">Central (CT)</option>
           <option value="America/New_York">Eastern (ET)</option>
@@ -8006,7 +8006,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       .filter(event => event.person);
     }
 
-    function expandConnectorAvailability() {
+    function expandConnectorAvailability(focusEmail = getCalendarFocusEmail({ includeSelected: false })) {
       const statusMap = {
         "1": { status: "tentative", subject: "Free/busy: Tentative hold" },
         "2": { status: "busy", subject: "Free/busy: Busy; subject unavailable" },
@@ -8015,8 +8015,8 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       };
       const expanded = [];
 
-      (window.SCR_ASSISTANT_FOCUS_EMAIL
-        ? DIRECT_CONNECTOR_AVAILABILITY.filter(snapshot => String(snapshot.email || "").toLowerCase() === window.SCR_ASSISTANT_FOCUS_EMAIL)
+      (focusEmail
+        ? DIRECT_CONNECTOR_AVAILABILITY.filter(snapshot => String(snapshot.email || "").toLowerCase() === focusEmail)
         : DIRECT_CONNECTOR_AVAILABILITY
       ).forEach(snapshot => {
         const view = String(snapshot.view || "");
@@ -8049,10 +8049,9 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       return expanded;
     }
 
-    function cloneEmbeddedEvents() {
+    function cloneEmbeddedEvents(focusEmail = getCalendarFocusEmail({ includeSelected: false })) {
       const seen = new Set();
-      const focusEmail = window.SCR_ASSISTANT_FOCUS_EMAIL || "";
-      return [...embeddedEvents, ...DIRECT_CONNECTOR_EVENTS, ...expandConnectorAvailability()]
+      return [...embeddedEvents, ...DIRECT_CONNECTOR_EVENTS, ...expandConnectorAvailability(focusEmail)]
         .filter(event => !focusEmail || String(event.email || "").toLowerCase() === focusEmail)
         .filter(event => {
           const key = `${event.email}|${event.status}|${event.subject}|${event.start}|${event.end}`;
@@ -8089,23 +8088,66 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       }
     }
 
+    function normalizeEmail(value) {
+      return String(value || "").trim().toLowerCase();
+    }
+
+    function getSelectedConsultantEmail() {
+      const selected = normalizeEmail(document.getElementById("personFilter")?.value);
+      return selected && selected !== "all" ? selected : "";
+    }
+
+    function getCalendarFocusEmail(options = {}) {
+      return normalizeEmail(
+        options.focusEmail ||
+        window.SCR_ASSISTANT_FOCUS_EMAIL ||
+        (options.includeSelected ? getSelectedConsultantEmail() : "")
+      );
+    }
+
+    function getCalendarFocusPerson(options = {}) {
+      const email = getCalendarFocusEmail(options);
+      return email ? rosterByEmail[email] || { name: email, email } : null;
+    }
+
+    function isFocusedConsultant(person) {
+      const focusEmail = getCalendarFocusEmail({ includeSelected: true });
+      return Boolean(person && focusEmail && normalizeEmail(person.email) === focusEmail);
+    }
+
+    function missingCalendarLabel(person) {
+      return isFocusedConsultant(person) ? "Getting calendar info" : "Snapshot gap";
+    }
+
+    function missingCalendarSentence(person) {
+      if (isFocusedConsultant(person)) {
+        return `Getting calendar information for ${person.name || person.email}. This focused refresh only targets this consultant before treating the window as open time.`;
+      }
+
+      return "This consultant still needs 3-week Outlook snapshot data before treating this as open time.";
+    }
+
+    function missingCalendarSubtle(person) {
+      return isFocusedConsultant(person) ? "getting calendar information" : "calendar not loaded";
+    }
+
     function refreshCalendarData(options = {}) {
       const force = Boolean(options.force);
+      const focusEmail = getCalendarFocusEmail({ focusEmail: options.focusEmail, includeSelected: false });
       const cached = readCalendarCache();
       const cacheIsFresh = cached && Date.now() - Number(cached.cachedAt || cached.refreshedAt) < CACHE_TTL_MS;
 
       if (!force && cacheIsFresh) {
-        const focusEmail = window.SCR_ASSISTANT_FOCUS_EMAIL || "";
         rawEvents = focusEmail
           ? cached.events.filter(event => String(event.email || "").toLowerCase() === focusEmail)
           : cached.events;
         lastRefreshAt = new Date(cached.refreshedAt);
         refreshSource = "cache";
       } else {
-        rawEvents = cloneEmbeddedEvents();
+        rawEvents = cloneEmbeddedEvents(focusEmail);
         lastRefreshAt = new Date();
-        refreshSource = force ? "manual refresh" : "snapshot refresh";
-        if (!window.SCR_ASSISTANT_FOCUS_EMAIL) {
+        refreshSource = focusEmail ? (force ? "focused manual refresh" : "focused snapshot refresh") : (force ? "manual refresh" : "snapshot refresh");
+        if (!focusEmail) {
           writeCalendarCache(rawEvents, lastRefreshAt.toISOString());
         }
       }
@@ -8131,16 +8173,29 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       if (!label || !status) return;
 
       const cacheMinutes = Math.round(CACHE_TTL_MS / 60000);
-      const sourceLabel = refreshSource === "cache"
+      const focusPerson = getCalendarFocusPerson({ includeSelected: true });
+      const sourceLabel = focusPerson
+        ? (refreshSource === "cache" ? "using cached data for selected consultant" : "focused consultant refresh")
+        : refreshSource === "cache"
         ? "using cached calendar data"
         : "calendar data refreshed";
-      label.textContent = lastRefreshAt
+      const focusMissing = focusPerson && !hasLoadedCalendar(focusPerson);
+      label.textContent = focusMissing
+        ? `Getting calendar information for ${focusPerson.name || focusPerson.email}`
+        : lastRefreshAt
         ? `Last refreshed: ${formatRefreshTimestamp(lastRefreshAt)} ${getZoneLabel(document.getElementById("planningZone").value)}`
         : "Last refresh pending";
       const visibleRoster = selectedRoster();
       const loadedCount = visibleRoster.filter(person => hasLoadedCalendar(person)).length;
       const partialCount = visibleRoster.length - loadedCount;
-      status.textContent = `Operating zone: ${getZoneLabel(document.getElementById("planningZone").value)}; 3-week staffing snapshot: ${formatStaffingWindow()}; ${loadedCount} loaded calendars in current filter; ${partialCount} snapshot gaps; ${sourceLabel}; cache ${cacheMinutes} min`;
+      if (focusPerson) {
+        const focusState = focusMissing
+          ? `getting calendar information for ${focusPerson.name || focusPerson.email}`
+          : `calendar loaded for ${focusPerson.name || focusPerson.email}`;
+        status.textContent = `Time zone: ${getZoneLabel(document.getElementById("planningZone").value)}; 3-week staffing snapshot: ${formatStaffingWindow()}; ${focusState}; ${sourceLabel}; cache ${cacheMinutes} min`;
+        return;
+      }
+      status.textContent = `Time zone: ${getZoneLabel(document.getElementById("planningZone").value)}; 3-week staffing snapshot: ${formatStaffingWindow()}; ${loadedCount} loaded calendars in current filter; ${partialCount} snapshot gaps; ${sourceLabel}; cache ${cacheMinutes} min`;
     }
 
     function classifyEvent(subject, status) {
@@ -8178,13 +8233,14 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     }
 
     function hasLoadedCalendar(person) {
-      return SNAPSHOT_LOADED_EMAILS.has(person.email) || DIRECT_CONNECTOR_LOADED_EMAILS.has(person.email);
+      const email = normalizeEmail(person?.email);
+      return SNAPSHOT_LOADED_EMAILS.has(email) || DIRECT_CONNECTOR_LOADED_EMAILS.has(email);
     }
 
     function coverageBadge(row) {
       return row.calendarLoaded
         ? `<span class="pill available">3-week snapshot loaded</span>`
-        : `<span class="pill unknown">Snapshot gap</span>`;
+        : `<span class="pill unknown">${missingCalendarLabel(row)}</span>`;
     }
 
     const skillNameAliases = new Map(Object.entries({
@@ -8580,7 +8636,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
 
       if (!calendarLoaded && !conflicts.length) {
         rank = 5;
-        label = "Snapshot gap";
+        label = missingCalendarLabel(person);
         pill = "unknown";
       }
 
@@ -8638,7 +8694,10 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const skillDetail = skillQuery
         ? ` Skill filter: ${skillQuery}.`
         : "";
-      const coverageDetail = partialCount
+      const focusedMissing = rows.find(row => !row.calendarLoaded && isFocusedConsultant(row));
+      const coverageDetail = focusedMissing
+        ? ` ${missingCalendarSentence(focusedMissing)}`
+        : partialCount
         ? ` ${partialCount} consultants still need 3-week Outlook snapshot data; ${unknownCount} are not counted as open for this window.`
         : "";
       const detail = clean.length
@@ -8656,7 +8715,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         <div class="top-person">
           <div>
             <div class="person-line"><span class="person-name">${row.name}</span>${legacyOrgBadge(row)}${locationBadge(row)}</div>
-            <div class="subtle">${row.team} - ${getZoneLabel(row.timeZone)}${row.skillRating ? ` - skill ${row.skillRating}` : ""}${row.calendarLoaded ? "" : " - snapshot gap"}</div>
+            <div class="subtle">${row.team} - ${getZoneLabel(row.timeZone)}${row.skillRating ? ` - skill ${row.skillRating}` : ""}${row.calendarLoaded ? "" : ` - ${missingCalendarLabel(row).toLowerCase()}`}</div>
           </div>
           <span class="pill ${row.pill}">${row.label}</span>
         </div>
@@ -8690,7 +8749,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
               }).join("")}</div>`
           : row.calendarLoaded
             ? `<span class="subtle">No overlapping calendar items.</span>`
-            : `<span class="subtle">This consultant still needs 3-week Outlook snapshot data before treating this as open time.</span>`;
+            : `<span class="subtle">${missingCalendarSentence(row)}</span>`;
 
         return `
           <tr>
@@ -8812,7 +8871,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
                 <div class="person-line"><span class="person-name">${item.name}</span>${legacyOrgBadge(item)}${locationBadge(item)}</div>
                 <div class="subtle">${item.team} - ${getZoneLabel(item.timeZone)}</div>
               </div>
-              <strong>${item.calendarLoaded ? `${(item.open / 60).toFixed(1)}h open` : "not loaded"}</strong>
+              <strong>${item.calendarLoaded ? `${(item.open / 60).toFixed(1)}h open` : missingCalendarLabel(item)}</strong>
             </div>
             <div class="bar">
               <div class="bar-hard" style="width:${hardWidth}%"></div>
@@ -8821,7 +8880,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
               <div class="bar-open" style="width:${openWidth}%"></div>
               <div class="bar-unknown" style="width:${unknownWidth}%"></div>
             </div>
-            <div class="subtle">${(item.hard / 60).toFixed(1)} hard; ${(item.soft / 60).toFixed(1)} soft; ${(item.other / 60).toFixed(1)} review; ${item.calendarLoaded ? `${(item.open / 60).toFixed(1)} open` : "calendar not loaded"}</div>
+            <div class="subtle">${(item.hard / 60).toFixed(1)} hard; ${(item.soft / 60).toFixed(1)} soft; ${(item.other / 60).toFixed(1)} review; ${item.calendarLoaded ? `${(item.open / 60).toFixed(1)} open` : missingCalendarSubtle(item)}</div>
           </div>
         `;
       }).join("");
@@ -8875,11 +8934,12 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
 
     function handleManualRefresh() {
       const button = document.getElementById("refreshButton");
+      const focusEmail = getSelectedConsultantEmail() || getCalendarFocusEmail({ includeSelected: false });
       button.disabled = true;
-      button.textContent = "Refreshing...";
-      refreshCalendarData({ force: true });
+      button.textContent = focusEmail ? "Refreshing consultant..." : "Refreshing...";
+      refreshCalendarData({ force: true, focusEmail });
       renderAll();
-      button.textContent = "Refresh now";
+      button.textContent = focusEmail ? "Refresh consultant" : "Refresh now";
       button.disabled = false;
     }
 
