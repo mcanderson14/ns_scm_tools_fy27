@@ -2,7 +2,7 @@
 // @name         SCR Mgr Assistant Toolbar BETA
 // @namespace    scrmgrassistant
 // @copyright    Copyright © 2024 by Ryan Morrissey
-// @version      27.0.0.11B
+// @version      27.0.0.13B
 // @description  Adds an Assistant Toolbar with interactive buttons to all SC Request forms.
 // @icon         https://cdn0.iconfinder.com/data/icons/phosphor-bold-vol-3-1/256/lifebuoy-duotone-512.png
 // @tag          productivity
@@ -64,6 +64,13 @@ const SCRIPT_VERSION = GM_info.script.version;
 const CONFIG_TITLE = `${GM_info.script.name} (v${SCRIPT_VERSION})`;
 const CALENDAR_DASHBOARD_DEFAULT_URL =
 	"file:///Users/michaean/Documents/Outlook%20Calendar%20Project%20-%20JPK/staffing-dashboard.html";
+const CALENDAR_FOCUSED_AVAILABILITY_OVERRIDES = {
+	"eric.baghdasarian@oracle.com": {
+		start: "2026-05-06T07:00:00.000Z",
+		intervalMinutes: 30,
+		view: "000000000000000022022222222222222220000000000000000000000000000012222222110000002222220000000000000000000000000022222222022200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000222220000222222222220000000000000000000000000001122000022222222222222222000000000000000000000000022112222222222222220000000000000000000000000000222222222222220220000000000000000000000000000000022000022002200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002222222222222222220000000000000222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222000000000000000012222222222220222200000000000000000000000000000022222222002200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002000000222200000000000000000000000000000000000022000000002200000000000000000000",
+	},
+};
 
 /**
  * Simple wrapper for console logging
@@ -3954,6 +3961,20 @@ var shout = (function () {
 				/<script\s+src=["']direct-connector-events\.js["']>\s*<\/script>/i,
 				`<script>\n${eventsScript}\n</script>`,
 			);
+			const focusEmail = context.email ? String(context.email).trim().toLowerCase() : "";
+			const focusedAvailabilityOverride = CALENDAR_FOCUSED_AVAILABILITY_OVERRIDES[focusEmail] || null;
+
+			if (focusedAvailabilityOverride) {
+				const overrideScript = `<script>
+window.DIRECT_CONNECTOR_LOADED_EMAILS = Array.isArray(window.DIRECT_CONNECTOR_LOADED_EMAILS) ? window.DIRECT_CONNECTOR_LOADED_EMAILS : [];
+if (!window.DIRECT_CONNECTOR_LOADED_EMAILS.includes(${JSON.stringify(focusEmail)})) {
+  window.DIRECT_CONNECTOR_LOADED_EMAILS.push(${JSON.stringify(focusEmail)});
+}
+window.DIRECT_CONNECTOR_AVAILABILITY = Array.isArray(window.DIRECT_CONNECTOR_AVAILABILITY) ? window.DIRECT_CONNECTOR_AVAILABILITY : [];
+window.DIRECT_CONNECTOR_AVAILABILITY.push(${JSON.stringify({ email: focusEmail, ...focusedAvailabilityOverride })});
+</script>`;
+				html = html.replace("</head>", `${overrideScript}\n</head>`);
+			}
 
 			if (!html.includes("SCR_ASSISTANT_LAUNCH_SEARCH || window.location.search")) {
 				html = html.replace(
@@ -4083,6 +4104,212 @@ var shout = (function () {
       const focusEmail = getCalendarFocusEmail({ focusEmail: options.focusEmail, includeSelected: false });
       const cached = readCalendarCache();`,
 			);
+			if (!html.includes("let lastDebugText")) {
+				html = html.replace("let skillsByEmail = new Map();", `let skillsByEmail = new Map();
+    let lastDebugText = "";`);
+			}
+			html = html.replace("Object.assign(existing, person, { email });", `Object.assign(existing, person, { email, source: person.source || existing.source || "Launch parameters" });`);
+			html = html.replace(
+				`timeZone: person.timeZone || "America/New_York"
+      };`,
+				`timeZone: person.timeZone || "America/New_York",
+        source: person.source || "Launch parameters"
+      };`,
+			);
+			if (!html.includes("calendarDebugOutput")) {
+				html = html.replace(
+					"</style>",
+					`
+    .debug-console {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+      padding: 14px 16px;
+      box-shadow: var(--shadow);
+      margin-bottom: 16px;
+    }
+    .debug-console summary {
+      cursor: pointer;
+      font-weight: 900;
+      color: var(--ink);
+    }
+    .debug-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 10px;
+      margin-bottom: 10px;
+    }
+    .debug-output {
+      margin: 0;
+      max-height: 260px;
+      overflow: auto;
+      border-radius: 6px;
+      border: 1px solid #243142;
+      background: #101820;
+      color: #dfe7ee;
+      padding: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+  </style>`,
+				);
+				html = html.replace(
+					`\n    <section class="layout">`,
+					`\n    <section class="debug-console" aria-label="Calendar debug console">
+      <details>
+        <summary>Calendar Debug Console</summary>
+        <div class="debug-toolbar">
+          <div class="subtle" id="calendarDebugSummary">Runtime roster and calendar source details.</div>
+          <button class="secondary-button" id="copyDebugButton" type="button">Copy debug</button>
+        </div>
+        <pre class="debug-output" id="calendarDebugOutput">Debug data will appear after the dashboard renders.</pre>
+      </details>
+    </section>
+
+    <section class="layout">`,
+				);
+			}
+			if (!html.includes("function countCalendarRecordsForEmail")) {
+				html = html.replace(
+					`function missingCalendarSubtle(person) {
+      return isFocusedConsultant(person) ? "getting calendar information" : "calendar not loaded";
+    }`,
+					`function missingCalendarSubtle(person) {
+      return isFocusedConsultant(person) ? "getting calendar information" : "calendar not loaded";
+    }
+
+    function countCalendarRecordsForEmail(records, email) {
+      const normalized = normalizeEmail(email);
+      if (!normalized || !Array.isArray(records)) return 0;
+      return records.filter(record => normalizeEmail(record.email) === normalized).length;
+    }
+
+    function getConsultantSource(person) {
+      if (!person) return "none";
+      if (person.source) return person.source;
+
+      const email = normalizeEmail(person.email);
+      const injected = Array.isArray(window.SCR_ASSISTANT_ROSTER)
+        && window.SCR_ASSISTANT_ROSTER.some(item => normalizeEmail(item.email) === email);
+
+      return injected ? "Tampermonkey injected roster" : "Built-in dashboard roster";
+    }
+
+    function getCalendarDebugData() {
+      const selectedEmail = getSelectedConsultantEmail();
+      const focusEmail = getCalendarFocusEmail({ includeSelected: true });
+      const debugEmail = focusEmail || selectedEmail;
+      const person = debugEmail ? rosterByEmail[debugEmail] || { name: debugEmail, email: debugEmail } : null;
+      const cached = readCalendarCache();
+      const rawCount = countCalendarRecordsForEmail(rawEvents, debugEmail);
+      const normalizedCount = countCalendarRecordsForEmail(normalizedEvents, debugEmail);
+      const embeddedCount = countCalendarRecordsForEmail(embeddedEvents, debugEmail);
+      const directEventCount = countCalendarRecordsForEmail(DIRECT_CONNECTOR_EVENTS, debugEmail);
+      const availabilityCount = countCalendarRecordsForEmail(DIRECT_CONNECTOR_AVAILABILITY, debugEmail);
+      const cacheCount = cached ? countCalendarRecordsForEmail(cached.events, debugEmail) : 0;
+      const snapshotLoaded = SNAPSHOT_LOADED_EMAILS.has(debugEmail);
+      const directLoaded = DIRECT_CONNECTOR_LOADED_EMAILS.has(debugEmail);
+
+      let likelyIssue = "No consultant selected.";
+      if (person && debugEmail) {
+        if (!rosterByEmail[debugEmail]) {
+          likelyIssue = "The consultant email is not in the dashboard roster.";
+        } else if (!snapshotLoaded && !directLoaded && embeddedCount === 0 && directEventCount === 0 && availabilityCount === 0 && cacheCount === 0) {
+          likelyIssue = "The consultant is in the roster, but no calendar snapshot, direct connector events, free/busy availability, or cache records exist for this email.";
+        } else if (!snapshotLoaded && !directLoaded && rawCount === 0) {
+          likelyIssue = "Calendar data exists elsewhere, but the focused refresh did not load records for this email.";
+        } else {
+          likelyIssue = "Calendar data is present for this consultant.";
+        }
+      }
+
+      return {
+        generatedAt: new Date().toISOString(),
+        launchSearch: window.SCR_ASSISTANT_LAUNCH_SEARCH || window.location.search || "",
+        selectedFilterValue: document.getElementById("personFilter")?.value || "",
+        focusEmail: window.SCR_ASSISTANT_FOCUS_EMAIL || "",
+        effectiveDebugEmail: debugEmail || "",
+        consultant: person ? {
+          name: person.name || "",
+          email: person.email || "",
+          team: person.team || "",
+          legacyOrg: person.legacyOrg || "",
+          location: person.location || "",
+          timeZone: person.timeZone || "",
+          source: getConsultantSource(person)
+        } : null,
+        roster: {
+          totalAfterRuntimeMerge: roster.length,
+          selectedRosterCount: selectedRoster().length,
+          injectedRosterCount: Array.isArray(window.SCR_ASSISTANT_ROSTER) ? window.SCR_ASSISTANT_ROSTER.length : 0
+        },
+        calendarDataForEmail: {
+          snapshotLoadedFlag: snapshotLoaded,
+          directConnectorLoadedFlag: directLoaded,
+          embeddedEvents: embeddedCount,
+          directConnectorEvents: directEventCount,
+          directConnectorAvailabilitySnapshots: availabilityCount,
+          cacheEvents: cacheCount,
+          rawEventsAfterRefresh: rawCount,
+          normalizedEventsAfterRefresh: normalizedCount,
+          refreshSource,
+          lastRefreshAt: lastRefreshAt ? lastRefreshAt.toISOString() : null
+        },
+        likelyIssue
+      };
+    }
+
+    function renderDebugConsole() {
+      const output = document.getElementById("calendarDebugOutput");
+      const summary = document.getElementById("calendarDebugSummary");
+      if (!output) return;
+
+      const debug = getCalendarDebugData();
+      lastDebugText = JSON.stringify(debug, null, 2);
+      output.textContent = lastDebugText;
+
+      if (summary) {
+        summary.textContent = debug.effectiveDebugEmail
+          ? \`\${debug.consultant?.name || debug.effectiveDebugEmail}: \${debug.likelyIssue}\`
+          : debug.likelyIssue;
+      }
+    }
+
+    function copyDebugConsole() {
+      const text = lastDebugText || document.getElementById("calendarDebugOutput")?.textContent || "";
+      const button = document.getElementById("copyDebugButton");
+
+      const setCopied = () => {
+        if (!button) return;
+        button.textContent = "Copied";
+        setTimeout(() => {
+          button.textContent = "Copy debug";
+        }, 1200);
+      };
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(setCopied).catch(() => {});
+        return;
+      }
+
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
+      setCopied();
+    }`,
+				);
+			}
 			html = html.replace(
 				`const focusEmail = window.SCR_ASSISTANT_FOCUS_EMAIL || "";
         rawEvents = focusEmail`,
@@ -4203,10 +4430,19 @@ var shout = (function () {
       button.disabled = false;
     }`,
 			);
+			html = html.replace("renderEvents();\n    }", "renderEvents();\n      renderDebugConsole();\n    }");
+			html = html.replace(
+				`document.getElementById("loadSkillsButton").addEventListener("click", () => {
+        document.getElementById("skillsFileInput").click();
+      });`,
+				`document.getElementById("loadSkillsButton").addEventListener("click", () => {
+        document.getElementById("skillsFileInput").click();
+      });
+      document.getElementById("copyDebugButton")?.addEventListener("click", copyDebugConsole);`,
+			);
 
 			const launchSearch = new URL(url).search;
 			const dashboardRoster = buildCalendarDashboardRoster(context);
-			const focusEmail = context.email ? String(context.email).trim().toLowerCase() : "";
 			const launchScript = `<script>
 window.SCR_ASSISTANT_LAUNCH_SEARCH = ${JSON.stringify(launchSearch)};
 window.SCR_ASSISTANT_ROSTER = ${JSON.stringify(dashboardRoster)};
@@ -4225,7 +4461,8 @@ window.SCR_ASSISTANT_FOCUS_EMAIL = ${JSON.stringify(focusEmail)};
           team: person.team || "NetSuite SCs",
           legacyOrg: person.legacyOrg || "NetSuite",
           location: person.location || "Unknown",
-          timeZone: person.timeZone || "America/New_York"
+          timeZone: person.timeZone || "America/New_York",
+          source: person.source || "Tampermonkey injected roster"
         };
         const existingIndex = rosterIndexByEmail.get(email);
 
