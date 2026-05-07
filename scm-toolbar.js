@@ -2,7 +2,7 @@
 // @name         SCR Mgr Assistant Toolbar BETA
 // @namespace    scrmgrassistant
 // @copyright    Copyright © 2024 by Ryan Morrissey
-// @version      27.0.0.4B
+// @version      27.0.0.5B
 // @description  Adds an Assistant Toolbar with interactive buttons to all SC Request forms.
 // @icon         https://cdn0.iconfinder.com/data/icons/phosphor-bold-vol-3-1/256/lifebuoy-duotone-512.png
 // @tag          productivity
@@ -20,6 +20,8 @@
 // @require      https://userscripts-mirror.org/scripts/source/107941.user.js
 // @require      https://fomantic-ui.com/javascript/library/tablesort.js
 // @resource     FOMANTIC_CSS https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.3/dist/semantic.min.css
+// @resource     CALENDAR_DASHBOARD_HTML https://raw.githubusercontent.com/mcanderson14/ns_scm_tools_fy27/main/staffing-dashboard.html
+// @resource     CALENDAR_DASHBOARD_EVENTS https://raw.githubusercontent.com/mcanderson14/ns_scm_tools_fy27/main/direct-connector-events.js
 // @grant        GM_getResourceText
 // @grant        GM_addStyle
 // @grant        GM_getValue
@@ -442,6 +444,20 @@ var shout = (function () {
 		GM_addStyle(/* syntax: css */ `#solutionconsultant span.description {font-size:8pt !important;}`);
 		GM_addStyle(/* syntax: css */ `.selection.dropdown .text.default {font-size:1em !important;}`);
 		GM_addStyle(/* syntax: css */ `#sc-mgr-assistant {margin-bottom: 20px;}`);
+		GM_addStyle(/* syntax: css */ `
+            #scr-modal-calendar-dashboard .content {
+                padding: 0 !important;
+                height: calc(100vh - 145px);
+            }
+
+            #scr-calendar-dashboard-frame {
+                display: block;
+                width: 100%;
+                height: 100%;
+                border: 0;
+                background: #f4f6f8;
+            }
+        `);
 
 		class Person {
 			constructor(id, first, last, location, status, notes, restricted, email, weight, inplay) {
@@ -1646,12 +1662,31 @@ var shout = (function () {
                 </div>
             </form>
             `;
+		var modalContentCalendarDashboard = /* syntax: html */ `
+            <!-- Embedded Calendar Dashboard Modal -->
+            <div class="ui fullscreen modal" id="scr-modal-calendar-dashboard">
+                <i class="close icon"></i>
+                <div class="header">SC Calendar Dashboard</div>
+                <div class="content">
+                    <iframe
+                        id="scr-calendar-dashboard-frame"
+                        title="SC Calendar Dashboard"
+                        sandbox="allow-scripts allow-forms allow-popups allow-modals"
+                    ></iframe>
+                </div>
+                <div class="actions">
+                    <a class="ui blue button" id="scr-calendar-dashboard-open-tab" href="#" target="_blank" rel="noopener noreferrer">Open in New Tab</a>
+                    <div class="ui black deny button">Dismiss</div>
+                </div>
+            </div>
+            `;
 		var fomanticCss = /* syntax: html */ `
             <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.3/dist/semantic.css" integrity="sha256-lT1UJMnT8Tu/iZ/FT7mJlzcRoe3yhl3K8oyCebjP8qw=" crossorigin="anonymous" referrerpolicy="no-referrer">
             `;
 		$("head").append(fomanticCss);
 		$("body").append(modalContentRequestForm);
 		$("body").append(modalContentNotesForm);
+		$("body").append(modalContentCalendarDashboard);
 
 		// SC Request Form Button Bar
 		// var nsBtnBar = $('#main_form table table').children('tbody').children('tr').eq(1);
@@ -3763,6 +3798,66 @@ var shout = (function () {
 			return url.toString();
 		}
 
+		function getCalendarDashboardResourceText(resourceName) {
+			try {
+				return GM_getResourceText(resourceName);
+			} catch (error) {
+				shout(`Unable to load ${resourceName}:`, error);
+				return "";
+			}
+		}
+
+		function buildEmbeddedCalendarDashboardHtml(url) {
+			let html = getCalendarDashboardResourceText("CALENDAR_DASHBOARD_HTML");
+			const eventsScript = getCalendarDashboardResourceText("CALENDAR_DASHBOARD_EVENTS");
+
+			if (!html) {
+				return "";
+			}
+
+			html = html.replace(
+				/<script\s+src=["']direct-connector-events\.js["']>\s*<\/script>/i,
+				`<script>\n${eventsScript}\n</script>`,
+			);
+
+			html = html.replace(
+				"new URLSearchParams(window.location.search)",
+				"new URLSearchParams(window.SCR_ASSISTANT_LAUNCH_SEARCH || window.location.search)",
+			);
+
+			const launchSearch = new URL(url).search;
+			const launchScript = `<script>window.SCR_ASSISTANT_LAUNCH_SEARCH = ${JSON.stringify(launchSearch)};</script>`;
+
+			if (html.includes("</head>")) {
+				return html.replace("</head>", `${launchScript}\n</head>`);
+			}
+
+			return `${launchScript}\n${html}`;
+		}
+
+		function openEmbeddedCalendarDashboard(url) {
+			const html = buildEmbeddedCalendarDashboardHtml(url);
+
+			if (!html) {
+				return false;
+			}
+
+			$("#scr-calendar-dashboard-frame").attr("srcdoc", html);
+			$("#scr-calendar-dashboard-open-tab").attr("href", url);
+			$("#scr-modal-calendar-dashboard")
+				.modal({
+					inverted: true,
+					closable: true,
+					onHidden: function () {
+						$("#scr-calendar-dashboard-frame").attr("srcdoc", "");
+					},
+				})
+				.modal("setting", "transition", "scale")
+				.modal("show");
+
+			return true;
+		}
+
 		function copyDashboardUrlFallback(url) {
 			return copyTextToClipboard(url).catch((error) => {
 				shout("Unable to copy calendar dashboard URL:", error);
@@ -3827,6 +3922,16 @@ var shout = (function () {
 		async function openCalendarDashboard(context, statusSelector) {
 			const url = buildCalendarDashboardUrl(context || {});
 			await copyDashboardUrlFallback(url);
+			const embeddedOpened = openEmbeddedCalendarDashboard(url);
+
+			if (embeddedOpened) {
+				if (statusSelector) {
+					$(statusSelector).text("Opened embedded calendar dashboard. Launch URL copied as fallback.");
+				}
+				shout("Open embedded calendar dashboard:", url);
+				return;
+			}
+
 			const result = await openUrlInNewTab(url);
 
 			if (statusSelector) {
