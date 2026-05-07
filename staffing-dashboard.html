@@ -8015,7 +8015,10 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       };
       const expanded = [];
 
-      DIRECT_CONNECTOR_AVAILABILITY.forEach(snapshot => {
+      (window.SCR_ASSISTANT_FOCUS_EMAIL
+        ? DIRECT_CONNECTOR_AVAILABILITY.filter(snapshot => String(snapshot.email || "").toLowerCase() === window.SCR_ASSISTANT_FOCUS_EMAIL)
+        : DIRECT_CONNECTOR_AVAILABILITY
+      ).forEach(snapshot => {
         const view = String(snapshot.view || "");
         const intervalMs = Number(snapshot.intervalMinutes || 30) * 60 * 1000;
         const startMs = Date.parse(snapshot.start);
@@ -8048,7 +8051,9 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
 
     function cloneEmbeddedEvents() {
       const seen = new Set();
+      const focusEmail = window.SCR_ASSISTANT_FOCUS_EMAIL || "";
       return [...embeddedEvents, ...DIRECT_CONNECTOR_EVENTS, ...expandConnectorAvailability()]
+        .filter(event => !focusEmail || String(event.email || "").toLowerCase() === focusEmail)
         .filter(event => {
           const key = `${event.email}|${event.status}|${event.subject}|${event.start}|${event.end}`;
           if (seen.has(key)) return false;
@@ -8090,14 +8095,19 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const cacheIsFresh = cached && Date.now() - Number(cached.cachedAt || cached.refreshedAt) < CACHE_TTL_MS;
 
       if (!force && cacheIsFresh) {
-        rawEvents = cached.events;
+        const focusEmail = window.SCR_ASSISTANT_FOCUS_EMAIL || "";
+        rawEvents = focusEmail
+          ? cached.events.filter(event => String(event.email || "").toLowerCase() === focusEmail)
+          : cached.events;
         lastRefreshAt = new Date(cached.refreshedAt);
         refreshSource = "cache";
       } else {
         rawEvents = cloneEmbeddedEvents();
         lastRefreshAt = new Date();
         refreshSource = force ? "manual refresh" : "snapshot refresh";
-        writeCalendarCache(rawEvents, lastRefreshAt.toISOString());
+        if (!window.SCR_ASSISTANT_FOCUS_EMAIL) {
+          writeCalendarCache(rawEvents, lastRefreshAt.toISOString());
+        }
       }
 
       normalizedEvents = normalizeEvents(rawEvents);
@@ -8965,6 +8975,10 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const consultant = (params.get("consultant") || params.get("person") || params.get("email") || "").trim().toLowerCase();
       const consultantName = (params.get("consultantName") || params.get("name") || "").trim();
 
+      if (consultant && consultant.includes("@")) {
+        window.SCR_ASSISTANT_FOCUS_EMAIL = consultant;
+      }
+
       if (consultant && rosterByEmail[consultant]) {
         return rosterByEmail[consultant];
       }
@@ -9073,9 +9087,9 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     populateTimeOptions();
     configureDateWindow();
     populatePersonFilter();
-    refreshCalendarData();
     loadSkillCache();
     applyLaunchParams();
+    refreshCalendarData();
     wireEvents();
     renderAll();
   </script>
