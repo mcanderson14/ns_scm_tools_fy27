@@ -325,6 +325,7 @@
     .pill.busy { color: #a22929; background: #fae8e8; border-color: #efb9b9; }
     .pill.review { color: #365b88; background: #e9f1fb; border-color: #c8daee; }
     .pill.unknown { color: #485564; background: #edf1f5; border-color: #cfd8e1; }
+    .pill.ot-warning { color: #fff; background: #c74734; border-color: #a52f24; }
     .pill.killeen { color: #164d82; background: #eaf2fb; border-color: #c8dcf2; }
     .pill.sunshine { color: #886200; background: #fff6d9; border-color: #f2dc8e; }
     .pill.anderson { color: #16615a; background: #e7f5f3; border-color: #bde1dd; }
@@ -8326,6 +8327,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         consultant: person ? {
           name: person.name || "",
           email: person.email || "",
+          manager: person.manager || "",
           team: person.team || "",
           legacyOrg: person.legacyOrg || "",
           location: person.location || "",
@@ -8508,6 +8510,27 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       return `${formatTime(start, timeZone)} - ${formatTime(end, timeZone)}`;
     }
 
+    function getLocalMinutesOfDay(date, timeZone) {
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        hour12: false,
+        hour: "2-digit",
+        minute: "2-digit"
+      }).formatToParts(date).reduce((acc, part) => {
+        if (part.type !== "literal") acc[part.type] = part.value;
+        return acc;
+      }, {});
+      const hour = Number(parts.hour) === 24 ? 0 : Number(parts.hour);
+      return hour * 60 + Number(parts.minute || 0);
+    }
+
+    function hasOvertimeWarning(person, windowConfig) {
+      const zone = person?.timeZone || windowConfig.timeZone;
+      const localStart = getLocalMinutesOfDay(windowConfig.meetingStart, zone);
+      const localEnd = getLocalMinutesOfDay(windowConfig.meetingEnd, zone);
+      return localStart < 7 * 60 + 45 || localEnd > 17 * 60 + 30;
+    }
+
     function addMinutes(date, minutes) {
       return new Date(date.getTime() + minutes * 60000);
     }
@@ -8664,6 +8687,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         hardBuffer,
         soft,
         other,
+        otWarning: hasOvertimeWarning(person, windowConfig),
         rank,
         label,
         pill
@@ -8769,7 +8793,10 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
               <strong>${formatTimeRange(windowConfig.meetingStart, windowConfig.meetingEnd, row.timeZone)}</strong>
               <div class="subtle">${getZoneLabel(row.timeZone)}</div>
             </td>
-            <td><span class="pill ${row.pill}">${row.label}</span></td>
+            <td>
+              <span class="pill ${row.pill}">${row.label}</span>
+              ${row.otWarning ? `<span class="pill ot-warning">OT WARNING</span>` : ""}
+            </td>
             <td>
               <strong>${row.hardMeeting}</strong> hard meeting
               <div class="subtle">${row.hardBuffer} hard buffer; ${row.soft} soft; ${row.other} review</div>
@@ -8979,29 +9006,85 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       return true;
     }
 
-    function addRuntimeRosterPerson(person) {
+    function ensureFilterOption(id, value, label) {
+      const select = document.getElementById(id);
+      if (!select || value == null || value === "") return false;
+      const text = String(value);
+
+      if (!Array.from(select.options).some(item => item.value === text)) {
+        const option = document.createElement("option");
+        option.value = text;
+        option.textContent = label || text;
+        select.appendChild(option);
+      }
+
+      return true;
+    }
+
+    function getManagerTeamName(manager) {
+      const text = String(manager || "").trim();
+      if (!text) return "";
+      if (text.includes(",")) return text.split(",")[0].trim();
+
+      const parts = text.split(/\s+/).filter(Boolean);
+      return parts.length > 1 ? parts[parts.length - 1] : text;
+    }
+
+    function normalizeRosterState(location) {
+      const text = String(location || "").trim();
+      const tokens = text.toUpperCase().match(/[A-Z]{2,3}/g) || [];
+      const state = tokens.reverse().find(token => token.length === 2 && token !== "US");
+      return state || text || "Unknown";
+    }
+
+    function normalizeRuntimeRosterPerson(person) {
       const email = String(person.email || "").trim().toLowerCase();
       if (!email) return null;
 
-      const existing = rosterByEmail[email];
-      if (existing) {
-        Object.assign(existing, person, { email, source: person.source || existing.source || "Launch parameters" });
-        return existing;
-      }
-
-      const normalized = {
+      const manager = person.manager || "";
+      const location = normalizeRosterState(person.state || person.location || "");
+      return {
         name: person.name || email,
         email,
-        team: person.team || "Requested",
+        manager,
+        team: getManagerTeamName(manager) || person.team || "Requested",
         legacyOrg: person.legacyOrg || "Requested",
-        location: person.location || "Unknown",
+        location,
         timeZone: person.timeZone || inferTimeZoneFromAvailabilityStart(email) || "America/New_York",
         source: person.source || "Launch parameters"
       };
+    }
+
+    function mergeRuntimeRosterPerson(existing, incoming) {
+      Object.entries(incoming).forEach(([key, value]) => {
+        if (key === "email") {
+          existing.email = value;
+          return;
+        }
+
+        if (value != null && value !== "") {
+          existing[key] = value;
+        }
+      });
+      return existing;
+    }
+
+    function addRuntimeRosterPerson(person) {
+      const normalized = normalizeRuntimeRosterPerson(person);
+      if (!normalized) return null;
+
+      const existing = rosterByEmail[normalized.email];
+      if (existing) {
+        const merged = mergeRuntimeRosterPerson(existing, normalized);
+        ensureFilterOption("teamFilter", merged.team, merged.team.startsWith("Team ") ? merged.team : `Team ${merged.team}`);
+        ensureFilterOption("legacyOrgFilter", merged.legacyOrg, merged.legacyOrg);
+        return merged;
+      }
+
       roster.push(normalized);
-      rosterByEmail[email] = normalized;
-      ensureSelectValue("teamFilter", normalized.team, normalized.team.startsWith("Team ") ? normalized.team : `Team ${normalized.team}`);
-      ensureSelectValue("legacyOrgFilter", normalized.legacyOrg, normalized.legacyOrg);
+      rosterByEmail[normalized.email] = normalized;
+      ensureFilterOption("teamFilter", normalized.team, normalized.team.startsWith("Team ") ? normalized.team : `Team ${normalized.team}`);
+      ensureFilterOption("legacyOrgFilter", normalized.legacyOrg, normalized.legacyOrg);
       return normalized;
     }
 
@@ -9087,6 +9170,35 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       return new URLSearchParams(window.SCR_ASSISTANT_LAUNCH_SEARCH || window.location.search || "");
     }
 
+    function getLaunchRosterPeople(params = getLaunchParams()) {
+      const embedded = Array.isArray(window.SCR_ASSISTANT_ROSTER) ? window.SCR_ASSISTANT_ROSTER : [];
+      const rosterParam = params.get("roster") || params.get("people") || "";
+      let parsed = [];
+
+      if (rosterParam) {
+        try {
+          const payload = JSON.parse(rosterParam);
+          parsed = Array.isArray(payload) ? payload : [payload];
+        } catch (error) {
+          parsed = [];
+        }
+      }
+
+      return [...embedded, ...parsed]
+        .filter(person => person && person.email)
+        .map(person => ({
+          ...person,
+          email: normalizeEmail(person.email)
+        }));
+    }
+
+    function mergeLaunchRosterPeople(params = getLaunchParams()) {
+      getLaunchRosterPeople(params).forEach(person => addRuntimeRosterPerson({
+        ...person,
+        source: person.source || "Staffing tool launch"
+      }));
+    }
+
     function getFocusedConsultantName(email) {
       const params = getLaunchParams();
       return (params.get("consultantName") || params.get("name") || "").trim() || inferRosterNameFromEmail(email);
@@ -9169,11 +9281,16 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       }
 
       if (consultant && consultant.includes("@")) {
+        const manager = params.get("manager") || "";
         return addRuntimeRosterPerson({
           name: consultantName || consultant,
           email: consultant,
-          team: "Requested",
-          legacyOrg: "Requested"
+          manager,
+          team: params.get("team") || getManagerTeamName(manager) || "Requested",
+          legacyOrg: params.get("legacyOrg") || "Requested",
+          location: params.get("state") || params.get("location") || "",
+          timeZone: params.get("zone") || "",
+          source: "Launch parameters"
         });
       }
 
@@ -9182,7 +9299,8 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
 
     function applyLaunchParams() {
       const params = getLaunchParams();
-      if (!Array.from(params.keys()).length) return;
+      mergeLaunchRosterPeople(params);
+      if (!Array.from(params.keys()).length && !Array.isArray(window.SCR_ASSISTANT_ROSTER)) return;
 
       const selectedPeople = ensureLaunchSelectedConsultants(params);
       const hasSelectedPeople = selectedPeople.length > 0;
@@ -9263,6 +9381,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       document.getElementById("searchFilter").addEventListener("input", renderEvents);
     }
 
+    mergeLaunchRosterPeople();
     addCalendarDataRosterEntries();
     populateTimeOptions();
     configureDateWindow();

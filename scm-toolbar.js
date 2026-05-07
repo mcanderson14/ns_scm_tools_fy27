@@ -2,7 +2,7 @@
 // @name         SCR Mgr Assistant Toolbar BETA
 // @namespace    scrmgrassistant
 // @copyright    Copyright © 2024 by Ryan Morrissey
-// @version      27.0.0.22B
+// @version      27.0.0.25B
 // @description  Adds an Assistant Toolbar with interactive buttons to all SC Request forms.
 // @icon         https://cdn0.iconfinder.com/data/icons/phosphor-bold-vol-3-1/256/lifebuoy-duotone-512.png
 // @tag          productivity
@@ -467,7 +467,7 @@ var shout = (function () {
         `);
 
 		class Person {
-			constructor(id, first, last, location, status, notes, restricted, email, weight, inplay) {
+			constructor(id, first, last, location, status, notes, restricted, email, manager, team, legacyOrg, weight, inplay) {
 				this._id = id;
 				this._first = first;
 				this._last = last;
@@ -476,6 +476,9 @@ var shout = (function () {
 				this._notes = notes;
 				this._restricted = restricted;
 				this._email = email || "";
+				this._manager = manager || "";
+				this._team = team || "";
+				this._legacyOrg = legacyOrg || "";
 				this._weight = weight || 0;
 				this._inplay = inplay || 0;
 			}
@@ -542,6 +545,30 @@ var shout = (function () {
 
 			set email(value) {
 				this._email = value;
+			}
+
+			get manager() {
+				return this._manager;
+			}
+
+			set manager(value) {
+				this._manager = value;
+			}
+
+			get team() {
+				return this._team;
+			}
+
+			set team(value) {
+				this._team = value;
+			}
+
+			get legacyOrg() {
+				return this._legacyOrg;
+			}
+
+			set legacyOrg(value) {
+				this._legacyOrg = value;
 			}
 
 			get weight() {
@@ -1955,6 +1982,9 @@ var shout = (function () {
 			columns.push(new nlobjSearchColumn("custrecord_emproster_avail_notes"));
 			columns.push(new nlobjSearchColumn("custrecord_emproster_avail_notes_res"));
 			columns.push(new nlobjSearchColumn("email", "custrecord_emproster_emp"));
+			columns.push(new nlobjSearchColumn("custrecord_emproster_mgrroster"));
+			columns.push(new nlobjSearchColumn("custrecord_emproster_salesteam"));
+			columns.push(new nlobjSearchColumn("custrecord_emproster_vertical_amo"));
 
 			var results = nlapiSearchRecord("customrecord_emproster", null, filters, columns);
 
@@ -1976,6 +2006,9 @@ var shout = (function () {
 					results[_i].getValue("custrecord_emproster_avail_notes"),
 					results[_i].getValue("custrecord_emproster_avail_notes_res"),
 					results[_i].getValue("email", "custrecord_emproster_emp"),
+					results[_i].getText("custrecord_emproster_mgrroster"),
+					results[_i].getText("custrecord_emproster_salesteam"),
+					results[_i].getText("custrecord_emproster_vertical_amo"),
 					_workload && _workload.length > 0 ? _workload[0] : 0,
 					_workload && _workload.length > 0 ? _workload[1] : 0,
 				);
@@ -2573,17 +2606,21 @@ var shout = (function () {
 				const percentage = (data.weightedRating / maxRating) * 100;
 				const cachedSc = getCachedScById(data.employeeId);
 				const cachedScByName = !cachedSc.email ? getCachedScByName(employee) : {};
+				const location = normalizeCalendarRosterState(data.location || cachedSc.location || cachedScByName.location || "");
+				const manager = data.manager || cachedSc.manager || cachedScByName.manager || "";
 
 				return {
 					employee: employee,
 					employeeId: data.employeeId,
 					email: cachedSc.email || cachedScByName.email || "",
-					manager: data.manager,
+					manager: manager,
+					team: getCalendarManagerTeamName(manager) || cachedSc.team || cachedScByName.team || "Skills Matrix",
+					legacyOrg: data.vertical || cachedSc.legacyOrg || cachedScByName.legacyOrg || "Selected",
 					availability: data.availability,
 					availabilityRanking: availabilityRanking(data.availability),
 					avail_notes: data.avail_notes,
 					avail_res: data.avail_res,
-					location: data.location,
+					location: location,
 					region: data.region,
 					vertical: data.vertical,
 					tier: data.tier,
@@ -2741,6 +2778,16 @@ var shout = (function () {
 			return `<div class="ui yellow rating disabled">${ratingsHtml}</div>`;
 		}
 
+		function escapeHtmlAttribute(value) {
+			return String(value || "").replace(/[&<>"']/g, (character) => ({
+				"&": "&amp;",
+				"<": "&lt;",
+				">": "&gt;",
+				'"': "&quot;",
+				"'": "&#39;",
+			})[character]);
+		}
+
 		function generateBodtOfWorkHtml(data, industryId) {
 			if (!data || data.length === 0) {
 				return "";
@@ -2792,6 +2839,12 @@ var shout = (function () {
 				 *   "industryRating"
 				 * }
 				 */
+				const rowEmail = escapeHtmlAttribute(data[i]["email"] || "");
+				const rowLocation = escapeHtmlAttribute(data[i]["location"] || "");
+				const rowTimeZone = escapeHtmlAttribute(data[i]["timeZone"] || guessCalendarTimeZone(data[i]["location"]));
+				const rowManager = escapeHtmlAttribute(data[i]["manager"] || "");
+				const rowTeam = escapeHtmlAttribute(data[i]["team"] || "");
+				const rowLegacyOrg = escapeHtmlAttribute(data[i]["legacyOrg"] || "");
 
 				const row = /* syntax: html */ `
                     <tr>
@@ -2800,37 +2853,19 @@ var shout = (function () {
 															data[i]["employeeId"]
 														}" data-ename="${
 															data[i]["employee"]
-														}" data-email="${
-															data[i]["email"] || ""
-														}" data-location="${
-															data[i]["location"] || ""
-														}" data-timezone="${
-															data[i]["timeZone"] || guessCalendarTimeZone(data[i]["location"])
-														}" aria-label="Select ${data[i]["employee"]} calendar">
+														}" data-email="${rowEmail}" data-location="${rowLocation}" data-timezone="${rowTimeZone}" data-manager="${rowManager}" data-team="${rowTeam}" data-legacyorg="${rowLegacyOrg}" aria-label="Select ${data[i]["employee"]} calendar">
                             <button type="button" class="ui mini primary icon button tableSkillsAssignButton" data-eid="${
 															data[i]["employeeId"]
 														}" data-ename="${
 															data[i]["employee"]
-														}" data-email="${
-															data[i]["email"] || ""
-														}" data-location="${
-															data[i]["location"] || ""
-														}" data-timezone="${
-															data[i]["timeZone"] || guessCalendarTimeZone(data[i]["location"])
-														}" data-tooltip="Assign user to request" data-position="right center">
+														}" data-email="${rowEmail}" data-location="${rowLocation}" data-timezone="${rowTimeZone}" data-manager="${rowManager}" data-team="${rowTeam}" data-legacyorg="${rowLegacyOrg}" data-tooltip="Assign user to request" data-position="right center">
                                 <i class="plus icon"></i>
                             </button>
                             <button type="button" class="ui mini teal icon button tableSkillsCalendarButton" data-eid="${
 															data[i]["employeeId"]
 														}" data-ename="${
 															data[i]["employee"]
-														}" data-email="${
-															data[i]["email"] || ""
-														}" data-location="${
-															data[i]["location"] || ""
-														}" data-timezone="${
-															data[i]["timeZone"] || guessCalendarTimeZone(data[i]["location"])
-														}" data-tooltip="Open calendar dashboard" data-position="right center">
+														}" data-email="${rowEmail}" data-location="${rowLocation}" data-timezone="${rowTimeZone}" data-manager="${rowManager}" data-team="${rowTeam}" data-legacyorg="${rowLegacyOrg}" data-tooltip="Open calendar dashboard" data-position="right center">
                                 <i class="calendar check outline icon"></i>
                             </button>
                         </td>
@@ -2987,15 +3022,24 @@ var shout = (function () {
 					var email = $(this).data("email") || "";
 					var location = $(this).data("location") || "";
 					var timeZone = $(this).data("timezone") || guessCalendarTimeZone(location);
+					var manager = $(this).data("manager") || "";
+					var team = $(this).data("team") || getCalendarManagerTeamName(manager) || "";
+					var legacyOrg = $(this).data("legacyorg") || "";
 					var cachedSc = getCachedScById(eid);
 					var cachedScByName = !email && !cachedSc.email ? getCachedScByName(ename) : {};
 					var resolvedEmail = email || cachedSc.email || cachedScByName.email || inferCalendarEmailFromName(ename);
+					var resolvedLocation = normalizeCalendarRosterState(location || cachedSc.location || cachedScByName.location || "");
+					var resolvedManager = manager || cachedSc.manager || cachedScByName.manager || "";
+					var resolvedTeam = team || cachedSc.team || cachedScByName.team || getCalendarManagerTeamName(resolvedManager) || "";
 
 					calendarSelectionOverrides[String(eid)] = {
 						name: ename,
 						email: resolvedEmail,
-						location: location,
-						timeZone: timeZone,
+						manager: resolvedManager,
+						team: resolvedTeam,
+						legacyOrg: legacyOrg || cachedSc.legacyOrg || cachedScByName.legacyOrg || "Selected",
+						location: resolvedLocation,
+						timeZone: timeZone || cachedSc.timeZone || cachedScByName.timeZone || guessCalendarTimeZone(resolvedLocation),
 					};
 
 					const newValues = [
@@ -3005,6 +3049,11 @@ var shout = (function () {
 							description: "Override: Added from skills search results table",
 							descriptionVertical: true,
 							email: resolvedEmail,
+							manager: resolvedManager,
+							team: resolvedTeam,
+							legacyOrg: legacyOrg || cachedSc.legacyOrg || cachedScByName.legacyOrg || "Selected",
+							location: resolvedLocation,
+							timeZone: timeZone || cachedSc.timeZone || cachedScByName.timeZone || guessCalendarTimeZone(resolvedLocation),
 						},
 					];
 
@@ -3024,16 +3073,24 @@ var shout = (function () {
 					var email = $(this).data("email") || "";
 					var location = $(this).data("location") || "";
 					var timeZone = $(this).data("timezone") || guessCalendarTimeZone(location);
+					var manager = $(this).data("manager") || "";
+					var team = $(this).data("team") || getCalendarManagerTeamName(manager) || "";
+					var legacyOrg = $(this).data("legacyorg") || "";
 					var cachedSc = getCachedScById(eid);
 					var cachedScByName = !email && !cachedSc.email ? getCachedScByName(ename) : {};
 					var resolvedLocation = location || cachedSc.location || cachedScByName.location || "";
+					var resolvedManager = manager || cachedSc.manager || cachedScByName.manager || "";
+					var resolvedTeam = team || cachedSc.team || cachedScByName.team || getCalendarManagerTeamName(resolvedManager) || "";
 					var resolvedTimeZone = timeZone || cachedSc.timeZone || cachedScByName.timeZone || guessCalendarTimeZone(resolvedLocation);
 
 					openCalendarDashboard({
 						id: eid,
 						name: ename,
 						email: email || cachedSc.email || cachedScByName.email || "",
-						location: resolvedLocation,
+						manager: resolvedManager,
+						team: resolvedTeam,
+						legacyOrg: legacyOrg || cachedSc.legacyOrg || cachedScByName.legacyOrg || "Selected",
+						location: normalizeCalendarRosterState(resolvedLocation),
 						timeZone: resolvedTimeZone,
 					}).catch((error) => {
 						shout("Calendar dashboard button error:", error);
@@ -3149,10 +3206,22 @@ var shout = (function () {
 			var people = getPeopleData();
 
 			people.forEach(async (person) => {
+				const calendarPerson = normalizeCalendarRosterPerson({
+					manager: person.manager,
+					team: person.team,
+					legacyOrg: person.legacyOrg,
+					location: person.shortLocation,
+				});
+
 				scValues.push({
 					name: person.name,
 					value: person.value,
 					email: person.email,
+					manager: calendarPerson.manager,
+					team: calendarPerson.team,
+					legacyOrg: calendarPerson.legacyOrg,
+					location: calendarPerson.location,
+					timeZone: calendarPerson.timeZone,
 					description: `${person.description}`,
 					descriptionVertical: true,
 				});
@@ -3694,6 +3763,41 @@ var shout = (function () {
 		let calendarDashboardReturnToQuickAssign = false;
 		const calendarSelectionOverrides = {};
 
+		function normalizeCalendarRosterState(location) {
+			const text = String(location || "").trim();
+			const tokens = text.toUpperCase().match(/[A-Z]{2,3}/g) || [];
+			const state = tokens.reverse().find((token) => token.length === 2 && token !== "US");
+			return state || text || "Unknown";
+		}
+
+		function getCalendarManagerTeamName(manager) {
+			const text = String(manager || "").trim();
+			if (!text) {
+				return "";
+			}
+
+			if (text.includes(",")) {
+				return text.split(",")[0].trim();
+			}
+
+			const parts = text.split(/\s+/).filter(Boolean);
+			return parts.length > 1 ? parts[parts.length - 1] : text;
+		}
+
+		function normalizeCalendarRosterPerson(person = {}) {
+			const manager = person.manager || "";
+			const location = normalizeCalendarRosterState(person.location || person.state || "");
+
+			return {
+				...person,
+				manager: manager,
+				team: getCalendarManagerTeamName(manager) || person.team || "NetSuite SCs",
+				legacyOrg: person.legacyOrg || "NetSuite",
+				location: location,
+				timeZone: person.timeZone || guessCalendarTimeZone(location),
+			};
+		}
+
 		function canonicalCalendarName(name) {
 			return String(name || "")
 				.toLowerCase()
@@ -3768,12 +3872,18 @@ var shout = (function () {
 				.trim();
 			const matchByName = !match.email && !override.email ? getCachedScByName(cleanName) : {};
 			const location = override.location || match.location || matchByName.location || getCalendarRosterLocation(displayText);
+			const manager = override.manager || match.manager || matchByName.manager || "";
+			const team = override.team || match.team || matchByName.team || getCalendarManagerTeamName(manager) || "";
+			const legacyOrg = override.legacyOrg || match.legacyOrg || matchByName.legacyOrg || "";
 
 			return {
 				id: value,
 				name: cleanName,
 				email: override.email || match.email || matchByName.email || inferCalendarEmailFromName(cleanName),
-				location: location,
+				manager: manager,
+				team: team,
+				legacyOrg: legacyOrg,
+				location: normalizeCalendarRosterState(location),
 				timeZone: override.timeZone || match.timeZone || matchByName.timeZone || guessCalendarTimeZone(location),
 			};
 		}
@@ -3857,18 +3967,24 @@ var shout = (function () {
 			const email = $element.data("email") || "";
 			const location = $element.data("location") || "";
 			const timeZone = $element.data("timezone") || guessCalendarTimeZone(location);
+			const manager = $element.data("manager") || "";
+			const team = $element.data("team") || getCalendarManagerTeamName(manager) || "";
+			const legacyOrg = $element.data("legacyorg") || "";
 			const cachedSc = getCachedScById(eid);
 			const cachedScByName = !email && !cachedSc.email ? getCachedScByName(name) : {};
 			const resolvedLocation = location || cachedSc.location || cachedScByName.location || "";
+			const resolvedManager = manager || cachedSc.manager || cachedScByName.manager || "";
+			const resolvedTeam = team || cachedSc.team || cachedScByName.team || getCalendarManagerTeamName(resolvedManager) || "";
 
 			return {
 				id: eid,
 				name: name,
 				email: email || cachedSc.email || cachedScByName.email || inferCalendarEmailFromName(name),
-				location: resolvedLocation,
+				manager: resolvedManager,
+				team: resolvedTeam,
+				legacyOrg: legacyOrg || cachedSc.legacyOrg || cachedScByName.legacyOrg || "Selected",
+				location: normalizeCalendarRosterState(resolvedLocation),
 				timeZone: timeZone || cachedSc.timeZone || cachedScByName.timeZone || guessCalendarTimeZone(resolvedLocation),
-				team: "Skills Matrix",
-				legacyOrg: "Selected",
 				source: "Skills matrix selection",
 			};
 		}
@@ -3938,11 +4054,18 @@ var shout = (function () {
 			const date = context.date || getDateNeededIsoForDashboard();
 			const people = Array.isArray(context.people) ? context.people.filter((person) => person && person.email) : [];
 			const peopleEmails = people.map((person) => String(person.email || "").trim().toLowerCase()).filter(Boolean);
+			const rosterPeople = people.length ? people : context.email ? [context] : [];
+			const rosterPayload = rosterPeople
+				.map((person) => normalizeCalendarRosterPerson(person))
+				.filter((person) => person.email);
 
 			if (peopleEmails.length > 0) {
 				url.searchParams.set("consultants", peopleEmails.join(","));
 			} else if (context.email) {
 				url.searchParams.set("consultant", context.email);
+			}
+			if (rosterPayload.length > 0) {
+				url.searchParams.set("roster", JSON.stringify(rosterPayload));
 			}
 			if (context.name && peopleEmails.length <= 1) {
 				url.searchParams.set("consultantName", context.name);
@@ -4004,6 +4127,7 @@ var shout = (function () {
 			columns.push(new nlobjSearchColumn("custrecord_emproster_firstname"));
 			columns.push(new nlobjSearchColumn("custrecord_emproster_lastname"));
 			columns.push(new nlobjSearchColumn("custrecord_emproster_olocation"));
+			columns.push(new nlobjSearchColumn("custrecord_emproster_mgrroster"));
 			columns.push(new nlobjSearchColumn("custrecord_emproster_salesteam"));
 			columns.push(new nlobjSearchColumn("custrecord_emproster_vertical_amo"));
 			columns.push(new nlobjSearchColumn("email", "custrecord_emproster_emp"));
@@ -4018,13 +4142,15 @@ var shout = (function () {
 				for (var i = 0; i < results.length; i++) {
 					const first = results[i].getValue("custrecord_emproster_firstname") || "";
 					const last = results[i].getValue("custrecord_emproster_lastname") || "";
-					const location = extractLocationString(results[i].getText("custrecord_emproster_olocation") || "");
+					const location = normalizeCalendarRosterState(extractLocationString(results[i].getText("custrecord_emproster_olocation") || ""));
+					const manager = results[i].getText("custrecord_emproster_mgrroster") || "";
 
 					people.push({
 						name: `${first} ${last}`.trim(),
 						email: results[i].getValue("email", "custrecord_emproster_emp"),
+						manager: manager,
 						location: location,
-						team: results[i].getText("custrecord_emproster_salesteam") || "NetSuite SCs",
+						team: getCalendarManagerTeamName(manager) || results[i].getText("custrecord_emproster_salesteam") || "NetSuite SCs",
 						legacyOrg: results[i].getText("custrecord_emproster_vertical_amo") || "NetSuite",
 						timeZone: guessCalendarTimeZone(location),
 					});
@@ -4038,25 +4164,36 @@ var shout = (function () {
 
 		function buildCalendarDashboardRoster(context = {}) {
 			const roster = [];
-			const seen = new Set();
+			const indexByEmail = {};
 
 			function addPerson(person) {
 				const email = String(person.email || "").trim().toLowerCase();
 
-				if (!email || seen.has(email)) {
+				if (!email) {
 					return;
 				}
 
-				const location = person.location || "";
-				seen.add(email);
-				roster.push({
+				const normalized = normalizeCalendarRosterPerson({
 					name: person.name || email,
 					email: email,
-					team: person.team || "NetSuite SCs",
-					legacyOrg: person.legacyOrg || "NetSuite",
-					location: location || "Unknown",
-					timeZone: person.timeZone || guessCalendarTimeZone(location),
+					manager: person.manager || "",
+					team: person.team || "",
+					legacyOrg: person.legacyOrg || "",
+					location: person.location || person.state || "",
+					timeZone: person.timeZone || "",
+					source: person.source || "",
 				});
+
+				if (Object.prototype.hasOwnProperty.call(indexByEmail, email)) {
+					roster[indexByEmail[email]] = {
+						...roster[indexByEmail[email]],
+						...normalized,
+					};
+					return;
+				}
+
+				indexByEmail[email] = roster.length;
+				roster.push(normalized);
 			}
 
 			const contextPeople = Array.isArray(context.people) ? context.people : [];
@@ -4083,7 +4220,11 @@ var shout = (function () {
 					addPerson({
 						name: cleanName,
 						email: person.email,
-						location: location,
+						manager: person.manager || "",
+						team: person.team || "",
+						legacyOrg: person.legacyOrg || "",
+						location: person.location || location,
+						timeZone: person.timeZone || "",
 					});
 				});
 			}
@@ -4092,8 +4233,12 @@ var shout = (function () {
 				addPerson({
 					name: context.name || context.email,
 					email: context.email,
-					location: context.location || "",
+					manager: context.manager || "",
+					team: context.team || "",
+					legacyOrg: context.legacyOrg || "",
+					location: context.location || context.state || "",
 					timeZone: context.timeZone || "",
+					source: context.source || "Focused consultant",
 				});
 			}
 
@@ -4193,13 +4338,62 @@ window.DIRECT_CONNECTOR_AVAILABILITY.push(${JSON.stringify({ email: focusEmail, 
       });
 `,
 					"",
-				)
-					.replace('      document.getElementById("skillsFileInput").addEventListener("change", handleSkillFileSelected);\n', "")
-					.replace('        "skillFilter",\n', "")
-					.replace('      document.getElementById("skillFilter").addEventListener("input", renderAll);\n', "")
-					.replace("    loadSkillCache();\n", "");
-			if (!html.includes("function inferTimeZoneFromAvailabilityStart")) {
+					)
+						.replace('      document.getElementById("skillsFileInput").addEventListener("change", handleSkillFileSelected);\n', "")
+						.replace('        "skillFilter",\n', "")
+						.replace('      document.getElementById("skillFilter").addEventListener("input", renderAll);\n', "")
+						.replace("    loadSkillCache();\n", "");
+			if (!html.includes(".pill.ot-warning")) {
 				html = html.replace(
+					".pill.unknown { color: #485564; background: #edf1f5; border-color: #cfd8e1; }",
+					`.pill.unknown { color: #485564; background: #edf1f5; border-color: #cfd8e1; }
+    .pill.ot-warning { color: #fff; background: #c74734; border-color: #a52f24; }`,
+				);
+			}
+			if (!html.includes("function hasOvertimeWarning")) {
+				html = html.replace(
+					`function addMinutes(date, minutes) {`,
+					`function getLocalMinutesOfDay(date, timeZone) {
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        hour12: false,
+        hour: "2-digit",
+        minute: "2-digit"
+      }).formatToParts(date).reduce((acc, part) => {
+        if (part.type !== "literal") acc[part.type] = part.value;
+        return acc;
+      }, {});
+      const hour = Number(parts.hour) === 24 ? 0 : Number(parts.hour);
+      return hour * 60 + Number(parts.minute || 0);
+    }
+
+    function hasOvertimeWarning(person, windowConfig) {
+      const zone = person?.timeZone || windowConfig.timeZone;
+      const localStart = getLocalMinutesOfDay(windowConfig.meetingStart, zone);
+      const localEnd = getLocalMinutesOfDay(windowConfig.meetingEnd, zone);
+      return localStart < 7 * 60 + 45 || localEnd > 17 * 60 + 30;
+    }
+
+    function addMinutes(date, minutes) {`,
+				);
+			}
+			html = html
+				.replace(
+					`other,
+        rank,`,
+					`other,
+        otWarning: hasOvertimeWarning(person, windowConfig),
+        rank,`,
+				)
+				.replace(
+					`<td><span class="pill \${row.pill}">\${row.label}</span></td>`,
+					`<td>
+              <span class="pill \${row.pill}">\${row.label}</span>
+              \${row.otWarning ? \`<span class="pill ot-warning">OT WARNING</span>\` : ""}
+            </td>`,
+				);
+				if (!html.includes("function inferTimeZoneFromAvailabilityStart")) {
+					html = html.replace(
 					"function addCalendarDataRosterEntries() {",
 					`function inferTimeZoneFromAvailabilityStart(email) {
       const normalized = normalizeEmail(email);
@@ -4915,6 +5109,7 @@ window.SCR_ASSISTANT_SELECTED_EMAILS = ${JSON.stringify(selectedEmails)};
         const normalized = {
           name: person.name || email,
           email,
+          manager: person.manager || "",
           team: person.team || "NetSuite SCs",
           legacyOrg: person.legacyOrg || "NetSuite",
           location: person.location || "Unknown",
