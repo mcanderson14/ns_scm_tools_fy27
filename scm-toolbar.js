@@ -2,7 +2,7 @@
 // @name         SCR Mgr Assistant Toolbar BETA
 // @namespace    scrmgrassistant
 // @copyright    Copyright © 2024 by Ryan Morrissey
-// @version      27.0.0.3B
+// @version      27.0.0.4B
 // @description  Adds an Assistant Toolbar with interactive buttons to all SC Request forms.
 // @icon         https://cdn0.iconfinder.com/data/icons/phosphor-bold-vol-3-1/256/lifebuoy-duotone-512.png
 // @tag          productivity
@@ -29,6 +29,7 @@
 // @grant        GM_registerMenuCommand
 // @grant        GM_setClipboard
 // @grant        GM_openInTab
+// @grant        GM.openInTab
 // @run-at       document-idle
 // @downloadURL  https://github.com/mcanderson14/ns_scm_tools_fy27/raw/main/scm-toolbar.js
 // @updateURL    https://github.com/mcanderson14/ns_scm_tools_fy27/raw/main/scm-toolbar.js
@@ -36,7 +37,7 @@
 // ==/UserScript==
 
 /* globals $, jQuery */
-/* globals GM_config, GM_SuperValue, waitForKeyElements, GM_setClipboard, GM_openInTab */
+/* globals GM, GM_config, GM_SuperValue, waitForKeyElements, GM_setClipboard, GM_openInTab */
 /* globals nlapiSearchRecord, nlapiGetFieldValue, nlapiSetFieldValue, nlapiGetFieldValues, nlapiSetFieldValues, nlapiGetUser, nlobjSearchFilter, nlobjSearchColumn, nlapiStringToDate */
 
 /**
@@ -2749,14 +2750,14 @@ var shout = (function () {
 				const row = /* syntax: html */ `
                     <tr>
                         <td class="center aligned tableSkillsAssign">
-                            <button class="ui mini primary icon button tableSkillsAssignButton" data-eid="${
+                            <button type="button" class="ui mini primary icon button tableSkillsAssignButton" data-eid="${
 															data[i]["employeeId"]
 														}" data-ename="${
 															data[i]["employee"]
 														}" data-tooltip="Assign user to request" data-position="right center">
                                 <i class="plus icon"></i>
                             </button>
-                            <button class="ui mini teal icon button tableSkillsCalendarButton" data-eid="${
+                            <button type="button" class="ui mini teal icon button tableSkillsCalendarButton" data-eid="${
 															data[i]["employeeId"]
 														}" data-ename="${
 															data[i]["employee"]
@@ -2935,6 +2936,8 @@ var shout = (function () {
 						id: eid,
 						name: ename,
 						email: email || cachedSc.email || cachedScByName.email || "",
+					}).catch((error) => {
+						shout("Calendar dashboard button error:", error);
 					});
 				});
 
@@ -3760,30 +3763,91 @@ var shout = (function () {
 			return url.toString();
 		}
 
-		function openUrlInNewTab(url) {
-			if (typeof GM_openInTab === "function") {
-				GM_openInTab(url, {
-					active: true,
-					insert: true,
-					setParent: true,
-				});
-				return;
-			}
-
-			window.open(url, "_blank", "noopener,noreferrer");
+		function copyDashboardUrlFallback(url) {
+			return copyTextToClipboard(url).catch((error) => {
+				shout("Unable to copy calendar dashboard URL:", error);
+			});
 		}
 
-		function openCalendarDashboard(context, statusSelector) {
+		async function openUrlInNewTab(url) {
+			const errors = [];
+
+			if (typeof GM !== "undefined" && GM && typeof GM.openInTab === "function") {
+				try {
+					await GM.openInTab(url, {
+						active: true,
+						insert: true,
+						setParent: true,
+					});
+					return {
+						opened: true,
+						method: "GM.openInTab",
+					};
+				} catch (error) {
+					errors.push(`GM.openInTab: ${error.message || error}`);
+				}
+			}
+
+			if (typeof GM_openInTab === "function") {
+				try {
+					GM_openInTab(url, {
+						active: true,
+						insert: true,
+						setParent: true,
+					});
+					return {
+						opened: true,
+						method: "GM_openInTab",
+					};
+				} catch (error) {
+					errors.push(`GM_openInTab: ${error.message || error}`);
+				}
+			}
+
+			try {
+				const openedWindow = window.open(url, "_blank", "noopener,noreferrer");
+				if (openedWindow) {
+					return {
+						opened: true,
+						method: "window.open",
+					};
+				}
+				errors.push("window.open: popup was blocked");
+			} catch (error) {
+				errors.push(`window.open: ${error.message || error}`);
+			}
+
+			return {
+				opened: false,
+				method: "",
+				error: errors.join(" | "),
+			};
+		}
+
+		async function openCalendarDashboard(context, statusSelector) {
 			const url = buildCalendarDashboardUrl(context || {});
-			openUrlInNewTab(url);
+			await copyDashboardUrlFallback(url);
+			const result = await openUrlInNewTab(url);
 
 			if (statusSelector) {
-				const msg = context && (context.email || context.name)
-					? "Opened calendar dashboard."
-					: "Opened dashboard without consultant filter.";
+				let msg;
+
+				if (result.opened && url.startsWith("file:")) {
+					msg = "Dashboard URL copied. If no tab opened, enable Tampermonkey file URL access or use an http:// dashboard URL.";
+				} else if (result.opened) {
+					msg = context && (context.email || context.name)
+						? "Opened calendar dashboard. URL copied as fallback."
+						: "Opened dashboard without consultant filter. URL copied as fallback.";
+				} else {
+					msg = "Open blocked; dashboard URL copied.";
+				}
+
 				$(statusSelector).text(msg);
 			}
 
+			if (!result.opened) {
+				shout("Calendar dashboard launch failed:", result.error);
+			}
 			shout("Open calendar dashboard:", url);
 		}
 
@@ -3877,7 +3941,10 @@ var shout = (function () {
 				return;
 			}
 
-			openCalendarDashboard(sc, "#calendarpromptstatus");
+			openCalendarDashboard(sc, "#calendarpromptstatus").catch((error) => {
+				$("#calendarpromptstatus").text("Open failed; check console for details.");
+				shout("Calendar dashboard button error:", error);
+			});
 		});
 		$("#_searchindustrylink").click(function (event) {
 			event.preventDefault();
