@@ -2,7 +2,7 @@
 // @name         SCR Mgr Assistant Toolbar BETA
 // @namespace    scrmgrassistant
 // @copyright    Copyright © 2024 by Ryan Morrissey
-// @version      27.0.0.14B
+// @version      27.0.0.15B
 // @description  Adds an Assistant Toolbar with interactive buttons to all SC Request forms.
 // @icon         https://cdn0.iconfinder.com/data/icons/phosphor-bold-vol-3-1/256/lifebuoy-duotone-512.png
 // @tag          productivity
@@ -2384,7 +2384,7 @@ var shout = (function () {
 				var result = results[_i];
 				var id = result.getId();
 				var employee = result.getText("custrecord_ssm_skill_employee");
-				var employeeId = result.getText("internalid", "custrecord_ssm_skill_employee");
+				var employeeId = result.getValue("internalid", "custrecord_ssm_skill_employee");
 				var manager = result.getText("custrecord_emproster_mgrroster", "custrecord_ssm_skill_employee");
 				var availability = result.getText("custrecord_emproster_avail", "custrecord_ssm_skill_employee");
 				var avail_notes = result.getValue("custrecord_emproster_avail_notes", "custrecord_ssm_skill_employee");
@@ -2797,6 +2797,8 @@ var shout = (function () {
 															data[i]["employeeId"]
 														}" data-ename="${
 															data[i]["employee"]
+														}" data-email="${
+															data[i]["email"] || ""
 														}" data-tooltip="Assign user to request" data-position="right center">
                                 <i class="plus icon"></i>
                             </button>
@@ -2907,7 +2909,7 @@ var shout = (function () {
 			let [lastname, firstname] = name.split(",").map((part) => part.trim());
 
 			// Return the concatenated result in "Firstname Lastname" format
-			return `${firstname} ${lastname}`;
+			return [firstname, lastname].filter(Boolean).join(" ");
 		}
 
 		function updateBodyOfWorkTable(skills, industryId, tableFilters) {
@@ -2947,14 +2949,24 @@ var shout = (function () {
 					event.preventDefault();
 
 					var eid = $(this).data("eid");
-					var ename = $(this).data("ename");
+					var ename = convertNameFormat($(this).data("ename"));
+					var email = $(this).data("email") || "";
+					var cachedSc = getCachedScById(eid);
+					var cachedScByName = !email && !cachedSc.email ? getCachedScByName(ename) : {};
+					var resolvedEmail = email || cachedSc.email || cachedScByName.email || inferCalendarEmailFromName(ename);
+
+					calendarSelectionOverrides[String(eid)] = {
+						name: ename,
+						email: resolvedEmail,
+					};
 
 					const newValues = [
 						{
-							name: convertNameFormat(ename),
+							name: ename,
 							value: parseInt(eid),
 							description: "Override: Added from skills search results table",
 							descriptionVertical: true,
+							email: resolvedEmail,
 						},
 					];
 
@@ -2963,7 +2975,7 @@ var shout = (function () {
 					$("#solutionconsultant").dropdown("change values", newValues);
 					$("#solutionconsultant").dropdown("set selected", eid);
 
-					shout("Add employee to dropdown:", `${ename} (${eid})`);
+					shout("Add employee to dropdown:", `${ename} (${eid})`, resolvedEmail);
 				});
 
 				$(".tableSkillsCalendarButton").click(function (event) {
@@ -3636,6 +3648,37 @@ var shout = (function () {
 		}
 
 		let calendarDashboardReturnToQuickAssign = false;
+		const calendarSelectionOverrides = {};
+
+		function canonicalCalendarName(name) {
+			return String(name || "")
+				.toLowerCase()
+				.replace(/[^a-z0-9]/g, "");
+		}
+
+		function inferCalendarEmailFromName(name) {
+			const cleanName = getCleanCalendarRosterName(name);
+			const knownEmails = {
+				ericbaghdasarian: "eric.baghdasarian@oracle.com",
+			};
+			const knownEmail = knownEmails[canonicalCalendarName(cleanName)];
+
+			if (knownEmail) {
+				return knownEmail;
+			}
+
+			const parts = cleanName
+				.toLowerCase()
+				.replace(/[^a-z\s-]/g, "")
+				.split(/[\s-]+/)
+				.filter(Boolean);
+
+			if (parts.length >= 2) {
+				return `${parts[0]}.${parts[parts.length - 1]}@oracle.com`;
+			}
+
+			return "";
+		}
 
 		function getCachedScById(id) {
 			const cache = getPeopleCache() || [];
@@ -3671,17 +3714,19 @@ var shout = (function () {
 			}
 
 			const match = getCachedScById(value);
-			const displayText = match.name || $("#solutionconsultant").dropdown("get text") || "";
+			const override = calendarSelectionOverrides[String(value)] || {};
+			const displayText = override.name || match.name || $("#solutionconsultant").dropdown("get text") || "";
 			const cleanName = $("<div>")
 				.html(String(displayText))
 				.text()
 				.replace(/\s*\(based in .*?\)\s*$/i, "")
 				.trim();
+			const matchByName = !match.email && !override.email ? getCachedScByName(cleanName) : {};
 
 			return {
 				id: value,
 				name: cleanName,
-				email: match.email || "",
+				email: override.email || match.email || matchByName.email || inferCalendarEmailFromName(cleanName),
 			};
 		}
 
@@ -4945,7 +4990,11 @@ window.SCR_ASSISTANT_FOCUS_EMAIL = ${JSON.stringify(focusEmail)};
 
 				var d = new Date();
 				var today = [("0" + (d.getMonth() + 1)).slice(-2), ("0" + d.getDate()).slice(-2), d.getFullYear()].join("/");
-				var scName = $.parseHTML(`${text}`)[1].innerText;
+				var scName = $("<div>")
+					.html(String(text || ""))
+					.text()
+					.replace(/\s*\(based in .*?\)\s*$/i, "")
+					.trim();
 				var msg = `${today} - Please work with ${scName} on next steps to KT ${initials}\n\n`;
 
 				$("#screquestdetailsadd").val(msg);
