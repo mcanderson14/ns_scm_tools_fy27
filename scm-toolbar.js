@@ -2,7 +2,7 @@
 // @name         SCR Mgr Assistant Toolbar BETA
 // @namespace    scrmgrassistant
 // @copyright    Copyright © 2024 by Ryan Morrissey
-// @version      27.0.0.34B
+// @version      27.0.0.35B
 // @description  Adds an Assistant Toolbar with interactive buttons to all SC Request forms.
 // @icon         https://cdn0.iconfinder.com/data/icons/phosphor-bold-vol-3-1/256/lifebuoy-duotone-512.png
 // @tag          productivity
@@ -469,12 +469,22 @@ var shout = (function () {
             #scr-modal-calendar-dashboard .content {
                 padding: 0 !important;
                 height: calc(100vh - 145px);
+                display: flex !important;
+                flex-direction: column;
+            }
+
+            #scr-calendar-dashboard-fallback {
+                display: none;
+                margin: 0 !important;
+                border-radius: 0 !important;
             }
 
             #scr-calendar-dashboard-frame {
                 display: block;
                 width: 100%;
                 height: 100%;
+                flex: 1 1 auto;
+                min-height: 0;
                 border: 0;
                 background: #f4f6f8;
             }
@@ -1718,6 +1728,7 @@ var shout = (function () {
                 <i class="close icon"></i>
                 <div class="header">SC Calendar Dashboard</div>
                 <div class="content">
+                    <div class="ui warning message" id="scr-calendar-dashboard-fallback"></div>
                     <iframe
                         id="scr-calendar-dashboard-frame"
                         title="SC Calendar Dashboard"
@@ -3776,6 +3787,7 @@ var shout = (function () {
 		}
 
 		let calendarDashboardReturnToQuickAssign = false;
+		let calendarDashboardLastAssetErrors = [];
 		const calendarSelectionOverrides = {};
 
 		function normalizeCalendarRosterState(location) {
@@ -4393,6 +4405,11 @@ var shout = (function () {
 						assetUrl,
 						error: error && error.message ? error.message : String(error),
 					});
+					calendarDashboardLastAssetErrors.push({
+						assetName,
+						assetUrl,
+						error: error && error.message ? error.message : String(error),
+					});
 				}
 			}
 
@@ -4403,6 +4420,8 @@ var shout = (function () {
 		}
 
 		async function buildEmbeddedCalendarDashboardHtml(url, context = {}) {
+			calendarDashboardLastAssetErrors = [];
+
 			const htmlAsset = await getCalendarDashboardAssetText("staffing-dashboard.html", url);
 			const eventsAsset = await getCalendarDashboardAssetText("direct-connector-events.js", url);
 			let html = htmlAsset.text;
@@ -5566,16 +5585,30 @@ window.SCR_ASSISTANT_SELECTED_EMAILS = ${JSON.stringify(selectedEmails)};
 			return `${launchScript}\n${html}`;
 		}
 
-		async function openEmbeddedCalendarDashboard(url, options = {}) {
-			const html = await buildEmbeddedCalendarDashboardHtml(url, options.context || {});
+		function openCalendarDashboardModal({ url, srcdoc = "", src = "", fallbackMessage = "", returnToQuickAssign = false }) {
+			calendarDashboardReturnToQuickAssign = Boolean(returnToQuickAssign);
+			const $frame = $("#scr-calendar-dashboard-frame");
+			const $fallback = $("#scr-calendar-dashboard-fallback");
 
-			if (!html) {
-				return false;
+			$frame.removeAttr("src").removeAttr("srcdoc");
+
+			if (srcdoc) {
+				$frame.attr("srcdoc", srcdoc);
+			} else if (src) {
+				$frame.attr("src", src);
 			}
 
-			calendarDashboardReturnToQuickAssign = Boolean(options.returnToQuickAssign);
+			if (fallbackMessage) {
+				$fallback
+					.empty()
+					.append($("<div>").addClass("header").text("Calendar dashboard opened in fallback mode"))
+					.append($("<p>").text(fallbackMessage))
+					.append($("<p>").text("The dashboard URL has been copied. If the frame below stays blank, click Open in New Tab or paste the copied URL into the address bar."))
+					.show();
+			} else {
+				$fallback.hide().empty();
+			}
 
-			$("#scr-calendar-dashboard-frame").attr("srcdoc", html);
 			$("#scr-calendar-dashboard-open-tab").attr("href", url);
 			$("#scr-modal-calendar-dashboard")
 				.modal({
@@ -5583,7 +5616,8 @@ window.SCR_ASSISTANT_SELECTED_EMAILS = ${JSON.stringify(selectedEmails)};
 					closable: true,
 					allowMultiple: true,
 					onHidden: function () {
-						$("#scr-calendar-dashboard-frame").attr("srcdoc", "");
+						$("#scr-calendar-dashboard-frame").removeAttr("src").removeAttr("srcdoc");
+						$("#scr-calendar-dashboard-fallback").hide().empty();
 
 						if (calendarDashboardReturnToQuickAssign) {
 							calendarDashboardReturnToQuickAssign = false;
@@ -5597,6 +5631,39 @@ window.SCR_ASSISTANT_SELECTED_EMAILS = ${JSON.stringify(selectedEmails)};
 				.modal("show");
 
 			return true;
+		}
+
+		async function openEmbeddedCalendarDashboard(url, options = {}) {
+			const html = await buildEmbeddedCalendarDashboardHtml(url, options.context || {});
+
+			if (!html) {
+				return false;
+			}
+
+			return openCalendarDashboardModal({
+				url,
+				srcdoc: html,
+				returnToQuickAssign: Boolean(options.returnToQuickAssign),
+			});
+		}
+
+		function getCalendarDashboardFallbackReason() {
+			if (!calendarDashboardLastAssetErrors.length) {
+				return "The embedded dashboard could not be built from the configured local files.";
+			}
+
+			return calendarDashboardLastAssetErrors
+				.map((item) => `${item.assetName}: ${item.error} (${item.assetUrl || "unresolved path"})`)
+				.join(" | ");
+		}
+
+		function openCalendarDashboardFallback(url, options = {}) {
+			return openCalendarDashboardModal({
+				url,
+				src: url,
+				returnToQuickAssign: Boolean(options.returnToQuickAssign),
+				fallbackMessage: getCalendarDashboardFallbackReason(),
+			});
 		}
 
 		function copyDashboardUrlFallback(url) {
@@ -5690,6 +5757,19 @@ window.SCR_ASSISTANT_SELECTED_EMAILS = ${JSON.stringify(selectedEmails)};
 				shout("Open embedded calendar dashboard:", url);
 				return;
 			}
+
+			openCalendarDashboardFallback(url, {
+				returnToQuickAssign: returnToQuickAssign,
+			});
+
+			if (statusSelector) {
+				$(statusSelector).text("Opened calendar dashboard fallback. URL copied; use Open in New Tab if the frame is blank.");
+			}
+			shout("Open calendar dashboard fallback:", {
+				url,
+				assetErrors: calendarDashboardLastAssetErrors,
+			});
+			return;
 
 			const result = await openUrlInNewTab(url);
 
