@@ -1,0 +1,51 @@
+{
+  "syncId": "sync-1778211494138-6zbhjg",
+  "createdAt": "2026-05-08T04:15:05.806Z",
+  "updatedAt": "2026-05-08T12:31:40.586Z",
+  "status": "complete",
+  "nextChunkIndex": 11,
+  "totalChunks": 11,
+  "totalConsultants": 275,
+  "completedChunks": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+  ],
+  "failedChunks": [],
+  "outputFile": "/Users/michaean/Documents/Outlook Calendar Project - JPK/direct-connector-events.js",
+  "requestFile": "/Users/michaean/Documents/Outlook Calendar Project - JPK/codex-calendar-sync-request.json",
+  "lastMerge": {
+    "chunkIndex": 10,
+    "loadedEmails": 217,
+    "availabilitySnapshots": 218,
+    "events": 0,
+    "errors": [
+      {
+        "email": "daniel.hogg02@oraclepdemos.com",
+        "responseCode": null,
+        "message": "Request could not be processed in time. Timeout occurred during 'Create-AvailabilityQueryResult-From-FreeBusyQueryResults, FreeBusyQueryIndex: 0 for AttendeeKind: Individual, RequestType: FederatedCrossForest'.",
+        "start": "2026-05-07T00:00:00.000Z",
+        "end": "2026-05-14T00:00:00.000Z"
+      }
+    ],
+    "missingParsed": [],
+    "matchingPayloads": 20
+  },
+  "failedConsultants": [
+    {
+      "email": "daniel.hogg02@oraclepdemos.com",
+      "responseCode": null,
+      "message": "Request could not be processed in time. Timeout occurred during 'Create-AvailabilityQueryResult-From-FreeBusyQueryResults, FreeBusyQueryIndex: 0 for AttendeeKind: Individual, RequestType: FederatedCrossForest'.",
+      "start": "2026-05-07T00:00:00.000Z",
+      "end": "2026-05-14T00:00:00.000Z"
+    }
+  ]
+}

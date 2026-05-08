@@ -560,6 +560,7 @@
         <div class="refresh-panel">
           <div class="refresh-row">
             <button class="refresh-button" id="refreshButton" type="button">Refresh now</button>
+            <button class="refresh-button" id="openRefreshConsoleButton" type="button">Open refresh console</button>
             <div class="snapshot-pill" id="lastRefreshLabel">Last refresh pending</div>
           </div>
           <div class="cache-note" id="cacheStatusLabel">3-week staffing snapshot: May 6 - May 26, 2026</div>
@@ -596,10 +597,15 @@
       <div class="control">
         <label for="planningZone">Time Zone</label>
         <select id="planningZone">
-          <option value="America/Chicago">Central (CT)</option>
           <option value="America/New_York">Eastern (ET)</option>
+          <option value="America/Chicago">Central (CT)</option>
           <option value="America/Denver">Mountain (MT)</option>
+          <option value="America/Phoenix">Arizona (MST)</option>
           <option value="America/Los_Angeles">Pacific (PT)</option>
+          <option value="America/Halifax">Atlantic (AT)</option>
+          <option value="America/Anchorage">Alaska (AKT)</option>
+          <option value="Pacific/Honolulu">Hawaii (HT)</option>
+          <option value="America/St_Johns">Newfoundland (NT)</option>
         </select>
       </div>
       <div class="control">
@@ -7980,8 +7986,10 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     const DIRECT_CONNECTOR_EVENTS = Array.isArray(window.DIRECT_CONNECTOR_EVENTS) ? window.DIRECT_CONNECTOR_EVENTS : [];
     const DIRECT_CONNECTOR_LOADED_EMAILS = new Set(Array.isArray(window.DIRECT_CONNECTOR_LOADED_EMAILS) ? window.DIRECT_CONNECTOR_LOADED_EMAILS : []);
     const DIRECT_CONNECTOR_AVAILABILITY = Array.isArray(window.DIRECT_CONNECTOR_AVAILABILITY) ? window.DIRECT_CONNECTOR_AVAILABILITY : [];
+    const IMPORTED_ROSTER = Array.isArray(window.SC_STAFFING_IMPORTED_ROSTER) ? window.SC_STAFFING_IMPORTED_ROSTER : [];
 
     const CACHE_KEY = "sc-staffing-dashboard-calendar-cache-direct-connector-202605062230";
+    const LOCAL_GRAPH_CACHE_KEY = "sc-staffing-dashboard-local-graph-cache-v1";
     const CACHE_TTL_MS = 5 * 60 * 1000;
     let rawEvents = [];
     let normalizedEvents = [];
@@ -8109,7 +8117,12 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       selectedEmails = getLaunchSelectedEmailSet()
     ) {
       const seen = new Set();
-      return [...embeddedEvents, ...DIRECT_CONNECTOR_EVENTS, ...expandConnectorAvailability(focusEmail, selectedEmails)]
+      return [
+        ...embeddedEvents,
+        ...DIRECT_CONNECTOR_EVENTS,
+        ...getLocalGraphEvents(focusEmail, selectedEmails),
+        ...expandConnectorAvailability(focusEmail, selectedEmails)
+      ]
         .filter(event => !focusEmail || String(event.email || "").toLowerCase() === focusEmail)
         .filter(event => !selectedEmails.size || selectedEmails.has(String(event.email || "").toLowerCase()))
         .filter(event => {
@@ -8147,6 +8160,19 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       }
     }
 
+    function readLocalGraphCache() {
+      try {
+        if (typeof window === "undefined" || !window.localStorage) return null;
+        const payload = window.localStorage.getItem(LOCAL_GRAPH_CACHE_KEY);
+        if (!payload) return null;
+        const parsed = JSON.parse(payload);
+        if (!Array.isArray(parsed.events) || !parsed.refreshedAt) return null;
+        return parsed;
+      } catch (error) {
+        return null;
+      }
+    }
+
     function normalizeEmail(value) {
       return String(value || "").trim().toLowerCase();
     }
@@ -8157,9 +8183,29 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       return records.filter(record => normalizeEmail(record.email) === normalized).length;
     }
 
+    function getLocalGraphEvents(focusEmail = "", selectedEmails = new Set()) {
+      const cache = readLocalGraphCache();
+      if (!cache) return [];
+      const selected = selectedEmails instanceof Set ? selectedEmails : new Set(selectedEmails || []);
+      return cache.events
+        .filter(event => !focusEmail || normalizeEmail(event.email) === focusEmail)
+        .filter(event => !selected.size || selected.has(normalizeEmail(event.email)))
+        .map(event => ({ ...event }));
+    }
+
+    function getLocalGraphLoadedEmails() {
+      const cache = readLocalGraphCache();
+      return new Set(
+        cache && Array.isArray(cache.loadedEmails)
+          ? cache.loadedEmails.map(email => normalizeEmail(email)).filter(Boolean)
+          : []
+      );
+    }
+
     function getScopedRecordCounts(email, selectedEmails = getLaunchSelectedEmailSet()) {
       const normalized = normalizeEmail(email);
       const selected = selectedEmails instanceof Set ? selectedEmails : new Set(selectedEmails || []);
+      const localGraphCache = readLocalGraphCache();
       const inScope = record => {
         const recordEmail = normalizeEmail(record.email);
         if (normalized) return recordEmail === normalized;
@@ -8172,6 +8218,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         embeddedEvents: embeddedEvents.filter(inScope).length,
         directConnectorEvents: DIRECT_CONNECTOR_EVENTS.filter(inScope).length,
         directConnectorAvailabilitySnapshots: DIRECT_CONNECTOR_AVAILABILITY.filter(inScope).length,
+          localConnectorEvents: localGraphCache ? localGraphCache.events.filter(inScope).length : 0,
         cacheEvents: (() => {
           const cached = readCalendarCache();
           return cached ? cached.events.filter(inScope).length : 0;
@@ -8407,17 +8454,22 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const embeddedCount = countCalendarRecordsForEmail(embeddedEvents, debugEmail);
       const directEventCount = countCalendarRecordsForEmail(DIRECT_CONNECTOR_EVENTS, debugEmail);
       const availabilityCount = countCalendarRecordsForEmail(DIRECT_CONNECTOR_AVAILABILITY, debugEmail);
+      const localGraphCache = readLocalGraphCache();
+      const localGraphCount = localGraphCache ? countCalendarRecordsForEmail(localGraphCache.events, debugEmail) : 0;
       const cacheCount = cached ? countCalendarRecordsForEmail(cached.events, debugEmail) : 0;
       const snapshotLoaded = SNAPSHOT_LOADED_EMAILS.has(debugEmail);
       const directLoaded = DIRECT_CONNECTOR_LOADED_EMAILS.has(debugEmail);
+      const localGraphLoaded = getLocalGraphLoadedEmails().has(debugEmail);
       const selectedConsultants = getLaunchSelectedEmails().map(email => {
         const selectedPerson = rosterByEmail[email] || { name: email, email };
         const selectedSnapshotLoaded = SNAPSHOT_LOADED_EMAILS.has(email);
         const selectedDirectLoaded = DIRECT_CONNECTOR_LOADED_EMAILS.has(email);
+        const selectedLocalGraphLoaded = getLocalGraphLoadedEmails().has(email);
         const selectedCounts = {
           embeddedEvents: countCalendarRecordsForEmail(embeddedEvents, email),
           directConnectorEvents: countCalendarRecordsForEmail(DIRECT_CONNECTOR_EVENTS, email),
           directConnectorAvailabilitySnapshots: countCalendarRecordsForEmail(DIRECT_CONNECTOR_AVAILABILITY, email),
+          localConnectorEvents: localGraphCache ? countCalendarRecordsForEmail(localGraphCache.events, email) : 0,
           cacheEvents: cached ? countCalendarRecordsForEmail(cached.events, email) : 0,
           rawEventsAfterRefresh: countCalendarRecordsForEmail(rawEvents, email),
           normalizedEventsAfterRefresh: countCalendarRecordsForEmail(normalizedEvents, email)
@@ -8435,6 +8487,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
           calendarLoaded: hasLoadedCalendar(selectedPerson),
           snapshotLoadedFlag: selectedSnapshotLoaded,
           directConnectorLoadedFlag: selectedDirectLoaded,
+          localConnectorLoadedFlag: selectedLocalGraphLoaded,
           calendarData: selectedCounts
         };
       });
@@ -8448,9 +8501,9 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       } else if (person && debugEmail) {
         if (!rosterByEmail[debugEmail]) {
           likelyIssue = "The consultant email is not in the dashboard roster.";
-        } else if (!snapshotLoaded && !directLoaded && embeddedCount === 0 && directEventCount === 0 && availabilityCount === 0 && cacheCount === 0) {
-          likelyIssue = "The consultant is in the roster, but no local snapshot, imported Outlook connector events, free/busy availability snapshot, or cache records exist for this email yet. Import this consultant's Outlook calendar data and reload the dashboard.";
-        } else if (!snapshotLoaded && !directLoaded && rawCount === 0) {
+        } else if (!snapshotLoaded && !directLoaded && !localGraphLoaded && embeddedCount === 0 && directEventCount === 0 && availabilityCount === 0 && localGraphCount === 0 && cacheCount === 0) {
+          likelyIssue = "The consultant is in the roster, but no local snapshot, imported Outlook connector events, local connector refresh data, free/busy availability snapshot, or cache records exist for this email yet. Import this consultant's Outlook calendar data and reload the dashboard.";
+        } else if (!snapshotLoaded && !directLoaded && !localGraphLoaded && rawCount === 0) {
           likelyIssue = "Calendar data exists elsewhere, but the current local refresh scope did not load records for this email.";
         } else {
           likelyIssue = "Calendar data is present for this consultant.";
@@ -8486,12 +8539,18 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
           embeddedEvents: embeddedCount,
           directConnectorEvents: directEventCount,
           directConnectorAvailabilitySnapshots: availabilityCount,
+          localConnectorEvents: localGraphCount,
           cacheEvents: cacheCount,
           rawEventsAfterRefresh: rawCount,
           normalizedEventsAfterRefresh: normalizedCount,
           refreshSource,
           lastRefreshAt: lastRefreshAt ? lastRefreshAt.toISOString() : null
         },
+        localConnectorCache: localGraphCache ? {
+          refreshedAt: localGraphCache.refreshedAt,
+          loadedEmails: localGraphCache.loadedEmails || [],
+          events: Array.isArray(localGraphCache.events) ? localGraphCache.events.length : 0
+        } : null,
         activityLog: calendarActivityLog,
         likelyIssue
       };
@@ -8565,7 +8624,12 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         "America/New_York": "Eastern (ET)",
         "America/Chicago": "Central (CT)",
         "America/Denver": "Mountain (MT)",
-        "America/Los_Angeles": "Pacific (PT)"
+        "America/Phoenix": "Arizona (MST)",
+        "America/Los_Angeles": "Pacific (PT)",
+        "America/Halifax": "Atlantic (AT)",
+        "America/Anchorage": "Alaska (AKT)",
+        "Pacific/Honolulu": "Hawaii (HT)",
+        "America/St_Johns": "Newfoundland (NT)"
       };
       return zoneLabels[zone] || zone;
     }
@@ -8588,9 +8652,11 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         && (
           SNAPSHOT_LOADED_EMAILS.has(email)
           || DIRECT_CONNECTOR_LOADED_EMAILS.has(email)
+          || getLocalGraphLoadedEmails().has(email)
           || countCalendarRecordsForEmail(embeddedEvents, email) > 0
           || countCalendarRecordsForEmail(DIRECT_CONNECTOR_EVENTS, email) > 0
           || countCalendarRecordsForEmail(DIRECT_CONNECTOR_AVAILABILITY, email) > 0
+          || countCalendarRecordsForEmail(getLocalGraphEvents(email, new Set([email])), email) > 0
           || countCalendarRecordsForEmail(rawEvents, email) > 0
         );
     }
@@ -9133,6 +9199,26 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       button.disabled = false;
     }
 
+    function buildRefreshConsoleUrl() {
+      const url = new URL("calendar-refresh.html", window.location.href);
+      const selectedEmail = getSelectedConsultantEmail();
+      const launchEmails = getLaunchSelectedEmails();
+      const emails = selectedEmail ? [selectedEmail] : launchEmails;
+      if (emails.length) url.searchParams.set("emails", emails.join(","));
+      url.searchParams.set("start", STAFFING_WINDOW_START);
+      url.searchParams.set("days", String(STAFFING_WINDOW_DAYS));
+      url.searchParams.set("dashboard", window.location.href.split("#")[0]);
+      return url.toString();
+    }
+
+    function openRefreshConsole() {
+      const url = buildRefreshConsoleUrl();
+      const opened = window.open(url, "_blank");
+      if (!opened && navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(url).catch(() => {});
+      }
+    }
+
     function setSelectValue(id, value) {
       const select = document.getElementById(id);
       if (!select || value == null || value === "") return false;
@@ -9268,7 +9354,12 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         "America/New_York",
         "America/Chicago",
         "America/Denver",
-        "America/Los_Angeles"
+        "America/Phoenix",
+        "America/Los_Angeles",
+        "America/Halifax",
+        "America/Anchorage",
+        "Pacific/Honolulu",
+        "America/St_Johns"
       ];
 
       return zones.find(zone => {
@@ -9299,6 +9390,18 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
 
     function addCalendarDataRosterEntries() {
       const emails = new Set();
+      const localGraphCache = readLocalGraphCache();
+
+      IMPORTED_ROSTER.forEach(person => addRuntimeRosterPerson({
+        ...person,
+        source: person.source || "Imported roster"
+      }));
+      if (localGraphCache && Array.isArray(localGraphCache.roster)) {
+        localGraphCache.roster.forEach(person => addRuntimeRosterPerson({
+          ...person,
+          source: person.source || "Local connector cache roster"
+        }));
+      }
 
       DIRECT_CONNECTOR_LOADED_EMAILS.forEach(email => emails.add(String(email || "").trim().toLowerCase()));
       DIRECT_CONNECTOR_AVAILABILITY.forEach(snapshot => emails.add(String(snapshot.email || "").trim().toLowerCase()));
@@ -9499,6 +9602,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
 
     function wireEvents() {
       document.getElementById("refreshButton").addEventListener("click", handleManualRefresh);
+      document.getElementById("openRefreshConsoleButton")?.addEventListener("click", openRefreshConsole);
       document.getElementById("copyDebugButton")?.addEventListener("click", copyDebugConsole);
       document.getElementById("personFilter").addEventListener("change", () => {
         syncPlanningZoneToSelectedConsultant();

@@ -1,0 +1,2371 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SC Calendar Sync Configuration</title>
+  <script src="consultant-roster.js"></script>
+  <script src="direct-connector-events.js"></script>
+  <style>
+    :root {
+      --navy: #183446;
+      --ink: #1f2a33;
+      --muted: #657383;
+      --line: #d8e1e8;
+      --surface: #ffffff;
+      --wash: #f5f8fa;
+      --teal: #137c75;
+      --red: #bd3328;
+      --green: #247244;
+      --shadow: 0 10px 24px rgba(31, 42, 51, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--wash);
+      color: var(--ink);
+      font-family: Inter, "Segoe UI", Arial, sans-serif;
+      font-size: 14px;
+    }
+
+    header {
+      background: var(--navy);
+      color: #fff;
+      padding: 24px 28px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 24px;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin-top: 6px;
+      color: rgba(255, 255, 255, 0.74);
+      line-height: 1.45;
+    }
+
+    main {
+      padding: 22px 28px 32px;
+      max-width: 1180px;
+      margin: 0 auto;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(320px, 430px) 1fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }
+
+    .panel + .panel { margin-top: 16px; }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 16px;
+      letter-spacing: 0;
+    }
+
+    label {
+      display: block;
+      margin: 12px 0 5px;
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+      padding: 9px 10px;
+      outline: none;
+    }
+
+    textarea {
+      min-height: 112px;
+      resize: vertical;
+    }
+
+    textarea.tall {
+      min-height: 260px;
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus {
+      border-color: var(--teal);
+      box-shadow: 0 0 0 3px rgba(19, 124, 117, 0.14);
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    button {
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      color: var(--ink);
+      cursor: pointer;
+      font-weight: 850;
+      padding: 8px 12px;
+    }
+
+    button.primary {
+      background: var(--teal);
+      border-color: var(--teal);
+      color: #fff;
+    }
+
+    button.danger {
+      color: var(--red);
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.48;
+    }
+
+    .note {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .status {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .pill {
+      border-radius: 999px;
+      background: #eef3f6;
+      color: var(--muted);
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 4px 9px;
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .pill.good {
+      background: #e8f4ed;
+      color: var(--green);
+    }
+
+    .pill.bad {
+      background: #f8e7e4;
+      color: var(--red);
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) minmax(160px, 220px) minmax(160px, 220px);
+      gap: 10px;
+      margin: 12px 0;
+    }
+
+    .table-scroll {
+      max-height: 620px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+    }
+
+    .table-scroll table {
+      margin: 0;
+    }
+
+    .checkbox-cell {
+      width: 34px;
+      text-align: center;
+    }
+
+    .checkbox-cell input {
+      width: auto;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .legacy-handoff {
+      display: none;
+    }
+
+    pre,
+    .output {
+      margin: 0;
+      max-height: 420px;
+      overflow: auto;
+      border-radius: 7px;
+      border: 1px solid #263643;
+      background: #101820;
+      color: #e6eef5;
+      padding: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid var(--line);
+      padding: 8px 6px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: 1fr; }
+      .toolbar { grid-template-columns: 1fr; }
+      main { padding-left: 16px; padding-right: 16px; }
+      header { padding-left: 16px; padding-right: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>SC Calendar Sync Configuration</h1>
+    <div class="subtitle">Configure the SC roster, choose who should be refreshed, and prepare the Codex Outlook Calendar sync that feeds the staffing dashboard.</div>
+  </header>
+
+  <main>
+    <div class="grid">
+      <section>
+        <div class="panel">
+          <h2>NetSuite SC Saved Search Roster</h2>
+          <p class="note">Paste the JSON or copied export from saved search 1311451. Save this roster before preparing an automation request so Codex has the SC names, team names, industry families, legacy designations, regions, and time zones.</p>
+          <div class="actions">
+            <button id="openNetSuiteSearchButton" type="button">Open saved search</button>
+          </div>
+          <label for="netsuiteRosterText">Saved Search JSON or Rows</label>
+          <textarea id="netsuiteRosterText" placeholder='Paste saved-search JSON like {"people":[...]} or copied NetSuite result rows here'></textarea>
+          <div class="actions">
+            <button class="primary" id="importNetSuiteRosterButton" type="button">Import and save roster</button>
+            <button id="clearImportedRosterButton" type="button">Clear imported roster</button>
+          </div>
+          <div class="status" id="netsuiteRosterStatus">
+            <span class="pill">No NetSuite roster imported</span>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Sync Scope</h2>
+          <p class="note">Choose the consultants and calendar window. The selected email list is what Codex will chunk during the automated refresh.</p>
+
+          <label for="emails">Consultant Emails</label>
+          <textarea id="emails" placeholder="one.person@oracle.com, another.person@oracle.com"></textarea>
+          <div class="actions">
+            <button id="loadFullRosterButton" type="button">Load full SC roster</button>
+            <button id="appendFullRosterButton" type="button">Append full roster</button>
+          </div>
+          <div class="status" id="rosterStatus">
+            <span class="pill">Roster not loaded</span>
+          </div>
+
+          <div class="row">
+            <div>
+              <label for="startDate">Start Date</label>
+              <input type="date" id="startDate">
+            </div>
+            <div>
+              <label for="days">Days</label>
+              <input type="number" id="days" min="1" max="62" value="21">
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label for="interval">Interval</label>
+              <select id="interval">
+                <option value="30">30 minutes</option>
+                <option value="15">15 minutes</option>
+                <option value="60">60 minutes</option>
+              </select>
+            </div>
+            <div>
+              <label for="timeZone">Request Time Zone</label>
+              <select id="timeZone">
+                <option value="UTC">UTC</option>
+                <option value="America/New_York">Eastern</option>
+                <option value="America/Chicago">Central</option>
+                <option value="America/Denver">Mountain</option>
+                <option value="America/Phoenix">Arizona</option>
+                <option value="America/Los_Angeles">Pacific</option>
+                <option value="America/Halifax">Atlantic</option>
+                <option value="America/Anchorage">Alaska</option>
+                <option value="Pacific/Honolulu">Hawaii</option>
+                <option value="America/St_Johns">Newfoundland</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="primary" id="copyRequestButton" type="button">Copy connector request</button>
+            <button id="openDashboardButton" type="button">Open dashboard</button>
+            <button class="danger" id="clearCacheButton" type="button">Clear local cache</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Codex Automation</h2>
+          <p class="note">Prepare and save the chunked sync plan. The Codex automation reads the saved request/state files, runs the next chunk with the Outlook connector, merges it, and resumes on the next scheduled run.</p>
+          <label for="localProjectFolder">Local Project Folder</label>
+          <input type="text" id="localProjectFolder" placeholder="/netsuite/scm_tools or C:\netsuite\scm_tools">
+          <p class="note" style="margin-top: 8px;">Use the folder where these dashboard files live on the user's computer. Mac and Windows paths are supported; the suggested shared paths are /netsuite/scm_tools for macOS and C:\netsuite\scm_tools for Windows.</p>
+          <div class="actions">
+            <button id="useCurrentFolderButton" type="button">Use current page folder</button>
+            <button id="saveProjectFolderButton" type="button">Save folder path</button>
+          </div>
+          <div class="status" id="projectFolderStatus">
+            <span class="pill">Project folder not saved</span>
+          </div>
+          <div class="row">
+            <div>
+              <label for="codexBatchSize">Batch Size</label>
+              <input type="number" id="codexBatchSize" min="1" max="25" value="20">
+            </div>
+            <div>
+              <label for="codexChunkIndex">Prepared Plan</label>
+              <input type="text" id="codexChunkIndex" value="None" readonly>
+            </div>
+          </div>
+          <div class="actions">
+            <button id="saveSyncConfigButton" type="button">Save page configuration</button>
+            <button id="loadSyncConfigButton" type="button">Load saved configuration</button>
+            <button class="primary" id="prepareCodexSyncButton" type="button">Prepare Codex sync</button>
+            <button class="primary" id="runCodexSyncButton" type="button">Run with Codex</button>
+            <button id="preparePreviousCodexChunkButton" type="button" hidden disabled>Previous chunk</button>
+            <button id="prepareNextCodexChunkButton" type="button" hidden disabled>Next chunk</button>
+            <button id="copyCodexSyncButton" type="button">Copy fallback request</button>
+            <button id="downloadCodexSyncButton" type="button">Download request file</button>
+          </div>
+          <div class="status" id="codexSyncStatus">
+            <span class="pill">No Codex sync request prepared</span>
+          </div>
+          <pre id="codexSyncOutput" style="margin-top: 12px;">Prepare a Codex sync request when the consultant list and date window are ready.</pre>
+        </div>
+
+        <div class="panel legacy-handoff">
+          <h2>Graph Availability Service</h2>
+          <p class="note">Trial path for direct local refresh. Start the local service, sign in once, then refresh selected consultants into the dashboard cache without copying connector output.</p>
+          <label for="graphServiceUrl">Local Service URL</label>
+          <input type="url" id="graphServiceUrl" placeholder="http://localhost:8787">
+          <div class="actions">
+            <button id="openGraphServiceLoginButton" type="button">Open service login</button>
+            <button id="checkGraphServiceButton" type="button">Check service</button>
+            <button class="primary" id="refreshGraphServiceButton" type="button">Refresh selected via service</button>
+          </div>
+          <div class="status" id="graphServiceStatus">
+            <span class="pill">Service not checked</span>
+          </div>
+        </div>
+
+        <div class="panel legacy-handoff">
+          <h2>Paste Connector Result</h2>
+          <p class="note">Paste the JSON returned by ChatGPT/Codex. Expected fields are loadedEmails, availability, events, and errors. Availability snapshots use the same compact free/busy view string used by the dashboard.</p>
+          <label for="connectorResult">Connector Result JSON</label>
+          <textarea class="tall" id="connectorResult" placeholder='{"loadedEmails":["person@oracle.com"],"availability":[],"events":[],"errors":[]}'></textarea>
+          <div class="actions">
+            <button class="primary" id="saveResultButton" type="button">Save result to dashboard cache</button>
+            <button id="loadSampleButton" type="button">Load example shape</button>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="panel">
+          <h2>Roster Configuration</h2>
+          <p class="note">Review the active SC roster, select who should be included in the next sync, and confirm the last calendar sync status for each consultant.</p>
+          <div class="toolbar">
+            <div>
+              <label for="rosterSearch">Search</label>
+              <input type="search" id="rosterSearch" placeholder="Name, email, team, industry">
+            </div>
+            <div>
+              <label for="rosterTeamFilter">Team</label>
+              <select id="rosterTeamFilter"></select>
+            </div>
+            <div>
+              <label for="rosterIndustryFilter">Industry Family</label>
+              <select id="rosterIndustryFilter"></select>
+            </div>
+          </div>
+          <div class="actions">
+            <button id="selectVisibleRosterButton" type="button">Select visible</button>
+            <button id="clearVisibleRosterButton" type="button">Clear visible</button>
+            <button id="selectUnsyncedRosterButton" type="button">Select missing sync</button>
+          </div>
+          <div class="status" id="cacheStatus">
+            <span class="pill">No local connector cache loaded</span>
+          </div>
+          <div id="cacheTable" style="margin-top: 12px;"></div>
+        </div>
+
+        <div class="panel legacy-handoff">
+          <h2>Activity</h2>
+          <pre id="activityLog">Ready.</pre>
+        </div>
+
+        <div class="panel">
+          <h2>direct-connector-events.js Export</h2>
+          <p class="note">The dashboard reads local storage automatically. This export is a fallback if you want to replace the static data file manually.</p>
+          <div class="actions">
+            <button id="copyExportButton" type="button">Copy export</button>
+            <button id="downloadExportButton" type="button">Download export</button>
+          </div>
+          <pre id="exportOutput" style="margin-top: 12px;">No export generated yet.</pre>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const LOCAL_GRAPH_CACHE_KEY = "sc-staffing-dashboard-local-graph-cache-v1";
+    const DASHBOARD_CACHE_KEY = "sc-staffing-dashboard-calendar-cache-direct-connector-202605062230";
+    const ROSTER_CACHE_KEY = "sc-staffing-dashboard-netsuite-roster-v1";
+    const CODEX_SYNC_PARAM = "codexSync";
+    const CODEX_SYNC_ID_PARAM = "codexSyncId";
+    const CODEX_SYNC_STATE_KEY = "sc-staffing-dashboard-codex-sync-state-v1";
+    const SYNC_CONFIG_KEY = "sc-staffing-dashboard-calendar-sync-config-v1";
+    const PROJECT_FOLDER_KEY = "sc-staffing-dashboard-project-folder-v1";
+    const CODEX_SYNC_KIND = "sc-calendar-codex-sync-request";
+    const CODEX_FULL_SYNC_KIND = "sc-calendar-codex-full-sync-request";
+    const CODEX_SYNC_VERSION = 1;
+    const DEFAULT_PROJECT_FOLDER = /Windows/i.test(navigator.userAgent) ? "C:\\netsuite\\scm_tools" : "/netsuite/scm_tools";
+    const CODEX_SYNC_DEFAULT_BATCH_SIZE = 20;
+    const CODEX_SYNC_MAX_BATCH_SIZE = 25;
+    const CODEX_SYNC_RUN_COMMAND = "Run the prepared calendar sync from the current browser page.";
+    const GRAPH_SERVICE_URL_KEY = "sc-staffing-dashboard-graph-service-url-v1";
+    const GRAPH_SERVICE_DEFAULT_URL = "http://localhost:8787";
+    const NETSUITE_SEARCH_URL = "https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl?rectype=1572&searchtype=Custom&style=REPORT&sortcol=Custom_NAME_raw&sortdir=ASC&csv=HTML&OfficeXML=F&pdf=&size=50&twbx=F&report=T&grid=&searchid=1311451&dle=T";
+    const STATUS_MAP = {
+      "1": { status: "tentative", subject: "Free/busy: Tentative hold" },
+      "2": { status: "busy", subject: "Free/busy: Busy; subject unavailable" },
+      "3": { status: "oof", subject: "Free/busy: Out of office; subject unavailable" },
+      "4": { status: "workingElsewhere", subject: "Free/busy: Working elsewhere; subject unavailable" }
+    };
+
+    let latestExportText = "";
+    let latestCodexSyncText = "";
+    let latestCodexSyncState = null;
+    let latestCodexChunkIndex = 0;
+    let rosterFilterOptionsReady = false;
+
+    function getSharedRoster() {
+      return Array.isArray(window.SC_STAFFING_CONSULTANTS)
+        ? window.SC_STAFFING_CONSULTANTS
+            .map(person => ({ ...person, email: normalizeEmail(person.email) }))
+            .filter(person => person.email)
+        : [];
+    }
+
+    function readImportedRoster() {
+      const payload = readJsonStorage(ROSTER_CACHE_KEY);
+      return payload && Array.isArray(payload.people) ? payload : null;
+    }
+
+    function getAvailableRoster() {
+      const imported = readImportedRoster();
+      return imported ? imported.people : getSharedRoster();
+    }
+
+    function qs(id) {
+      return document.getElementById(id);
+    }
+
+    function log(message, details) {
+      const output = qs("activityLog");
+      const stamp = new Date().toLocaleTimeString();
+      const line = details ? `${stamp} - ${message}\n${JSON.stringify(details, null, 2)}` : `${stamp} - ${message}`;
+      output.textContent = `${line}\n\n${output.textContent}`.trim();
+    }
+
+    function escapeHtml(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function normalizeEmail(value) {
+      return String(value || "").trim().toLowerCase();
+    }
+
+    function parseEmails(value) {
+      return [...new Set(String(value || "")
+        .split(/[\s,;]+/)
+        .map(normalizeEmail)
+        .filter(email => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)))];
+    }
+
+    function normalizeHeader(value) {
+      return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    }
+
+    function normalizeRosterObject(person) {
+      if (!person || typeof person !== "object") return person;
+
+      const normalized = { ...person };
+      const byHeader = Object.fromEntries(Object.entries(person).map(([key, value]) => [normalizeHeader(key), value]));
+      const aliases = {
+        name: ["scnameconsultant", "name", "employee", "consultant", "solutionconsultant", "sc", "salesconsultant"],
+        email: ["emailadress", "emailaddress", "email", "emailaddresswork", "workemail", "employeeemail"],
+        title: ["jobtitle", "title"],
+        team: ["team", "teamname", "managerteamname", "managerteam", "manager"],
+        manager: ["manager", "teammanager", "managerteamname", "managerteam", "teamname", "team"],
+        industryFamily: ["industryfamily", "industyfamily", "industry", "industryvertical", "industrygroup"],
+        legacyOrg: ["directamolegacy", "directamo", "directoramo", "legacydesignation", "legacy", "designation", "directamolegacydesignation", "directoramolegacydesignation"],
+        officeLocation: ["officelocation", "office", "location", "state", "homestate"],
+        region: ["region", "salesregion", "scregion"]
+      };
+
+      Object.entries(aliases).forEach(([target, names]) => {
+        if (normalized[target]) return;
+        const match = names.find(name => byHeader[name] !== undefined && byHeader[name] !== null && String(byHeader[name]).trim() !== "");
+        if (match) normalized[target] = byHeader[match];
+      });
+
+      return normalized;
+    }
+
+    function parseDelimitedText(text) {
+      const source = String(text || "").trim();
+      if (!source) return [];
+      const firstLine = source.split(/\r?\n/)[0] || "";
+      const delimiter = firstLine.includes("\t") ? "\t" : ",";
+      const rows = [];
+      let row = [];
+      let cell = "";
+      let quoted = false;
+
+      for (let index = 0; index < source.length; index += 1) {
+        const char = source[index];
+        const next = source[index + 1];
+        if (char === '"') {
+          if (quoted && next === '"') {
+            cell += '"';
+            index += 1;
+          } else {
+            quoted = !quoted;
+          }
+        } else if (char === delimiter && !quoted) {
+          row.push(cell.trim());
+          cell = "";
+        } else if ((char === "\n" || char === "\r") && !quoted) {
+          if (char === "\r" && next === "\n") index += 1;
+          row.push(cell.trim());
+          if (row.some(value => value !== "")) rows.push(row);
+          row = [];
+          cell = "";
+        } else {
+          cell += char;
+        }
+      }
+
+      row.push(cell.trim());
+      if (row.some(value => value !== "")) rows.push(row);
+      return rows;
+    }
+
+    function parseRosterRows(text) {
+      const rows = parseDelimitedText(text);
+      if (rows.length < 2) return [];
+      const headers = rows[0].map(normalizeHeader);
+      const aliases = {
+        name: ["scnameconsultant", "name", "employee", "consultant", "solutionconsultant", "sc", "salesconsultant"],
+        email: ["emailadress", "emailaddress", "email", "emailaddresswork", "workemail", "employeeemail"],
+        title: ["jobtitle", "title"],
+        manager: ["manager", "teammanager", "managerteamname", "managerteam", "teamname"],
+        team: ["team", "teamname", "managerteamname", "managerteam", "manager"],
+        industryFamily: ["industryfamily", "industyfamily", "industry", "industryvertical", "industrygroup"],
+        legacyOrg: ["directamolegacy", "directoramo", "directamo", "legacydesignation", "legacy", "designation", "directamolegacydesignation", "directoramolegacydesignation"],
+        region: ["region", "salesregion", "scregion"],
+        officeLocation: ["officelocation", "office", "location", "state", "homestate"]
+      };
+
+      const findIndex = names => headers.findIndex(header => names.includes(header));
+      const indexes = Object.fromEntries(Object.entries(aliases).map(([key, names]) => [key, findIndex(names)]));
+      const getValue = (row, key) => indexes[key] >= 0 ? String(row[indexes[key]] || "").trim() : "";
+
+      return rows.slice(1).map(row => {
+        const email = normalizeEmail(getValue(row, "email"));
+        if (!email) return null;
+        const region = getValue(row, "region");
+        const officeLocation = getValue(row, "officeLocation");
+        const manager = getValue(row, "manager");
+        const team = getValue(row, "team") || manager || "NetSuite Roster";
+        const legacyOrg = normalizeLegacyOrg(getValue(row, "legacyOrg"));
+        const state = extractStateFromOfficeLocation(officeLocation);
+        return {
+          name: getValue(row, "name") || inferNameFromEmail(email),
+          email,
+          title: getValue(row, "title"),
+          manager,
+          team,
+          industryFamily: getValue(row, "industryFamily"),
+          legacyOrg,
+          region,
+          officeLocation,
+          state,
+          location: officeLocation || state,
+          timeZone: inferTimeZoneFromOfficeLocation(officeLocation, region),
+          source: "NetSuite saved search 1311451"
+        };
+      }).filter(Boolean);
+    }
+
+    function parseRosterInput(text) {
+      const source = String(text || "").trim();
+      if (!source) return [];
+
+      if (source.startsWith("{") || source.startsWith("[")) {
+        const parsed = JSON.parse(source);
+        const normalizeRows = rows => Array.isArray(rows) ? rows.map(normalizeRosterObject) : [];
+        return Array.isArray(parsed) ? normalizeRows(parsed) : normalizeRows(parsed.people || parsed.roster || parsed.consultants || parsed.results || []);
+      }
+
+      return parseRosterRows(source);
+    }
+
+    function inferNameFromEmail(email) {
+      return normalizeEmail(email).split("@")[0].split(/[._-]+/).filter(Boolean)
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
+    }
+
+    function normalizeLegacyOrg(value) {
+      const text = String(value || "").trim();
+      if (/amo/i.test(text)) return "AMO";
+      if (/direct/i.test(text)) return "Direct";
+      return text || "Active SC";
+    }
+
+    function extractStateFromOfficeLocation(value) {
+      const text = String(value || "").trim();
+      if (!text) return "";
+
+      const countryStateMatch = text.match(/^US[-\s]+([A-Z]{2})$/i);
+      if (countryStateMatch) return countryStateMatch[1].toUpperCase();
+
+      if (/^CA[-\s]+/i.test(text)) return "";
+
+      const stateNames = {
+        alabama: "AL", alaska: "AK", arizona: "AZ", arkansas: "AR", california: "CA", colorado: "CO",
+        connecticut: "CT", delaware: "DE", florida: "FL", georgia: "GA", hawaii: "HI", idaho: "ID",
+        illinois: "IL", indiana: "IN", iowa: "IA", kansas: "KS", kentucky: "KY", louisiana: "LA",
+        maine: "ME", maryland: "MD", massachusetts: "MA", michigan: "MI", minnesota: "MN", mississippi: "MS",
+        missouri: "MO", montana: "MT", nebraska: "NE", nevada: "NV", newhampshire: "NH", newjersey: "NJ",
+        newmexico: "NM", newyork: "NY", northcarolina: "NC", northdakota: "ND", ohio: "OH", oklahoma: "OK",
+        oregon: "OR", pennsylvania: "PA", rhodeisland: "RI", southcarolina: "SC", southdakota: "SD",
+        tennessee: "TN", texas: "TX", utah: "UT", vermont: "VT", virginia: "VA", washington: "WA",
+        westvirginia: "WV", wisconsin: "WI", wyoming: "WY", districtofcolumbia: "DC"
+      };
+      const stateCodes = new Set(Object.values(stateNames));
+      const tokens = text.toUpperCase().split(/[^A-Z]+/).filter(Boolean);
+      const tokenMatch = tokens.find(token => stateCodes.has(token));
+      if (tokenMatch) return tokenMatch;
+
+      const compact = normalizeHeader(text);
+      const nameMatch = Object.entries(stateNames).find(([name]) => compact.includes(name));
+      return nameMatch ? nameMatch[1] : "";
+    }
+
+    function inferTimeZoneFromOfficeLocation(officeLocation, fallbackRegion = "") {
+      const state = extractStateFromOfficeLocation(officeLocation);
+      const canadaTimeZone = inferCanadaTimeZoneFromOfficeLocation(officeLocation);
+      if (canadaTimeZone) return canadaTimeZone;
+      const timeZoneByState = {
+        AL: "America/Chicago", AK: "America/Anchorage", AZ: "America/Phoenix", AR: "America/Chicago",
+        CA: "America/Los_Angeles", CO: "America/Denver", CT: "America/New_York", DC: "America/New_York",
+        DE: "America/New_York", FL: "America/New_York", GA: "America/New_York", HI: "Pacific/Honolulu",
+        IA: "America/Chicago", ID: "America/Denver", IL: "America/Chicago", IN: "America/New_York",
+        KS: "America/Chicago", KY: "America/New_York", LA: "America/Chicago", MA: "America/New_York",
+        MD: "America/New_York", ME: "America/New_York", MI: "America/New_York", MN: "America/Chicago",
+        MO: "America/Chicago", MS: "America/Chicago", MT: "America/Denver", NC: "America/New_York",
+        ND: "America/Chicago", NE: "America/Chicago", NH: "America/New_York", NJ: "America/New_York",
+        NM: "America/Denver", NV: "America/Los_Angeles", NY: "America/New_York", OH: "America/New_York",
+        OK: "America/Chicago", OR: "America/Los_Angeles", PA: "America/New_York", RI: "America/New_York",
+        SC: "America/New_York", SD: "America/Chicago", TN: "America/Chicago", TX: "America/Chicago",
+        UT: "America/Denver", VA: "America/New_York", VT: "America/New_York", WA: "America/Los_Angeles",
+        WI: "America/Chicago", WV: "America/New_York", WY: "America/Denver"
+      };
+      if (state && timeZoneByState[state]) return timeZoneByState[state];
+
+      const text = String(fallbackRegion || "").toLowerCase();
+      if (/(pacific|west)/.test(text)) return "America/Los_Angeles";
+      if (/(mountain)/.test(text)) return "America/Denver";
+      if (/(central)/.test(text)) return "America/Chicago";
+      if (/(east|eastern)/.test(text)) return "America/New_York";
+      return "";
+    }
+
+    function inferCanadaTimeZoneFromOfficeLocation(value) {
+      const text = String(value || "").trim();
+      const match = text.match(/^CA[-\s]+(.+)$/i);
+      if (!match) return "";
+
+      const province = normalizeHeader(match[1]);
+      const provinceTimeZones = {
+        britishcolumbia: "America/Vancouver",
+        alberta: "America/Edmonton",
+        saskatchewan: "America/Regina",
+        manitoba: "America/Winnipeg",
+        ontario: "America/Toronto",
+        quebec: "America/Toronto",
+        newbrunswick: "America/Halifax",
+        novascotia: "America/Halifax",
+        princeedwardisland: "America/Halifax",
+        newfoundlandandlabrador: "America/St_Johns",
+        yukon: "America/Whitehorse",
+        northwestterritories: "America/Yellowknife",
+        nunavut: "America/Iqaluit"
+      };
+
+      return provinceTimeZones[province] || "";
+    }
+
+    function getOfficeLocationDisplay(person) {
+      const rawOfficeLocation = String(person.officeLocation || "").trim();
+      const rawState = String(person.state || "").trim();
+      const rawLocation = String(person.location || "").trim();
+      const rawRegion = String(person.region || "").trim();
+      const isRegionOnly = value => {
+        const normalized = normalizeHeader(value);
+        return !normalized || normalized === normalizeHeader(rawRegion) || [
+          "west",
+          "central",
+          "east",
+          "pacific",
+          "mountain",
+          "atlantic",
+          "canwest",
+          "caneast"
+        ].includes(normalized);
+      };
+      const raw = rawOfficeLocation || rawState || (isRegionOnly(rawLocation) ? "" : rawLocation);
+      if (!raw) return "";
+
+      const usState = extractStateFromOfficeLocation(raw);
+      if (usState) return usState;
+
+      const canadaMatch = raw.match(/^CA[-\s]+(.+)$/i);
+      if (canadaMatch) return canadaMatch[1].trim();
+
+      return raw;
+    }
+
+    function inferTimeZoneFromRegion(value) {
+      return inferTimeZoneFromOfficeLocation(value, value);
+    }
+
+    function getTimeZoneDisplayLabel(timeZone) {
+      const labels = {
+        "UTC": "UTC",
+        "America/New_York": "Eastern",
+        "America/Chicago": "Central",
+        "America/Denver": "Mountain",
+        "America/Phoenix": "Arizona",
+        "America/Los_Angeles": "Pacific",
+        "America/Halifax": "Atlantic",
+        "America/Anchorage": "Alaska",
+        "Pacific/Honolulu": "Hawaii",
+        "America/St_Johns": "Newfoundland",
+        "America/Vancouver": "Pacific",
+        "America/Edmonton": "Mountain",
+        "America/Regina": "Central",
+        "America/Winnipeg": "Central",
+        "America/Toronto": "Eastern",
+        "America/Whitehorse": "Pacific",
+        "America/Yellowknife": "Mountain",
+        "America/Iqaluit": "Eastern"
+      };
+      return labels[timeZone] || timeZone || "";
+    }
+
+    function updateNetSuiteRosterStatus() {
+      const imported = readImportedRoster();
+      qs("netsuiteRosterStatus").innerHTML = imported
+        ? [
+            `<span class="pill good">${imported.people.length} imported active SC${imported.people.length === 1 ? "" : "s"}</span>`,
+            `<span class="pill">Saved ${new Date(imported.importedAt).toLocaleString()}</span>`
+          ].join("")
+        : '<span class="pill">No NetSuite roster imported</span>';
+    }
+
+    function saveImportedRoster(people, source = NETSUITE_SEARCH_URL) {
+      const normalized = (people || []).map(person => {
+        const input = normalizeRosterObject(person && typeof person === "object" ? person : { email: person });
+        const email = normalizeEmail(input.email);
+        if (!email) return null;
+        const region = input.region || "";
+        const officeLocation = input.officeLocation || input.location || input.state || "";
+        const state = input.state || extractStateFromOfficeLocation(officeLocation);
+        const location = officeLocation || state;
+        return {
+          ...input,
+          name: input.name || inferNameFromEmail(email),
+          email,
+          manager: input.manager || "",
+          team: input.team || input.manager || "NetSuite Roster",
+          industryFamily: input.industryFamily || "",
+          legacyOrg: normalizeLegacyOrg(input.legacyOrg || input.designation || ""),
+          region,
+          officeLocation,
+          state,
+          location,
+          timeZone: input.timeZone || inferTimeZoneFromOfficeLocation(officeLocation || state, region),
+          source: input.source || "NetSuite saved search 1311451"
+        };
+      }).filter(Boolean);
+
+      const deduped = [...new Map(normalized.map(person => [person.email, person])).values()]
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      if (!deduped.length) return [];
+
+      writeJsonStorage(ROSTER_CACHE_KEY, {
+        importedAt: new Date().toISOString(),
+        source,
+        people: deduped
+      });
+      rosterFilterOptionsReady = false;
+      updateRosterFilterOptions();
+      setEmails(deduped.map(person => person.email));
+      updateNetSuiteRosterStatus();
+      updateRosterStatus();
+      return deduped;
+    }
+
+    function importNetSuiteRoster() {
+      let people = [];
+      try {
+        people = parseRosterInput(qs("netsuiteRosterText").value);
+      } catch (error) {
+        log("Could not parse roster input. Paste delimited saved-search rows or roster JSON.", {
+          message: error.message
+        });
+      }
+      if (!people.length) {
+        log("No roster rows were imported. Confirm the pasted data includes headers and an email column.");
+        updateNetSuiteRosterStatus();
+        return;
+      }
+
+      const deduped = saveImportedRoster(people, NETSUITE_SEARCH_URL);
+      log("Imported NetSuite saved search roster.", {
+        people: deduped.length,
+        source: NETSUITE_SEARCH_URL
+      });
+    }
+
+    function clearImportedRoster() {
+      window.localStorage.removeItem(ROSTER_CACHE_KEY);
+      rosterFilterOptionsReady = false;
+      updateRosterFilterOptions();
+      updateNetSuiteRosterStatus();
+      updateRosterStatus();
+      renderCacheStatus();
+      log("Cleared imported NetSuite roster.");
+    }
+
+    function updateRosterStatus() {
+      const roster = getAvailableRoster();
+      const imported = readImportedRoster();
+      const currentEmails = parseEmails(qs("emails").value);
+      const teams = [...new Set(roster.map(person => person.team).filter(Boolean))].sort();
+      qs("rosterStatus").innerHTML = roster.length
+        ? [
+            `<span class="pill good">${roster.length} ${imported ? "NetSuite" : "built-in"} roster consultant${roster.length === 1 ? "" : "s"} available</span>`,
+            `<span class="pill">${currentEmails.length} email${currentEmails.length === 1 ? "" : "s"} in request</span>`,
+            `<span class="pill">${teams.length} team${teams.length === 1 ? "" : "s"}</span>`
+          ].join("")
+        : '<span class="pill bad">consultant-roster.js not loaded</span>';
+    }
+
+    function setEmails(emails, options = {}) {
+      qs("emails").value = [...new Set(emails.map(normalizeEmail).filter(Boolean))].sort().join(", ");
+      updateRosterStatus();
+      if (!options.skipRender) renderCacheStatus();
+    }
+
+    function importRosterFromLaunchParams(params) {
+      const rosterPayload = params.get("roster");
+      if (!rosterPayload) return;
+
+      try {
+        const parsed = JSON.parse(rosterPayload);
+        const people = Array.isArray(parsed) ? parsed : parsed && parsed.people;
+        const source = (parsed && parsed.source) || params.get("source") || NETSUITE_SEARCH_URL;
+        const imported = saveImportedRoster(people, source);
+        if (imported.length) {
+          log("Imported roster from launch URL.", {
+            people: imported.length,
+            source
+          });
+        } else {
+          log("Roster launch URL did not include any usable consultant rows.");
+        }
+      } catch (error) {
+        log("Could not import roster from launch URL.", {
+          message: error.message
+        });
+      }
+    }
+
+    function loadFullRoster({ append = false } = {}) {
+      const rosterEmails = getAvailableRoster().map(person => person.email);
+      if (!rosterEmails.length) {
+        log("No shared roster was available.", { expectedFile: "consultant-roster.js" });
+        updateRosterStatus();
+        return;
+      }
+
+      const currentEmails = append ? parseEmails(qs("emails").value) : [];
+      setEmails([...currentEmails, ...rosterEmails]);
+      log(append ? "Appended full SC roster to request." : "Loaded full SC roster into request.", {
+        rosterEmails: rosterEmails.length,
+        totalEmails: parseEmails(qs("emails").value).length
+      });
+    }
+
+    function addDaysIso(dateValue, days) {
+      const [year, month, day] = dateValue.split("-").map(Number);
+      const date = new Date(Date.UTC(year, month - 1, day + days));
+      return [
+        date.getUTCFullYear(),
+        String(date.getUTCMonth() + 1).padStart(2, "0"),
+        String(date.getUTCDate()).padStart(2, "0")
+      ].join("-");
+    }
+
+    function todayIso() {
+      const now = new Date();
+      return [
+        now.getFullYear(),
+        String(now.getMonth() + 1).padStart(2, "0"),
+        String(now.getDate()).padStart(2, "0")
+      ].join("-");
+    }
+
+    function readJsonStorage(key) {
+      try {
+        const value = window.localStorage.getItem(key);
+        return value ? JSON.parse(value) : null;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function writeJsonStorage(key, value) {
+      window.localStorage.setItem(key, JSON.stringify(value));
+    }
+
+    function inferProjectFolderFromPage() {
+      try {
+        const url = new URL(window.location.href);
+        if (url.protocol !== "file:") return DEFAULT_PROJECT_FOLDER;
+
+        let pathname = decodeURIComponent(url.pathname || "");
+        if (/^\/[A-Za-z]:\//.test(pathname)) pathname = pathname.slice(1);
+        pathname = pathname.replace(/\//g, pathname.includes("\\") ? "\\" : "/");
+        const separator = pathname.includes("\\") ? "\\" : "/";
+        return pathname.slice(0, pathname.lastIndexOf(separator)) || DEFAULT_PROJECT_FOLDER;
+      } catch {
+        return DEFAULT_PROJECT_FOLDER;
+      }
+    }
+
+    function normalizeProjectFolder(value) {
+      const fallback = inferProjectFolderFromPage();
+      let folder = String(value || fallback).trim();
+      if (!folder) folder = fallback;
+      folder = folder.replace(/^file:\/\//i, "");
+      folder = decodeURIComponent(folder);
+      if (/^\/[A-Za-z]:\//.test(folder)) folder = folder.slice(1);
+      return folder.replace(/[\\\/]+$/g, "");
+    }
+
+    function joinLocalPath(folder, fileName) {
+      const normalizedFolder = normalizeProjectFolder(folder);
+      const separator = normalizedFolder.includes("\\") ? "\\" : "/";
+      return `${normalizedFolder}${separator}${fileName}`;
+    }
+
+    function getProjectFolder() {
+      return normalizeProjectFolder(qs("localProjectFolder")?.value || window.localStorage.getItem(PROJECT_FOLDER_KEY));
+    }
+
+    function getCodexPaths() {
+      const projectFolder = getProjectFolder();
+      return {
+        projectFolder,
+        helperFile: joinLocalPath(projectFolder, "calendar-codex-sync-tools.mjs"),
+        requestFile: joinLocalPath(projectFolder, "codex-calendar-sync-request.json"),
+        stateFile: joinLocalPath(projectFolder, "codex-calendar-sync-state.json"),
+        outputFile: joinLocalPath(projectFolder, "direct-connector-events.js")
+      };
+    }
+
+    function updateProjectFolderStatus() {
+      const paths = getCodexPaths();
+      qs("projectFolderStatus").innerHTML = [
+        `<span class="pill good">${escapeHtml(paths.projectFolder)}</span>`,
+        `<span class="pill">${paths.projectFolder.includes("\\") ? "Windows path" : "Mac/Unix path"}</span>`
+      ].join("");
+      return paths;
+    }
+
+    function saveProjectFolder(value = qs("localProjectFolder").value) {
+      const folder = normalizeProjectFolder(value);
+      qs("localProjectFolder").value = folder;
+      window.localStorage.setItem(PROJECT_FOLDER_KEY, folder);
+      updateProjectFolderStatus();
+      log("Saved local project folder.", getCodexPaths());
+      return folder;
+    }
+
+    function useCurrentPageFolder() {
+      saveProjectFolder(inferProjectFolderFromPage());
+    }
+
+    function readSyncConfig() {
+      return readJsonStorage(SYNC_CONFIG_KEY);
+    }
+
+    function getDirectConnectorData() {
+      return {
+        metadata: window.DIRECT_CONNECTOR_SYNC_METADATA || null,
+        loadedEmails: Array.isArray(window.DIRECT_CONNECTOR_LOADED_EMAILS) ? window.DIRECT_CONNECTOR_LOADED_EMAILS.map(normalizeEmail) : [],
+        availability: Array.isArray(window.DIRECT_CONNECTOR_AVAILABILITY) ? window.DIRECT_CONNECTOR_AVAILABILITY : [],
+        directEvents: Array.isArray(window.DIRECT_CONNECTOR_EVENTS) ? window.DIRECT_CONNECTOR_EVENTS : [],
+        warnings: Array.isArray(window.DIRECT_CONNECTOR_SYNC_WARNINGS) ? window.DIRECT_CONNECTOR_SYNC_WARNINGS : []
+      };
+    }
+
+    function getConfiguredEmails() {
+      const selected = parseEmails(qs("emails").value);
+      if (selected.length) return selected;
+
+      const saved = readSyncConfig();
+      return Array.isArray(saved?.selectedEmails) ? saved.selectedEmails.map(normalizeEmail).filter(Boolean) : [];
+    }
+
+    function getVisibleRosterRows() {
+      const roster = getAvailableRoster();
+      const query = normalizeHeader(qs("rosterSearch")?.value || "");
+      const team = qs("rosterTeamFilter")?.value || "";
+      const industry = qs("rosterIndustryFilter")?.value || "";
+
+      return roster.filter(person => {
+        if (team && String(person.team || "") !== team) return false;
+        if (industry && String(person.industryFamily || "") !== industry) return false;
+        if (!query) return true;
+
+        return [
+          person.name,
+          person.email,
+          person.title,
+          person.manager,
+          person.team,
+          person.industryFamily,
+          person.legacyOrg,
+          person.region,
+          person.location
+        ].some(value => normalizeHeader(value).includes(query));
+      });
+    }
+
+    function getSyncStatusForEmail(email) {
+      const direct = getDirectConnectorData();
+      const normalizedEmail = normalizeEmail(email);
+      const loaded = new Set(direct.loadedEmails).has(normalizedEmail);
+      const hasSnapshot = direct.availability.some(snapshot => normalizeEmail(snapshot.email) === normalizedEmail);
+      const hasDirectEvents = direct.directEvents.some(event => normalizeEmail(event.email) === normalizedEmail);
+      const warning = direct.warnings.find(item => normalizeEmail(item.email) === normalizedEmail);
+      const refreshedAt = direct.metadata?.refreshedAt || "";
+
+      if (warning) {
+        return {
+          label: "Warning",
+          tone: "bad",
+          detail: warning.message || "Connector warning",
+          lastSync: refreshedAt
+        };
+      }
+
+      if (hasSnapshot || hasDirectEvents) {
+        return {
+          label: "Synced",
+          tone: "good",
+          detail: hasSnapshot ? "Availability snapshot" : "Direct events",
+          lastSync: refreshedAt
+        };
+      }
+
+      if (loaded) {
+        return {
+          label: "Loaded",
+          tone: "",
+          detail: "No availability snapshot",
+          lastSync: refreshedAt
+        };
+      }
+
+      return {
+        label: "Not synced",
+        tone: "bad",
+        detail: "No calendar data",
+        lastSync: ""
+      };
+    }
+
+    function updateRosterFilterOptions() {
+      const roster = getAvailableRoster();
+      const teamSelect = qs("rosterTeamFilter");
+      const industrySelect = qs("rosterIndustryFilter");
+      if (!teamSelect || !industrySelect) return;
+
+      const currentTeam = teamSelect.value;
+      const currentIndustry = industrySelect.value;
+      const teams = [...new Set(roster.map(person => person.team).filter(Boolean))].sort();
+      const industries = [...new Set(roster.map(person => person.industryFamily).filter(Boolean))].sort();
+
+      teamSelect.innerHTML = [
+        '<option value="">All teams</option>',
+        ...teams.map(team => `<option value="${escapeHtml(team)}">${escapeHtml(team)}</option>`)
+      ].join("");
+      industrySelect.innerHTML = [
+        '<option value="">All industry families</option>',
+        ...industries.map(item => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`)
+      ].join("");
+
+      teamSelect.value = teams.includes(currentTeam) ? currentTeam : "";
+      industrySelect.value = industries.includes(currentIndustry) ? currentIndustry : "";
+      rosterFilterOptionsReady = true;
+    }
+
+    function setRosterSelection(emails, { append = false } = {}) {
+      const current = append ? parseEmails(qs("emails").value) : [];
+      setEmails([...current, ...emails]);
+      renderCacheStatus();
+    }
+
+    function saveSyncConfig() {
+      const context = getCalendarRequestContext();
+      const paths = getCodexPaths();
+      const config = {
+        savedAt: new Date().toISOString(),
+        selectedEmails: context.emails,
+        roster: context.roster,
+        start: context.start,
+        days: context.days,
+        end: context.end,
+        intervalMinutes: context.intervalMinutes,
+        timeZone: context.timeZone,
+        batchSize: getCodexBatchSize(),
+        projectFolder: paths.projectFolder,
+        outputFile: paths.outputFile,
+        requestFile: paths.requestFile,
+        stateFile: paths.stateFile,
+        helperFile: paths.helperFile
+      };
+
+      writeJsonStorage(SYNC_CONFIG_KEY, config);
+      updateRosterStatus();
+      renderCacheStatus();
+      log("Saved calendar sync configuration in this browser.", {
+        consultants: config.selectedEmails.length,
+        window: `${config.start} through ${config.end}`,
+        batchSize: config.batchSize
+      });
+      return config;
+    }
+
+    function loadSavedSyncConfig() {
+      const config = readSyncConfig();
+      if (!config) {
+        log("No saved calendar sync configuration was found.");
+        return;
+      }
+
+      qs("startDate").value = config.start || qs("startDate").value;
+      qs("days").value = config.days || qs("days").value;
+      qs("interval").value = config.intervalMinutes || qs("interval").value;
+      qs("timeZone").value = config.timeZone || qs("timeZone").value;
+      qs("codexBatchSize").value = config.batchSize || qs("codexBatchSize").value;
+      if (config.projectFolder) saveProjectFolder(config.projectFolder);
+      if (Array.isArray(config.selectedEmails)) setEmails(config.selectedEmails);
+      updateRosterStatus();
+      renderCacheStatus();
+      log("Loaded saved calendar sync configuration.", {
+        consultants: (config.selectedEmails || []).length,
+        savedAt: config.savedAt
+      });
+    }
+
+    function readLocalCache() {
+      const cache = readJsonStorage(LOCAL_GRAPH_CACHE_KEY);
+      return cache && Array.isArray(cache.events) ? cache : null;
+    }
+
+    function expandAvailability(snapshot) {
+      const view = String(snapshot.view || "");
+      const intervalMs = Number(snapshot.intervalMinutes || 30) * 60 * 1000;
+      const startMs = Date.parse(snapshot.start);
+      const expanded = [];
+      if (!view || !Number.isFinite(startMs) || !intervalMs) return expanded;
+
+      let blockCode = null;
+      let blockStart = 0;
+      const flush = endIndex => {
+        if (!blockCode || !STATUS_MAP[blockCode]) return;
+        expanded.push({
+          email: normalizeEmail(snapshot.email),
+          status: STATUS_MAP[blockCode].status,
+          subject: STATUS_MAP[blockCode].subject,
+          start: new Date(startMs + blockStart * intervalMs).toISOString(),
+          end: new Date(startMs + endIndex * intervalMs).toISOString()
+        });
+      };
+
+      for (let index = 0; index <= view.length; index += 1) {
+        const code = view[index] || "0";
+        if (code === blockCode) continue;
+        flush(index);
+        blockCode = STATUS_MAP[code] ? code : null;
+        blockStart = index;
+      }
+
+      return expanded;
+    }
+
+    function normalizeEvent(event) {
+      return {
+        email: normalizeEmail(event.email),
+        status: String(event.status || "busy"),
+        subject: String(event.subject || "Free/busy: Busy; subject unavailable"),
+        start: new Date(event.start).toISOString(),
+        end: new Date(event.end).toISOString()
+      };
+    }
+
+    function buildExport(cache = readLocalCache()) {
+      if (!cache) return "";
+      return [
+        "// Generated by SC Calendar Connector Console.",
+        `// Refreshed at: ${cache.refreshedAt}`,
+        `window.SC_STAFFING_IMPORTED_ROSTER = ${JSON.stringify(cache.roster || [], null, 2)};`,
+        "",
+        `window.DIRECT_CONNECTOR_LOADED_EMAILS = ${JSON.stringify(cache.loadedEmails || [], null, 2)};`,
+        "",
+        `window.DIRECT_CONNECTOR_AVAILABILITY = ${JSON.stringify(cache.availability || [], null, 2)};`,
+        "",
+        `window.DIRECT_CONNECTOR_EVENTS = ${JSON.stringify(cache.directEvents || [], null, 2)};`,
+        ""
+      ].join("\n");
+    }
+
+    function mergeCache(next) {
+      const existing = readLocalCache();
+      const refreshedEmails = new Set((next.loadedEmails || []).map(normalizeEmail));
+      const keepEvent = event => !refreshedEmails.has(normalizeEmail(event.email));
+      const keepSnapshot = snapshot => !refreshedEmails.has(normalizeEmail(snapshot.email));
+      const existingLoaded = existing && Array.isArray(existing.loadedEmails) ? existing.loadedEmails : [];
+      const existingRoster = existing && Array.isArray(existing.roster) ? existing.roster : [];
+      const nextRoster = Array.isArray(next.roster) ? next.roster : [];
+      const rosterMap = new Map(existingRoster.map(person => [normalizeEmail(person.email), person]));
+      nextRoster.forEach(person => {
+        const email = normalizeEmail(person.email);
+        if (email) rosterMap.set(email, { ...person, email });
+      });
+
+      return {
+        version: 1,
+        source: "chatgpt-outlook-connector-refresh",
+        refreshedAt: next.refreshedAt,
+        start: next.start,
+        end: next.end,
+        intervalMinutes: next.intervalMinutes,
+        roster: [...rosterMap.values()].sort((a, b) => String(a.name || a.email).localeCompare(String(b.name || b.email))),
+        loadedEmails: [...new Set([...existingLoaded, ...(next.loadedEmails || [])].map(normalizeEmail).filter(Boolean))].sort(),
+        availability: [
+          ...(existing && Array.isArray(existing.availability) ? existing.availability.filter(keepSnapshot) : []),
+          ...(next.availability || [])
+        ],
+        directEvents: [
+          ...(existing && Array.isArray(existing.directEvents) ? existing.directEvents.filter(keepEvent) : []),
+          ...(next.directEvents || [])
+        ],
+        events: [
+          ...(existing && Array.isArray(existing.events) ? existing.events.filter(keepEvent) : []),
+          ...(next.events || [])
+        ],
+        errors: [
+          ...(existing && Array.isArray(existing.errors) ? existing.errors : []),
+          ...(next.errors || [])
+        ].slice(-50)
+      };
+    }
+
+    function writeDashboardCaches(cache) {
+      writeJsonStorage(LOCAL_GRAPH_CACHE_KEY, cache);
+      writeJsonStorage(DASHBOARD_CACHE_KEY, {
+        events: cache.events,
+        refreshedAt: cache.refreshedAt,
+        cachedAt: Date.now(),
+        source: "chatgpt-outlook-connector-refresh"
+      });
+    }
+
+    function renderCacheStatus() {
+      const cache = readLocalCache();
+      const direct = getDirectConnectorData();
+      const roster = getAvailableRoster();
+      if (!rosterFilterOptionsReady) updateRosterFilterOptions();
+      const rows = getVisibleRosterRows();
+      const selected = new Set(getConfiguredEmails());
+      const status = qs("cacheStatus");
+      const table = qs("cacheTable");
+      latestExportText = buildExport(cache);
+      qs("exportOutput").textContent = latestExportText || "No export generated yet.";
+
+      if (!roster.length) {
+        status.innerHTML = '<span class="pill bad">No roster loaded</span>';
+        table.innerHTML = "";
+        return;
+      }
+
+      status.innerHTML = [
+        `<span class="pill good">${selected.size} selected</span>`,
+        `<span class="pill">${rows.length} visible</span>`,
+        `<span class="pill">${roster.length} roster record${roster.length === 1 ? "" : "s"}</span>`,
+        `<span class="pill good">${direct.loadedEmails.length} loaded calendar${direct.loadedEmails.length === 1 ? "" : "s"}</span>`,
+        `<span class="pill">${direct.availability.length} availability snapshot${direct.availability.length === 1 ? "" : "s"}</span>`,
+        direct.metadata?.refreshedAt ? `<span class="pill">Last sync ${new Date(direct.metadata.refreshedAt).toLocaleString()}</span>` : '<span class="pill bad">Last sync unknown</span>'
+      ].join("");
+
+      table.innerHTML = [
+        '<div class="table-scroll"><table>',
+        "<thead><tr><th></th><th>SC</th><th>Team</th><th>Industry Family</th><th>Legacy</th><th>Office Location</th><th>Region</th><th>Time Zone</th><th>Calendar Status</th><th>Last Sync</th></tr></thead>",
+        "<tbody>",
+        ...rows.map(person => {
+          const email = normalizeEmail(person.email);
+          const sync = getSyncStatusForEmail(email);
+          const lastSync = sync.lastSync ? new Date(sync.lastSync).toLocaleString() : '<span class="muted">Never</span>';
+          return [
+            "<tr>",
+            `<td class="checkbox-cell"><input type="checkbox" class="roster-select" data-email="${escapeHtml(email)}" ${selected.has(email) ? "checked" : ""}></td>`,
+            `<td><strong>${escapeHtml(person.name || inferNameFromEmail(email))}</strong><br><span class="muted">${escapeHtml(email)}</span>${person.title ? `<br><span class="muted">${escapeHtml(person.title)}</span>` : ""}</td>`,
+            `<td>${escapeHtml(person.team || person.manager || "")}</td>`,
+            `<td>${escapeHtml(person.industryFamily || "")}</td>`,
+            `<td>${escapeHtml(person.legacyOrg || "")}</td>`,
+            `<td title="${escapeHtml(person.officeLocation || person.location || "")}">${escapeHtml(getOfficeLocationDisplay(person))}</td>`,
+            `<td>${escapeHtml(person.region || "")}</td>`,
+            `<td>${escapeHtml(getTimeZoneDisplayLabel(person.timeZone))}</td>`,
+            `<td><span class="pill ${sync.tone}">${escapeHtml(sync.label)}</span><br><span class="muted">${escapeHtml(sync.detail)}</span></td>`,
+            `<td>${lastSync}</td>`,
+            "</tr>"
+          ].join("");
+        }),
+        "</tbody></table></div>"
+      ].join("");
+
+      table.querySelectorAll(".roster-select").forEach(input => {
+        input.addEventListener("change", event => {
+          const current = new Set(parseEmails(qs("emails").value));
+          const email = normalizeEmail(event.target.dataset.email);
+          if (event.target.checked) current.add(email);
+          else current.delete(email);
+          setEmails([...current]);
+        });
+      });
+    }
+
+    function compactRosterPerson(person) {
+      return {
+        id: person.id || "",
+        name: person.name || inferNameFromEmail(person.email),
+        email: normalizeEmail(person.email),
+        title: person.title || "",
+        manager: person.manager || "",
+        team: person.team || "",
+        industryFamily: person.industryFamily || "",
+        legacyOrg: person.legacyOrg || "",
+        region: person.region || "",
+        officeLocation: person.officeLocation || "",
+        state: person.state || extractStateFromOfficeLocation(person.officeLocation || person.location || ""),
+        location: person.location || "",
+        timeZone: person.timeZone || inferTimeZoneFromOfficeLocation(person.officeLocation || person.location || person.state, person.region),
+        source: person.source || ""
+      };
+    }
+
+    function getCalendarRequestContext() {
+      const emails = parseEmails(qs("emails").value);
+      const rosterByEmail = Object.fromEntries(getAvailableRoster().map(person => [person.email, person]));
+      const roster = emails.map(email => compactRosterPerson(rosterByEmail[email] || {
+        email,
+        name: inferNameFromEmail(email),
+        source: "Manual email entry"
+      }));
+      const start = qs("startDate").value;
+      const days = Number(qs("days").value || 21);
+      const interval = Number(qs("interval").value || 30);
+      const zone = qs("timeZone").value || "UTC";
+      const end = start ? addDaysIso(start, days) : "";
+
+      if (!emails.length) throw new Error("Enter at least one consultant email.");
+      if (!start) throw new Error("Start date is required.");
+
+      return {
+        emails,
+        roster,
+        start,
+        end,
+        days,
+        intervalMinutes: interval,
+        timeZone: zone
+      };
+    }
+
+    function getCodexBatchSize() {
+      const value = Number(qs("codexBatchSize").value || CODEX_SYNC_DEFAULT_BATCH_SIZE);
+      return Math.max(1, Math.min(CODEX_SYNC_MAX_BATCH_SIZE, Number.isFinite(value) ? value : CODEX_SYNC_DEFAULT_BATCH_SIZE));
+    }
+
+    function chunkArray(values, size) {
+      const chunks = [];
+      for (let index = 0; index < values.length; index += size) {
+        chunks.push(values.slice(index, index + size));
+      }
+      return chunks.length ? chunks : [[]];
+    }
+
+    function createSyncId() {
+      return `sync-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    }
+
+    function getCodexSyncSignature(context, batchSize) {
+      return JSON.stringify({
+        emails: context.emails,
+        start: context.start,
+        end: context.end,
+        intervalMinutes: context.intervalMinutes,
+        timeZone: context.timeZone,
+        batchSize,
+        projectFolder: getCodexPaths().projectFolder
+      });
+    }
+
+    function readCodexSyncStore() {
+      return readJsonStorage(CODEX_SYNC_STATE_KEY) || {};
+    }
+
+    function writeCodexSyncStore(store) {
+      writeJsonStorage(CODEX_SYNC_STATE_KEY, store);
+    }
+
+    function saveCodexSyncState(state) {
+      const store = readCodexSyncStore();
+      store[state.syncId] = state;
+      store.latestSyncId = state.syncId;
+
+      const syncIds = Object.keys(store)
+        .filter(key => key !== "latestSyncId")
+        .sort((a, b) => String(store[b].createdAt).localeCompare(String(store[a].createdAt)));
+      syncIds.slice(5).forEach(syncId => delete store[syncId]);
+
+      writeCodexSyncStore(store);
+    }
+
+    function readCodexSyncState(syncId) {
+      const store = readCodexSyncStore();
+      return syncId ? store[syncId] : store[store.latestSyncId];
+    }
+
+    function buildCodexSyncState() {
+      const context = getCalendarRequestContext();
+      const batchSize = getCodexBatchSize();
+      const rosterByEmail = Object.fromEntries(context.roster.map(person => [person.email, person]));
+      const emailChunks = chunkArray(context.emails, batchSize);
+      return {
+        syncId: createSyncId(),
+        createdAt: new Date().toISOString(),
+        signature: getCodexSyncSignature(context, batchSize),
+        batchSize,
+        context,
+        chunks: emailChunks.map((emails, index) => ({
+          index,
+          emails,
+          roster: emails.map(email => rosterByEmail[email] || compactRosterPerson({
+            email,
+            name: inferNameFromEmail(email),
+            source: "Manual email entry"
+          }))
+        }))
+      };
+    }
+
+    function getOrCreateCodexSyncState() {
+      const context = getCalendarRequestContext();
+      const batchSize = getCodexBatchSize();
+      const signature = getCodexSyncSignature(context, batchSize);
+
+      if (latestCodexSyncState && latestCodexSyncState.signature === signature) {
+        return latestCodexSyncState;
+      }
+
+      latestCodexChunkIndex = 0;
+      latestCodexSyncState = buildCodexSyncState();
+      saveCodexSyncState(latestCodexSyncState);
+      return latestCodexSyncState;
+    }
+
+    function encodeBase64Url(text) {
+      const bytes = new TextEncoder().encode(text);
+      let binary = "";
+      for (let index = 0; index < bytes.length; index += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+      }
+      return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+    }
+
+    function decodeBase64Url(value) {
+      const base64 = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
+      const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+      const binary = atob(padded);
+      const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
+      return new TextDecoder().decode(bytes);
+    }
+
+    function buildCodexSyncRequest(state, chunkIndex = 0) {
+      const paths = getCodexPaths();
+      const safeChunkIndex = Math.max(0, Math.min(chunkIndex, state.chunks.length - 1));
+      const chunk = state.chunks[safeChunkIndex];
+      const context = {
+        ...state.context,
+        emails: chunk.emails,
+        roster: chunk.roster
+      };
+      const syncPlan = {
+        syncId: state.syncId,
+        mode: state.chunks.length > 1 ? "chunked" : "single",
+        chunkIndex: safeChunkIndex,
+        chunkNumber: safeChunkIndex + 1,
+        totalChunks: state.chunks.length,
+        batchSize: state.batchSize,
+        chunkConsultants: chunk.emails.length,
+        totalConsultants: state.context.emails.length,
+        isFinalChunk: safeChunkIndex === state.chunks.length - 1
+      };
+
+      return {
+        kind: CODEX_SYNC_KIND,
+        version: CODEX_SYNC_VERSION,
+        createdAt: new Date().toISOString(),
+        sourcePage: window.location.href.split("?")[0],
+        connector: "microsoft-outlook-calendar",
+        task: "Fetch Outlook free/busy availability for this consultant chunk, then update the local staffing dashboard data file.",
+        syncPlan,
+        output: {
+          projectFolder: paths.projectFolder,
+          helperFile: paths.helperFile,
+          requestFile: paths.requestFile,
+          stateFile: paths.stateFile,
+          directConnectorEventsFile: paths.outputFile,
+          format: "direct-connector-events.js"
+        },
+        request: context,
+        codexInstructions: [
+          "Use the Microsoft Outlook Calendar connector. The user must be authenticated in Codex/ChatGPT for the connector call.",
+          "Fetch free/busy calendar availability for every email in this chunk from request.start through request.end using request.timeZone.",
+          "Merge this chunk into output.directConnectorEventsFile. Replace existing data for this chunk's emails, and preserve data for emails outside this chunk.",
+          "If syncPlan.isFinalChunk is false, keep the output file valid for the dashboard but do not remove prior chunk data.",
+          "Use free/busy level data unless meeting subjects are explicitly available and safe to include.",
+          "Write the refreshed result to output.directConnectorEventsFile so staffing-dashboard.html can load it without manual paste."
+        ]
+      };
+    }
+
+    function buildCodexFullSyncRequest(state) {
+      const paths = getCodexPaths();
+      return {
+        kind: CODEX_FULL_SYNC_KIND,
+        version: CODEX_SYNC_VERSION,
+        createdAt: new Date().toISOString(),
+        sourcePage: window.location.href.split("?")[0],
+        connector: "microsoft-outlook-calendar",
+        task: "Fetch Outlook free/busy availability for all consultant chunks, then update the local staffing dashboard data file.",
+        syncPlan: {
+          syncId: state.syncId,
+          mode: state.chunks.length > 1 ? "full-chunked" : "single",
+          totalChunks: state.chunks.length,
+          batchSize: state.batchSize,
+          totalConsultants: state.context.emails.length
+        },
+        output: {
+          projectFolder: paths.projectFolder,
+          helperFile: paths.helperFile,
+          requestFile: paths.requestFile,
+          stateFile: paths.stateFile,
+          directConnectorEventsFile: paths.outputFile,
+          format: "direct-connector-events.js"
+        },
+        request: state.context,
+        chunks: state.chunks,
+        codexInstructions: [
+          "Use the Microsoft Outlook Calendar connector. The user must be authenticated in Codex/ChatGPT for the connector call.",
+          "Run every chunk in chunks sequentially in this single Codex task unless the user stops the run.",
+          "For each chunk, fetch free/busy calendar availability from request.start through request.end using request.timeZone.",
+          "After each chunk, merge the chunk into output.directConnectorEventsFile. Replace existing data for that chunk's emails, and preserve data for emails outside that chunk.",
+          "Use free/busy level data unless meeting subjects are explicitly available and safe to include.",
+          "When all chunks are complete, output.directConnectorEventsFile should contain the merged data for all refreshed consultants."
+        ]
+      };
+    }
+
+    function renderCodexFullSyncRequest(request, urlWasUpdated) {
+      const plan = request.syncPlan;
+      const status = qs("codexSyncStatus");
+      status.innerHTML = [
+        `<span class="pill good">${plan.totalChunks} chunk${plan.totalChunks === 1 ? "" : "s"} prepared</span>`,
+        `<span class="pill">${plan.totalConsultants} consultant${plan.totalConsultants === 1 ? "" : "s"}</span>`,
+        `<span class="pill">${request.request.start} to ${request.request.end}</span>`,
+        `<span class="pill">${request.request.timeZone}</span>`,
+        urlWasUpdated ? '<span class="pill good">Short URL prepared</span>' : '<span class="pill bad">Plan ready in page only</span>'
+      ].join("");
+      qs("codexChunkIndex").value = `${plan.totalChunks} chunk${plan.totalChunks === 1 ? "" : "s"}`;
+      qs("preparePreviousCodexChunkButton").disabled = true;
+      qs("prepareNextCodexChunkButton").disabled = true;
+
+      qs("codexSyncOutput").textContent = [
+        "Full Codex sync plan is ready.",
+        "",
+        "Next step: tell Codex, \"Run the prepared calendar sync.\"",
+        "",
+        `Chunks: ${plan.totalChunks}`,
+        `Consultants: ${plan.totalConsultants}`,
+        `Batch size: ${plan.batchSize}`,
+        `Window: ${request.request.start} through ${request.request.end}`,
+        `Project folder: ${request.output.projectFolder}`,
+        `Output file: ${request.output.directConnectorEventsFile}`,
+        "",
+        "Codex-readable full plan JSON:",
+        JSON.stringify(request, null, 2)
+      ].join("\n");
+    }
+
+    function renderCodexSyncRequest(request, urlWasUpdated) {
+      const emails = request.request.emails || [];
+      const plan = request.syncPlan || {
+        chunkIndex: 0,
+        chunkNumber: 1,
+        totalChunks: 1,
+        totalConsultants: emails.length,
+        isFinalChunk: true
+      };
+      const status = qs("codexSyncStatus");
+      status.innerHTML = [
+        `<span class="pill good">Chunk ${plan.chunkNumber} of ${plan.totalChunks}</span>`,
+        `<span class="pill">${emails.length} consultant${emails.length === 1 ? "" : "s"} in chunk</span>`,
+        `<span class="pill">${plan.totalConsultants} total consultant${plan.totalConsultants === 1 ? "" : "s"}</span>`,
+        `<span class="pill">${request.request.start} to ${request.request.end}</span>`,
+        `<span class="pill">${request.request.timeZone}</span>`,
+        urlWasUpdated ? '<span class="pill good">URL prepared for Codex</span>' : '<span class="pill bad">URL too large; use fallback file</span>'
+      ].join("");
+      const hasChunkState = plan.totalChunks <= 1 || (latestCodexSyncState && latestCodexSyncState.syncId === plan.syncId);
+      qs("codexChunkIndex").value = `Chunk ${plan.chunkNumber} of ${plan.totalChunks}`;
+      qs("preparePreviousCodexChunkButton").disabled = !hasChunkState || plan.chunkIndex <= 0;
+      qs("prepareNextCodexChunkButton").disabled = !hasChunkState || plan.chunkIndex >= plan.totalChunks - 1;
+
+      qs("codexSyncOutput").textContent = [
+        "Codex sync request is ready.",
+        "",
+        "Next step: tell Codex, \"Run the prepared calendar sync.\"",
+        plan.totalChunks > 1 ? "After Codex finishes this chunk, click Next chunk and run the prepared sync again." : "",
+        "",
+        `Chunk: ${plan.chunkNumber} of ${plan.totalChunks}`,
+        `Consultants: ${emails.join(", ")}`,
+        `Window: ${request.request.start} through ${request.request.end}`,
+        `Project folder: ${request.output.projectFolder}`,
+        `Output file: ${request.output.directConnectorEventsFile}`,
+        "",
+        "Fallback JSON:",
+        JSON.stringify(request, null, 2)
+      ].join("\n");
+    }
+
+    function prepareCodexSync(chunkIndex = 0) {
+      try {
+        const state = getOrCreateCodexSyncState();
+        const request = buildCodexFullSyncRequest(state);
+        latestCodexSyncText = JSON.stringify(request, null, 2);
+        latestCodexChunkIndex = 0;
+        latestCodexSyncState = state;
+        saveCodexSyncState(state);
+        const url = new URL(window.location.href);
+        url.searchParams.delete("roster");
+        url.searchParams.delete("emails");
+        url.searchParams.delete("consultants");
+        url.searchParams.delete(CODEX_SYNC_PARAM);
+        url.searchParams.set(CODEX_SYNC_ID_PARAM, state.syncId);
+        const urlWasUpdated = url.href.length <= 120000;
+
+        if (urlWasUpdated) {
+          window.history.replaceState(null, "", url.href);
+        }
+
+        renderCodexFullSyncRequest(request, urlWasUpdated);
+        log(urlWasUpdated ? "Prepared full Codex calendar sync plan." : "Prepared full Codex calendar sync plan in page only.", {
+          chunks: request.syncPlan.totalChunks,
+          totalConsultants: request.syncPlan.totalConsultants,
+          start: request.request.start,
+          end: request.request.end
+        });
+      } catch (error) {
+        qs("codexSyncStatus").innerHTML = `<span class="pill bad">${error.message}</span>`;
+        log("Could not prepare Codex sync request.", { message: error.message });
+      }
+    }
+
+    async function runCodexSyncHandoff() {
+      prepareCodexSync(0);
+      await copyText(CODEX_SYNC_RUN_COMMAND);
+
+      const state = latestCodexSyncState;
+      const chunks = state ? state.chunks.length : 0;
+      const consultants = state ? state.context.emails.length : 0;
+      qs("codexSyncStatus").innerHTML = [
+        '<span class="pill good">Codex handoff ready</span>',
+        chunks ? `<span class="pill">${chunks} chunk${chunks === 1 ? "" : "s"}</span>` : "",
+        consultants ? `<span class="pill">${consultants} consultant${consultants === 1 ? "" : "s"}</span>` : "",
+        '<span class="pill good">Command copied</span>'
+      ].filter(Boolean).join("");
+
+      qs("codexSyncOutput").textContent = [
+        "Codex handoff is ready.",
+        "",
+        "The page cannot directly call the Outlook connector. The connector call has to run from authenticated Codex/ChatGPT.",
+        "",
+        "The command below was copied to your clipboard:",
+        CODEX_SYNC_RUN_COMMAND,
+        "",
+        "Paste or type that command in Codex. Codex will read this page, run every prepared chunk, and update direct-connector-events.js."
+      ].join("\n");
+
+      log("Prepared Codex sync handoff command.", {
+        command: CODEX_SYNC_RUN_COMMAND,
+        chunks,
+        consultants
+      });
+    }
+
+    function prepareAdjacentCodexChunk(direction) {
+      const state = getOrCreateCodexSyncState();
+      prepareCodexSync(latestCodexChunkIndex + direction);
+    }
+
+    function loadCodexSyncStateIntoForm(state, sourceLabel) {
+      latestCodexSyncState = state;
+      qs("startDate").value = state.context.start || qs("startDate").value;
+      qs("days").value = state.context.days || qs("days").value;
+      qs("interval").value = state.context.intervalMinutes || qs("interval").value;
+      qs("timeZone").value = state.context.timeZone || qs("timeZone").value;
+      qs("codexBatchSize").value = state.batchSize || CODEX_SYNC_DEFAULT_BATCH_SIZE;
+
+      if (Array.isArray(state.context.roster) && state.context.roster.length) {
+        saveImportedRoster(state.context.roster, sourceLabel);
+      }
+      if (Array.isArray(state.context.emails)) {
+        setEmails(state.context.emails);
+      }
+    }
+
+    function loadCodexSyncFromParams(params) {
+      const encoded = params.get(CODEX_SYNC_PARAM);
+      const syncIdFromParams = params.get(CODEX_SYNC_ID_PARAM);
+      if (!encoded && syncIdFromParams) {
+        const state = readCodexSyncState(syncIdFromParams);
+        if (!state || !state.context) return;
+
+        latestCodexChunkIndex = 0;
+        loadCodexSyncStateIntoForm(state, "Codex sync local state");
+        const request = buildCodexFullSyncRequest(state);
+        latestCodexSyncText = JSON.stringify(request, null, 2);
+        renderCodexFullSyncRequest(request, true);
+        log("Loaded prepared full Codex calendar sync plan from local state.", {
+          chunks: request.syncPlan.totalChunks,
+          consultants: request.syncPlan.totalConsultants,
+          start: request.request.start,
+          end: request.request.end
+        });
+        return;
+      }
+
+      if (!encoded) return;
+
+      try {
+        const request = JSON.parse(decodeBase64Url(encoded));
+        if (!request || request.kind !== CODEX_SYNC_KIND || !request.request) return;
+        const syncId = syncIdFromParams || request.syncPlan?.syncId;
+        const storedState = readCodexSyncState(syncId);
+        latestCodexChunkIndex = request.syncPlan?.chunkIndex || 0;
+
+        if (storedState && storedState.context) {
+          loadCodexSyncStateIntoForm(storedState, "Codex sync local state");
+        } else {
+          qs("startDate").value = request.request.start || qs("startDate").value;
+          qs("days").value = request.request.days || qs("days").value;
+          qs("interval").value = request.request.intervalMinutes || qs("interval").value;
+          qs("timeZone").value = request.request.timeZone || qs("timeZone").value;
+
+          if (Array.isArray(request.request.roster) && request.request.roster.length) {
+            saveImportedRoster(request.request.roster, "Codex sync launch URL");
+          }
+          if (Array.isArray(request.request.emails)) {
+            setEmails(request.request.emails);
+          }
+        }
+
+        latestCodexSyncText = JSON.stringify(request, null, 2);
+        renderCodexSyncRequest(request, true);
+        log("Loaded prepared Codex calendar sync request from URL.", {
+          consultants: request.request.emails.length,
+          start: request.request.start,
+          end: request.request.end
+        });
+      } catch (error) {
+        log("Could not load Codex sync request from URL.", {
+          message: error.message
+        });
+      }
+    }
+
+    function loadSettings() {
+      const params = new URLSearchParams(window.location.search);
+      qs("localProjectFolder").value = normalizeProjectFolder(window.localStorage.getItem(PROJECT_FOLDER_KEY) || inferProjectFolderFromPage());
+      updateProjectFolderStatus();
+      qs("emails").value = params.get("emails") || params.get("consultants") || "";
+      qs("startDate").value = params.get("start") || todayIso();
+      qs("days").value = params.get("days") || "21";
+      qs("timeZone").value = params.get("zone") || "UTC";
+      loadGraphServiceSettings();
+      importRosterFromLaunchParams(params);
+      loadCodexSyncFromParams(params);
+
+      if (!params.has("emails") && !params.has("consultants") && !params.has(CODEX_SYNC_ID_PARAM)) {
+        const config = readSyncConfig();
+        if (config) {
+          qs("startDate").value = config.start || qs("startDate").value;
+          qs("days").value = config.days || qs("days").value;
+          qs("interval").value = config.intervalMinutes || qs("interval").value;
+          qs("timeZone").value = config.timeZone || qs("timeZone").value;
+          qs("codexBatchSize").value = config.batchSize || qs("codexBatchSize").value;
+          if (config.projectFolder) saveProjectFolder(config.projectFolder);
+          if (Array.isArray(config.selectedEmails)) setEmails(config.selectedEmails, { skipRender: true });
+        }
+      }
+    }
+
+    function loadGraphServiceSettings() {
+      const savedUrl = window.localStorage.getItem(GRAPH_SERVICE_URL_KEY) || GRAPH_SERVICE_DEFAULT_URL;
+      qs("graphServiceUrl").value = savedUrl;
+    }
+
+    function getGraphServiceUrl() {
+      const input = qs("graphServiceUrl");
+      const value = String(input.value || GRAPH_SERVICE_DEFAULT_URL).trim().replace(/\/+$/g, "");
+      if (!/^https?:\/\/[^/\s]+/i.test(value)) {
+        throw new Error("Enter a valid local service URL, such as http://localhost:8787.");
+      }
+      input.value = value;
+      window.localStorage.setItem(GRAPH_SERVICE_URL_KEY, value);
+      return value;
+    }
+
+    function setGraphServiceStatus(items) {
+      const normalized = Array.isArray(items) ? items : [{ text: items }];
+      qs("graphServiceStatus").innerHTML = normalized
+        .filter(Boolean)
+        .map(item => `<span class="pill ${item.tone || ""}">${escapeHtml(item.text)}</span>`)
+        .join("");
+    }
+
+    async function fetchGraphServiceJson(path, options = {}) {
+      const response = await fetch(`${getGraphServiceUrl()}${path}`, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          ...(options.headers || {})
+        }
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.message || payload.authError || `Service returned ${response.status}`);
+      }
+      return payload;
+    }
+
+    function openGraphServiceLogin() {
+      const url = `${getGraphServiceUrl()}/auth/login`;
+      window.open(url, "_blank");
+      setGraphServiceStatus([
+        { text: "Login opened", tone: "good" },
+        { text: getGraphServiceUrl() }
+      ]);
+      log("Opened local Graph service login.", { url });
+    }
+
+    async function checkGraphService() {
+      try {
+        setGraphServiceStatus([{ text: "Checking service..." }]);
+        const health = await fetchGraphServiceJson("/health");
+        const profile = health.profile?.displayName || health.profile?.userPrincipalName || health.profile?.mail || "";
+        setGraphServiceStatus([
+          { text: health.configured ? "Configured" : "Missing client ID", tone: health.configured ? "good" : "bad" },
+          { text: health.authenticated ? "Authenticated" : "Not authenticated", tone: health.authenticated ? "good" : "bad" },
+          profile ? { text: profile } : null,
+          { text: health.tenant || "tenant unknown" }
+        ]);
+        log("Checked local Graph availability service.", health.authError ? { authError: health.authError } : { profile });
+        return health;
+      } catch (error) {
+        setGraphServiceStatus([
+          { text: "Service unavailable", tone: "bad" },
+          { text: error.message, tone: "bad" }
+        ]);
+        log("Local Graph availability service check failed.", { message: error.message });
+        return null;
+      }
+    }
+
+    async function refreshWithGraphService() {
+      const context = getCalendarRequestContext();
+      const request = {
+        ...context,
+        batchSize: getCodexBatchSize(),
+        includeEvents: false
+      };
+
+      try {
+        setGraphServiceStatus([
+          { text: "Refreshing selected consultants..." },
+          { text: `${context.emails.length} consultant${context.emails.length === 1 ? "" : "s"}` }
+        ]);
+        log("Refreshing calendars through local Graph availability service.", {
+          consultants: context.emails.length,
+          start: context.start,
+          end: context.end,
+          timeZone: context.timeZone
+        });
+
+        const payload = await fetchGraphServiceJson("/availability", {
+          method: "POST",
+          body: JSON.stringify(request)
+        });
+
+        qs("connectorResult").value = JSON.stringify(payload, null, 2);
+        saveConnectorResult();
+        setGraphServiceStatus([
+          { text: "Refresh complete", tone: "good" },
+          { text: `${(payload.loadedEmails || []).length} loaded consultant${(payload.loadedEmails || []).length === 1 ? "" : "s"}`, tone: "good" },
+          (payload.errors || []).length ? { text: `${payload.errors.length} error${payload.errors.length === 1 ? "" : "s"}`, tone: "bad" } : null,
+          { text: new Date(payload.refreshedAt || Date.now()).toLocaleString() }
+        ]);
+        log("Local Graph service refresh complete.", {
+          loadedEmails: payload.loadedEmails || [],
+          availabilitySnapshots: (payload.availability || []).length,
+          errors: payload.errors || []
+        });
+      } catch (error) {
+        setGraphServiceStatus([
+          { text: "Refresh failed", tone: "bad" },
+          { text: error.message, tone: "bad" }
+        ]);
+        log("Local Graph service refresh failed.", { message: error.message });
+      }
+    }
+
+    function buildConnectorRequest() {
+      const { emails, roster: requestRoster, start, end, intervalMinutes: interval, timeZone: zone } = getCalendarRequestContext();
+
+      return [
+        "Use the Microsoft Outlook Calendar connector to fetch free/busy availability for the staffing dashboard.",
+        "",
+        `Consultants: ${emails.join(", ")}`,
+        `Window: ${start}T00:00:00 through ${end}T00:00:00`,
+        `Time zone: ${zone}`,
+        `Availability interval: ${interval} minutes`,
+        "",
+        "If the connector or calendar API has a schedule-count limit, process consultants in batches of 20 and return one consolidated JSON response.",
+        "",
+        "Roster metadata for the request:",
+        JSON.stringify(requestRoster.map(person => ({
+          name: person.name,
+          email: person.email,
+          title: person.title || "",
+          manager: person.manager || "",
+          team: person.team || "",
+          industryFamily: person.industryFamily || "",
+          legacyOrg: person.legacyOrg || "",
+          officeLocation: person.officeLocation || "",
+          state: person.state || "",
+          region: person.region || "",
+          location: person.location || "",
+          timeZone: person.timeZone || ""
+        })), null, 2),
+        "",
+        "Return ONLY valid JSON in this shape, with no markdown fence:",
+        JSON.stringify({
+          refreshedAt: "ISO timestamp",
+          start,
+          end,
+          intervalMinutes: interval,
+          roster: requestRoster.slice(0, 1).map(person => ({
+            name: person.name,
+            email: person.email,
+            title: person.title || "",
+            manager: person.manager || "",
+            team: person.team || "",
+            industryFamily: person.industryFamily || "",
+            legacyOrg: person.legacyOrg || "",
+            officeLocation: person.officeLocation || "",
+            state: person.state || "",
+            region: person.region || "",
+            location: person.location || "",
+            timeZone: person.timeZone || "",
+            source: "NetSuite saved search 1311451"
+          })),
+          loadedEmails: emails,
+          availability: [
+            {
+              email: emails[0],
+              start: `${start}T00:00:00.000Z`,
+              intervalMinutes: interval,
+              view: "availabilityViewStringFromConnectorOrEquivalent"
+            }
+          ],
+          events: [
+            {
+              email: emails[0],
+              status: "busy",
+              subject: "Free/busy: Busy; subject unavailable",
+              start: `${start}T13:00:00.000Z`,
+              end: `${start}T13:30:00.000Z`
+            }
+          ],
+          errors: []
+        }, null, 2),
+        "",
+        "If the connector cannot provide compact availability view strings, return events only. Use only free/busy level data unless meeting subjects are explicitly available and safe to include."
+      ].join("\n");
+    }
+
+    async function copyText(text) {
+      if (!text) return;
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(text);
+          return;
+        } catch (error) {
+          // Fall through to the textarea copy path for file:// pages.
+        }
+      }
+
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      textarea.style.left = "-9999px";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
+    }
+
+    async function copyConnectorRequest() {
+      const request = buildConnectorRequest();
+      await copyText(request);
+      log("Copied ChatGPT connector import request.");
+    }
+
+    function getCodexSyncRequestText() {
+      if (!latestCodexSyncText) {
+        const state = getOrCreateCodexSyncState();
+        const request = buildCodexFullSyncRequest(state);
+        latestCodexSyncText = JSON.stringify(request, null, 2);
+      }
+      return latestCodexSyncText;
+    }
+
+    async function copyCodexSyncRequest() {
+      const requestText = getCodexSyncRequestText();
+      await copyText(requestText);
+      log("Copied Codex sync fallback request.");
+    }
+
+    function downloadCodexSyncRequest() {
+      const requestText = getCodexSyncRequestText();
+      const blob = new Blob([requestText], { type: "application/json" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "codex-calendar-sync-request.json";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(link.href);
+      log("Downloaded Codex sync request file.");
+    }
+
+    function parseConnectorResult() {
+      const raw = qs("connectorResult").value.trim();
+      if (!raw) throw new Error("Paste connector result JSON first.");
+      const payload = JSON.parse(raw);
+      const data = payload.calendarData || payload;
+
+      const start = data.start || qs("startDate").value;
+      const days = Number(qs("days").value || 21);
+      const end = data.end || (start ? addDaysIso(start, days) : "");
+      const intervalMinutes = Number(data.intervalMinutes || qs("interval").value || 30);
+      const availability = Array.isArray(data.availability) ? data.availability.map(snapshot => ({
+        email: normalizeEmail(snapshot.email),
+        start: new Date(snapshot.start || `${start}T00:00:00Z`).toISOString(),
+        intervalMinutes: Number(snapshot.intervalMinutes || intervalMinutes),
+        view: String(snapshot.view || "")
+      })).filter(snapshot => snapshot.email && snapshot.view) : [];
+      const directEvents = Array.isArray(data.events) ? data.events.map(normalizeEvent) : [];
+      const expandedEvents = availability.flatMap(expandAvailability);
+      const events = [...expandedEvents, ...directEvents];
+      const loadedEmails = data.loadedEmails && Array.isArray(data.loadedEmails)
+        ? data.loadedEmails.map(normalizeEmail).filter(Boolean)
+        : [...new Set([...availability.map(item => item.email), ...directEvents.map(item => item.email)])];
+      const rosterByEmail = Object.fromEntries(getAvailableRoster().map(person => [person.email, person]));
+      const resultRoster = Array.isArray(data.roster)
+        ? data.roster.map(person => ({ ...person, email: normalizeEmail(person.email) })).filter(person => person.email)
+        : loadedEmails.map(email => rosterByEmail[email]).filter(Boolean);
+
+      if (!loadedEmails.length) throw new Error("Connector result did not include any loaded emails.");
+
+      return {
+        refreshedAt: data.refreshedAt || new Date().toISOString(),
+        start,
+        end,
+        intervalMinutes,
+        loadedEmails,
+        roster: resultRoster,
+        availability,
+        directEvents,
+        events,
+        errors: Array.isArray(data.errors) ? data.errors : []
+      };
+    }
+
+    function saveConnectorResult() {
+      const parsed = parseConnectorResult();
+      const merged = mergeCache(parsed);
+      writeDashboardCaches(merged);
+      renderCacheStatus();
+      log("Saved connector result to dashboard cache.", {
+        loadedEmails: parsed.loadedEmails,
+        events: parsed.events.length,
+        availabilitySnapshots: parsed.availability.length,
+        directEvents: parsed.directEvents.length,
+        errors: parsed.errors
+      });
+    }
+
+    function loadExampleShape() {
+      const emails = parseEmails(qs("emails").value);
+      const email = emails[0] || "person@oracle.com";
+      const start = qs("startDate").value || todayIso();
+      const interval = Number(qs("interval").value || 30);
+      qs("connectorResult").value = JSON.stringify({
+        refreshedAt: new Date().toISOString(),
+        start,
+        end: addDaysIso(start, Number(qs("days").value || 21)),
+        intervalMinutes: interval,
+        loadedEmails: [email],
+        availability: [
+          {
+            email,
+            start: `${start}T00:00:00.000Z`,
+            intervalMinutes: interval,
+            view: "000000000000000022220000000000000000000000000000"
+          }
+        ],
+        events: [],
+        errors: []
+      }, null, 2);
+      log("Loaded example connector result shape.");
+    }
+
+    async function copyExport() {
+      const text = latestExportText || buildExport();
+      if (!text) return;
+      await copyText(text);
+      log("Copied direct-connector-events.js export.");
+    }
+
+    function downloadExport() {
+      const text = latestExportText || buildExport();
+      if (!text) return;
+      const blob = new Blob([text], { type: "text/javascript" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "direct-connector-events.js";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(link.href);
+      log("Downloaded direct-connector-events.js export.");
+    }
+
+    function clearLocalCache() {
+      window.localStorage.removeItem(LOCAL_GRAPH_CACHE_KEY);
+      window.localStorage.removeItem(DASHBOARD_CACHE_KEY);
+      renderCacheStatus();
+      log("Cleared local calendar cache.");
+    }
+
+    function openDashboard() {
+      const params = new URLSearchParams(window.location.search);
+      const dashboard = params.get("dashboard") || "staffing-dashboard.html";
+      window.open(dashboard, "_blank");
+    }
+
+    function wireEvents() {
+      qs("copyRequestButton").addEventListener("click", () => copyConnectorRequest().catch(error => log("Copy request failed.", { message: error.message })));
+      qs("openNetSuiteSearchButton").addEventListener("click", () => window.open(NETSUITE_SEARCH_URL, "_blank"));
+      qs("importNetSuiteRosterButton").addEventListener("click", importNetSuiteRoster);
+      qs("clearImportedRosterButton").addEventListener("click", clearImportedRoster);
+      qs("loadFullRosterButton").addEventListener("click", () => loadFullRoster());
+      qs("appendFullRosterButton").addEventListener("click", () => loadFullRoster({ append: true }));
+      qs("useCurrentFolderButton").addEventListener("click", useCurrentPageFolder);
+      qs("saveProjectFolderButton").addEventListener("click", () => saveProjectFolder());
+      qs("saveSyncConfigButton").addEventListener("click", () => {
+        try {
+          saveProjectFolder();
+          saveSyncConfig();
+        } catch (error) {
+          log("Could not save calendar sync configuration.", { message: error.message });
+        }
+      });
+      qs("loadSyncConfigButton").addEventListener("click", loadSavedSyncConfig);
+      qs("rosterSearch").addEventListener("input", renderCacheStatus);
+      qs("rosterTeamFilter").addEventListener("change", renderCacheStatus);
+      qs("rosterIndustryFilter").addEventListener("change", renderCacheStatus);
+      qs("selectVisibleRosterButton").addEventListener("click", () => {
+        setRosterSelection(getVisibleRosterRows().map(person => person.email), { append: true });
+        log("Selected visible consultants.", { selected: getVisibleRosterRows().length });
+      });
+      qs("clearVisibleRosterButton").addEventListener("click", () => {
+        const visible = new Set(getVisibleRosterRows().map(person => normalizeEmail(person.email)));
+        setEmails(parseEmails(qs("emails").value).filter(email => !visible.has(email)));
+        log("Cleared visible consultants from the sync selection.", { cleared: visible.size });
+      });
+      qs("selectUnsyncedRosterButton").addEventListener("click", () => {
+        const missing = getVisibleRosterRows()
+          .filter(person => getSyncStatusForEmail(person.email).label !== "Synced")
+          .map(person => person.email);
+        setRosterSelection(missing, { append: true });
+        log("Selected visible consultants missing a clean sync.", { selected: missing.length });
+      });
+      qs("prepareCodexSyncButton").addEventListener("click", () => prepareCodexSync(0));
+      qs("runCodexSyncButton").addEventListener("click", () => runCodexSyncHandoff().catch(error => log("Codex sync handoff failed.", { message: error.message })));
+      qs("preparePreviousCodexChunkButton").addEventListener("click", () => prepareAdjacentCodexChunk(-1));
+      qs("prepareNextCodexChunkButton").addEventListener("click", () => prepareAdjacentCodexChunk(1));
+      qs("copyCodexSyncButton").addEventListener("click", () => copyCodexSyncRequest().catch(error => log("Copy Codex sync request failed.", { message: error.message })));
+      qs("downloadCodexSyncButton").addEventListener("click", downloadCodexSyncRequest);
+      qs("graphServiceUrl").addEventListener("change", () => {
+        try {
+          getGraphServiceUrl();
+          setGraphServiceStatus([{ text: "Service URL saved", tone: "good" }]);
+        } catch (error) {
+          setGraphServiceStatus([{ text: error.message, tone: "bad" }]);
+        }
+      });
+      qs("openGraphServiceLoginButton").addEventListener("click", () => {
+        try {
+          openGraphServiceLogin();
+        } catch (error) {
+          setGraphServiceStatus([{ text: error.message, tone: "bad" }]);
+          log("Could not open Graph service login.", { message: error.message });
+        }
+      });
+      qs("checkGraphServiceButton").addEventListener("click", () => checkGraphService());
+      qs("refreshGraphServiceButton").addEventListener("click", () => refreshWithGraphService());
+      qs("emails").addEventListener("input", () => {
+        updateRosterStatus();
+        renderCacheStatus();
+      });
+      qs("saveResultButton").addEventListener("click", () => {
+        try {
+          saveConnectorResult();
+        } catch (error) {
+          log("Save connector result failed.", { message: error.message });
+        }
+      });
+      qs("loadSampleButton").addEventListener("click", loadExampleShape);
+      qs("copyExportButton").addEventListener("click", () => copyExport().catch(error => log("Copy export failed.", { message: error.message })));
+      qs("downloadExportButton").addEventListener("click", downloadExport);
+      qs("clearCacheButton").addEventListener("click", clearLocalCache);
+      qs("openDashboardButton").addEventListener("click", openDashboard);
+    }
+
+    loadSettings();
+    wireEvents();
+    renderCacheStatus();
+    updateNetSuiteRosterStatus();
+    updateRosterStatus();
+    log("Calendar sync configuration ready. Import the roster, select consultants, save the configuration, then prepare the Codex sync.");
+  </script>
+</body>
+</html>
