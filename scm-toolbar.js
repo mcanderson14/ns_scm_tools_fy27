@@ -2,7 +2,7 @@
 // @name         SCR Mgr Assistant Toolbar BETA
 // @namespace    scrmgrassistant
 // @copyright    Copyright © 2024 by Ryan Morrissey
-// @version      27.0.0.32B
+// @version      27.0.0.34B
 // @description  Adds an Assistant Toolbar with interactive buttons to all SC Request forms.
 // @icon         https://cdn0.iconfinder.com/data/icons/phosphor-bold-vol-3-1/256/lifebuoy-duotone-512.png
 // @tag          productivity
@@ -63,10 +63,15 @@ const SCRIPT_ID = `${SCRIPT_PREFIX}assistant_config`;
 const SCRIPT_CACHE_ID = `${SCRIPT_PREFIX}people_cache`;
 const SCRIPT_VERSION = GM_info.script.version;
 const CONFIG_TITLE = `${GM_info.script.name} (v${SCRIPT_VERSION})`;
+const CALENDAR_DASHBOARD_MAC_HOME_PATH = "/Users/michaean";
 const CALENDAR_DASHBOARD_DEFAULT_URL =
 	/Windows/i.test(navigator.userAgent)
 		? "file:///C:/netsuite/scm_tools/staffing-dashboard.html"
-		: "~/netsuite/scm_tools/staffing-dashboard.html";
+		: `file://${CALENDAR_DASHBOARD_MAC_HOME_PATH}/netsuite/scm_tools/staffing-dashboard.html`;
+const CALENDAR_LOCAL_SCRIPT_DEFAULT_URL =
+	/Windows/i.test(navigator.userAgent)
+		? "file:///C:/netsuite/scm_tools/direct-connector-events.js"
+		: `file://${CALENDAR_DASHBOARD_MAC_HOME_PATH}/netsuite/scm_tools/direct-connector-events.js`;
 const CALENDAR_FOCUSED_AVAILABILITY_OVERRIDES = {
 	"eric.baghdasarian@oracle.com": {
 		start: "2026-05-06T07:00:00.000Z",
@@ -237,6 +242,12 @@ var shout = (function () {
 			size: 100,
 			default: CALENDAR_DASHBOARD_DEFAULT_URL,
 			section: ["Integrations", "Configure external tools launched from the assistant bar."],
+		},
+		calendarLocalScriptUrl: {
+			label: "Calendar local data script URL",
+			type: "text",
+			size: 100,
+			default: CALENDAR_LOCAL_SCRIPT_DEFAULT_URL,
 		},
 		forceRefreshCache: {
 			label: "Force cache refresh",
@@ -708,6 +719,7 @@ var shout = (function () {
 			forceRefreshCache: gmc.get("forceRefreshCache"),
 			aiStaffing: gmc.get("aiStaffing"),
 			calendarDashboardUrl: gmc.get("calendarDashboardUrl"),
+			calendarLocalScriptUrl: gmc.get("calendarLocalScriptUrl"),
 			cacheDateTime: gmc.get("cacheDateTime"),
 			hashtags: gmc.get("hashtags"),
 		};
@@ -4040,22 +4052,50 @@ var shout = (function () {
 			return navigator.clipboard.writeText(text);
 		}
 
+		function normalizeCalendarDashboardFileUrl(rawUrl) {
+			let value = String(rawUrl || CALENDAR_DASHBOARD_DEFAULT_URL || "").trim();
+
+			if (!value) {
+				value = CALENDAR_DASHBOARD_DEFAULT_URL;
+			}
+
+			value = value.replace(/^file:\/\/~(?=\/|$)/i, `file://${CALENDAR_DASHBOARD_MAC_HOME_PATH}`);
+
+			if (value === "~") {
+				value = CALENDAR_DASHBOARD_MAC_HOME_PATH;
+			} else if (value.indexOf("~/") === 0) {
+				value = `${CALENDAR_DASHBOARD_MAC_HOME_PATH}/${value.slice(2)}`;
+			}
+
+			if (/^[a-z]:[\\/]/i.test(value)) {
+				return `file:///${value.replace(/\\/g, "/")}`;
+			}
+
+			if (value.indexOf("/") === 0) {
+				return `file://${value}`;
+			}
+
+			if (/^[a-z][a-z\d+.-]*:/i.test(value)) {
+				return value;
+			}
+
+			return `file://${value}`;
+		}
+
 		function buildCalendarDashboardUrl(context) {
 			const baseUrl = settings.calendarDashboardUrl || CALENDAR_DASHBOARD_DEFAULT_URL;
-			const normalizedBaseUrl = /^[a-z][a-z\d+.-]*:/i.test(baseUrl)
-				? baseUrl
-				: `file://${baseUrl}`;
+			const normalizedBaseUrl = normalizeCalendarDashboardFileUrl(baseUrl);
 			let url;
 
 			try {
 				url = new URL(normalizedBaseUrl, window.location.href);
 				if (url.protocol !== "file:") {
 					shout("Calendar dashboard URL must point to a local file. Falling back to the local default.", baseUrl);
-					url = new URL(CALENDAR_DASHBOARD_DEFAULT_URL);
+					url = new URL(normalizeCalendarDashboardFileUrl(CALENDAR_DASHBOARD_DEFAULT_URL));
 				}
 			} catch (error) {
 				shout("Invalid calendar dashboard URL configured:", baseUrl);
-				url = new URL(CALENDAR_DASHBOARD_DEFAULT_URL);
+				url = new URL(normalizeCalendarDashboardFileUrl(CALENDAR_DASHBOARD_DEFAULT_URL));
 			}
 
 			const date = context.date || getDateNeededIsoForDashboard();
@@ -4254,15 +4294,23 @@ var shout = (function () {
 
 		function resolveCalendarDashboardAssetUrl(dashboardUrl, assetName) {
 			try {
-				const baseUrl = String(dashboardUrl || settings.calendarDashboardUrl || CALENDAR_DASHBOARD_DEFAULT_URL || "").trim();
-				const normalizedBaseUrl = /^[a-z][a-z\d+.-]*:/i.test(baseUrl)
-					? baseUrl
-					: `file://${baseUrl}`;
+				const configuredScriptUrl = String(settings.calendarLocalScriptUrl || "").trim();
+				const baseUrl = assetName === "direct-connector-events.js" && configuredScriptUrl
+					? configuredScriptUrl
+					: String(dashboardUrl || settings.calendarDashboardUrl || CALENDAR_DASHBOARD_DEFAULT_URL || "").trim();
+				const normalizedBaseUrl = normalizeCalendarDashboardFileUrl(baseUrl);
 				const assetUrl = new URL(normalizedBaseUrl, window.location.href);
 				if (assetUrl.protocol !== "file:") {
 					shout("Calendar dashboard assets must be local files:", assetUrl.href);
 					return "";
 				}
+
+				if (assetName === "direct-connector-events.js" && configuredScriptUrl) {
+					assetUrl.search = "";
+					assetUrl.hash = "";
+					return assetUrl.href;
+				}
+
 				const pathParts = assetUrl.pathname.split("/");
 				pathParts[pathParts.length - 1] = assetName;
 				assetUrl.pathname = pathParts.join("/");
