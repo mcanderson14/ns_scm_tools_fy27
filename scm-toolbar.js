@@ -2,7 +2,7 @@
 // @name         SCR Mgr Assistant Toolbar BETA
 // @namespace    scrmgrassistant
 // @copyright    Copyright © 2024 by Ryan Morrissey
-// @version      27.0.0.37B
+// @version      27.0.0.38B
 // @description  Adds an Assistant Toolbar with interactive buttons to all SC Request forms.
 // @icon         https://cdn0.iconfinder.com/data/icons/phosphor-bold-vol-3-1/256/lifebuoy-duotone-512.png
 // @tag          productivity
@@ -5593,9 +5593,13 @@ window.SCR_ASSISTANT_SELECTED_EMAILS = ${JSON.stringify(selectedEmails)};
 			$frame.removeAttr("src").removeAttr("srcdoc");
 
 			if (srcdoc) {
+				$frame.show();
 				$frame.attr("srcdoc", srcdoc);
 			} else if (src) {
+				$frame.show();
 				$frame.attr("src", src);
+			} else {
+				$frame.hide();
 			}
 
 			if (fallbackMessage) {
@@ -5672,6 +5676,63 @@ window.SCR_ASSISTANT_SELECTED_EMAILS = ${JSON.stringify(selectedEmails)};
 			});
 		}
 
+		function openUrlInNewTabImmediate(url) {
+			const errors = [];
+
+			if (typeof GM_openInTab === "function") {
+				try {
+					GM_openInTab(url, {
+						active: true,
+						insert: true,
+						setParent: true,
+					});
+					return {
+						opened: true,
+						method: "GM_openInTab",
+					};
+				} catch (error) {
+					errors.push(`GM_openInTab: ${error.message || error}`);
+				}
+			}
+
+			try {
+				const openedWindow = window.open(url, "_blank", "noopener,noreferrer");
+				if (openedWindow) {
+					return {
+						opened: true,
+						method: "window.open",
+					};
+				}
+				errors.push("window.open: popup was blocked");
+			} catch (error) {
+				errors.push(`window.open: ${error.message || error}`);
+			}
+
+			if (typeof GM !== "undefined" && GM && typeof GM.openInTab === "function") {
+				try {
+					GM.openInTab(url, {
+						active: true,
+						insert: true,
+						setParent: true,
+					}).catch((error) => {
+						shout("GM.openInTab rejected after launch attempt:", error);
+					});
+					return {
+						opened: true,
+						method: "GM.openInTab",
+					};
+				} catch (error) {
+					errors.push(`GM.openInTab: ${error.message || error}`);
+				}
+			}
+
+			return {
+				opened: false,
+				method: "",
+				error: errors.join(" | "),
+			};
+		}
+
 		async function openUrlInNewTab(url) {
 			const errors = [];
 
@@ -5739,6 +5800,7 @@ window.SCR_ASSISTANT_SELECTED_EMAILS = ${JSON.stringify(selectedEmails)};
 			}
 
 			const url = buildCalendarDashboardUrl(normalizedContext);
+			const openResult = openUrlInNewTabImmediate(url);
 			await copyDashboardUrlFallback(url);
 			const returnToQuickAssign = Boolean(
 				normalizedContext?.returnToQuickAssign ||
@@ -5746,16 +5808,30 @@ window.SCR_ASSISTANT_SELECTED_EMAILS = ${JSON.stringify(selectedEmails)};
 					$("#scr-modal-request-form").is(":visible"),
 			);
 
+			if (openResult.opened) {
+				if (statusSelector) {
+					$(statusSelector).text("Opened local calendar dashboard in a new tab. URL copied as fallback.");
+				}
+				shout("Open local calendar dashboard:", {
+					url,
+					method: openResult.method,
+				});
+				return;
+			}
+
 			openCalendarDashboardModal({
 				url,
-				src: url,
 				returnToQuickAssign: returnToQuickAssign,
+				fallbackMessage: `The browser blocked the automatic local file launch. ${openResult.error || ""}`.trim(),
 			});
 
 			if (statusSelector) {
-				$(statusSelector).text("Opened local calendar dashboard. URL copied as fallback.");
+				$(statusSelector).text("Open blocked; click Open in New Tab or paste the copied URL.");
 			}
-			shout("Open local calendar dashboard:", url);
+			shout("Calendar dashboard launch blocked:", {
+				url,
+				error: openResult.error,
+			});
 		}
 
 		/**
