@@ -2,7 +2,7 @@
 // @name         SCR Mgr Assistant Toolbar BETA
 // @namespace    scrmgrassistant
 // @copyright    Copyright © 2024 by Ryan Morrissey
-// @version      27.0.0.35B
+// @version      27.0.0.36B
 // @description  Adds an Assistant Toolbar with interactive buttons to all SC Request forms.
 // @icon         https://cdn0.iconfinder.com/data/icons/phosphor-bold-vol-3-1/256/lifebuoy-duotone-512.png
 // @tag          productivity
@@ -5745,54 +5745,17 @@ window.SCR_ASSISTANT_SELECTED_EMAILS = ${JSON.stringify(selectedEmails)};
 					$("#scr-modal-request-form").hasClass("active") ||
 					$("#scr-modal-request-form").is(":visible"),
 			);
-			const embeddedOpened = await openEmbeddedCalendarDashboard(url, {
-				returnToQuickAssign: returnToQuickAssign,
-				context: normalizedContext,
-			});
 
-			if (embeddedOpened) {
-				if (statusSelector) {
-					$(statusSelector).text("Opened embedded calendar dashboard. Launch URL copied as fallback.");
-				}
-				shout("Open embedded calendar dashboard:", url);
-				return;
-			}
-
-			openCalendarDashboardFallback(url, {
-				returnToQuickAssign: returnToQuickAssign,
-			});
-
-			if (statusSelector) {
-				$(statusSelector).text("Opened calendar dashboard fallback. URL copied; use Open in New Tab if the frame is blank.");
-			}
-			shout("Open calendar dashboard fallback:", {
+			openCalendarDashboardModal({
 				url,
-				assetErrors: calendarDashboardLastAssetErrors,
+				src: url,
+				returnToQuickAssign: returnToQuickAssign,
 			});
-			return;
-
-			const result = await openUrlInNewTab(url);
 
 			if (statusSelector) {
-				let msg;
-
-					if (result.opened && url.startsWith("file:")) {
-					msg = "Dashboard URL copied. If no tab opened, enable Tampermonkey file URL access and confirm the local dashboard path.";
-				} else if (result.opened) {
-					msg = normalizedContext && (normalizedContext.email || normalizedContext.name)
-						? "Opened calendar dashboard. URL copied as fallback."
-						: "Opened dashboard without consultant filter. URL copied as fallback.";
-				} else {
-					msg = "Open blocked; dashboard URL copied.";
-				}
-
-				$(statusSelector).text(msg);
+				$(statusSelector).text("Opened local calendar dashboard. URL copied as fallback.");
 			}
-
-			if (!result.opened) {
-				shout("Calendar dashboard launch failed:", result.error);
-			}
-			shout("Open calendar dashboard:", url);
+			shout("Open local calendar dashboard:", url);
 		}
 
 		/**
