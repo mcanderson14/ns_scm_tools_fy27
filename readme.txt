@@ -70,6 +70,11 @@ Prerequisites
    Set this folder in calendar-refresh.html before preparing a Codex sync. If a
    user stores the package somewhere else, enter that custom path instead.
 
+5. If the Tampermonkey toolbar opens the embedded calendar dashboard from a
+   local file path, enable Tampermonkey file URL access in the browser extension
+   settings. Without that permission, the embedded dashboard cannot read the
+   local files; the toolbar will only copy/open the local dashboard URL.
+
 
 Roster Setup
 ------------

@@ -2,7 +2,7 @@
 // @name         SCR Mgr Assistant Toolbar BETA
 // @namespace    scrmgrassistant
 // @copyright    Copyright © 2024 by Ryan Morrissey
-// @version      27.0.0.29B
+// @version      27.0.0.31B
 // @description  Adds an Assistant Toolbar with interactive buttons to all SC Request forms.
 // @icon         https://cdn0.iconfinder.com/data/icons/phosphor-bold-vol-3-1/256/lifebuoy-duotone-512.png
 // @tag          productivity
@@ -20,8 +20,6 @@
 // @require      https://userscripts-mirror.org/scripts/source/107941.user.js
 // @require      https://fomantic-ui.com/javascript/library/tablesort.js
 // @resource     FOMANTIC_CSS https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.3/dist/semantic.min.css
-// @resource     CALENDAR_DASHBOARD_HTML https://raw.githubusercontent.com/mcanderson14/ns_scm_tools_fy27/main/staffing-dashboard.html
-// @resource     CALENDAR_DASHBOARD_EVENTS https://raw.githubusercontent.com/mcanderson14/ns_scm_tools_fy27/main/direct-connector-events.js
 // @grant        GM_getResourceText
 // @grant        GM_addStyle
 // @grant        GM_getValue
@@ -32,6 +30,9 @@
 // @grant        GM_setClipboard
 // @grant        GM_openInTab
 // @grant        GM.openInTab
+// @grant        GM_xmlhttpRequest
+// @grant        GM.xmlHttpRequest
+// @connect      *
 // @run-at       document-idle
 // @downloadURL  https://github.com/mcanderson14/ns_scm_tools_fy27/raw/main/scm-toolbar.js
 // @updateURL    https://github.com/mcanderson14/ns_scm_tools_fy27/raw/main/scm-toolbar.js
@@ -39,7 +40,7 @@
 // ==/UserScript==
 
 /* globals $, jQuery */
-/* globals GM, GM_config, GM_SuperValue, waitForKeyElements, GM_setClipboard, GM_openInTab */
+/* globals GM, GM_config, GM_SuperValue, waitForKeyElements, GM_setClipboard, GM_openInTab, GM_xmlhttpRequest */
 /* globals nlapiSearchRecord, nlapiGetFieldValue, nlapiSetFieldValue, nlapiGetFieldValues, nlapiSetFieldValues, nlapiGetUser, nlobjSearchFilter, nlobjSearchColumn, nlapiStringToDate */
 
 /**
@@ -63,7 +64,9 @@ const SCRIPT_CACHE_ID = `${SCRIPT_PREFIX}people_cache`;
 const SCRIPT_VERSION = GM_info.script.version;
 const CONFIG_TITLE = `${GM_info.script.name} (v${SCRIPT_VERSION})`;
 const CALENDAR_DASHBOARD_DEFAULT_URL =
-	"file:///Users/michaean/Documents/Outlook%20Calendar%20Project%20-%20JPK/staffing-dashboard.html";
+	/Windows/i.test(navigator.userAgent)
+		? "file:///C:/netsuite/scm_tools/staffing-dashboard.html"
+		: "file:///netsuite/scm_tools/staffing-dashboard.html";
 const CALENDAR_FOCUSED_AVAILABILITY_OVERRIDES = {
 	"eric.baghdasarian@oracle.com": {
 		start: "2026-05-06T07:00:00.000Z",
@@ -4046,6 +4049,10 @@ var shout = (function () {
 
 			try {
 				url = new URL(normalizedBaseUrl, window.location.href);
+				if (url.protocol !== "file:") {
+					shout("Calendar dashboard URL must point to a local file. Falling back to the local default.", baseUrl);
+					url = new URL(CALENDAR_DASHBOARD_DEFAULT_URL);
+				}
 			} catch (error) {
 				shout("Invalid calendar dashboard URL configured:", baseUrl);
 				url = new URL(CALENDAR_DASHBOARD_DEFAULT_URL);
@@ -4245,20 +4252,121 @@ var shout = (function () {
 			return roster;
 		}
 
-		function getCalendarDashboardResourceText(resourceName) {
+		function resolveCalendarDashboardAssetUrl(dashboardUrl, assetName) {
 			try {
-				return GM_getResourceText(resourceName);
+				const baseUrl = String(dashboardUrl || settings.calendarDashboardUrl || CALENDAR_DASHBOARD_DEFAULT_URL || "").trim();
+				const normalizedBaseUrl = /^[a-z][a-z\d+.-]*:/i.test(baseUrl)
+					? baseUrl
+					: `file://${baseUrl}`;
+				const assetUrl = new URL(normalizedBaseUrl, window.location.href);
+				if (assetUrl.protocol !== "file:") {
+					shout("Calendar dashboard assets must be local files:", assetUrl.href);
+					return "";
+				}
+				const pathParts = assetUrl.pathname.split("/");
+				pathParts[pathParts.length - 1] = assetName;
+				assetUrl.pathname = pathParts.join("/");
+				assetUrl.search = "";
+				assetUrl.hash = "";
+				return assetUrl.href;
 			} catch (error) {
-				shout(`Unable to load ${resourceName}:`, error);
+				shout("Unable to resolve calendar dashboard asset URL:", assetName, error);
 				return "";
 			}
 		}
 
-		function buildEmbeddedCalendarDashboardHtml(url, context = {}) {
-			let html = getCalendarDashboardResourceText("CALENDAR_DASHBOARD_HTML");
-			let eventsScript = getCalendarDashboardResourceText("CALENDAR_DASHBOARD_EVENTS");
+		function loadDashboardAssetViaRequest(assetUrl) {
+			return new Promise((resolve, reject) => {
+				if (!assetUrl) {
+					reject(new Error("No asset URL provided."));
+					return;
+				}
 
-			if (!html) {
+				if (typeof GM_xmlhttpRequest === "function") {
+					GM_xmlhttpRequest({
+						method: "GET",
+						url: assetUrl,
+						timeout: 10000,
+						onload: function (response) {
+							const status = Number(response.status || 0);
+							if ((status >= 200 && status < 300) || status === 0) {
+								resolve(response.responseText || "");
+								return;
+							}
+							reject(new Error(`Request failed with HTTP ${status}`));
+						},
+						onerror: function (error) {
+							reject(error instanceof Error ? error : new Error("Request failed."));
+						},
+						ontimeout: function () {
+							reject(new Error("Request timed out."));
+						},
+					});
+					return;
+				}
+
+				if (typeof GM !== "undefined" && GM && typeof GM.xmlHttpRequest === "function") {
+					GM.xmlHttpRequest({
+						method: "GET",
+						url: assetUrl,
+						timeout: 10000,
+					})
+						.then((response) => {
+							const status = Number(response.status || 0);
+							if ((status >= 200 && status < 300) || status === 0) {
+								resolve(response.responseText || "");
+								return;
+							}
+							reject(new Error(`Request failed with HTTP ${status}`));
+						})
+						.catch(reject);
+					return;
+				}
+
+				reject(new Error("GM_xmlhttpRequest is unavailable."));
+			});
+		}
+
+		async function getCalendarDashboardAssetText(assetName, dashboardUrl) {
+			const assetUrl = resolveCalendarDashboardAssetUrl(dashboardUrl, assetName);
+
+			if (assetUrl) {
+				try {
+					const text = await loadDashboardAssetViaRequest(assetUrl);
+					if (text && text.trim().length > 0) {
+						shout(`Loaded ${assetName} from configured dashboard folder:`, assetUrl);
+						return {
+							text,
+							source: assetUrl,
+							};
+						}
+					} catch (error) {
+					shout(`Unable to load ${assetName} from configured dashboard folder. Local dashboard files are required.`, {
+						assetUrl,
+						error: error && error.message ? error.message : String(error),
+					});
+				}
+			}
+
+			return {
+				text: "",
+				source: assetUrl || "not resolved",
+			};
+		}
+
+		async function buildEmbeddedCalendarDashboardHtml(url, context = {}) {
+			const htmlAsset = await getCalendarDashboardAssetText("staffing-dashboard.html", url);
+			const eventsAsset = await getCalendarDashboardAssetText("direct-connector-events.js", url);
+			let html = htmlAsset.text;
+			let eventsScript = eventsAsset.text;
+
+			if (!html || !eventsScript) {
+				shout("Calendar dashboard local files could not be loaded for embedded launch.", {
+					htmlSource: htmlAsset.source,
+					eventsSource: eventsAsset.source,
+					hasHtml: Boolean(html),
+					hasEvents: Boolean(eventsScript),
+				});
 				return "";
 			}
 
@@ -4275,6 +4383,13 @@ window.DIRECT_CONNECTOR_AVAILABILITY = Array.isArray(window.DIRECT_CONNECTOR_AVA
 window.DIRECT_CONNECTOR_AVAILABILITY.push(${JSON.stringify({ email: focusEmail, ...focusedAvailabilityOverride })});
 `;
 			}
+
+			eventsScript += `
+window.SCR_ASSISTANT_DASHBOARD_ASSET_SOURCE = ${JSON.stringify({
+				html: htmlAsset.source,
+				events: eventsAsset.source,
+			})};
+`;
 
 			html = html.replace(
 				/<script\s+src=["']direct-connector-events\.js["']>\s*<\/script>/i,
@@ -4758,7 +4873,7 @@ window.DIRECT_CONNECTOR_AVAILABILITY.push(${JSON.stringify({ email: focusEmail, 
         logCalendarActivity("no-calendar-records-found", {
           focusEmail: focusEmail || "",
           selectedEmails: selectedEmailList,
-          note: "No local bundled snapshot, imported Outlook connector event, free/busy availability snapshot, or cache records were found for this refresh scope."
+          note: "No local snapshot, imported Outlook connector event, free/busy availability snapshot, or cache records were found for this refresh scope."
         });
       }
       renderRefreshState();`,
@@ -5403,8 +5518,8 @@ window.SCR_ASSISTANT_SELECTED_EMAILS = ${JSON.stringify(selectedEmails)};
 			return `${launchScript}\n${html}`;
 		}
 
-		function openEmbeddedCalendarDashboard(url, options = {}) {
-			const html = buildEmbeddedCalendarDashboardHtml(url, options.context || {});
+		async function openEmbeddedCalendarDashboard(url, options = {}) {
+			const html = await buildEmbeddedCalendarDashboardHtml(url, options.context || {});
 
 			if (!html) {
 				return false;
@@ -5515,7 +5630,7 @@ window.SCR_ASSISTANT_SELECTED_EMAILS = ${JSON.stringify(selectedEmails)};
 					$("#scr-modal-request-form").hasClass("active") ||
 					$("#scr-modal-request-form").is(":visible"),
 			);
-			const embeddedOpened = openEmbeddedCalendarDashboard(url, {
+			const embeddedOpened = await openEmbeddedCalendarDashboard(url, {
 				returnToQuickAssign: returnToQuickAssign,
 				context: normalizedContext,
 			});
@@ -5533,8 +5648,8 @@ window.SCR_ASSISTANT_SELECTED_EMAILS = ${JSON.stringify(selectedEmails)};
 			if (statusSelector) {
 				let msg;
 
-				if (result.opened && url.startsWith("file:")) {
-					msg = "Dashboard URL copied. If no tab opened, enable Tampermonkey file URL access or use an http:// dashboard URL.";
+					if (result.opened && url.startsWith("file:")) {
+					msg = "Dashboard URL copied. If no tab opened, enable Tampermonkey file URL access and confirm the local dashboard path.";
 				} else if (result.opened) {
 					msg = normalizedContext && (normalizedContext.email || normalizedContext.name)
 						? "Opened calendar dashboard. URL copied as fallback."

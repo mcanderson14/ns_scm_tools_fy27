@@ -1080,12 +1080,20 @@
     }
 
     function getDirectConnectorData() {
+      const metadata = window.DIRECT_CONNECTOR_SYNC_METADATA || null;
+      const explicitWarnings = Array.isArray(window.DIRECT_CONNECTOR_SYNC_WARNINGS) ? window.DIRECT_CONNECTOR_SYNC_WARNINGS : [];
+      const metadataWarnings = Array.isArray(metadata?.failedConsultants)
+        ? metadata.failedConsultants.map(email => ({
+            email,
+            message: "Connector did not return a usable availability snapshot."
+          }))
+        : [];
       return {
-        metadata: window.DIRECT_CONNECTOR_SYNC_METADATA || null,
+        metadata,
         loadedEmails: Array.isArray(window.DIRECT_CONNECTOR_LOADED_EMAILS) ? window.DIRECT_CONNECTOR_LOADED_EMAILS.map(normalizeEmail) : [],
         availability: Array.isArray(window.DIRECT_CONNECTOR_AVAILABILITY) ? window.DIRECT_CONNECTOR_AVAILABILITY : [],
         directEvents: Array.isArray(window.DIRECT_CONNECTOR_EVENTS) ? window.DIRECT_CONNECTOR_EVENTS : [],
-        warnings: Array.isArray(window.DIRECT_CONNECTOR_SYNC_WARNINGS) ? window.DIRECT_CONNECTOR_SYNC_WARNINGS : []
+        warnings: [...explicitWarnings, ...metadataWarnings]
       };
     }
 
@@ -1382,14 +1390,21 @@
         return;
       }
 
+      const usableCalendarEmails = new Set([
+        ...direct.availability.map(snapshot => normalizeEmail(snapshot.email)).filter(Boolean),
+        ...direct.directEvents.map(event => normalizeEmail(event.email)).filter(Boolean)
+      ]);
+
       status.innerHTML = [
         `<span class="pill good">${selected.size} selected</span>`,
         `<span class="pill">${rows.length} visible</span>`,
         `<span class="pill">${roster.length} roster record${roster.length === 1 ? "" : "s"}</span>`,
-        `<span class="pill good">${direct.loadedEmails.length} loaded calendar${direct.loadedEmails.length === 1 ? "" : "s"}</span>`,
+        `<span class="pill good">${usableCalendarEmails.size} usable calendar${usableCalendarEmails.size === 1 ? "" : "s"}</span>`,
+        `<span class="pill">${direct.loadedEmails.length} attempted calendar${direct.loadedEmails.length === 1 ? "" : "s"}</span>`,
         `<span class="pill">${direct.availability.length} availability snapshot${direct.availability.length === 1 ? "" : "s"}</span>`,
+        direct.warnings.length ? `<span class="pill bad">${direct.warnings.length} warning${direct.warnings.length === 1 ? "" : "s"}</span>` : "",
         direct.metadata?.refreshedAt ? `<span class="pill">Last sync ${new Date(direct.metadata.refreshedAt).toLocaleString()}</span>` : '<span class="pill bad">Last sync unknown</span>'
-      ].join("");
+      ].filter(Boolean).join("");
 
       table.innerHTML = [
         '<div class="table-scroll"><table>',

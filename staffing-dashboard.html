@@ -8512,6 +8512,14 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
 
       return {
         generatedAt: new Date().toISOString(),
+        dashboardAssetSource: window.SCR_ASSISTANT_DASHBOARD_ASSET_SOURCE || null,
+        directConnectorMetadata: window.DIRECT_CONNECTOR_SYNC_METADATA || null,
+        directConnectorTotals: {
+          loadedEmails: DIRECT_CONNECTOR_LOADED_EMAILS.size,
+          availabilitySnapshots: DIRECT_CONNECTOR_AVAILABILITY.length,
+          directEvents: DIRECT_CONNECTOR_EVENTS.length,
+          warnings: Array.isArray(window.DIRECT_CONNECTOR_SYNC_WARNINGS) ? window.DIRECT_CONNECTOR_SYNC_WARNINGS.length : 0
+        },
         launchSearch: window.SCR_ASSISTANT_LAUNCH_SEARCH || window.location.search || "",
         selectedFilterValue: document.getElementById("personFilter")?.value || "",
         focusEmail: window.SCR_ASSISTANT_FOCUS_EMAIL || "",
