@@ -2,7 +2,7 @@
 // @name         SCR Mgr Assistant Toolbar BETA
 // @namespace    scrmgrassistant
 // @copyright    Copyright © 2024 by Ryan Morrissey
-// @version      27.0.0.36B
+// @version      27.0.0.37B
 // @description  Adds an Assistant Toolbar with interactive buttons to all SC Request forms.
 // @icon         https://cdn0.iconfinder.com/data/icons/phosphor-bold-vol-3-1/256/lifebuoy-duotone-512.png
 // @tag          productivity
@@ -1732,7 +1732,7 @@ var shout = (function () {
                     <iframe
                         id="scr-calendar-dashboard-frame"
                         title="SC Calendar Dashboard"
-                        sandbox="allow-scripts allow-forms allow-popups allow-modals"
+                        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
                     ></iframe>
                 </div>
                 <div class="actions">
