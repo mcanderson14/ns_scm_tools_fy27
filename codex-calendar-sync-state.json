@@ -20,8 +20,8 @@
     10
   ],
   "failedChunks": [],
-  "outputFile": "/Users/michaean/Documents/Outlook Calendar Project - JPK/direct-connector-events.js",
-  "requestFile": "/Users/michaean/Documents/Outlook Calendar Project - JPK/codex-calendar-sync-request.json",
+  "outputFile": "/Users/michaean/netsuite/scm_tools/direct-connector-events.js",
+  "requestFile": "/Users/michaean/netsuite/scm_tools/codex-calendar-sync-request.json",
   "lastMerge": {
     "chunkIndex": 10,
     "loadedEmails": 217,

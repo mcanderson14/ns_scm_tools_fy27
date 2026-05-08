@@ -2,7 +2,7 @@
 // @name         SCR Mgr Assistant Toolbar BETA
 // @namespace    scrmgrassistant
 // @copyright    Copyright © 2024 by Ryan Morrissey
-// @version      27.0.0.31B
+// @version      27.0.0.32B
 // @description  Adds an Assistant Toolbar with interactive buttons to all SC Request forms.
 // @icon         https://cdn0.iconfinder.com/data/icons/phosphor-bold-vol-3-1/256/lifebuoy-duotone-512.png
 // @tag          productivity
@@ -66,7 +66,7 @@ const CONFIG_TITLE = `${GM_info.script.name} (v${SCRIPT_VERSION})`;
 const CALENDAR_DASHBOARD_DEFAULT_URL =
 	/Windows/i.test(navigator.userAgent)
 		? "file:///C:/netsuite/scm_tools/staffing-dashboard.html"
-		: "file:///netsuite/scm_tools/staffing-dashboard.html";
+		: "~/netsuite/scm_tools/staffing-dashboard.html";
 const CALENDAR_FOCUSED_AVAILABILITY_OVERRIDES = {
 	"eric.baghdasarian@oracle.com": {
 		start: "2026-05-06T07:00:00.000Z",

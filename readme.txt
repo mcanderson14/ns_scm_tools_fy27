@@ -62,7 +62,7 @@ Prerequisites
    shared team convention, use these paths:
 
    macOS:
-   /netsuite/scm_tools
+   ~/netsuite/scm_tools
 
    Windows:
    C:\netsuite\scm_tools
@@ -150,7 +150,7 @@ Sync Configuration
 9. Initialize the new request state from a terminal or Codex:
 
    macOS example:
-   node "/netsuite/scm_tools/calendar-codex-sync-tools.mjs" init-state
+   node ~/netsuite/scm_tools/calendar-codex-sync-tools.mjs init-state
 
    Windows example:
    node "C:\netsuite\scm_tools\calendar-codex-sync-tools.mjs" init-state
@@ -165,7 +165,7 @@ Run:
 
 macOS example:
 
-node "/netsuite/scm_tools/calendar-codex-sync-tools.mjs" status
+node ~/netsuite/scm_tools/calendar-codex-sync-tools.mjs status
 
 Windows example:
 
@@ -209,7 +209,7 @@ Workspace:
 Set this to the user's local project folder.
 
 macOS example:
-/netsuite/scm_tools
+~/netsuite/scm_tools
 
 Windows example:
 C:\netsuite\scm_tools
@@ -298,7 +298,7 @@ Use this flow when the roster or date window changes:
 6. Run:
 
    macOS example:
-   node "/netsuite/scm_tools/calendar-codex-sync-tools.mjs" init-state
+   node ~/netsuite/scm_tools/calendar-codex-sync-tools.mjs init-state
 
    Windows example:
    node "C:\netsuite\scm_tools\calendar-codex-sync-tools.mjs" init-state
@@ -309,7 +309,7 @@ If you intentionally need to restart the same sync ID from chunk 0, use:
 
 macOS example:
 
-node "/netsuite/scm_tools/calendar-codex-sync-tools.mjs" init-state "/netsuite/scm_tools/codex-calendar-sync-request.json" "/netsuite/scm_tools/codex-calendar-sync-state.json" --force
+node ~/netsuite/scm_tools/calendar-codex-sync-tools.mjs init-state ~/netsuite/scm_tools/codex-calendar-sync-request.json ~/netsuite/scm_tools/codex-calendar-sync-state.json --force
 
 Windows example:
 

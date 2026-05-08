@@ -2,7 +2,7 @@
   "kind": "sc-calendar-codex-full-sync-request",
   "version": 1,
   "createdAt": "2026-05-08T03:38:14.140Z",
-  "sourcePage": "file:///Users/michaean/Documents/Outlook%20Calendar%20Project%20-%20JPK/calendar-refresh.html",
+  "sourcePage": "file:///Users/michaean/netsuite/scm_tools/calendar-refresh.html",
   "connector": "microsoft-outlook-calendar",
   "task": "Fetch Outlook free/busy availability for all consultant chunks, then update the local staffing dashboard data file.",
   "syncPlan": {
@@ -13,7 +13,7 @@
     "totalConsultants": 275
   },
   "output": {
-    "directConnectorEventsFile": "/Users/michaean/Documents/Outlook Calendar Project - JPK/direct-connector-events.js",
+    "directConnectorEventsFile": "/Users/michaean/netsuite/scm_tools/direct-connector-events.js",
     "format": "direct-connector-events.js"
   },
   "request": {

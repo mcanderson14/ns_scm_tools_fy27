@@ -357,8 +357,8 @@
           <h2>Codex Automation</h2>
           <p class="note">Prepare and save the chunked sync plan. The Codex automation reads the saved request/state files, runs the next chunk with the Outlook connector, merges it, and resumes on the next scheduled run.</p>
           <label for="localProjectFolder">Local Project Folder</label>
-          <input type="text" id="localProjectFolder" placeholder="/netsuite/scm_tools or C:\netsuite\scm_tools">
-          <p class="note" style="margin-top: 8px;">Use the folder where these dashboard files live on the user's computer. Mac and Windows paths are supported; the suggested shared paths are /netsuite/scm_tools for macOS and C:\netsuite\scm_tools for Windows.</p>
+          <input type="text" id="localProjectFolder" placeholder="~/netsuite/scm_tools or C:\netsuite\scm_tools">
+          <p class="note" style="margin-top: 8px;">Use the folder where these dashboard files live on the user's computer. Mac and Windows paths are supported; the suggested shared paths are ~/netsuite/scm_tools for macOS and C:\netsuite\scm_tools for Windows.</p>
           <div class="actions">
             <button id="useCurrentFolderButton" type="button">Use current page folder</button>
             <button id="saveProjectFolderButton" type="button">Save folder path</button>
@@ -478,7 +478,7 @@
     const CODEX_SYNC_KIND = "sc-calendar-codex-sync-request";
     const CODEX_FULL_SYNC_KIND = "sc-calendar-codex-full-sync-request";
     const CODEX_SYNC_VERSION = 1;
-    const DEFAULT_PROJECT_FOLDER = /Windows/i.test(navigator.userAgent) ? "C:\\netsuite\\scm_tools" : "/netsuite/scm_tools";
+    const DEFAULT_PROJECT_FOLDER = /Windows/i.test(navigator.userAgent) ? "C:\\netsuite\\scm_tools" : "~/netsuite/scm_tools";
     const CODEX_SYNC_DEFAULT_BATCH_SIZE = 20;
     const CODEX_SYNC_MAX_BATCH_SIZE = 25;
     const CODEX_SYNC_RUN_COMMAND = "Run the prepared calendar sync from the current browser page.";
@@ -1022,9 +1022,31 @@
       }
     }
 
+    function inferMacHomeFromPage() {
+      try {
+        const url = new URL(window.location.href);
+        if (url.protocol !== "file:") return "";
+
+        const pathname = decodeURIComponent(url.pathname || "");
+        const match = pathname.match(/^\/Users\/[^/]+/);
+        return match ? match[0] : "";
+      } catch {
+        return "";
+      }
+    }
+
+    function expandHomeFolder(value) {
+      const text = String(value || "").trim();
+      if (text === "~" || text.startsWith("~/")) {
+        const home = inferMacHomeFromPage();
+        if (home) return text.replace(/^~/, home);
+      }
+      return text;
+    }
+
     function normalizeProjectFolder(value) {
       const fallback = inferProjectFolderFromPage();
-      let folder = String(value || fallback).trim();
+      let folder = expandHomeFolder(value || fallback);
       if (!folder) folder = fallback;
       folder = folder.replace(/^file:\/\//i, "");
       folder = decodeURIComponent(folder);

@@ -65,7 +65,7 @@ Prefer the compact `availabilityView` data. Only include event records when the 
 
 Open `calendar-refresh.html` locally to configure the sync. The page is now the roster and automation configuration surface:
 
-1. Set **Local Project Folder** to the folder where this package lives. The suggested shared paths are `/netsuite/scm_tools` for macOS and `C:\netsuite\scm_tools` for Windows, but any local folder path is supported.
+1. Set **Local Project Folder** to the folder where this package lives. The suggested shared paths are `~/netsuite/scm_tools` for macOS and `C:\netsuite\scm_tools` for Windows, but any local folder path is supported.
 2. Open NetSuite saved search `1311451`.
 3. Copy/export the active SC roster as JSON or copied result rows.
 4. Paste that data into the NetSuite SC Saved Search Roster box and click **Import and save roster**.
