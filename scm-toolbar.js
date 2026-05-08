@@ -2,7 +2,7 @@
 // @name         SCR Mgr Assistant Toolbar BETA
 // @namespace    scrmgrassistant
 // @copyright    Copyright © 2024 by Ryan Morrissey
-// @version      27.0.0.38B
+// @version      27.0.0.39B
 // @description  Adds an Assistant Toolbar with interactive buttons to all SC Request forms.
 // @icon         https://cdn0.iconfinder.com/data/icons/phosphor-bold-vol-3-1/256/lifebuoy-duotone-512.png
 // @tag          productivity
@@ -5678,37 +5678,61 @@ window.SCR_ASSISTANT_SELECTED_EMAILS = ${JSON.stringify(selectedEmails)};
 
 		function openUrlInNewTabImmediate(url) {
 			const errors = [];
-
-			if (typeof GM_openInTab === "function") {
-				try {
-					GM_openInTab(url, {
-						active: true,
-						insert: true,
-						setParent: true,
-					});
-					return {
-						opened: true,
-						method: "GM_openInTab",
-					};
-				} catch (error) {
-					errors.push(`GM_openInTab: ${error.message || error}`);
-				}
-			}
+			const isFileUrl = String(url || "").indexOf("file:") === 0;
 
 			try {
-				const openedWindow = window.open(url, "_blank", "noopener,noreferrer");
+				const openedWindow = window.open(url, "_blank");
 				if (openedWindow) {
 					return {
 						opened: true,
 						method: "window.open",
 					};
 				}
-				errors.push("window.open: popup was blocked");
+				errors.push("window.open: popup was blocked or local file launch was denied");
 			} catch (error) {
 				errors.push(`window.open: ${error.message || error}`);
 			}
 
-			if (typeof GM !== "undefined" && GM && typeof GM.openInTab === "function") {
+			try {
+				const launcherWindow = window.open("about:blank", "_blank");
+				if (launcherWindow) {
+					const safeUrl = JSON.stringify(url);
+					launcherWindow.document.open();
+					launcherWindow.document.write(`<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>SC Calendar Dashboard Launcher</title>
+  <style>
+    body { font: 14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 32px; color: #1f2933; }
+    a, button { display: inline-block; margin-top: 12px; padding: 10px 14px; border-radius: 4px; background: #256f8f; color: #fff; text-decoration: none; border: 0; cursor: pointer; }
+    code { display: block; max-width: 100%; margin-top: 16px; padding: 12px; white-space: pre-wrap; word-break: break-all; background: #f4f6f8; color: #1f2933; }
+  </style>
+</head>
+<body>
+  <h1>Opening SC Calendar Dashboard</h1>
+  <p>If the dashboard does not open automatically, use the button below.</p>
+  <a href="${url.replace(/"/g, "&quot;")}">Open Calendar Dashboard</a>
+  <code>${url.replace(/</g, "&lt;")}</code>
+  <script>
+    setTimeout(function () {
+      window.location.href = ${safeUrl};
+    }, 50);
+  </script>
+</body>
+</html>`);
+					launcherWindow.document.close();
+					return {
+						opened: true,
+						method: "about:blank launcher",
+					};
+				}
+				errors.push("about:blank launcher: popup was blocked");
+			} catch (error) {
+				errors.push(`about:blank launcher: ${error.message || error}`);
+			}
+
+			if (!isFileUrl && typeof GM !== "undefined" && GM && typeof GM.openInTab === "function") {
 				try {
 					GM.openInTab(url, {
 						active: true,
@@ -5723,6 +5747,22 @@ window.SCR_ASSISTANT_SELECTED_EMAILS = ${JSON.stringify(selectedEmails)};
 					};
 				} catch (error) {
 					errors.push(`GM.openInTab: ${error.message || error}`);
+				}
+			}
+
+			if (!isFileUrl && typeof GM_openInTab === "function") {
+				try {
+					GM_openInTab(url, {
+						active: true,
+						insert: true,
+						setParent: true,
+					});
+					return {
+						opened: true,
+						method: "GM_openInTab",
+					};
+				} catch (error) {
+					errors.push(`GM_openInTab: ${error.message || error}`);
 				}
 			}
 
@@ -5810,7 +5850,7 @@ window.SCR_ASSISTANT_SELECTED_EMAILS = ${JSON.stringify(selectedEmails)};
 
 			if (openResult.opened) {
 				if (statusSelector) {
-					$(statusSelector).text("Opened local calendar dashboard in a new tab. URL copied as fallback.");
+					$(statusSelector).text("Calendar dashboard launch attempted in a new tab. URL copied as fallback.");
 				}
 				shout("Open local calendar dashboard:", {
 					url,
