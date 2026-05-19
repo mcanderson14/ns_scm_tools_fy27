@@ -11,7 +11,6 @@ const DEFAULT_OUT_DIR = join(PROJECT_DIR, PACKAGE_NAME);
 const DIRECT_FILES = [
   "calendar-refresh.html",
   "staffing-dashboard.html",
-  "calendar-dashboard-launch-helper.js",
   "scr-staffing-helper.user.js",
   "sc-calendar-dashboard-bridge.user.js",
   "netsuite-sc-roster-calendar-refresh.user.js",

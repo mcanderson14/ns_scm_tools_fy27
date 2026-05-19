@@ -50,8 +50,8 @@ shared package:
 
 After installing:
 
-1. In SCOUT settings, confirm Dashboard URL is:
-   `https://mcanderson14.github.io/ns_scm_tools_fy27/staffing-dashboard.html`
+1. SCOUT opens the shared GitHub Pages staffing dashboard automatically; no
+   local Dashboard URL setting is needed.
 2. In the roster helper menu, reset or set Calendar refresh URL to:
    `https://mcanderson14.github.io/ns_scm_tools_fy27/calendar-refresh.html`
 

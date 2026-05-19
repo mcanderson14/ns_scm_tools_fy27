@@ -15,7 +15,6 @@ Publish these files at the repository root:
 
 - `staffing-dashboard.html`
 - `calendar-refresh.html`
-- `calendar-dashboard-launch-helper.js`
 - `direct-connector-events.js` as the starter empty cache
 - `direct-connector-events.starter.js`
 - `scr-staffing-helper.user.js`

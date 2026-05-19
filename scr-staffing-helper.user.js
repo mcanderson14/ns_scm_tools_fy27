@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/FY26_scm_tools
-// @version      b26.4.53
+// @version      27.0.2
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -16,7 +16,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  b26.4.53
+   SCOUT — SC Operations Utility Tool  27.0.2
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -26,7 +26,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = 'b26.4.53';
+  const SCRIPT_VERSION = '27.0.2';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -72,23 +72,14 @@
   const SCOUT_LOGO_SRC = 'data:image/png;base64,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';
 
   /* ────────────────────────────────────────────────────────────────
-     DASHBOARD URL CONFIG  (persisted in localStorage)
-     Defaults to the GitHub Pages staffing dashboard static host.
+     SHARED DASHBOARD URL
+     SCOUT opens the GitHub Pages staffing dashboard static host directly.
   ──────────────────────────────────────────────────────────────── */
-  const DASHBOARD_URL_KEY     = 'sc_staffing_dashboard_url';
   const DASHBOARD_URL_DEFAULT = 'https://mcanderson14.github.io/ns_scm_tools_fy27/staffing-dashboard.html';
-  const LEGACY_DASHBOARD_URL_RE = /(?:oracle-my\.sharepoint\.com\/.*\/staffing-dashboard\.(?:html|aspx)|file:\/\/.*\/staffing-dashboard\.html)/i;
   const LOCAL_CONFIG_KEY      = 'sc_staffing_helper_config_v1';
-
-  function normalizeDashboardUrl(value) {
-    const url = String(value || '').trim();
-    if (!url || LEGACY_DASHBOARD_URL_RE.test(url)) return DASHBOARD_URL_DEFAULT;
-    return url;
-  }
 
   function getLocalConfig() {
     const defaults = {
-      dashboardUrl: DASHBOARD_URL_DEFAULT,
       calendarIntegrationEnabled: false,
       gptAssistEnabled: false,
       extraTeamMembers: '',
@@ -102,17 +93,14 @@
       cfg = {};
     }
 
-    const legacyDashboardUrl = localStorage.getItem(DASHBOARD_URL_KEY);
     const legacyCalendar = localStorage.getItem('sc_cal_integration_enabled');
     const merged = {
       ...defaults,
       ...cfg,
     };
-    if (!cfg.dashboardUrl && legacyDashboardUrl) merged.dashboardUrl = legacyDashboardUrl;
     if (typeof cfg.calendarIntegrationEnabled !== 'boolean' && legacyCalendar !== null) {
       merged.calendarIntegrationEnabled = legacyCalendar === 'true';
     }
-    merged.dashboardUrl = normalizeDashboardUrl(merged.dashboardUrl);
     merged.gptAssistEnabled = Boolean(merged.gptAssistEnabled);
     merged.extraTeamMembers = String(merged.extraTeamMembers || '');
     merged.extraTeamManagers = String(merged.extraTeamManagers || '');
@@ -122,23 +110,18 @@
 
   function saveLocalConfig(patch) {
     const cfg = { ...getLocalConfig(), ...(patch || {}) };
-    cfg.dashboardUrl = normalizeDashboardUrl(cfg.dashboardUrl);
     cfg.extraTeamMembers = String(cfg.extraTeamMembers || '');
     cfg.extraTeamManagers = String(cfg.extraTeamManagers || '');
     cfg.feedbackWebhookUrl = String(cfg.feedbackWebhookUrl || '').trim();
     cfg.calendarIntegrationEnabled = Boolean(cfg.calendarIntegrationEnabled);
     cfg.gptAssistEnabled = Boolean(cfg.gptAssistEnabled);
     localStorage.setItem(LOCAL_CONFIG_KEY, JSON.stringify(cfg));
-    localStorage.setItem(DASHBOARD_URL_KEY, cfg.dashboardUrl);
     localStorage.setItem('sc_cal_integration_enabled', cfg.calendarIntegrationEnabled ? 'true' : 'false');
     return cfg;
   }
 
   function getDashboardUrl() {
-    return getLocalConfig().dashboardUrl;
-  }
-  function saveDashboardUrl(url) {
-    if (url && url.trim()) saveLocalConfig({ dashboardUrl: url.trim() });
+    return DASHBOARD_URL_DEFAULT;
   }
 
   function getExtraTeamMembersText() {
@@ -3329,7 +3312,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         </div>
         <div class="sc-header-actions">
           <button id="sc-feedback-btn" title="Open Slack to report a bug or request an enhancement">Bug / Idea</button>
-          <button id="sc-settings-btn" title="Configure calendar helper path">⚙</button>
+          <button id="sc-settings-btn" title="Configure SCOUT settings">⚙</button>
           <button id="sc-skills-close" title="Close panel">✕</button>
         </div>
       </div>
@@ -3341,17 +3324,12 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
         <!-- Settings Card (hidden by default, shown when gear clicked) -->
         <div class="sc-card" id="sc-settings-card" style="display:none">
-          <div class="sc-card-title">⚙ Local Helper Settings</div>
+          <div class="sc-card-title">⚙ SCOUT Settings</div>
           <div class="sc-field">
-            <label class="sc-label">Dashboard URL</label>
-            <input type="text" id="sc-dashboard-url-input"
-              autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"
-              value="${getDashboardUrl().replace(/"/g, '&quot;')}"
-              placeholder="https://mcanderson14.github.io/ns_scm_tools_fy27/staffing-dashboard.html">
+            <label class="sc-label">Calendar Dashboard</label>
             <div class="sc-field-hint">
-              URL to the GitHub Pages <strong>staffing-dashboard.html</strong> page.<br>
-              Default: <code>mcanderson14.github.io/ns_scm_tools_fy27</code>.<br>
-              Local <code>file://</code> URLs still work as a fallback when Tampermonkey has file access enabled.
+              Opens the shared GitHub Pages dashboard:
+              <code>mcanderson14.github.io/ns_scm_tools_fy27</code>.
             </div>
           </div>
           <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
@@ -4771,9 +4749,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
   /* ────────────────────────────────────────────────────────────────
      CALENDAR DASHBOARD
-     GM_openInTab can open file:// URLs when Tampermonkey has
-     "Allow access to file URLs" enabled — unlike window.open()
-     which Chrome blocks for file:// from https:// pages.
+     GM_openInTab opens the shared GitHub Pages dashboard from NetSuite.
      Falls back to GM_setClipboard if GM_openInTab is unavailable.
      URL parameters are built directly — no external helper required.
   ──────────────────────────────────────────────────────────────── */
@@ -4829,7 +4805,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     return `${getDashboardUrl()}?${params.toString()}`;
   }
 
-  /** Open a URL using GM_openInTab (works for file://) or fall back to clipboard. */
+  /** Open a URL using GM_openInTab or fall back to clipboard. */
   function gmOpenUrl(url) {
     try {
       const opener = (typeof GM_openInTab !== 'undefined') ? GM_openInTab
@@ -4842,7 +4818,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     } catch (_) { /* fall through */ }
     // Last resort: copy to clipboard
     try { GM_setClipboard(url); } catch (_) { navigator.clipboard.writeText(url).catch(() => {}); }
-    showToast('📋 Dashboard URL copied — paste in a new tab to open.', 'info', 8000);
+    showToast('📋 Dashboard link copied — paste in a new tab to open.', 'info', 8000);
   }
 
   function copyToClipboardQuietly(text) {
@@ -4908,7 +4884,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const webhookUrl = getFeedbackWebhookUrl();
     if (webhookUrl) {
       if (!/^https:\/\/hooks\.slack\.com\/triggers\//i.test(webhookUrl)) {
-        showToast('Feedback webhook should start with https://hooks.slack.com/triggers/. Check Local Helper Settings.', 'error', 9000);
+        showToast('Feedback webhook should start with https://hooks.slack.com/triggers/. Check SCOUT Settings.', 'error', 9000);
         return;
       }
       showToast('Starting Slack feedback workflow...', 'info', 4000);
@@ -6157,13 +6133,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   }
 
   function populateSettingsForm() {
-    const urlInput = document.getElementById('sc-dashboard-url-input');
     const calToggle = document.getElementById('sc-cal-integration-toggle');
     const gptToggle = document.getElementById('sc-gpt-assist-toggle');
     const extraTeam = document.getElementById('sc-extra-team-members-input');
     const extraManagers = document.getElementById('sc-extra-team-managers-input');
     const feedbackWebhook = document.getElementById('sc-feedback-webhook-input');
-    if (urlInput) urlInput.value = getDashboardUrl();
     if (calToggle) calToggle.checked = getCalIntegrationEnabled();
     if (gptToggle) gptToggle.checked = getGptAssistEnabled();
     if (extraTeam) extraTeam.value = getExtraTeamMembersText();
@@ -6172,15 +6146,12 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   }
 
   function saveSettingsFromForm() {
-    const urlInput = document.getElementById('sc-dashboard-url-input');
     const calToggle = document.getElementById('sc-cal-integration-toggle');
     const gptToggle = document.getElementById('sc-gpt-assist-toggle');
     const extraTeam = document.getElementById('sc-extra-team-members-input');
     const extraManagers = document.getElementById('sc-extra-team-managers-input');
     const feedbackWebhook = document.getElementById('sc-feedback-webhook-input');
-    const dashboardUrl = urlInput ? urlInput.value.trim() : getDashboardUrl();
     saveLocalConfig({
-      dashboardUrl: dashboardUrl || getDashboardUrl(),
       calendarIntegrationEnabled: calToggle ? calToggle.checked : getCalIntegrationEnabled(),
       gptAssistEnabled: gptToggle ? gptToggle.checked : getGptAssistEnabled(),
       extraTeamMembers: extraTeam ? extraTeam.value : getExtraTeamMembersText(),
