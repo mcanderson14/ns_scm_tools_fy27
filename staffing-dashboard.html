@@ -62,6 +62,25 @@
       letter-spacing: 0;
     }
 
+    .title-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .version-pill {
+      border: 1px solid rgba(255, 255, 255, 0.26);
+      background: rgba(255, 255, 255, 0.11);
+      border-radius: 999px;
+      padding: 4px 9px;
+      color: rgba(255, 255, 255, 0.9);
+      white-space: nowrap;
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1;
+    }
+
     .header-subtitle {
       margin: 7px 0 0;
       color: rgba(255, 255, 255, 0.76);
@@ -693,7 +712,10 @@
   <header class="app-header">
     <div class="header-inner">
       <div>
-        <h1>SC Staffing Dashboard</h1>
+        <div class="title-row">
+          <h1>SC Staffing Dashboard</h1>
+          <span class="version-pill">v27.0.2</span>
+        </div>
         <p class="header-subtitle">SC org calendar staffing view across a rolling 3-week window</p>
       </div>
       <div class="header-actions">

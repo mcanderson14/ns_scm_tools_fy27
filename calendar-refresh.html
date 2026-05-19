@@ -35,10 +35,29 @@
       padding: 24px 28px;
     }
 
+    .header-title-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
     h1 {
       margin: 0;
       font-size: 24px;
       letter-spacing: 0;
+    }
+
+    .version-pill {
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      border-radius: 999px;
+      padding: 4px 9px;
+      background: rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1;
+      white-space: nowrap;
     }
 
     .subtitle {
@@ -318,7 +337,10 @@
 </head>
 <body>
   <header>
-    <h1>SC Calendar Refresh</h1>
+    <div class="header-title-row">
+      <h1>SC Calendar Refresh</h1>
+      <span class="version-pill">v27.0.2</span>
+    </div>
     <div class="subtitle">Get a Microsoft Graph Explorer token, build the NetSuite SC roster, then refresh staffing calendar availability for the dashboard.</div>
   </header>
 
@@ -378,6 +400,7 @@
           <textarea id="emails" placeholder="one.person@oracle.com, another.person@oracle.com"></textarea>
           <div class="actions">
             <button id="loadFullRosterButton" type="button">Load full SC roster</button>
+            <button id="selectAllRefreshButton" type="button">Select all for refresh</button>
             <button id="appendFullRosterButton" type="button">Append full roster</button>
           </div>
           <div class="status" id="rosterStatus">
@@ -1088,6 +1111,21 @@
       const currentEmails = append ? parseEmails(qs("emails").value) : [];
       setEmails([...currentEmails, ...rosterEmails]);
       log(append ? "Appended full SC roster to request." : "Loaded full SC roster into request.", {
+        rosterEmails: rosterEmails.length,
+        totalEmails: parseEmails(qs("emails").value).length
+      });
+    }
+
+    function selectAllForRefresh() {
+      const rosterEmails = getAvailableRoster().map(person => person.email);
+      if (!rosterEmails.length) {
+        log("No NetSuite roster is available. Import and save the saved search roster first.");
+        updateRosterStatus();
+        return;
+      }
+
+      setEmails(rosterEmails);
+      log("Selected all NetSuite roster consultants for refresh.", {
         rosterEmails: rosterEmails.length,
         totalEmails: parseEmails(qs("emails").value).length
       });
@@ -2972,6 +3010,7 @@
       qs("importNetSuiteRosterButton").addEventListener("click", importNetSuiteRoster);
       qs("clearImportedRosterButton").addEventListener("click", clearImportedRoster);
       qs("loadFullRosterButton").addEventListener("click", () => loadFullRoster());
+      qs("selectAllRefreshButton").addEventListener("click", selectAllForRefresh);
       qs("appendFullRosterButton").addEventListener("click", () => loadFullRoster({ append: true }));
       qs("useCurrentFolderButton").addEventListener("click", useCurrentPageFolder);
       qs("saveProjectFolderButton").addEventListener("click", () => saveProjectFolder());
