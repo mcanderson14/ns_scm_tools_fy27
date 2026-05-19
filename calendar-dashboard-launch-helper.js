@@ -4,7 +4,7 @@
  * Use this as a Tampermonkey @require in any NetSuite helper script that needs
  * to open the SC calendar dashboard:
  *
- * // @require file:///Users/YOUR_MAC_USERNAME/netsuite/scm_tools/calendar-dashboard-launch-helper.js
+ * // @require https://mcanderson14.github.io/ns_scm_tools_fy27/calendar-dashboard-launch-helper.js
  *
  * Then call:
  * window.SC_CALENDAR_DASHBOARD.open({

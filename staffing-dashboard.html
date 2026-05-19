@@ -509,6 +509,146 @@
     .bar-open { background: #31a66a; }
     .bar-unknown { background: #c9d2db; }
 
+    .weekly-section {
+      margin-top: 18px;
+      padding-top: 16px;
+      border-top: 1px solid var(--line);
+    }
+
+    .weekly-section-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .weekly-section h3 {
+      margin: 0 0 3px;
+      font-size: 15px;
+      letter-spacing: 0;
+    }
+
+    .weekly-legend {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+      margin: 0 0 10px;
+    }
+
+    .weekly-legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .weekly-swatch {
+      width: 11px;
+      height: 11px;
+      border-radius: 3px;
+      border: 1px solid transparent;
+    }
+
+    .weekly-swatch.open { background: var(--green); }
+    .weekly-swatch.busy { background: var(--red); }
+    .weekly-swatch.unknown {
+      background: #c9d2db;
+      border-color: #aeb9c5;
+    }
+
+    .weekly-chart {
+      width: 100%;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fbfcfd;
+    }
+
+    .weekly-grid {
+      --day-count: 21;
+      display: grid;
+      grid-template-columns: minmax(220px, 260px) repeat(var(--day-count), minmax(42px, 1fr));
+      min-width: 1226px;
+    }
+
+    .weekly-person-cell,
+    .weekly-day-cell {
+      border-bottom: 1px solid var(--line);
+    }
+
+    .weekly-person-cell {
+      position: sticky;
+      left: 0;
+      z-index: 2;
+      display: grid;
+      align-content: center;
+      gap: 3px;
+      min-height: 96px;
+      padding: 10px 12px;
+      background: var(--surface);
+      border-right: 1px solid var(--line-strong);
+    }
+
+    .weekly-day-cell {
+      min-height: 96px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+      padding: 8px 4px;
+      border-left: 1px solid rgba(220, 227, 234, 0.64);
+    }
+
+    .weekly-day-cell.week-start {
+      border-left-color: var(--line-strong);
+      border-left-width: 2px;
+    }
+
+    .weekly-day-cell.weekend {
+      background: #f4f6f8;
+    }
+
+    .weekly-bar {
+      width: 18px;
+      height: 54px;
+      display: flex;
+      flex-direction: column-reverse;
+      overflow: hidden;
+      border: 1px solid #cfd8e1;
+      border-radius: 5px;
+      background: #edf1f5;
+    }
+
+    .weekly-bar-open { background: var(--green); }
+    .weekly-bar-busy { background: var(--red); }
+    .weekly-bar-unknown { background: #c9d2db; height: 100%; }
+
+    .weekly-weekend-spacer {
+      width: 18px;
+      height: 54px;
+      border-radius: 5px;
+    }
+
+    .weekly-date-label {
+      min-height: 26px;
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.12;
+      text-align: center;
+    }
+
+    .weekly-date-label strong {
+      display: block;
+      color: #465567;
+      font-size: 10px;
+      font-weight: 850;
+    }
+
     .event-controls {
       display: grid;
       grid-template-columns: 180px minmax(160px, 1fr);
@@ -559,8 +699,8 @@
       <div class="header-actions">
         <div class="refresh-panel">
           <div class="refresh-row">
-            <button class="refresh-button" id="refreshButton" type="button">Refresh now</button>
-            <button class="refresh-button" id="openRefreshConsoleButton" type="button">Open refresh console</button>
+            <button class="refresh-button" id="refreshButton" type="button">Refresh selected</button>
+            <button class="refresh-button" id="openRefreshConsoleButton" type="button" title="Open the calendar refresh page with the current dashboard scope">Open token refresh</button>
             <div class="snapshot-pill" id="lastRefreshLabel">Last refresh pending</div>
           </div>
           <div class="cache-note" id="cacheStatusLabel">3-week staffing snapshot: May 6 - May 26, 2026</div>
@@ -572,14 +712,9 @@
   <main>
     <section class="control-bar" aria-label="Staffing filters">
       <div class="control">
-        <label for="teamFilter">Team</label>
+        <label for="teamFilter">SC Manager</label>
         <select id="teamFilter">
-          <option value="all">All teams</option>
-          <option value="Killeen">Team Killeen</option>
-          <option value="Sunshine">Team Sunshine</option>
-          <option value="Anderson">Team Anderson</option>
-          <option value="Yazbeck">Team Yazbeck</option>
-          <option value="Gorajek">Team Gorajek</option>
+          <option value="all">All SC managers</option>
         </select>
       </div>
       <div class="control">
@@ -590,8 +725,6 @@
         <label for="legacyOrgFilter">Legacy Org</label>
         <select id="legacyOrgFilter">
           <option value="all">All legacy orgs</option>
-          <option value="Direct" selected>Direct</option>
-          <option value="AMO">AMO</option>
         </select>
       </div>
       <div class="control">
@@ -723,7 +856,7 @@
               <tr>
                 <th>Rank</th>
                 <th>Consultant</th>
-                <th>Team</th>
+                <th>SC Manager</th>
                 <th>Local Time</th>
                 <th>Status</th>
                 <th>Overlap</th>
@@ -758,6 +891,20 @@
         </div>
         <div class="panel-body">
           <div class="load-list" id="loadList"></div>
+          <div class="weekly-section" aria-label="Working day availability chart">
+            <div class="weekly-section-header">
+              <div>
+                <h3>Working Day Availability</h3>
+                <div class="subtle" id="weeklyAvailabilitySubtitle"></div>
+              </div>
+            </div>
+            <div class="weekly-legend" aria-label="Availability legend">
+              <span><i class="weekly-swatch open"></i>Open</span>
+              <span><i class="weekly-swatch busy"></i>Booked</span>
+              <span><i class="weekly-swatch unknown"></i>Snapshot gap</span>
+            </div>
+            <div class="weekly-chart" id="weeklyAvailabilityChart"></div>
+          </div>
         </div>
       </aside>
 
@@ -789,7 +936,7 @@
               <tr>
                 <th>Time</th>
                 <th>Consultant</th>
-                <th>Team</th>
+                <th>SC Manager</th>
                 <th>Status</th>
                 <th>Severity</th>
                 <th>Subject</th>
@@ -808,47 +955,58 @@
 
   <script src="direct-connector-events.js"></script>
   <script>
-    const roster = [
-      { name: "Katherine Albrecht", email: "katherine.albrecht@oracle.com", team: "Killeen", legacyOrg: "Direct", location: "TN", timeZone: "America/Chicago" },
-      { name: "Ryan Travis", email: "ryan.travis@oracle.com", team: "Killeen", legacyOrg: "Direct", location: "AL", timeZone: "America/Chicago" },
-      { name: "Abbey Vahhaji", email: "abbey.vahhaji@oracle.com", team: "Killeen", legacyOrg: "Direct", location: "IL", timeZone: "America/Chicago" },
-      { name: "Courtney Ricken", email: "courtney.ricken@oracle.com", team: "Killeen", legacyOrg: "Direct", location: "SC", timeZone: "America/New_York" },
-      { name: "Dave Carey", email: "dave.c.carey@oracle.com", team: "Killeen", legacyOrg: "Direct", location: "VA", timeZone: "America/New_York" },
-      { name: "Rob Kee", email: "rob.kee@oracle.com", team: "Killeen", legacyOrg: "AMO", location: "TX", timeZone: "America/Chicago" },
-      { name: "Austin Schaub", email: "austin.schaub@oracle.com", team: "Killeen", legacyOrg: "AMO", location: "IL", timeZone: "America/Chicago" },
-      { name: "Tray Absher", email: "tray.absher@oracle.com", team: "Killeen", legacyOrg: "AMO", location: "TX", timeZone: "America/Chicago" },
-      { name: "Jared Schuster", email: "jared.schuster@oracle.com", team: "Sunshine", legacyOrg: "AMO", location: "TX", timeZone: "America/Chicago" },
-      { name: "Olivia Manning", email: "olivia.manning@oracle.com", team: "Sunshine", legacyOrg: "Direct", location: "MA", timeZone: "America/New_York" },
-      { name: "Madison O'Connor", email: "madison.oconnor@oracle.com", team: "Sunshine", legacyOrg: "AMO", location: "NY", timeZone: "America/New_York" },
-      { name: "Ron Traum", email: "ron.traum@oracle.com", team: "Sunshine", legacyOrg: "AMO", location: "NY", timeZone: "America/New_York" },
-      { name: "Ben Gibson", email: "ben.gibson@oracle.com", team: "Sunshine", legacyOrg: "Direct", location: "MA", timeZone: "America/New_York" },
-      { name: "Corey Tenanes", email: "corey.tenanes@oracle.com", team: "Sunshine", legacyOrg: "Direct", location: "CT", timeZone: "America/New_York" },
-      { name: "Cesar Douchet", email: "cesar.douchet@oracle.com", team: "Sunshine", legacyOrg: "AMO", location: "TX", timeZone: "America/Chicago" },
-      { name: "Rafael Da Silva", email: "rafael.dasilva@oracle.com", team: "Anderson", legacyOrg: "AMO", location: "FL", timeZone: "America/New_York" },
-      { name: "Erik Stoltzner", email: "erik.stoltzner@oracle.com", team: "Anderson", legacyOrg: "AMO", location: "TX", timeZone: "America/Chicago" },
-      { name: "Brian Ageeb", email: "brian.ageeb@oracle.com", team: "Anderson", legacyOrg: "Direct", location: "FL", timeZone: "America/New_York" },
-      { name: "Steph Azoulay", email: "steph.azoulay@oracle.com", team: "Anderson", legacyOrg: "Direct", location: "FL", timeZone: "America/New_York" },
-      { name: "Chris Hamilton", email: "chris.c.hamilton@oracle.com", team: "Anderson", legacyOrg: "AMO", location: "FL", timeZone: "America/New_York" },
-      { name: "Mark Newkirk", email: "mark.newkirk@oracle.com", team: "Anderson", legacyOrg: "Direct", location: "FL", timeZone: "America/New_York" },
-      { name: "Katie Carroll", email: "katie.carroll@oracle.com", team: "Anderson", legacyOrg: "Direct", location: "TX", timeZone: "America/Chicago" },
-      { name: "Stanley Getz", email: "stanley.getz@oracle.com", team: "Anderson", legacyOrg: "Direct", location: "FL", timeZone: "America/New_York" },
-      { name: "Ben Brown", email: "ben.r.brown@oracle.com", team: "Yazbeck", legacyOrg: "Direct", location: "MA", timeZone: "America/New_York" },
-      { name: "Eric Carmell", email: "eric.carmell@oracle.com", team: "Yazbeck", legacyOrg: "Direct", location: "MA", timeZone: "America/New_York" },
-      { name: "Tiffany Dimitrov", email: "tiffany.dimitrov@oracle.com", team: "Yazbeck", legacyOrg: "Direct", location: "MA", timeZone: "America/New_York" },
-      { name: "Charles Zafonte", email: "charles.zafonte@oracle.com", team: "Yazbeck", legacyOrg: "Direct", location: "MA", timeZone: "America/New_York" },
-      { name: "Tommy Fitzgerald", email: "tommy.fitzgerald@oracle.com", team: "Yazbeck", legacyOrg: "AMO", location: "MA", timeZone: "America/New_York" },
-      { name: "Mark Wilson", email: "mark.p.wilson@oracle.com", team: "Yazbeck", legacyOrg: "AMO", location: "MA", timeZone: "America/New_York" },
-      { name: "Max Sicard", email: "max.sicard@oracle.com", team: "Yazbeck", legacyOrg: "AMO", location: "MA", timeZone: "America/New_York" },
-      { name: "Brett White", email: "brett.a.white@oracle.com", team: "Yazbeck", legacyOrg: "AMO", location: "TX", timeZone: "America/Chicago" },
-      { name: "Taylor Karg", email: "taylor.karg@oracle.com", team: "Gorajek", legacyOrg: "Direct", location: "OH", timeZone: "America/New_York" },
-      { name: "Youssef Maghous", email: "youssef.maghous@oracle.com", team: "Gorajek", legacyOrg: "Direct", location: "ON", timeZone: "America/New_York" },
-      { name: "Andrew Kravet", email: "andrew.kravet@oracle.com", team: "Gorajek", legacyOrg: "AMO", location: "NC", timeZone: "America/New_York" },
-      { name: "Dan Bausman", email: "dan.bausman@oracle.com", team: "Gorajek", legacyOrg: "AMO", location: "MN", timeZone: "America/Chicago" },
-      { name: "Quinn Dagley", email: "quinn.dagley@oracle.com", team: "Gorajek", legacyOrg: "AMO", location: "MI", timeZone: "America/New_York" },
-      { name: "Gustus Pederson", email: "gustus.pederson@oracle.com", team: "Gorajek", legacyOrg: "AMO", location: "MN", timeZone: "America/Chicago" },
-      { name: "James Herman", email: "james.herman@oracle.com", team: "Gorajek", legacyOrg: "Direct", location: "MI", timeZone: "America/New_York" },
-      { name: "Cameron Jones", email: "cameron.c.jones@oracle.com", team: "Gorajek", legacyOrg: "Direct", location: "NC", timeZone: "America/New_York" }
-    ];
+    const ROSTER_CONFIG_STORAGE_KEY = "sc-staffing-dashboard-netsuite-roster-v1";
+
+    function readRosterConfiguration() {
+      try {
+        const payload = window.localStorage?.getItem(ROSTER_CONFIG_STORAGE_KEY);
+        const parsed = payload ? JSON.parse(payload) : null;
+        return parsed && Array.isArray(parsed.people) ? parsed.people : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function normalizeInitialRosterPerson(person = {}, source = "") {
+      const email = normalizeEmail(person.email);
+      if (!email) return null;
+      const state = normalizeRosterState(person.state || person.location || person.officeLocation || "");
+      return {
+        name: person.name || email,
+        email,
+        manager: person.manager || "",
+        team: person.team || person.manager || "",
+        industryFamily: person.industryFamily || "",
+        legacyOrg: person.legacyOrg || person.industryFamily || "",
+        location: person.location || state,
+        timeZone: person.timeZone || "",
+        source: person.source || source
+      };
+    }
+
+    function mergeRosterLists(lists) {
+      const byEmail = new Map();
+      lists.flat().forEach(person => {
+        const normalized = normalizeInitialRosterPerson(person, "Roster configuration");
+        if (!normalized) return;
+        const existing = byEmail.get(normalized.email) || {};
+        const merged = { ...existing, email: normalized.email };
+        Object.entries(normalized).forEach(([key, value]) => {
+          if (key === "email" || (value != null && value !== "")) merged[key] = value;
+        });
+        byEmail.set(normalized.email, merged);
+      });
+      return [...byEmail.values()].sort((a, b) => String(a.name || a.email).localeCompare(String(b.name || b.email)));
+    }
+
+    function getInitialRoster() {
+      return mergeRosterLists([
+        Array.isArray(window.SC_STAFFING_IMPORTED_ROSTER) ? window.SC_STAFFING_IMPORTED_ROSTER : [],
+        readRosterConfiguration()
+      ]);
+    }
+
+    const roster = getInitialRoster();
 
     const rosterByEmail = Object.fromEntries(roster.map(person => [person.email, person]));
 
@@ -7990,6 +8148,28 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
 
     const CACHE_KEY = "sc-staffing-dashboard-calendar-cache-direct-connector-202605062230";
     const LOCAL_GRAPH_CACHE_KEY = "sc-staffing-dashboard-local-graph-cache-v1";
+    const GRAPH_EXPLORER_TOKEN_VAULT_KEY = "sc-staffing-dashboard-graph-explorer-token-vault-v2";
+    const GRAPH_EXPLORER_LOCAL_KEY_KEY = "sc-staffing-dashboard-graph-explorer-local-key-v1";
+    const GRAPH_GET_SCHEDULE_URL = "https://graph.microsoft.com/v1.0/me/calendar/getSchedule";
+    const GRAPH_REFRESH_BATCH_SIZE = 20;
+    const GRAPH_TIME_ZONE_MAP = {
+      "UTC": "UTC",
+      "Etc/UTC": "UTC",
+      "America/New_York": "Eastern Standard Time",
+      "America/Chicago": "Central Standard Time",
+      "America/Denver": "Mountain Standard Time",
+      "America/Phoenix": "US Mountain Standard Time",
+      "America/Los_Angeles": "Pacific Standard Time",
+      "America/Halifax": "Atlantic Standard Time",
+      "America/Anchorage": "Alaskan Standard Time",
+      "Pacific/Honolulu": "Hawaiian Standard Time"
+    };
+    const GRAPH_AVAILABILITY_STATUS_MAP = {
+      "1": { status: "tentative", subject: "Free/busy: Tentative hold" },
+      "2": { status: "busy", subject: "Free/busy: Busy; subject unavailable" },
+      "3": { status: "oof", subject: "Free/busy: Out of office; subject unavailable" },
+      "4": { status: "workingElsewhere", subject: "Free/busy: Working elsewhere; subject unavailable" }
+    };
     const CACHE_TTL_MS = 5 * 60 * 1000;
     let rawEvents = [];
     let normalizedEvents = [];
@@ -8017,6 +8197,19 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       }[character]));
     }
 
+    function readJsonStorage(key) {
+      try {
+        const value = window.localStorage.getItem(key);
+        return value ? JSON.parse(value) : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function writeJsonStorage(key, value) {
+      window.localStorage.setItem(key, JSON.stringify(value));
+    }
+
     function addDaysIso(dateValue, days) {
       const [year, month, day] = dateValue.split("-").map(Number);
       const date = new Date(Date.UTC(year, month - 1, day + days));
@@ -8025,6 +8218,47 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         String(date.getUTCMonth() + 1).padStart(2, "0"),
         String(date.getUTCDate()).padStart(2, "0")
       ].join("-");
+    }
+
+    function getIsoDateInZone(date = new Date(), timeZone = document.getElementById("planningZone")?.value || "America/New_York") {
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+      }).formatToParts(date).reduce((acc, part) => {
+        if (part.type !== "literal") acc[part.type] = part.value;
+        return acc;
+      }, {});
+
+      return `${parts.year}-${parts.month}-${parts.day}`;
+    }
+
+    function isoDateToUtcMs(dateValue) {
+      const [year, month, day] = dateValue.split("-").map(Number);
+      return Date.UTC(year, month - 1, day);
+    }
+
+    function diffIsoDays(startDate, endDate) {
+      return Math.round((isoDateToUtcMs(endDate) - isoDateToUtcMs(startDate)) / 86400000);
+    }
+
+    function maxIsoDate(...dates) {
+      return dates.filter(Boolean).sort().pop();
+    }
+
+    function getActiveStaffingWindowStart() {
+      const today = getIsoDateInZone();
+      const activeStart = maxIsoDate(STAFFING_WINDOW_START, today);
+      return activeStart > STAFFING_WINDOW_END ? STAFFING_WINDOW_END : activeStart;
+    }
+
+    function getActiveStaffingWindowEndExclusive() {
+      return addDaysIso(STAFFING_WINDOW_END, 1);
+    }
+
+    function getActiveStaffingWindowDays() {
+      return Math.max(1, diffIsoDays(getActiveStaffingWindowStart(), getActiveStaffingWindowEndExclusive()));
     }
 
     function formatIsoDate(dateValue) {
@@ -8039,17 +8273,19 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     }
 
     function formatStaffingWindow() {
-      const start = formatIsoDate(STAFFING_WINDOW_START);
+      const activeStart = getActiveStaffingWindowStart();
+      const start = formatIsoDate(activeStart);
       const end = formatIsoDate(STAFFING_WINDOW_END);
-      return `${start.replace(`, ${STAFFING_WINDOW_START.slice(0, 4)}`, "")} - ${end}`;
+      return `${start.replace(`, ${activeStart.slice(0, 4)}`, "")} - ${end}`;
     }
 
     function configureDateWindow() {
       const input = document.getElementById("meetingDate");
       if (!input) return;
-      input.min = STAFFING_WINDOW_START;
+      const activeStart = getActiveStaffingWindowStart();
+      input.min = activeStart;
       input.max = STAFFING_WINDOW_END;
-      if (!input.value || input.value < STAFFING_WINDOW_START) input.value = STAFFING_WINDOW_START;
+      if (!input.value || input.value < activeStart) input.value = activeStart;
       if (input.value > STAFFING_WINDOW_END) input.value = STAFFING_WINDOW_END;
     }
 
@@ -8200,6 +8436,289 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
           ? cache.loadedEmails.map(email => normalizeEmail(email)).filter(Boolean)
           : []
       );
+    }
+
+    function decodeBase64Url(value) {
+      const base64 = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
+      const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+      const binary = atob(padded);
+      const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
+      return new TextDecoder().decode(bytes);
+    }
+
+    function bytesToBase64(bytes) {
+      let binary = "";
+      for (let index = 0; index < bytes.length; index += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+      }
+      return btoa(binary);
+    }
+
+    function base64ToBytes(value) {
+      const binary = atob(String(value || ""));
+      return Uint8Array.from(binary, char => char.charCodeAt(0));
+    }
+
+    function ensureGraphCrypto() {
+      if (!window.crypto?.subtle) {
+        throw new Error("Encrypted token storage requires Web Crypto. Use Chrome or Edge.");
+      }
+    }
+
+    function getGraphExplorerTokenExpiry(token) {
+      try {
+        const parts = String(token || "").split(".");
+        if (parts.length < 2) return null;
+        const payload = JSON.parse(decodeBase64Url(parts[1]));
+        const exp = Number(payload.exp || 0);
+        return exp ? exp * 1000 : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function getOrCreateGraphExplorerLocalKey() {
+      let key = window.localStorage.getItem(GRAPH_EXPLORER_LOCAL_KEY_KEY);
+      if (!key) {
+        const bytes = new Uint8Array(32);
+        window.crypto.getRandomValues(bytes);
+        key = bytesToBase64(bytes);
+        window.localStorage.setItem(GRAPH_EXPLORER_LOCAL_KEY_KEY, key);
+      }
+      return key;
+    }
+
+    async function importGraphExplorerLocalKey() {
+      ensureGraphCrypto();
+      return window.crypto.subtle.importKey(
+        "raw",
+        base64ToBytes(getOrCreateGraphExplorerLocalKey()),
+        { name: "AES-GCM" },
+        false,
+        ["decrypt"]
+      );
+    }
+
+    async function decryptGraphExplorerTokenRecord(record) {
+      ensureGraphCrypto();
+      if (!record || record.kind !== "sc-calendar-graph-explorer-token-vault" || !record.ciphertext || !record.iv) {
+        throw new Error("No saved Graph Explorer token was found. Click Open token refresh, save a token, then try Refresh selected again.");
+      }
+      if (record.keyMode === "passphrase") {
+        throw new Error("This saved token file requires a passphrase. Load it on the token refresh page first.");
+      }
+
+      const plaintext = await window.crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: base64ToBytes(record.iv) },
+        await importGraphExplorerLocalKey(),
+        base64ToBytes(record.ciphertext)
+      );
+      const payload = JSON.parse(new TextDecoder().decode(plaintext));
+      const expiresAt = Number(payload.expiresAt || getGraphExplorerTokenExpiry(payload.token) || 0);
+      if (expiresAt && expiresAt <= Date.now()) {
+        window.localStorage.removeItem(GRAPH_EXPLORER_TOKEN_VAULT_KEY);
+        throw new Error("The saved Graph Explorer token expired. Open token refresh and save a fresh token.");
+      }
+      return {
+        token: String(payload.token || ""),
+        expiresAt: expiresAt || null
+      };
+    }
+
+    async function getStoredGraphExplorerToken() {
+      const record = readJsonStorage(GRAPH_EXPLORER_TOKEN_VAULT_KEY);
+      const payload = await decryptGraphExplorerTokenRecord(record);
+      if (!payload.token) throw new Error("The saved Graph Explorer token is empty. Open token refresh and save a fresh token.");
+      return payload.token;
+    }
+
+    function graphExplorerTimeZone(value) {
+      const text = String(value || "UTC").trim() || "UTC";
+      return GRAPH_TIME_ZONE_MAP[text] || text;
+    }
+
+    function chunkArray(values, size) {
+      const chunks = [];
+      for (let index = 0; index < values.length; index += size) {
+        chunks.push(values.slice(index, index + size));
+      }
+      return chunks.length ? chunks : [[]];
+    }
+
+    function getDashboardGraphRequestContext() {
+      const people = selectedRoster();
+      const emails = [...new Set(people.map(person => normalizeEmail(person.email)).filter(Boolean))];
+      if (!emails.length) throw new Error("No consultants match the current dashboard filters.");
+
+      return {
+        emails,
+        roster: people.filter(person => emails.includes(normalizeEmail(person.email))),
+        start: getActiveStaffingWindowStart(),
+        end: getActiveStaffingWindowEndExclusive(),
+        intervalMinutes: 30,
+        timeZone: document.getElementById("planningZone")?.value || "America/New_York"
+      };
+    }
+
+    async function fetchDashboardGraphSchedule(token, context, emails) {
+      const timeZone = graphExplorerTimeZone(context.timeZone);
+      const response = await fetch(GRAPH_GET_SCHEDULE_URL, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "Prefer": `outlook.timezone="${timeZone}"`
+        },
+        body: JSON.stringify({
+          schedules: emails,
+          startTime: {
+            dateTime: `${context.start}T00:00:00`,
+            timeZone
+          },
+          endTime: {
+            dateTime: `${context.end}T00:00:00`,
+            timeZone
+          },
+          availabilityViewInterval: Number(context.intervalMinutes || 30)
+        })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error?.message || payload.message || `Microsoft Graph returned ${response.status}`);
+      }
+      return payload;
+    }
+
+    function normalizeDashboardGraphSchedules(payload, context, emails, rosterByEmail) {
+      const expected = new Set(emails.map(normalizeEmail));
+      const returned = new Set();
+      const availability = [];
+      const errors = [];
+      const intervalMinutes = Number(context.intervalMinutes || 30);
+
+      (payload.value || []).forEach(schedule => {
+        const email = normalizeEmail(schedule.scheduleId || schedule.schedule_id);
+        if (!expected.has(email)) return;
+        returned.add(email);
+
+        if (schedule.error) {
+          errors.push({
+            email,
+            responseCode: schedule.error.responseCode || schedule.error.code || null,
+            message: schedule.error.message || "Microsoft Graph returned an error for this schedule.",
+            start: `${context.start}T00:00:00.000Z`,
+            end: `${context.end}T00:00:00.000Z`
+          });
+        }
+
+        const view = schedule.availabilityView || schedule.availability_view || "";
+        if (view) {
+          availability.push({
+            email,
+            start: `${context.start}T00:00:00.000Z`,
+            intervalMinutes,
+            view: String(view)
+          });
+        }
+      });
+
+      [...expected].filter(email => !returned.has(email)).forEach(email => {
+        errors.push({
+          email,
+          message: "Microsoft Graph did not return this schedule in the getSchedule response.",
+          start: `${context.start}T00:00:00.000Z`,
+          end: `${context.end}T00:00:00.000Z`
+        });
+      });
+
+      return {
+        loadedEmails: [...expected].sort(),
+        availability,
+        errors,
+        roster: [...expected].map(email => rosterByEmail[email]).filter(Boolean)
+      };
+    }
+
+    function expandDashboardAvailability(snapshot) {
+      const view = String(snapshot.view || "");
+      const intervalMs = Number(snapshot.intervalMinutes || 30) * 60 * 1000;
+      const startMs = Date.parse(snapshot.start);
+      const expanded = [];
+      if (!view || !Number.isFinite(startMs) || !intervalMs) return expanded;
+
+      let blockCode = null;
+      let blockStart = 0;
+      const flush = endIndex => {
+        if (!blockCode || !GRAPH_AVAILABILITY_STATUS_MAP[blockCode]) return;
+        expanded.push({
+          email: normalizeEmail(snapshot.email),
+          status: GRAPH_AVAILABILITY_STATUS_MAP[blockCode].status,
+          subject: GRAPH_AVAILABILITY_STATUS_MAP[blockCode].subject,
+          start: new Date(startMs + blockStart * intervalMs).toISOString(),
+          end: new Date(startMs + endIndex * intervalMs).toISOString()
+        });
+      };
+
+      for (let index = 0; index <= view.length; index += 1) {
+        const code = view[index] || "0";
+        if (code === blockCode) continue;
+        flush(index);
+        blockCode = GRAPH_AVAILABILITY_STATUS_MAP[code] ? code : null;
+        blockStart = index;
+      }
+
+      return expanded;
+    }
+
+    function mergeDashboardGraphCache(next) {
+      const existing = readLocalGraphCache();
+      const refreshedEmails = new Set((next.loadedEmails || []).map(normalizeEmail));
+      const keepForOtherEmail = item => !refreshedEmails.has(normalizeEmail(item.email));
+      const existingLoaded = existing && Array.isArray(existing.loadedEmails) ? existing.loadedEmails : [];
+      const existingRoster = existing && Array.isArray(existing.roster) ? existing.roster : [];
+      const rosterMap = new Map(existingRoster.map(person => [normalizeEmail(person.email), person]));
+
+      (next.roster || []).forEach(person => {
+        const email = normalizeEmail(person.email);
+        if (email) rosterMap.set(email, { ...person, email });
+      });
+
+      return {
+        version: 1,
+        source: "dashboard-graph-explorer-refresh",
+        refreshedAt: next.refreshedAt,
+        start: next.start,
+        end: next.end,
+        intervalMinutes: next.intervalMinutes,
+        roster: [...rosterMap.values()].sort((a, b) => String(a.name || a.email).localeCompare(String(b.name || b.email))),
+        loadedEmails: [...new Set([...existingLoaded, ...(next.loadedEmails || [])].map(normalizeEmail).filter(Boolean))].sort(),
+        availability: [
+          ...(existing && Array.isArray(existing.availability) ? existing.availability.filter(keepForOtherEmail) : []),
+          ...(next.availability || [])
+        ],
+        directEvents: [
+          ...(existing && Array.isArray(existing.directEvents) ? existing.directEvents.filter(keepForOtherEmail) : []),
+          ...(next.directEvents || [])
+        ],
+        events: [
+          ...(existing && Array.isArray(existing.events) ? existing.events.filter(keepForOtherEmail) : []),
+          ...(next.events || [])
+        ],
+        errors: [
+          ...(existing && Array.isArray(existing.errors) ? existing.errors : []),
+          ...(next.errors || [])
+        ].slice(-50)
+      };
+    }
+
+    function writeDashboardGraphCaches(cache) {
+      writeJsonStorage(LOCAL_GRAPH_CACHE_KEY, cache);
+      writeJsonStorage(CACHE_KEY, {
+        events: cache.events,
+        refreshedAt: cache.refreshedAt,
+        cachedAt: Date.now(),
+        source: "dashboard-graph-explorer-refresh"
+      });
     }
 
     function getScopedRecordCounts(email, selectedEmails = getLaunchSelectedEmailSet()) {
@@ -8654,6 +9173,14 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       return `<span class="pill location">${person.location || "--"}</span>`;
     }
 
+    function getManagerFilterValue(person) {
+      return String(person?.manager || person?.team || "").trim();
+    }
+
+    function getManagerLabel(person) {
+      return getManagerFilterValue(person) || "Unassigned";
+    }
+
     function hasLoadedCalendar(person) {
       const email = normalizeEmail(person?.email);
       return Boolean(email)
@@ -8777,13 +9304,13 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     }
 
     function selectedRoster() {
-      const team = document.getElementById("teamFilter").value;
+      const manager = document.getElementById("teamFilter").value;
       const person = document.getElementById("personFilter").value;
       const legacyOrg = document.getElementById("legacyOrgFilter").value;
       const selectedEmails = getLaunchSelectedEmailSet();
       return roster.filter(item => {
         if (selectedEmails.size && !selectedEmails.has(normalizeEmail(item.email))) return false;
-        if (team !== "all" && item.team !== team) return false;
+        if (manager !== "all" && getManagerFilterValue(item) !== manager) return false;
         if (legacyOrg !== "all" && item.legacyOrg !== legacyOrg) return false;
         if (person !== "all" && item.email !== person) return false;
         return true;
@@ -8805,12 +9332,12 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     function populatePersonFilter() {
       const select = document.getElementById("personFilter");
       const current = select.value || "all";
-      const team = document.getElementById("teamFilter").value;
+      const manager = document.getElementById("teamFilter").value;
       const legacyOrg = document.getElementById("legacyOrgFilter").value;
       const selectedEmails = getLaunchSelectedEmailSet();
       let people = roster.filter(person => {
         if (selectedEmails.size && !selectedEmails.has(normalizeEmail(person.email))) return false;
-        if (team !== "all" && person.team !== team) return false;
+        if (manager !== "all" && getManagerFilterValue(person) !== manager) return false;
         if (legacyOrg !== "all" && person.legacyOrg !== legacyOrg) return false;
         return true;
       });
@@ -8972,7 +9499,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         <div class="top-person">
           <div>
             <div class="person-line"><span class="person-name">${row.name}</span>${legacyOrgBadge(row)}${locationBadge(row)}</div>
-            <div class="subtle">${row.team} - ${getZoneLabel(row.timeZone)}${row.calendarLoaded ? "" : ` - ${missingCalendarLabel(row).toLowerCase()}`}</div>
+            <div class="subtle">${escapeHtml(getManagerLabel(row))} - ${getZoneLabel(row.timeZone)}${row.calendarLoaded ? "" : ` - ${missingCalendarLabel(row).toLowerCase()}`}</div>
           </div>
           <span class="pill ${row.pill}">${row.label}</span>
         </div>
@@ -9015,7 +9542,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
               <div class="person-line"><span class="person-name">${row.name}</span>${legacyOrgBadge(row)}${locationBadge(row)}</div>
               <div class="subtle">${row.email}</div>
             </td>
-            <td><span class="pill ${row.team.toLowerCase()}">${row.team}</span></td>
+            <td><span class="pill status">${escapeHtml(getManagerLabel(row))}</span></td>
             <td>
               <strong>${formatTimeRange(windowConfig.meetingStart, windowConfig.meetingEnd, row.timeZone)}</strong>
               <div class="subtle">${getZoneLabel(row.timeZone)}</div>
@@ -9086,9 +9613,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       });
     }
 
-    function getDayWindow() {
-      const date = document.getElementById("meetingDate").value;
-      const zone = document.getElementById("planningZone").value;
+    function getWorkdayWindow(date, zone) {
       const workdayStart = 8 * 60;
       const workdayEnd = 17 * 60;
       return {
@@ -9101,8 +9626,123 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       };
     }
 
+    function getDayWindow() {
+      const date = document.getElementById("meetingDate").value;
+      const zone = document.getElementById("planningZone").value;
+      return getWorkdayWindow(date, zone);
+    }
+
     function eventMinutesInDay(event, dayWindow) {
       return overlapMinutes(dayWindow.start, dayWindow.end, event.startDate, event.endDate);
+    }
+
+    function getStaffingDateKeys() {
+      const activeStart = getActiveStaffingWindowStart();
+      return Array.from({ length: getActiveStaffingWindowDays() }, (_, index) => addDaysIso(activeStart, index));
+    }
+
+    function isWeekendIso(dateValue) {
+      const [year, month, day] = dateValue.split("-").map(Number);
+      const dayOfWeek = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+      return dayOfWeek === 0 || dayOfWeek === 6;
+    }
+
+    function getWeeklyDateLabel(dateValue) {
+      const [year, month, day] = dateValue.split("-").map(Number);
+      const date = new Date(Date.UTC(year, month - 1, day));
+      return {
+        weekday: new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "UTC" }).format(date),
+        monthDay: new Intl.DateTimeFormat("en-US", { month: "numeric", day: "numeric", timeZone: "UTC" }).format(date)
+      };
+    }
+
+    function buildEventsByEmail(events) {
+      return events.reduce((map, event) => {
+        const email = normalizeEmail(event.email);
+        if (!email) return map;
+        if (!map.has(email)) map.set(email, []);
+        map.get(email).push(event);
+        return map;
+      }, new Map());
+    }
+
+    function renderWeeklyAvailabilityCell(person, dateValue, eventsByEmail, zone) {
+      const label = getWeeklyDateLabel(dateValue);
+      const weekStartClass = label.weekday === "Mon" ? " week-start" : "";
+      const labelMarkup = `<div class="weekly-date-label">${label.weekday}<strong>${label.monthDay}</strong></div>`;
+
+      if (isWeekendIso(dateValue)) {
+        return `
+          <div class="weekly-day-cell weekend${weekStartClass}" title="${escapeHtml(`${label.weekday} ${label.monthDay}: weekend`)}">
+            <div class="weekly-weekend-spacer"></div>
+            ${labelMarkup}
+          </div>
+        `;
+      }
+
+      const calendarLoaded = hasLoadedCalendar(person);
+      if (!calendarLoaded) {
+        return `
+          <div class="weekly-day-cell${weekStartClass}" title="${escapeHtml(`${person.name} ${label.weekday} ${label.monthDay}: ${missingCalendarLabel(person)}`)}">
+            <div class="weekly-bar"><div class="weekly-bar-unknown"></div></div>
+            ${labelMarkup}
+          </div>
+        `;
+      }
+
+      const dayWindow = getWorkdayWindow(dateValue, zone);
+      const personEvents = eventsByEmail.get(normalizeEmail(person.email)) || [];
+      const busyMinutes = Math.min(
+        dayWindow.workdayMinutes,
+        personEvents.reduce((sum, event) => sum + eventMinutesInDay(event, dayWindow), 0)
+      );
+      const openMinutes = Math.max(0, dayWindow.workdayMinutes - busyMinutes);
+      const busyHeight = Math.max(0, Math.min(100, Math.round((busyMinutes / dayWindow.workdayMinutes) * 100)));
+      const openHeight = Math.max(0, 100 - busyHeight);
+      const title = `${person.name} ${label.weekday} ${label.monthDay}: ${(openMinutes / 60).toFixed(1)}h open, ${(busyMinutes / 60).toFixed(1)}h booked`;
+
+      return `
+        <div class="weekly-day-cell${weekStartClass}" title="${escapeHtml(title)}">
+          <div class="weekly-bar" aria-label="${escapeHtml(title)}">
+            <div class="weekly-bar-open" style="height:${openHeight}%"></div>
+            <div class="weekly-bar-busy" style="height:${busyHeight}%"></div>
+          </div>
+          ${labelMarkup}
+        </div>
+      `;
+    }
+
+    function renderWeeklyAvailability() {
+      const container = document.getElementById("weeklyAvailabilityChart");
+      const subtitle = document.getElementById("weeklyAvailabilitySubtitle");
+      if (!container || !subtitle) return;
+
+      const dateKeys = getStaffingDateKeys();
+      const zone = document.getElementById("planningZone").value;
+      const people = selectedRoster()
+        .slice()
+        .sort((a, b) => getManagerLabel(a).localeCompare(getManagerLabel(b)) || a.name.localeCompare(b.name));
+      const eventsByEmail = buildEventsByEmail(normalizedEvents);
+
+      subtitle.textContent = `${formatStaffingWindow()} - weekdays 8:00 AM-5:00 PM ${getZoneLabel(zone)} - ${people.length} consultant${people.length === 1 ? "" : "s"}`;
+
+      if (!people.length) {
+        container.innerHTML = `<div class="footnote">No consultants match the current filters.</div>`;
+        return;
+      }
+
+      container.style.setProperty("--day-count", String(dateKeys.length));
+      container.innerHTML = `
+        <div class="weekly-grid" style="--day-count:${dateKeys.length}; min-width: max(100%, ${260 + dateKeys.length * 46}px);">
+          ${people.map(person => `
+            <div class="weekly-person-cell">
+              <div class="person-line"><span class="person-name">${escapeHtml(person.name)}</span>${legacyOrgBadge(person)}${locationBadge(person)}</div>
+              <div class="subtle">${escapeHtml(getManagerLabel(person))} - ${getZoneLabel(person.timeZone)}</div>
+            </div>
+            ${dateKeys.map(dateValue => renderWeeklyAvailabilityCell(person, dateValue, eventsByEmail, zone)).join("")}
+          `).join("")}
+        </div>
+      `;
     }
 
     function renderLoad() {
@@ -9132,7 +9772,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
             <div class="load-top">
               <div>
                 <div class="person-line"><span class="person-name">${item.name}</span>${legacyOrgBadge(item)}${locationBadge(item)}</div>
-                <div class="subtle">${item.team} - ${getZoneLabel(item.timeZone)}</div>
+                <div class="subtle">${escapeHtml(getManagerLabel(item))} - ${getZoneLabel(item.timeZone)}</div>
               </div>
               <strong>${item.calendarLoaded ? `${(item.open / 60).toFixed(1)}h open` : missingCalendarLabel(item)}</strong>
             </div>
@@ -9172,7 +9812,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
                   <div class="person-line"><span class="person-name">${event.person.name}</span>${legacyOrgBadge(event.person)}${locationBadge(event.person)}</div>
                   <div class="subtle">${event.person.email}</div>
                 </td>
-                <td><span class="pill ${event.person.team.toLowerCase()}">${event.person.team}</span></td>
+                <td><span class="pill status">${escapeHtml(getManagerLabel(event.person))}</span></td>
                 <td><span class="pill status">${event.status}</span></td>
                 <td><span class="pill ${meta.pill}">${meta.label}</span></td>
                 <td>${escapeHtml(event.subject)}</td>
@@ -9191,30 +9831,112 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       renderRecommendation(rows, windowConfig);
       renderAvailabilityTable(rows, windowConfig);
       renderAlternateSlots();
+      renderWeeklyAvailability();
       renderLoad();
       renderEvents();
       renderDebugConsole();
     }
 
-    function handleManualRefresh() {
+    function setDashboardRefreshStatus(title, detail) {
+      const label = document.getElementById("lastRefreshLabel");
+      const status = document.getElementById("cacheStatusLabel");
+      if (label && title) label.textContent = title;
+      if (status && detail) status.textContent = detail;
+    }
+
+    async function handleManualRefresh() {
       const button = document.getElementById("refreshButton");
-      const focusEmail = getSelectedConsultantEmail() || getCalendarFocusEmail({ includeSelected: false });
+      const originalText = button.textContent;
       button.disabled = true;
-      button.textContent = focusEmail ? "Refreshing consultant..." : "Refreshing...";
-      refreshCalendarData({ force: true, focusEmail });
-      renderAll();
-      button.textContent = focusEmail ? "Refresh consultant" : "Refresh now";
-      button.disabled = false;
+      button.textContent = "Refreshing Graph...";
+
+      try {
+        const token = await getStoredGraphExplorerToken();
+        const context = getDashboardGraphRequestContext();
+        const chunks = chunkArray(context.emails, GRAPH_REFRESH_BATCH_SIZE);
+        const rosterByEmail = Object.fromEntries(context.roster.map(person => [normalizeEmail(person.email), person]));
+        const combined = {
+          refreshedAt: new Date().toISOString(),
+          start: context.start,
+          end: context.end,
+          intervalMinutes: context.intervalMinutes,
+          loadedEmails: [],
+          availability: [],
+          directEvents: [],
+          events: [],
+          errors: [],
+          roster: []
+        };
+
+        setDashboardRefreshStatus(
+          "Refreshing selected SCs...",
+          `${context.emails.length} consultant${context.emails.length === 1 ? "" : "s"}; ${chunks.length} Graph request${chunks.length === 1 ? "" : "s"}`
+        );
+        logCalendarActivity("dashboard-graph-refresh-start", {
+          consultants: context.emails.length,
+          chunks: chunks.length,
+          start: context.start,
+          end: context.end,
+          timeZone: context.timeZone
+        });
+
+        for (let index = 0; index < chunks.length; index += 1) {
+          const emails = chunks[index];
+          const payload = await fetchDashboardGraphSchedule(token, context, emails);
+          const normalized = normalizeDashboardGraphSchedules(payload, context, emails, rosterByEmail);
+          combined.loadedEmails.push(...normalized.loadedEmails);
+          combined.availability.push(...normalized.availability);
+          combined.errors.push(...normalized.errors);
+          combined.roster.push(...normalized.roster);
+          setDashboardRefreshStatus(
+            `Graph refresh ${index + 1}/${chunks.length}`,
+            `${combined.availability.length} availability snapshot${combined.availability.length === 1 ? "" : "s"} loaded`
+          );
+        }
+
+        combined.loadedEmails = [...new Set(combined.loadedEmails.map(normalizeEmail).filter(Boolean))].sort();
+        combined.roster = [...new Map(combined.roster.map(person => [normalizeEmail(person.email), person])).values()];
+        combined.events = combined.availability.flatMap(expandDashboardAvailability);
+
+        const merged = mergeDashboardGraphCache(combined);
+        writeDashboardGraphCaches(merged);
+        refreshCalendarData({ force: true });
+        refreshSource = "Graph Explorer token";
+        lastRefreshAt = new Date(combined.refreshedAt);
+        renderAll();
+        setDashboardRefreshStatus(
+          "Graph refresh complete",
+          `${combined.loadedEmails.length} consultant${combined.loadedEmails.length === 1 ? "" : "s"} refreshed; ${combined.availability.length} availability snapshot${combined.availability.length === 1 ? "" : "s"}`
+        );
+        logCalendarActivity("dashboard-graph-refresh-complete", {
+          loadedEmails: combined.loadedEmails,
+          availabilitySnapshots: combined.availability.length,
+          expandedEvents: combined.events.length,
+          errors: combined.errors
+        });
+      } catch (error) {
+        setDashboardRefreshStatus("Graph refresh failed", error.message);
+        logCalendarActivity("dashboard-graph-refresh-failed", { message: error.message });
+        renderDebugConsole();
+      } finally {
+        button.textContent = originalText || "Refresh selected";
+        button.disabled = false;
+      }
     }
 
     function buildRefreshConsoleUrl() {
       const url = new URL("calendar-refresh.html", window.location.href);
       const selectedEmail = getSelectedConsultantEmail();
       const launchEmails = getLaunchSelectedEmails();
-      const emails = selectedEmail ? [selectedEmail] : launchEmails;
+      const filteredEmails = selectedRoster().map(person => normalizeEmail(person.email)).filter(Boolean);
+      const planningZone = document.getElementById("planningZone")?.value || "";
+      const emails = selectedEmail ? [selectedEmail] : launchEmails.length ? launchEmails : filteredEmails;
       if (emails.length) url.searchParams.set("emails", emails.join(","));
-      url.searchParams.set("start", STAFFING_WINDOW_START);
-      url.searchParams.set("days", String(STAFFING_WINDOW_DAYS));
+      url.searchParams.set("start", getActiveStaffingWindowStart());
+      url.searchParams.set("days", String(getActiveStaffingWindowDays()));
+      url.searchParams.set("interval", "30");
+      if (planningZone) url.searchParams.set("zone", planningZone);
+      url.searchParams.set("mode", "graph-explorer-token");
       url.searchParams.set("dashboard", window.location.href.split("#")[0]);
       return url.toString();
     }
@@ -9268,13 +9990,30 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       return true;
     }
 
-    function getManagerTeamName(manager) {
+    function formatManagerFilterLabel(manager) {
       const text = String(manager || "").trim();
-      if (!text) return "";
-      if (text.includes(",")) return text.split(",")[0].trim();
+      return text || "Unassigned";
+    }
 
-      const parts = text.split(/\s+/).filter(Boolean);
-      return parts.length > 1 ? parts[parts.length - 1] : text;
+    function populateRosterFilterOptions() {
+      const currentManager = document.getElementById("teamFilter")?.value || "all";
+      const currentLegacyOrg = document.getElementById("legacyOrgFilter")?.value || "all";
+      const managers = [...new Set(roster.map(getManagerFilterValue).filter(Boolean))].sort();
+      const legacyOrgs = [...new Set(roster.map(person => person.legacyOrg).filter(Boolean))].sort();
+
+      const managerSelect = document.getElementById("teamFilter");
+      const legacySelect = document.getElementById("legacyOrgFilter");
+      if (managerSelect) {
+        managerSelect.innerHTML = '<option value="all">All SC managers</option>';
+        managers.forEach(manager => ensureFilterOption("teamFilter", manager, formatManagerFilterLabel(manager)));
+        managerSelect.value = managers.includes(currentManager) ? currentManager : "all";
+      }
+
+      if (legacySelect) {
+        legacySelect.innerHTML = '<option value="all">All legacy orgs</option>';
+        legacyOrgs.forEach(org => ensureFilterOption("legacyOrgFilter", org, org));
+        legacySelect.value = legacyOrgs.includes(currentLegacyOrg) ? currentLegacyOrg : "all";
+      }
     }
 
     function normalizeRosterState(location) {
@@ -9294,8 +10033,8 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         name: person.name || email,
         email,
         manager,
-        team: getManagerTeamName(manager) || person.team || "Requested",
-        legacyOrg: person.legacyOrg || "Requested",
+        team: person.team || manager || "Requested",
+        legacyOrg: person.legacyOrg || person.industryFamily || "Requested",
         location,
         timeZone: person.timeZone || inferTimeZoneFromAvailabilityStart(email) || "America/New_York",
         source: person.source || "Launch parameters"
@@ -9323,14 +10062,14 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const existing = rosterByEmail[normalized.email];
       if (existing) {
         const merged = mergeRuntimeRosterPerson(existing, normalized);
-        ensureFilterOption("teamFilter", merged.team, merged.team.startsWith("Team ") ? merged.team : `Team ${merged.team}`);
+        ensureFilterOption("teamFilter", getManagerFilterValue(merged), formatManagerFilterLabel(getManagerFilterValue(merged)));
         ensureFilterOption("legacyOrgFilter", merged.legacyOrg, merged.legacyOrg);
         return merged;
       }
 
       roster.push(normalized);
       rosterByEmail[normalized.email] = normalized;
-      ensureFilterOption("teamFilter", normalized.team, normalized.team.startsWith("Team ") ? normalized.team : `Team ${normalized.team}`);
+      ensureFilterOption("teamFilter", getManagerFilterValue(normalized), formatManagerFilterLabel(getManagerFilterValue(normalized)));
       ensureFilterOption("legacyOrgFilter", normalized.legacyOrg, normalized.legacyOrg);
       return normalized;
     }
@@ -9423,7 +10162,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
           name: inferRosterNameFromEmail(email),
           email,
           team: "Calendar Data",
-          legacyOrg: "Direct",
+          legacyOrg: "Unknown",
           timeZone: inferTimeZoneFromAvailabilityStart(email),
           source: "Calendar data"
         });
@@ -9475,8 +10214,8 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       return selectedEmails.map(email => rosterByEmail[email] || addRuntimeRosterPerson({
         name: inferRosterNameFromEmail(email),
         email,
-        team: "Skills Matrix",
-        legacyOrg: "Selected",
+        team: "Selected consultants",
+        legacyOrg: "Unknown",
         timeZone: inferTimeZoneFromAvailabilityStart(email),
         source: "Skills matrix selection"
       })).filter(Boolean);
@@ -9495,7 +10234,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
           name: options.name || getFocusedConsultantName(focusEmail),
           email: focusEmail,
           team: options.team || "Calendar Data",
-          legacyOrg: options.legacyOrg || "Direct",
+          legacyOrg: options.legacyOrg || "Unknown",
           timeZone: options.timeZone || inferTimeZoneFromAvailabilityStart(focusEmail),
           source: options.source || "Focused consultant"
         });
@@ -9503,7 +10242,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
 
       if (!person) return null;
 
-      ensureSelectValue("teamFilter", person.team, person.team.startsWith("Team ") ? person.team : `Team ${person.team}`);
+      ensureSelectValue("teamFilter", getManagerFilterValue(person), formatManagerFilterLabel(getManagerFilterValue(person)));
       ensureSelectValue("legacyOrgFilter", person.legacyOrg, person.legacyOrg);
       populatePersonFilter();
       ensureSelectValue("personFilter", person.email, person.name);
@@ -9550,7 +10289,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
           name: consultantName || consultant,
           email: consultant,
           manager,
-          team: params.get("team") || getManagerTeamName(manager) || "Requested",
+          team: params.get("team") || manager || "Requested",
           legacyOrg: params.get("legacyOrg") || "Requested",
           location: params.get("state") || params.get("location") || "",
           timeZone: params.get("zone") || "",
@@ -9577,26 +10316,29 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         setSelectValue("personFilter", "all");
         setPlanningZoneForPerson(selectedPeople[0]);
       } else if (launchedPerson) {
-        ensureSelectValue("teamFilter", launchedPerson.team, launchedPerson.team.startsWith("Team ") ? launchedPerson.team : `Team ${launchedPerson.team}`);
+        ensureSelectValue("teamFilter", getManagerFilterValue(launchedPerson), formatManagerFilterLabel(getManagerFilterValue(launchedPerson)));
         ensureSelectValue("legacyOrgFilter", launchedPerson.legacyOrg, launchedPerson.legacyOrg);
         populatePersonFilter();
         document.getElementById("personFilter").value = launchedPerson.email;
         setPlanningZoneForPerson(launchedPerson);
       } else {
-        ensureSelectValue("teamFilter", params.get("team"), params.get("team"));
+        ensureSelectValue("teamFilter", params.get("manager") || params.get("team"), params.get("manager") || params.get("team"));
         ensureSelectValue("legacyOrgFilter", params.get("legacyOrg"), params.get("legacyOrg"));
         populatePersonFilter();
         setSelectValue("personFilter", params.get("consultant") || params.get("person") || params.get("email"));
         syncPlanningZoneToSelectedConsultant();
       }
 
+      setSelectValue("planningZone", params.get("zone"));
+
       const date = params.get("date");
       if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
         document.getElementById("meetingDate").value = date;
         configureDateWindow();
+      } else {
+        configureDateWindow();
       }
 
-      setSelectValue("planningZone", params.get("zone"));
       setSelectValue("meetingDuration", params.get("duration"));
       setSelectValue("bufferMinutes", params.get("buffer"));
       setSelectValue("meetingType", params.get("meetingType"));
@@ -9650,6 +10392,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     addCalendarDataRosterEntries();
     populateTimeOptions();
     configureDateWindow();
+    populateRosterFilterOptions();
     populatePersonFilter();
     applyLaunchParams();
     ensureFocusedConsultantInFilter();

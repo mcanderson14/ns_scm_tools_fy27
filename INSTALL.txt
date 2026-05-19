@@ -1,0 +1,128 @@
+SC Calendar Dashboard GitHub Pages Install Guide
+================================================
+
+Use GitHub Pages as the static app host for the SCOUT calendar dashboard and
+calendar refresh pages. User-specific roster data, Graph Explorer tokens, and
+calendar cache data stay in that user's browser storage for the GitHub Pages
+origin.
+
+GitHub Pages app URLs:
+
+- Dashboard:
+  https://mcanderson14.github.io/ns_scm_tools_fy27/staffing-dashboard.html
+- Calendar refresh:
+  https://mcanderson14.github.io/ns_scm_tools_fy27/calendar-refresh.html
+
+GitHub repository target:
+
+```text
+https://github.com/mcanderson14/ns_scm_tools_fy27
+```
+
+
+Before You Start
+----------------
+The user needs:
+
+1. Chrome or Edge.
+2. Tampermonkey installed in the browser.
+3. Access to the GitHub Pages app URLs above.
+4. Access to the NetSuite SC roster saved search:
+   https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl?rectype=1572&searchtype=Custom&style=REPORT&sortcol=Custom_NAME_raw&sortdir=ASC&csv=HTML&OfficeXML=F&pdf=&size=50&twbx=F&report=T&grid=&searchid=1311451&dle=T
+5. Access to Microsoft Graph Explorer:
+   https://developer.microsoft.com/en-us/graph/graph-explorer
+
+Do not publish a populated `direct-connector-events.js` file. That file can
+contain local Outlook availability snapshots after a refresh. The shared
+GitHub copy should stay as the starter empty cache.
+
+
+Step 1: Install Tampermonkey Scripts
+------------------------------------
+Install these userscripts from the GitHub repo, GitHub raw file view, or the
+shared package:
+
+1. `scr-staffing-helper.user.js` for the SCOUT widget on NetSuite SC Request
+   pages.
+2. `netsuite-sc-roster-calendar-refresh.user.js` for importing the NetSuite SC
+   roster into the calendar refresh page.
+3. Optional: `sc-calendar-dashboard-bridge.user.js`.
+
+After installing:
+
+1. In SCOUT settings, confirm Dashboard URL is:
+   `https://mcanderson14.github.io/ns_scm_tools_fy27/staffing-dashboard.html`
+2. In the roster helper menu, reset or set Calendar refresh URL to:
+   `https://mcanderson14.github.io/ns_scm_tools_fy27/calendar-refresh.html`
+
+
+Step 2: Build The NetSuite SC Roster
+------------------------------------
+1. Open the GitHub Pages calendar refresh page.
+2. In Step 2, open the linked NetSuite SC roster saved search.
+3. On the saved search page, click **Send roster to refresh**.
+4. If the helper is not available, copy the saved search rows or JSON manually,
+   paste the data in the roster box, and click **Import and save roster**.
+5. Confirm the SC Manager filter shows the managers from the imported roster.
+
+The calendar-refresh and staffing-dashboard pages use manager information from
+the NetSuite saved search. They do not depend on hard-coded team names.
+
+
+Step 3: Get A Graph Explorer Token
+----------------------------------
+1. Open Graph Explorer:
+   https://developer.microsoft.com/en-us/graph/graph-explorer
+2. Sign in with the user's Oracle Microsoft Office 365 account.
+3. Click API Explorer.
+4. Open the Access Token tab.
+5. Copy the access token.
+6. Return to the GitHub Pages calendar refresh page.
+7. Paste it into Graph Explorer Access Token.
+8. Click **Save encrypted token**.
+
+After save, the token is hidden from the page and kept in an encrypted
+browser-local vault until the token's JWT expiry. Graph Explorer tokens still
+expire; when that happens, copy a fresh token from Graph Explorer and paste it
+again.
+
+
+Step 4: Refresh Calendar Data
+-----------------------------
+1. On `calendar-refresh.html`, click **Probe first 3**.
+2. Confirm the probe reports loaded consultants and availability snapshots.
+3. Open `staffing-dashboard.html`.
+4. Choose the SC manager or consultants to display.
+5. Click **Refresh selected**. The dashboard uses the saved encrypted token and
+   refreshes the selected SCs into the GitHub Pages browser cache.
+6. If the dashboard reports that no token is saved, click **Open token refresh**,
+   save a fresh token, return to the dashboard, and click **Refresh selected**
+   again.
+
+
+Updating The Shared Tool
+------------------------
+1. Commit updated app files to the GitHub Pages repository.
+2. Confirm GitHub Pages publishes the latest files.
+3. Tell users to refresh the GitHub Pages dashboard and refresh pages.
+4. If a `.user.js` file changed, tell users to reimport it into Tampermonkey
+   unless Tampermonkey auto-update is configured.
+
+
+Troubleshooting
+---------------
+- Dashboard or refresh page is stale:
+  Hard refresh the GitHub Pages page or wait for GitHub Pages cache to clear.
+
+- A NetSuite button opens the old SharePoint or local file URL:
+  Reinstall the latest userscript, then use the helper menu reset option.
+
+- The SC Manager list is missing or wrong:
+  Reimport the NetSuite SC roster saved search and save it on calendar-refresh.
+
+- Graph returns 401 or InvalidAuthenticationToken:
+  Copy a fresh Graph Explorer access token.
+
+- Graph returns 403 or AccessDenied:
+  Confirm Graph Explorer has a calendar permission such as Calendars.ReadBasic,
+  Calendars.Read, or Calendars.ReadWrite, and confirm the tenant allows it.

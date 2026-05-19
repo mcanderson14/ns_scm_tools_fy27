@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SC Calendar Dashboard Data Bridge
 // @namespace    scm-tools-calendar-dashboard
-// @version      27.0.0.1B
+// @version      27.0.0.3
 // @description  Injects locally synced SC calendar data into the hosted staffing dashboard.
 // @author       Michael Anderson
 // @match        https://mcanderson14.github.io/ns_scm_tools_fy27/staffing-dashboard.html*

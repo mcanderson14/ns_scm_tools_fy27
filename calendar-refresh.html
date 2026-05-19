@@ -4,7 +4,6 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>SC Calendar Sync Configuration</title>
-  <script src="consultant-roster.js"></script>
   <script src="direct-connector-events.js"></script>
   <style>
     :root {
@@ -70,6 +69,13 @@
     }
 
     .panel + .panel { margin-top: 16px; }
+
+    .runtime-warning {
+      border-color: rgba(189, 51, 40, 0.42);
+      background: #fff7f5;
+      color: #7a251d;
+      margin-bottom: 16px;
+    }
 
     h2 {
       margin: 0 0 12px;
@@ -139,6 +145,32 @@
       padding: 8px 12px;
     }
 
+    .button-link {
+      align-items: center;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      color: var(--ink);
+      display: inline-flex;
+      font-size: 13px;
+      font-weight: 850;
+      min-height: 38px;
+      padding: 8px 12px;
+      text-decoration: none;
+    }
+
+    button.oracle-red,
+    .button-link.oracle-red {
+      background: #c74634;
+      border-color: #a63a2d;
+      color: #fff;
+    }
+
+    button.oracle-red:hover,
+    .button-link.oracle-red:hover {
+      background: #b33f31;
+    }
+
     button.primary {
       background: var(--teal);
       border-color: var(--teal);
@@ -152,6 +184,21 @@
     button:disabled {
       cursor: not-allowed;
       opacity: 0.48;
+    }
+
+    .inline-check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 9px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: none;
+    }
+
+    .inline-check input {
+      width: auto;
     }
 
     .note {
@@ -271,18 +318,46 @@
 </head>
 <body>
   <header>
-    <h1>SC Calendar Sync Configuration</h1>
-    <div class="subtitle">Configure the SC roster, choose who should be refreshed, and prepare the Codex Outlook Calendar sync that feeds the staffing dashboard.</div>
+    <h1>SC Calendar Refresh</h1>
+    <div class="subtitle">Get a Microsoft Graph Explorer token, build the NetSuite SC roster, then refresh staffing calendar availability for the dashboard.</div>
   </header>
 
   <main>
+    <div class="panel runtime-warning" id="runtimeWarning">
+      <h2>Page scripts are still loading</h2>
+      <p class="note">If this message stays visible and buttons do not respond, SharePoint is opening this file in a restricted viewer. Open the synced local copy, or publish the same files from a static web host such as Oracle Git/GitHub Pages.</p>
+    </div>
+
+    <div class="panel">
+      <h2>Step 1. Get Graph Explorer Token</h2>
+      <p class="note">Open Microsoft Graph Explorer, log in with your Oracle Microsoft Office 365 account, click API Explorer, then click the Access Token tab. Copy the access token and paste it below.</p>
+      <div class="actions">
+        <a class="button-link oracle-red" href="https://developer.microsoft.com/en-us/graph/graph-explorer" target="_blank" rel="noopener noreferrer">Open Graph Explorer</a>
+      </div>
+      <label for="graphExplorerToken">Graph Explorer Access Token</label>
+      <textarea id="graphExplorerToken" placeholder="Paste access token from Graph Explorer"></textarea>
+      <p class="note" style="margin-top: 8px;">After save, the token is hidden from the page and kept in an encrypted browser vault until the token's JWT expiry. Export/import uses an encrypted token file protected by the passphrase below.</p>
+      <label for="graphExplorerTokenPassphrase">Encrypted Token File Passphrase</label>
+      <input type="password" id="graphExplorerTokenPassphrase" autocomplete="new-password" placeholder="Required only to export or import an encrypted token file">
+      <div class="actions">
+        <button class="primary" id="saveGraphExplorerTokenButton" type="button">Save encrypted token</button>
+        <button id="downloadGraphExplorerTokenButton" type="button">Save encrypted token file</button>
+        <label class="button-link" for="graphExplorerTokenFile">Load encrypted token file</label>
+        <input id="graphExplorerTokenFile" type="file" accept="application/json,.json" hidden>
+        <button id="clearGraphExplorerTokenButton" type="button">Clear saved token</button>
+      </div>
+      <div class="status" id="graphExplorerStatus">
+        <span class="pill">Token not checked</span>
+      </div>
+    </div>
+
     <div class="grid">
       <section>
         <div class="panel">
-          <h2>NetSuite SC Saved Search Roster</h2>
-          <p class="note">Paste the JSON or copied export from saved search 1311451. Save this roster before preparing an automation request so Codex has the SC names, team names, industry families, legacy designations, regions, and time zones.</p>
+          <h2>Step 2. Build NetSuite SC Roster</h2>
+          <p class="note">Open the SC roster search, copy the JSON or copied search rows, paste the data in the box below, then click Import and save roster.</p>
           <div class="actions">
-            <button id="openNetSuiteSearchButton" type="button">Open saved search</button>
+            <a class="button-link oracle-red" href="https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl?rectype=1572&amp;searchtype=Custom&amp;style=REPORT&amp;sortcol=Custom_NAME_raw&amp;sortdir=ASC&amp;csv=HTML&amp;OfficeXML=F&amp;pdf=&amp;size=50&amp;twbx=F&amp;report=T&amp;grid=&amp;searchid=1311451&amp;dle=T" target="_top" rel="noopener noreferrer">Open SC roster search</a>
           </div>
           <label for="netsuiteRosterText">Saved Search JSON or Rows</label>
           <textarea id="netsuiteRosterText" placeholder='Paste saved-search JSON like {"people":[...]} or copied NetSuite result rows here'></textarea>
@@ -296,8 +371,8 @@
         </div>
 
         <div class="panel">
-          <h2>Sync Scope</h2>
-          <p class="note">Choose the consultants and calendar window. The selected email list is what Codex will chunk during the automated refresh.</p>
+          <h2>Step 3. Refresh Via Saved Token</h2>
+          <p class="note">Choose the consultants and calendar window, then probe or refresh through the saved Graph Explorer token.</p>
 
           <label for="emails">Consultant Emails</label>
           <textarea id="emails" placeholder="one.person@oracle.com, another.person@oracle.com"></textarea>
@@ -347,13 +422,15 @@
           </div>
 
           <div class="actions">
-            <button class="primary" id="copyRequestButton" type="button">Copy connector request</button>
+            <button class="primary" id="refreshGraphExplorerButton" type="button">Refresh selected via token</button>
+            <button id="probeGraphExplorerButton" type="button">Probe first 3</button>
+            <button class="primary legacy-handoff" id="copyRequestButton" type="button">Copy connector request</button>
             <button id="openDashboardButton" type="button">Open dashboard</button>
             <button class="danger" id="clearCacheButton" type="button">Clear local cache</button>
           </div>
         </div>
 
-        <div class="panel">
+        <div class="panel legacy-handoff">
           <h2>Codex Automation</h2>
           <p class="note">Prepare and save the chunked sync plan. The Codex automation reads the saved request/state files, runs the next chunk with the Outlook connector, merges it, and resumes on the next scheduled run.</p>
           <label for="localProjectFolder">Local Project Folder</label>
@@ -426,10 +503,10 @@
           <div class="toolbar">
             <div>
               <label for="rosterSearch">Search</label>
-              <input type="search" id="rosterSearch" placeholder="Name, email, team, industry">
+              <input type="search" id="rosterSearch" placeholder="Name, email, manager, industry">
             </div>
             <div>
-              <label for="rosterTeamFilter">Team</label>
+              <label for="rosterTeamFilter">SC Manager</label>
               <select id="rosterTeamFilter"></select>
             </div>
             <div>
@@ -484,6 +561,19 @@
     const CODEX_SYNC_RUN_COMMAND = "Run the prepared calendar sync from the current browser page.";
     const GRAPH_SERVICE_URL_KEY = "sc-staffing-dashboard-graph-service-url-v1";
     const GRAPH_SERVICE_DEFAULT_URL = "http://localhost:8787";
+    const GRAPH_EXPLORER_TOKEN_SESSION_KEY = "sc-staffing-dashboard-graph-explorer-token-session-v1";
+    const GRAPH_EXPLORER_TOKEN_VAULT_KEY = "sc-staffing-dashboard-graph-explorer-token-vault-v2";
+    const GRAPH_EXPLORER_LOCAL_KEY_KEY = "sc-staffing-dashboard-graph-explorer-local-key-v1";
+    const GRAPH_GET_SCHEDULE_URL = "https://graph.microsoft.com/v1.0/me/calendar/getSchedule";
+    const GRAPH_TIME_ZONE_MAP = {
+      "UTC": "UTC",
+      "Etc/UTC": "UTC",
+      "America/New_York": "Eastern Standard Time",
+      "America/Chicago": "Central Standard Time",
+      "America/Denver": "Mountain Standard Time",
+      "America/Phoenix": "US Mountain Standard Time",
+      "America/Los_Angeles": "Pacific Standard Time"
+    };
     const NETSUITE_SEARCH_URL = "https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl?rectype=1572&searchtype=Custom&style=REPORT&sortcol=Custom_NAME_raw&sortdir=ASC&csv=HTML&OfficeXML=F&pdf=&size=50&twbx=F&report=T&grid=&searchid=1311451&dle=T";
     const STATUS_MAP = {
       "1": { status: "tentative", subject: "Free/busy: Tentative hold" },
@@ -498,14 +588,6 @@
     let latestCodexChunkIndex = 0;
     let rosterFilterOptionsReady = false;
 
-    function getSharedRoster() {
-      return Array.isArray(window.SC_STAFFING_CONSULTANTS)
-        ? window.SC_STAFFING_CONSULTANTS
-            .map(person => ({ ...person, email: normalizeEmail(person.email) }))
-            .filter(person => person.email)
-        : [];
-    }
-
     function readImportedRoster() {
       const payload = readJsonStorage(ROSTER_CACHE_KEY);
       return payload && Array.isArray(payload.people) ? payload : null;
@@ -513,7 +595,11 @@
 
     function getAvailableRoster() {
       const imported = readImportedRoster();
-      return imported ? imported.people : getSharedRoster();
+      return imported ? imported.people : [];
+    }
+
+    function getRosterManagerValue(person) {
+      return String(person?.manager || person?.team || "").trim();
     }
 
     function qs(id) {
@@ -525,6 +611,38 @@
       const stamp = new Date().toLocaleTimeString();
       const line = details ? `${stamp} - ${message}\n${JSON.stringify(details, null, 2)}` : `${stamp} - ${message}`;
       output.textContent = `${line}\n\n${output.textContent}`.trim();
+    }
+
+    function markRuntimeReady() {
+      const warning = qs("runtimeWarning");
+      if (warning) warning.hidden = true;
+    }
+
+    function reportStartupError(label, error) {
+      const message = error?.message || String(error || "Unknown error");
+      console.error(`Calendar refresh startup failed during ${label}:`, error);
+      const warning = qs("runtimeWarning");
+      if (warning) {
+        warning.hidden = false;
+        warning.innerHTML = [
+          "<h2>Calendar refresh could not finish loading</h2>",
+          `<p class="note">Startup stopped during ${escapeHtml(label)}: ${escapeHtml(message)}</p>`,
+          '<p class="note">If this page is open inside a SharePoint preview or restricted viewer, open the synced local copy or use a static web host such as Oracle Git/GitHub Pages.</p>'
+        ].join("");
+      }
+      try {
+        log(`Startup warning during ${label}.`, { message });
+      } catch {
+        // The activity log may not be wired yet if startup failed very early.
+      }
+    }
+
+    function runStartupStep(label, fn) {
+      try {
+        fn();
+      } catch (error) {
+        reportStartupError(label, error);
+      }
     }
 
     function escapeHtml(value) {
@@ -919,14 +1037,14 @@
       const roster = getAvailableRoster();
       const imported = readImportedRoster();
       const currentEmails = parseEmails(qs("emails").value);
-      const teams = [...new Set(roster.map(person => person.team).filter(Boolean))].sort();
+      const managers = [...new Set(roster.map(getRosterManagerValue).filter(Boolean))].sort();
       qs("rosterStatus").innerHTML = roster.length
         ? [
-            `<span class="pill good">${roster.length} ${imported ? "NetSuite" : "built-in"} roster consultant${roster.length === 1 ? "" : "s"} available</span>`,
+            `<span class="pill good">${roster.length} NetSuite roster consultant${roster.length === 1 ? "" : "s"} available</span>`,
             `<span class="pill">${currentEmails.length} email${currentEmails.length === 1 ? "" : "s"} in request</span>`,
-            `<span class="pill">${teams.length} team${teams.length === 1 ? "" : "s"}</span>`
+            `<span class="pill">${managers.length} SC manager${managers.length === 1 ? "" : "s"}</span>`
           ].join("")
-        : '<span class="pill bad">consultant-roster.js not loaded</span>';
+        : '<span class="pill bad">Import the NetSuite SC saved search roster first</span>';
     }
 
     function setEmails(emails, options = {}) {
@@ -962,7 +1080,7 @@
     function loadFullRoster({ append = false } = {}) {
       const rosterEmails = getAvailableRoster().map(person => person.email);
       if (!rosterEmails.length) {
-        log("No shared roster was available.", { expectedFile: "consultant-roster.js" });
+        log("No NetSuite roster is available. Import and save the saved search roster first.");
         updateRosterStatus();
         return;
       }
@@ -1130,11 +1248,11 @@
     function getVisibleRosterRows() {
       const roster = getAvailableRoster();
       const query = normalizeHeader(qs("rosterSearch")?.value || "");
-      const team = qs("rosterTeamFilter")?.value || "";
+      const manager = qs("rosterTeamFilter")?.value || "";
       const industry = qs("rosterIndustryFilter")?.value || "";
 
       return roster.filter(person => {
-        if (team && String(person.team || "") !== team) return false;
+        if (manager && getRosterManagerValue(person) !== manager) return false;
         if (industry && String(person.industryFamily || "") !== industry) return false;
         if (!query) return true;
 
@@ -1198,25 +1316,25 @@
 
     function updateRosterFilterOptions() {
       const roster = getAvailableRoster();
-      const teamSelect = qs("rosterTeamFilter");
+      const managerSelect = qs("rosterTeamFilter");
       const industrySelect = qs("rosterIndustryFilter");
-      if (!teamSelect || !industrySelect) return;
+      if (!managerSelect || !industrySelect) return;
 
-      const currentTeam = teamSelect.value;
+      const currentManager = managerSelect.value;
       const currentIndustry = industrySelect.value;
-      const teams = [...new Set(roster.map(person => person.team).filter(Boolean))].sort();
+      const managers = [...new Set(roster.map(getRosterManagerValue).filter(Boolean))].sort();
       const industries = [...new Set(roster.map(person => person.industryFamily).filter(Boolean))].sort();
 
-      teamSelect.innerHTML = [
-        '<option value="">All teams</option>',
-        ...teams.map(team => `<option value="${escapeHtml(team)}">${escapeHtml(team)}</option>`)
+      managerSelect.innerHTML = [
+        '<option value="">All SC managers</option>',
+        ...managers.map(manager => `<option value="${escapeHtml(manager)}">${escapeHtml(manager)}</option>`)
       ].join("");
       industrySelect.innerHTML = [
         '<option value="">All industry families</option>',
         ...industries.map(item => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`)
       ].join("");
 
-      teamSelect.value = teams.includes(currentTeam) ? currentTeam : "";
+      managerSelect.value = managers.includes(currentManager) ? currentManager : "";
       industrySelect.value = industries.includes(currentIndustry) ? currentIndustry : "";
       rosterFilterOptionsReady = true;
     }
@@ -1430,7 +1548,7 @@
 
       table.innerHTML = [
         '<div class="table-scroll"><table>',
-        "<thead><tr><th></th><th>SC</th><th>Team</th><th>Industry Family</th><th>Legacy</th><th>Office Location</th><th>Region</th><th>Time Zone</th><th>Calendar Status</th><th>Last Sync</th></tr></thead>",
+        "<thead><tr><th></th><th>SC</th><th>SC Manager</th><th>Industry Family</th><th>Legacy</th><th>Office Location</th><th>Region</th><th>Time Zone</th><th>Calendar Status</th><th>Last Sync</th></tr></thead>",
         "<tbody>",
         ...rows.map(person => {
           const email = normalizeEmail(person.email);
@@ -1440,7 +1558,7 @@
             "<tr>",
             `<td class="checkbox-cell"><input type="checkbox" class="roster-select" data-email="${escapeHtml(email)}" ${selected.has(email) ? "checked" : ""}></td>`,
             `<td><strong>${escapeHtml(person.name || inferNameFromEmail(email))}</strong><br><span class="muted">${escapeHtml(email)}</span>${person.title ? `<br><span class="muted">${escapeHtml(person.title)}</span>` : ""}</td>`,
-            `<td>${escapeHtml(person.team || person.manager || "")}</td>`,
+            `<td>${escapeHtml(getRosterManagerValue(person))}</td>`,
             `<td>${escapeHtml(person.industryFamily || "")}</td>`,
             `<td>${escapeHtml(person.legacyOrg || "")}</td>`,
             `<td title="${escapeHtml(person.officeLocation || person.location || "")}">${escapeHtml(getOfficeLocationDisplay(person))}</td>`,
@@ -1932,8 +2050,13 @@
       qs("emails").value = params.get("emails") || params.get("consultants") || "";
       qs("startDate").value = params.get("start") || todayIso();
       qs("days").value = params.get("days") || "21";
+      qs("interval").value = params.get("interval") || "30";
       qs("timeZone").value = params.get("zone") || "UTC";
       loadGraphServiceSettings();
+      loadGraphExplorerToken().catch(error => setGraphExplorerStatus([
+        { text: "Token vault unavailable", tone: "bad" },
+        { text: error.message, tone: "bad" }
+      ]));
       importRosterFromLaunchParams(params);
       loadCodexSyncFromParams(params);
 
@@ -2067,6 +2190,532 @@
           { text: error.message, tone: "bad" }
         ]);
         log("Local Graph service refresh failed.", { message: error.message });
+      }
+    }
+
+    function graphExplorerTimeZone(value) {
+      const text = String(value || "UTC").trim() || "UTC";
+      return GRAPH_TIME_ZONE_MAP[text] || text;
+    }
+
+    function getGraphExplorerTokenExpiry(token) {
+      try {
+        const parts = String(token || "").split(".");
+        if (parts.length < 2) return null;
+        const payload = JSON.parse(decodeBase64Url(parts[1]));
+        const exp = Number(payload.exp || 0);
+        return exp ? exp * 1000 : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function getGraphExplorerTokenPassphrase() {
+      return String(qs("graphExplorerTokenPassphrase")?.value || "");
+    }
+
+    function bytesToBase64(bytes) {
+      let binary = "";
+      for (let index = 0; index < bytes.length; index += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+      }
+      return btoa(binary);
+    }
+
+    function base64ToBytes(value) {
+      const binary = atob(String(value || ""));
+      return Uint8Array.from(binary, char => char.charCodeAt(0));
+    }
+
+    function ensureGraphCrypto() {
+      if (!window.crypto?.subtle) {
+        throw new Error("Encrypted token storage requires Web Crypto. Use Chrome or Edge.");
+      }
+    }
+
+    function getOrCreateGraphExplorerLocalKey() {
+      let key = window.localStorage.getItem(GRAPH_EXPLORER_LOCAL_KEY_KEY);
+      if (!key) {
+        const bytes = new Uint8Array(32);
+        window.crypto.getRandomValues(bytes);
+        key = bytesToBase64(bytes);
+        window.localStorage.setItem(GRAPH_EXPLORER_LOCAL_KEY_KEY, key);
+      }
+      return key;
+    }
+
+    async function importGraphExplorerLocalKey() {
+      ensureGraphCrypto();
+      return window.crypto.subtle.importKey(
+        "raw",
+        base64ToBytes(getOrCreateGraphExplorerLocalKey()),
+        { name: "AES-GCM" },
+        false,
+        ["encrypt", "decrypt"]
+      );
+    }
+
+    async function deriveGraphExplorerPassphraseKey(passphrase, saltBytes, iterations = 210000) {
+      ensureGraphCrypto();
+      if (!passphrase) throw new Error("Enter the encrypted token file passphrase first.");
+      const baseKey = await window.crypto.subtle.importKey(
+        "raw",
+        new TextEncoder().encode(passphrase),
+        "PBKDF2",
+        false,
+        ["deriveKey"]
+      );
+      return window.crypto.subtle.deriveKey(
+        {
+          name: "PBKDF2",
+          salt: saltBytes,
+          iterations,
+          hash: "SHA-256"
+        },
+        baseKey,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["encrypt", "decrypt"]
+      );
+    }
+
+    async function encryptGraphExplorerTokenRecord(token, { passphrase = "" } = {}) {
+      ensureGraphCrypto();
+      const normalizedToken = String(token || "").trim().replace(/^Bearer\s+/i, "");
+      if (!normalizedToken) throw new Error("Paste a Graph Explorer access token first.");
+
+      const expiresAt = getGraphExplorerTokenExpiry(normalizedToken);
+      if (expiresAt && expiresAt <= Date.now()) {
+        throw new Error("This Graph Explorer token is already expired. Copy a fresh token.");
+      }
+
+      const iv = new Uint8Array(12);
+      window.crypto.getRandomValues(iv);
+      const salt = passphrase ? new Uint8Array(16) : null;
+      if (salt) window.crypto.getRandomValues(salt);
+      const key = passphrase
+        ? await deriveGraphExplorerPassphraseKey(passphrase, salt)
+        : await importGraphExplorerLocalKey();
+      const payload = JSON.stringify({
+        token: normalizedToken,
+        savedAt: new Date().toISOString(),
+        expiresAt
+      });
+      const ciphertext = new Uint8Array(await window.crypto.subtle.encrypt(
+        { name: "AES-GCM", iv },
+        key,
+        new TextEncoder().encode(payload)
+      ));
+
+      return {
+        kind: "sc-calendar-graph-explorer-token-vault",
+        version: 2,
+        algorithm: "AES-GCM",
+        keyMode: passphrase ? "passphrase" : "browser-local",
+        kdf: passphrase ? {
+          name: "PBKDF2",
+          hash: "SHA-256",
+          iterations: 210000,
+          salt: bytesToBase64(salt)
+        } : null,
+        iv: bytesToBase64(iv),
+        ciphertext: bytesToBase64(ciphertext),
+        savedAt: new Date().toISOString(),
+        expiresAt
+      };
+    }
+
+    async function decryptGraphExplorerTokenRecord(record, { passphrase = "" } = {}) {
+      ensureGraphCrypto();
+      if (!record || record.kind !== "sc-calendar-graph-explorer-token-vault" || !record.ciphertext || !record.iv) {
+        throw new Error("This is not a recognized encrypted Graph Explorer token file.");
+      }
+
+      const iv = base64ToBytes(record.iv);
+      const key = record.keyMode === "passphrase"
+        ? await deriveGraphExplorerPassphraseKey(passphrase, base64ToBytes(record.kdf?.salt || ""), Number(record.kdf?.iterations || 210000))
+        : await importGraphExplorerLocalKey();
+      const plaintext = await window.crypto.subtle.decrypt(
+        { name: "AES-GCM", iv },
+        key,
+        base64ToBytes(record.ciphertext)
+      );
+      const payload = JSON.parse(new TextDecoder().decode(plaintext));
+      const expiresAt = Number(payload.expiresAt || getGraphExplorerTokenExpiry(payload.token) || 0);
+      if (expiresAt && expiresAt <= Date.now()) {
+        throw new Error("The saved Graph Explorer token has expired. Copy a fresh token.");
+      }
+      return {
+        token: String(payload.token || ""),
+        savedAt: payload.savedAt || record.savedAt || null,
+        expiresAt: expiresAt || null
+      };
+    }
+
+    function readGraphExplorerTokenVault() {
+      try {
+        return JSON.parse(window.localStorage.getItem(GRAPH_EXPLORER_TOKEN_VAULT_KEY) || "null");
+      } catch {
+        return null;
+      }
+    }
+
+    function formatTokenExpiry(expiresAt) {
+      if (!expiresAt) return "Expiry unavailable";
+      const date = new Date(expiresAt);
+      const minutes = Math.max(0, Math.round((expiresAt - Date.now()) / 60000));
+      const relative = minutes >= 90 ? `${Math.round(minutes / 60)} hr` : `${minutes} min`;
+      return `Expires ${date.toLocaleString()} (${relative})`;
+    }
+
+    async function getStoredGraphExplorerToken() {
+      const record = readGraphExplorerTokenVault();
+      if (!record) return null;
+      try {
+        return await decryptGraphExplorerTokenRecord(record);
+      } catch (error) {
+        if (/expired/i.test(error.message || "")) {
+          clearGraphExplorerToken({ silent: true });
+          setGraphExplorerStatus([
+            { text: "Saved token expired", tone: "bad" },
+            { text: "Copy a fresh token", tone: "bad" }
+          ]);
+          return null;
+        }
+        setGraphExplorerStatus([
+          { text: "Saved token locked", tone: "bad" },
+          { text: error.message, tone: "bad" }
+        ]);
+        return null;
+      }
+    }
+
+    async function saveGraphExplorerToken(token, { silent = false } = {}) {
+      const normalizedToken = String(token || "").trim().replace(/^Bearer\s+/i, "");
+      if (!normalizedToken) throw new Error("Paste a Graph Explorer access token first.");
+      const record = await encryptGraphExplorerTokenRecord(normalizedToken);
+      window.localStorage.setItem(GRAPH_EXPLORER_TOKEN_VAULT_KEY, JSON.stringify(record));
+      window.sessionStorage.removeItem(GRAPH_EXPLORER_TOKEN_SESSION_KEY);
+      if (qs("graphExplorerToken")) {
+        qs("graphExplorerToken").value = "";
+        qs("graphExplorerToken").placeholder = "Encrypted token saved. Paste a replacement token here after it expires.";
+      }
+      if (!silent) {
+        setGraphExplorerStatus([
+          { text: "Encrypted token saved", tone: "good" },
+          record.expiresAt ? { text: formatTokenExpiry(record.expiresAt), tone: "good" } : null
+        ]);
+      }
+      return record;
+    }
+
+    async function migrateLegacyGraphExplorerToken() {
+      let legacy = null;
+      try {
+        legacy = JSON.parse(window.sessionStorage.getItem(GRAPH_EXPLORER_TOKEN_SESSION_KEY) || "null");
+      } catch {
+        legacy = null;
+      }
+      if (!legacy?.token || readGraphExplorerTokenVault()) return;
+      try {
+        await saveGraphExplorerToken(legacy.token, { silent: true });
+      } catch {
+        window.sessionStorage.removeItem(GRAPH_EXPLORER_TOKEN_SESSION_KEY);
+      }
+    }
+
+    async function loadGraphExplorerToken() {
+      await migrateLegacyGraphExplorerToken();
+      const stored = await getStoredGraphExplorerToken();
+      if (!stored?.token) {
+        setGraphExplorerStatus([{ text: "No saved token" }]);
+        return;
+      }
+      if (qs("graphExplorerToken")) {
+        qs("graphExplorerToken").value = "";
+        qs("graphExplorerToken").placeholder = "Encrypted token saved. Paste a replacement token here after it expires.";
+      }
+      setGraphExplorerStatus([
+        { text: "Encrypted token ready", tone: "good" },
+        stored.expiresAt ? { text: formatTokenExpiry(stored.expiresAt), tone: "good" } : null
+      ]);
+    }
+
+    function clearGraphExplorerToken({ silent = false, keepField = false } = {}) {
+      try {
+        window.sessionStorage.removeItem(GRAPH_EXPLORER_TOKEN_SESSION_KEY);
+        window.localStorage.removeItem(GRAPH_EXPLORER_TOKEN_VAULT_KEY);
+      } catch {
+        // Ignore storage cleanup failures.
+      }
+      if (!keepField && qs("graphExplorerToken")) qs("graphExplorerToken").value = "";
+      if (!silent && qs("graphExplorerStatus")) {
+        setGraphExplorerStatus([{ text: "Saved token cleared" }]);
+      }
+    }
+
+    async function getGraphExplorerToken() {
+      const input = qs("graphExplorerToken");
+      let token = String(input.value || "").trim().replace(/^Bearer\s+/i, "");
+      if (!token) {
+        const stored = await getStoredGraphExplorerToken();
+        token = stored?.token || "";
+      }
+      if (!token) throw new Error("Paste a Graph Explorer access token first, or load a saved encrypted token file.");
+      await saveGraphExplorerToken(token, { silent: true });
+      return token;
+    }
+
+    async function saveTextFile(fileName, text, type = "application/json") {
+      const blob = new Blob([text], { type });
+      if (window.showSaveFilePicker) {
+        try {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: fileName,
+            types: [{ description: "JSON file", accept: { [type]: [".json"] } }]
+          });
+          const writable = await handle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          return true;
+        } catch (error) {
+          if (error.name === "AbortError") return false;
+        }
+      }
+
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(link.href);
+      return true;
+    }
+
+    async function downloadGraphExplorerTokenFile() {
+      const passphrase = getGraphExplorerTokenPassphrase();
+      if (!passphrase) throw new Error("Enter a passphrase before saving an encrypted token file.");
+      const token = await getGraphExplorerToken();
+      const record = await encryptGraphExplorerTokenRecord(token, { passphrase });
+      const saved = await saveTextFile("graph-explorer-token.encrypted.json", JSON.stringify(record, null, 2));
+      if (!saved) {
+        setGraphExplorerStatus([{ text: "Encrypted token file save cancelled" }]);
+        return;
+      }
+      setGraphExplorerStatus([
+        { text: "Encrypted token file saved", tone: "good" },
+        record.expiresAt ? { text: formatTokenExpiry(record.expiresAt), tone: "good" } : null
+      ]);
+    }
+
+    async function loadGraphExplorerTokenFile() {
+      const input = qs("graphExplorerTokenFile");
+      const file = input?.files?.[0];
+      if (!file) return;
+      try {
+        const passphrase = getGraphExplorerTokenPassphrase();
+        if (!passphrase) throw new Error("Enter the encrypted token file passphrase first.");
+        const record = JSON.parse(await file.text());
+        const payload = await decryptGraphExplorerTokenRecord(record, { passphrase });
+        await saveGraphExplorerToken(payload.token, { silent: true });
+        setGraphExplorerStatus([
+          { text: "Encrypted token file loaded", tone: "good" },
+          payload.expiresAt ? { text: formatTokenExpiry(payload.expiresAt), tone: "good" } : null
+        ]);
+      } finally {
+        input.value = "";
+      }
+    }
+
+    function setGraphExplorerStatus(items) {
+      const normalized = Array.isArray(items) ? items : [{ text: items }];
+      qs("graphExplorerStatus").innerHTML = normalized
+        .filter(Boolean)
+        .map(item => `<span class="pill ${item.tone || ""}">${escapeHtml(item.text)}</span>`)
+        .join("");
+    }
+
+    function getGraphExplorerRequestContext() {
+      try {
+        return getCalendarRequestContext();
+      } catch (error) {
+        if (!/email/i.test(error.message || "")) throw error;
+      }
+
+      const saved = readSyncConfig();
+      if (Array.isArray(saved?.selectedEmails) && saved.selectedEmails.length) {
+        setEmails(saved.selectedEmails);
+        qs("startDate").value = saved.start || qs("startDate").value;
+        qs("days").value = saved.days || qs("days").value;
+        qs("interval").value = saved.intervalMinutes || qs("interval").value;
+        qs("timeZone").value = saved.timeZone || qs("timeZone").value;
+        return getCalendarRequestContext();
+      }
+
+      const rosterEmails = getAvailableRoster().map(person => person.email).filter(Boolean);
+      if (rosterEmails.length) {
+        setEmails(rosterEmails);
+        return getCalendarRequestContext();
+      }
+
+      throw new Error("Enter at least one consultant email or load the full SC roster before probing Graph.");
+    }
+
+    async function fetchGraphExplorerSchedule(token, context, emails) {
+      const timeZone = graphExplorerTimeZone(context.timeZone);
+      const response = await fetch(GRAPH_GET_SCHEDULE_URL, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "Prefer": `outlook.timezone="${timeZone}"`
+        },
+        body: JSON.stringify({
+          schedules: emails,
+          startTime: {
+            dateTime: `${context.start}T00:00:00`,
+            timeZone
+          },
+          endTime: {
+            dateTime: `${context.end}T00:00:00`,
+            timeZone
+          },
+          availabilityViewInterval: Number(context.intervalMinutes || 30)
+        })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error?.message || payload.message || `Microsoft Graph returned ${response.status}`);
+      }
+      return payload;
+    }
+
+    function normalizeGraphExplorerSchedules(payload, context, emails, rosterByEmail) {
+      const expected = new Set(emails.map(normalizeEmail));
+      const returned = new Set();
+      const availability = [];
+      const errors = [];
+      const intervalMinutes = Number(context.intervalMinutes || 30);
+
+      (payload.value || []).forEach(schedule => {
+        const email = normalizeEmail(schedule.scheduleId || schedule.schedule_id);
+        if (!expected.has(email)) return;
+        returned.add(email);
+
+        if (schedule.error) {
+          errors.push({
+            email,
+            responseCode: schedule.error.responseCode || schedule.error.code || null,
+            message: schedule.error.message || "Microsoft Graph returned an error for this schedule.",
+            start: `${context.start}T00:00:00.000Z`,
+            end: `${context.end}T00:00:00.000Z`
+          });
+        }
+
+        const view = schedule.availabilityView || schedule.availability_view || "";
+        if (view) {
+          availability.push({
+            email,
+            start: `${context.start}T00:00:00.000Z`,
+            intervalMinutes,
+            view: String(view)
+          });
+        }
+      });
+
+      [...expected].filter(email => !returned.has(email)).forEach(email => {
+        errors.push({
+          email,
+          message: "Microsoft Graph did not return this schedule in the getSchedule response.",
+          start: `${context.start}T00:00:00.000Z`,
+          end: `${context.end}T00:00:00.000Z`
+        });
+      });
+
+      return {
+        loadedEmails: [...expected].sort(),
+        availability,
+        errors,
+        roster: [...expected].map(email => rosterByEmail[email]).filter(Boolean)
+      };
+    }
+
+    async function refreshWithGraphExplorerToken({ probe = false } = {}) {
+      try {
+        const token = await getGraphExplorerToken();
+        const context = getGraphExplorerRequestContext();
+        const batchSize = getCodexBatchSize();
+        const chunks = chunkArray(context.emails, batchSize);
+        const selectedChunks = probe ? [chunks[0].slice(0, 3)] : chunks;
+        const rosterByEmail = Object.fromEntries(context.roster.map(person => [normalizeEmail(person.email), person]));
+        const combined = {
+          refreshedAt: new Date().toISOString(),
+          start: context.start,
+          end: context.end,
+          intervalMinutes: context.intervalMinutes,
+          loadedEmails: [],
+          availability: [],
+          events: [],
+          errors: [],
+          roster: []
+        };
+
+        setGraphExplorerStatus([
+          { text: probe ? "Probing Graph..." : "Refreshing through Graph..." },
+          { text: probe ? `${selectedChunks[0].length} consultant probe` : `${context.emails.length} consultants` }
+        ]);
+        log(probe ? "Probing Microsoft Graph Explorer token." : "Refreshing calendars through Graph Explorer token.", {
+          consultants: probe ? selectedChunks[0].length : context.emails.length,
+          chunks: selectedChunks.length,
+          start: context.start,
+          end: context.end,
+          timeZone: context.timeZone
+        });
+
+        for (let index = 0; index < selectedChunks.length; index += 1) {
+          const emails = selectedChunks[index];
+          const payload = await fetchGraphExplorerSchedule(token, context, emails);
+          const normalized = normalizeGraphExplorerSchedules(payload, context, emails, rosterByEmail);
+          combined.loadedEmails.push(...normalized.loadedEmails);
+          combined.availability.push(...normalized.availability);
+          combined.errors.push(...normalized.errors);
+          combined.roster.push(...normalized.roster);
+          setGraphExplorerStatus([
+            { text: probe ? "Probe response received" : `Processed chunk ${index + 1} of ${selectedChunks.length}`, tone: "good" },
+            { text: `${combined.availability.length} snapshot${combined.availability.length === 1 ? "" : "s"}`, tone: "good" },
+            combined.errors.length ? { text: `${combined.errors.length} warning${combined.errors.length === 1 ? "" : "s"}`, tone: "bad" } : null
+          ]);
+        }
+
+        combined.loadedEmails = [...new Set(combined.loadedEmails)].sort();
+        combined.roster = [...new Map(combined.roster.map(person => [normalizeEmail(person.email), person])).values()];
+        qs("connectorResult").value = JSON.stringify(combined, null, 2);
+
+        if (!probe) {
+          saveConnectorResult();
+          await saveGraphExplorerToken(token, { silent: true });
+        }
+
+        setGraphExplorerStatus([
+          { text: probe ? "Probe complete" : "Refresh complete", tone: "good" },
+          { text: `${combined.loadedEmails.length} loaded consultant${combined.loadedEmails.length === 1 ? "" : "s"}`, tone: "good" },
+          { text: `${combined.availability.length} availability snapshot${combined.availability.length === 1 ? "" : "s"}`, tone: combined.availability.length ? "good" : "bad" },
+          combined.errors.length ? { text: `${combined.errors.length} warning${combined.errors.length === 1 ? "" : "s"}`, tone: "bad" } : null
+        ]);
+        log(probe ? "Microsoft Graph Explorer token probe complete." : "Microsoft Graph Explorer token refresh complete.", {
+          loadedEmails: combined.loadedEmails,
+          availabilitySnapshots: combined.availability.length,
+          errors: combined.errors
+        });
+      } catch (error) {
+        setGraphExplorerStatus([
+          { text: probe ? "Probe failed" : "Refresh failed", tone: "bad" },
+          { text: error.message, tone: "bad" }
+        ]);
+        log(probe ? "Microsoft Graph Explorer token probe failed." : "Microsoft Graph Explorer token refresh failed.", {
+          message: error.message
+        });
       }
     }
 
@@ -2320,7 +2969,6 @@
 
     function wireEvents() {
       qs("copyRequestButton").addEventListener("click", () => copyConnectorRequest().catch(error => log("Copy request failed.", { message: error.message })));
-      qs("openNetSuiteSearchButton").addEventListener("click", () => window.open(NETSUITE_SEARCH_URL, "_blank"));
       qs("importNetSuiteRosterButton").addEventListener("click", importNetSuiteRoster);
       qs("clearImportedRosterButton").addEventListener("click", clearImportedRoster);
       qs("loadFullRosterButton").addEventListener("click", () => loadFullRoster());
@@ -2379,6 +3027,34 @@
       });
       qs("checkGraphServiceButton").addEventListener("click", () => checkGraphService());
       qs("refreshGraphServiceButton").addEventListener("click", () => refreshWithGraphService());
+      qs("graphExplorerToken").addEventListener("input", () => {
+        if (String(qs("graphExplorerToken").value || "").trim()) {
+          setGraphExplorerStatus([{ text: "Token pasted; save or refresh to store encrypted", tone: "good" }]);
+        } else {
+          loadGraphExplorerToken().catch(error => setGraphExplorerStatus([{ text: error.message, tone: "bad" }]));
+        }
+      });
+      qs("saveGraphExplorerTokenButton").addEventListener("click", () => {
+        saveGraphExplorerToken(qs("graphExplorerToken").value).catch(error => setGraphExplorerStatus([
+          { text: "Token not saved", tone: "bad" },
+          { text: error.message, tone: "bad" }
+        ]));
+      });
+      qs("downloadGraphExplorerTokenButton").addEventListener("click", () => {
+        downloadGraphExplorerTokenFile().catch(error => setGraphExplorerStatus([
+          { text: "Token file not saved", tone: "bad" },
+          { text: error.message, tone: "bad" }
+        ]));
+      });
+      qs("graphExplorerTokenFile").addEventListener("change", () => {
+        loadGraphExplorerTokenFile().catch(error => setGraphExplorerStatus([
+          { text: "Token file not loaded", tone: "bad" },
+          { text: error.message, tone: "bad" }
+        ]));
+      });
+      qs("clearGraphExplorerTokenButton").addEventListener("click", () => clearGraphExplorerToken());
+      qs("probeGraphExplorerButton").addEventListener("click", () => refreshWithGraphExplorerToken({ probe: true }));
+      qs("refreshGraphExplorerButton").addEventListener("click", () => refreshWithGraphExplorerToken());
       qs("emails").addEventListener("input", () => {
         updateRosterStatus();
         renderCacheStatus();
@@ -2397,12 +3073,13 @@
       qs("openDashboardButton").addEventListener("click", openDashboard);
     }
 
-    loadSettings();
-    wireEvents();
-    renderCacheStatus();
-    updateNetSuiteRosterStatus();
-    updateRosterStatus();
-    log("Calendar sync configuration ready. Import the roster, select consultants, save the configuration, then prepare the Codex sync.");
+    runStartupStep("button wiring", wireEvents);
+    runStartupStep("settings load", loadSettings);
+    runStartupStep("cache status render", renderCacheStatus);
+    runStartupStep("NetSuite roster status render", updateNetSuiteRosterStatus);
+    runStartupStep("roster status render", updateRosterStatus);
+    markRuntimeReady();
+    log("Calendar refresh ready. Save a Graph Explorer token, import the SC roster, select consultants, then refresh via saved token.");
   </script>
 </body>
 </html>

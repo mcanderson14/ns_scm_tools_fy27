@@ -1,0 +1,14 @@
+SC Calendar Dashboard GitHub Pages package
+
+Start here:
+- INSTALL.txt
+- INSTALL-GRAPH-EXPLORER-TOKEN.md for Graph token details
+- GITHUB-PAGES-SETUP.md for GitHub Pages publishing
+- netsuite-sc-roster-calendar-refresh.user.js for optional NetSuite roster import
+- calendar-refresh.html
+- staffing-dashboard.html
+
+Privacy check:
+- direct-connector-events.js is the starter empty cache.
+- No Graph Explorer token is included.
+- Each user must sign into Graph Explorer and copy their own temporary token.

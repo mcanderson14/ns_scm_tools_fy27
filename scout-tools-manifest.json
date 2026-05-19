@@ -1,0 +1,29 @@
+{
+  "name": "FY27 SCM SCOUT Tools",
+  "version": "27.0.0.8",
+  "publishedAt": "2026-05-19",
+  "githubPagesBaseUrl": "https://mcanderson14.github.io/ns_scm_tools_fy27",
+  "repositoryUrl": "https://github.com/mcanderson14/ns_scm_tools_fy27",
+  "runMode": "github-pages-static-host",
+  "files": {
+    "dashboard": "https://mcanderson14.github.io/ns_scm_tools_fy27/staffing-dashboard.html",
+    "refresh": "https://mcanderson14.github.io/ns_scm_tools_fy27/calendar-refresh.html",
+    "installGuide": "INSTALL.txt",
+    "githubPagesSetupGuide": "GITHUB-PAGES-SETUP.md"
+  },
+  "userscripts": {
+    "scoutStaffingHelper": "scr-staffing-helper.user.js",
+    "rosterRefreshHelper": "netsuite-sc-roster-calendar-refresh.user.js",
+    "dashboardDataBridge": "sc-calendar-dashboard-bridge.user.js"
+  },
+  "localData": {
+    "primaryStorage": "browser localStorage for the GitHub Pages origin",
+    "bridgeStorage": "Tampermonkey extension storage",
+    "contains": [
+      "Graph Explorer encrypted token vault until token expiry",
+      "NetSuite SC roster cache",
+      "Microsoft Graph free/busy availability snapshots",
+      "dashboard preferences and refresh metadata"
+    ]
+  }
+}
