@@ -339,7 +339,7 @@
   <header>
     <div class="header-title-row">
       <h1>SC Calendar Refresh</h1>
-      <span class="version-pill">v27.0.2</span>
+      <span class="version-pill">v27.0.3</span>
     </div>
     <div class="subtitle">Get a Microsoft Graph Explorer token, build the NetSuite SC roster, then refresh staffing calendar availability for the dashboard.</div>
   </header>
@@ -394,7 +394,7 @@
 
         <div class="panel">
           <h2>Step 3. Refresh Via Saved Token</h2>
-          <p class="note">Choose the consultants and calendar window, then probe or refresh through the saved Graph Explorer token.</p>
+          <p class="note">Choose the consultants and calendar window, then test or refresh through the saved Graph Explorer token. Test does not update the dashboard cache.</p>
 
           <label for="emails">Consultant Emails</label>
           <textarea id="emails" placeholder="one.person@oracle.com, another.person@oracle.com"></textarea>
@@ -446,7 +446,7 @@
 
           <div class="actions">
             <button class="primary" id="refreshGraphExplorerButton" type="button">Refresh selected via token</button>
-            <button id="probeGraphExplorerButton" type="button">Probe first 3</button>
+            <button id="probeGraphExplorerButton" type="button">Test first 3 (no save)</button>
             <button class="primary legacy-handoff" id="copyRequestButton" type="button">Copy connector request</button>
             <button id="openDashboardButton" type="button">Open dashboard</button>
             <button class="danger" id="clearCacheButton" type="button">Clear local cache</button>
@@ -1310,12 +1310,17 @@
 
     function getSyncStatusForEmail(email) {
       const direct = getDirectConnectorData();
+      const cache = readLocalCache();
       const normalizedEmail = normalizeEmail(email);
-      const loaded = new Set(direct.loadedEmails).has(normalizedEmail);
-      const hasSnapshot = direct.availability.some(snapshot => normalizeEmail(snapshot.email) === normalizedEmail);
-      const hasDirectEvents = direct.directEvents.some(event => normalizeEmail(event.email) === normalizedEmail);
-      const warning = direct.warnings.find(item => normalizeEmail(item.email) === normalizedEmail);
-      const refreshedAt = direct.metadata?.refreshedAt || "";
+      const cachedLoadedEmails = Array.isArray(cache?.loadedEmails) ? cache.loadedEmails.map(normalizeEmail) : [];
+      const cachedAvailability = Array.isArray(cache?.availability) ? cache.availability : [];
+      const cachedEvents = Array.isArray(cache?.directEvents) ? cache.directEvents : [];
+      const cachedWarnings = Array.isArray(cache?.errors) ? cache.errors : [];
+      const loaded = new Set([...direct.loadedEmails, ...cachedLoadedEmails]).has(normalizedEmail);
+      const hasSnapshot = [...direct.availability, ...cachedAvailability].some(snapshot => normalizeEmail(snapshot.email) === normalizedEmail);
+      const hasDirectEvents = [...direct.directEvents, ...cachedEvents].some(event => normalizeEmail(event.email) === normalizedEmail);
+      const warning = [...direct.warnings, ...cachedWarnings].find(item => normalizeEmail(item.email) === normalizedEmail);
+      const refreshedAt = cache?.refreshedAt || direct.metadata?.refreshedAt || "";
 
       if (warning) {
         return {
@@ -1330,7 +1335,7 @@
         return {
           label: "Synced",
           tone: "good",
-          detail: hasSnapshot ? "Availability snapshot" : "Direct events",
+          detail: hasSnapshot ? "Graph availability snapshot" : "Direct events",
           lastSync: refreshedAt
         };
       }
@@ -1559,6 +1564,14 @@
       const selected = new Set(getConfiguredEmails());
       const status = qs("cacheStatus");
       const table = qs("cacheTable");
+      const activeLoadedEmails = cache && Array.isArray(cache.loadedEmails) ? cache.loadedEmails.map(normalizeEmail).filter(Boolean) : direct.loadedEmails;
+      const activeAvailability = cache && Array.isArray(cache.availability) ? cache.availability : direct.availability;
+      const activeEvents = cache && Array.isArray(cache.directEvents) ? cache.directEvents : direct.directEvents;
+      const activeWarnings = [
+        ...direct.warnings,
+        ...(cache && Array.isArray(cache.errors) ? cache.errors : [])
+      ];
+      const activeRefreshedAt = cache?.refreshedAt || direct.metadata?.refreshedAt || "";
       latestExportText = buildExport(cache);
       qs("exportOutput").textContent = latestExportText || "No export generated yet.";
 
@@ -1569,8 +1582,8 @@
       }
 
       const usableCalendarEmails = new Set([
-        ...direct.availability.map(snapshot => normalizeEmail(snapshot.email)).filter(Boolean),
-        ...direct.directEvents.map(event => normalizeEmail(event.email)).filter(Boolean)
+        ...activeAvailability.map(snapshot => normalizeEmail(snapshot.email)).filter(Boolean),
+        ...activeEvents.map(event => normalizeEmail(event.email)).filter(Boolean)
       ]);
 
       status.innerHTML = [
@@ -1578,10 +1591,10 @@
         `<span class="pill">${rows.length} visible</span>`,
         `<span class="pill">${roster.length} roster record${roster.length === 1 ? "" : "s"}</span>`,
         `<span class="pill good">${usableCalendarEmails.size} usable calendar${usableCalendarEmails.size === 1 ? "" : "s"}</span>`,
-        `<span class="pill">${direct.loadedEmails.length} attempted calendar${direct.loadedEmails.length === 1 ? "" : "s"}</span>`,
-        `<span class="pill">${direct.availability.length} availability snapshot${direct.availability.length === 1 ? "" : "s"}</span>`,
-        direct.warnings.length ? `<span class="pill bad">${direct.warnings.length} warning${direct.warnings.length === 1 ? "" : "s"}</span>` : "",
-        direct.metadata?.refreshedAt ? `<span class="pill">Last sync ${new Date(direct.metadata.refreshedAt).toLocaleString()}</span>` : '<span class="pill bad">Last sync unknown</span>'
+        `<span class="pill">${activeLoadedEmails.length} attempted calendar${activeLoadedEmails.length === 1 ? "" : "s"}</span>`,
+        `<span class="pill">${activeAvailability.length} availability snapshot${activeAvailability.length === 1 ? "" : "s"}</span>`,
+        activeWarnings.length ? `<span class="pill bad">${activeWarnings.length} warning${activeWarnings.length === 1 ? "" : "s"}</span>` : "",
+        activeRefreshedAt ? `<span class="pill">Last sync ${new Date(activeRefreshedAt).toLocaleString()}</span>` : '<span class="pill bad">Last sync unknown</span>'
       ].filter(Boolean).join("");
 
       table.innerHTML = [
@@ -2739,12 +2752,14 @@
           { text: probe ? "Probe complete" : "Refresh complete", tone: "good" },
           { text: `${combined.loadedEmails.length} loaded consultant${combined.loadedEmails.length === 1 ? "" : "s"}`, tone: "good" },
           { text: `${combined.availability.length} availability snapshot${combined.availability.length === 1 ? "" : "s"}`, tone: combined.availability.length ? "good" : "bad" },
+          probe ? { text: "Test only; dashboard not updated" } : { text: "Dashboard cache updated", tone: "good" },
           combined.errors.length ? { text: `${combined.errors.length} warning${combined.errors.length === 1 ? "" : "s"}`, tone: "bad" } : null
         ]);
         log(probe ? "Microsoft Graph Explorer token probe complete." : "Microsoft Graph Explorer token refresh complete.", {
           loadedEmails: combined.loadedEmails,
           availabilitySnapshots: combined.availability.length,
-          errors: combined.errors
+          errors: combined.errors,
+          dashboardUrl: probe ? null : buildDashboardUrl()
         });
       } catch (error) {
         setGraphExplorerStatus([
@@ -2999,10 +3014,27 @@
       log("Cleared local calendar cache.");
     }
 
-    function openDashboard() {
+    function buildDashboardUrl() {
       const params = new URLSearchParams(window.location.search);
       const dashboard = params.get("dashboard") || "staffing-dashboard.html";
-      window.open(dashboard, "_blank");
+      const url = new URL(dashboard, window.location.href);
+      const emails = getConfiguredEmails();
+      const start = qs("startDate")?.value || "";
+      const days = qs("days")?.value || "";
+      const interval = qs("interval")?.value || "";
+      const zone = qs("timeZone")?.value || "";
+
+      if (emails.length) url.searchParams.set("emails", emails.join(","));
+      if (start) url.searchParams.set("start", start);
+      if (days) url.searchParams.set("days", days);
+      if (interval) url.searchParams.set("interval", interval);
+      if (zone) url.searchParams.set("zone", zone);
+      url.searchParams.set("v", `sync-${Date.now()}`);
+      return url.toString();
+    }
+
+    function openDashboard() {
+      window.open(buildDashboardUrl(), "_blank");
     }
 
     function wireEvents() {

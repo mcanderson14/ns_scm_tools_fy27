@@ -714,7 +714,7 @@
       <div>
         <div class="title-row">
           <h1>SC Staffing Dashboard</h1>
-          <span class="version-pill">v27.0.2</span>
+          <span class="version-pill">v27.0.3</span>
         </div>
         <p class="header-subtitle">SC org calendar staffing view across a rolling 3-week window</p>
       </div>
@@ -8830,19 +8830,19 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     }
 
     function missingCalendarLabel(person) {
-      return isPendingCalendarConsultant(person) ? "Needs connector import" : "Snapshot gap";
+      return isPendingCalendarConsultant(person) ? "Needs Graph refresh" : "Snapshot gap";
     }
 
     function missingCalendarSentence(person) {
       if (isPendingCalendarConsultant(person)) {
-        return `No Outlook connector data has been imported for ${person.name || person.email}. Import this consultant's calendar data before treating this as open time.`;
+        return `No Graph refresh data has been saved for ${person.name || person.email}. Refresh this consultant's calendar before treating this as open time.`;
       }
 
       return "This consultant still needs 3-week Outlook snapshot data before treating this as open time.";
     }
 
     function missingCalendarSubtle(person) {
-      return isPendingCalendarConsultant(person) ? "connector import needed" : "calendar not loaded";
+      return isPendingCalendarConsultant(person) ? "Graph refresh needed" : "calendar not loaded";
     }
 
     function refreshCalendarData(options = {}) {
@@ -8958,7 +8958,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const importNeededText = importNeededNames.join(", ");
       const importNeeded = importNeededNames.length > 0;
       const sourceLabel = focusPerson
-        ? (importNeeded ? "local calendar sources checked; connector import missing" : refreshSource === "cache" ? "using cached data for selected consultant" : "focused consultant refresh")
+        ? (importNeeded ? "local calendar sources checked; Graph refresh missing" : refreshSource === "cache" ? "using cached data for selected consultant" : "focused consultant refresh")
         : refreshSource === "cache"
         ? "using cached calendar data"
         : "calendar data refreshed";
@@ -8971,13 +8971,13 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const partialCount = visibleRoster.length - loadedCount;
       if (focusPerson) {
         const focusState = focusMissing
-          ? `connector import needed for ${focusPerson.name || focusPerson.email}`
+          ? `Graph refresh needed for ${focusPerson.name || focusPerson.email}`
           : `calendar loaded for ${focusPerson.name || focusPerson.email}`;
         status.textContent = `Time zone: ${getZoneLabel(document.getElementById("planningZone").value)}; 3-week staffing snapshot: ${formatStaffingWindow()}; ${focusState}; ${sourceLabel}; cache ${cacheMinutes} min`;
         return;
       }
       if (pendingSelected.length) {
-        status.textContent = `Time zone: ${getZoneLabel(document.getElementById("planningZone").value)}; 3-week staffing snapshot: ${formatStaffingWindow()}; connector import needed for ${importNeededText}; ${loadedCount} loaded calendars in current filter; ${partialCount} gaps; local calendar sources checked; cache ${cacheMinutes} min`;
+        status.textContent = `Time zone: ${getZoneLabel(document.getElementById("planningZone").value)}; 3-week staffing snapshot: ${formatStaffingWindow()}; Graph refresh needed for ${importNeededText}; ${loadedCount} loaded calendars in current filter; ${partialCount} gaps; local calendar sources checked; cache ${cacheMinutes} min`;
         return;
       }
       status.textContent = `Time zone: ${getZoneLabel(document.getElementById("planningZone").value)}; 3-week staffing snapshot: ${formatStaffingWindow()}; ${loadedCount} loaded calendars in current filter; ${partialCount} snapshot gaps; ${sourceLabel}; cache ${cacheMinutes} min`;
@@ -9043,7 +9043,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         if (!rosterByEmail[debugEmail]) {
           likelyIssue = "The consultant email is not in the dashboard roster.";
         } else if (!snapshotLoaded && !directLoaded && !localGraphLoaded && embeddedCount === 0 && directEventCount === 0 && availabilityCount === 0 && localGraphCount === 0 && cacheCount === 0) {
-          likelyIssue = "The consultant is in the roster, but no local snapshot, imported Outlook connector events, local connector refresh data, free/busy availability snapshot, or cache records exist for this email yet. Import this consultant's Outlook calendar data and reload the dashboard.";
+          likelyIssue = "The consultant is in the roster, but no local snapshot, imported Outlook connector events, Graph refresh data, free/busy availability snapshot, or cache records exist for this email yet. Refresh this consultant on the token page and reopen the dashboard.";
         } else if (!snapshotLoaded && !directLoaded && !localGraphLoaded && rawCount === 0) {
           likelyIssue = "Calendar data exists elsewhere, but the current local refresh scope did not load records for this email.";
         } else {
@@ -9502,7 +9502,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const coverageDetail = focusedMissing
         ? ` ${missingCalendarSentence(focusedMissing)}`
         : pendingSelected.length
-        ? ` Connector import needed for ${pendingSelected.map(row => row.name || row.email).join(", ")}.`
+        ? ` Graph refresh needed for ${pendingSelected.map(row => row.name || row.email).join(", ")}.`
         : partialCount
         ? ` ${partialCount} consultants still need 3-week Outlook snapshot data; ${unknownCount} are not counted as open for this window.`
         : "";
