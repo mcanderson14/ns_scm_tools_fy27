@@ -42,13 +42,13 @@
     .app-header {
       background: #1f3447;
       color: #fff;
-      padding: 22px 28px 18px;
+      padding: 18px 28px;
       border-bottom: 1px solid rgba(255, 255, 255, 0.14);
     }
 
     .header-inner {
       display: flex;
-      align-items: flex-end;
+      align-items: center;
       justify-content: space-between;
       gap: 20px;
       max-width: 1680px;
@@ -59,12 +59,12 @@
       display: flex;
       align-items: center;
       gap: 14px;
-      min-width: 260px;
+      min-width: 190px;
     }
 
     .scout-logo {
-      width: 68px;
-      height: 68px;
+      width: 132px;
+      height: auto;
       object-fit: contain;
       flex: 0 0 auto;
     }
@@ -710,6 +710,7 @@
       .app-header,
       main { padding-left: 16px; padding-right: 16px; }
       .header-inner { align-items: flex-start; flex-direction: column; }
+      .scout-logo { width: 112px; }
       .header-actions,
       .refresh-panel,
       .refresh-row { justify-content: flex-start; justify-items: start; }
@@ -727,13 +728,7 @@
     <div class="header-inner">
       <div class="brand-row">
         <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
-        <div>
-          <div class="title-row">
-            <h1>SC Staffing Dashboard</h1>
-            <span class="version-pill">v27.0.8</span>
-          </div>
-          <p class="header-subtitle">SC org calendar staffing view across a rolling 3-week window</p>
-        </div>
+        <span class="version-pill">v27.0.9</span>
       </div>
       <div class="header-actions">
         <div class="refresh-panel">

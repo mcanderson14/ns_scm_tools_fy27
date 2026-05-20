@@ -32,7 +32,7 @@
     header {
       background: var(--navy);
       color: #fff;
-      padding: 24px 28px;
+      padding: 18px 28px 22px;
     }
 
     .header-title-row {
@@ -49,9 +49,13 @@
       flex-wrap: wrap;
     }
 
+    .header-copy {
+      margin-top: 10px;
+    }
+
     .scout-logo {
-      width: 68px;
-      height: 68px;
+      width: 132px;
+      height: auto;
       object-fit: contain;
       flex: 0 0 auto;
     }
@@ -223,6 +227,12 @@
       color: #fff;
     }
 
+    button.action-ready {
+      background: var(--green);
+      border-color: var(--green);
+      color: #fff;
+    }
+
     button.danger {
       color: var(--red);
     }
@@ -251,6 +261,12 @@
       margin: 0;
       color: var(--muted);
       line-height: 1.45;
+    }
+
+    .input-ready {
+      border-color: rgba(36, 114, 68, 0.75);
+      background: #f4fbf6;
+      box-shadow: 0 0 0 3px rgba(36, 114, 68, 0.1);
     }
 
     .status {
@@ -359,6 +375,7 @@
       .toolbar { grid-template-columns: 1fr; }
       main { padding-left: 16px; padding-right: 16px; }
       header { padding-left: 16px; padding-right: 16px; }
+      .scout-logo { width: 112px; }
     }
   </style>
 </head>
@@ -366,13 +383,11 @@
   <header>
     <div class="brand-row">
       <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
-      <div>
-        <div class="header-title-row">
-          <h1>SC Calendar Refresh</h1>
-          <span class="version-pill">v27.0.8</span>
-        </div>
-        <div class="subtitle">Get a Microsoft Graph Explorer token, build the NetSuite SC roster, then refresh staffing calendar availability for the dashboard.</div>
-      </div>
+      <span class="version-pill">v27.0.9</span>
+    </div>
+    <div class="header-copy">
+      <h1>SC Calendar Refresh</h1>
+      <div class="subtitle">Follow the steps below to refresh the SC Calendars</div>
     </div>
   </header>
 
@@ -390,14 +405,9 @@
       </div>
       <label for="graphExplorerToken">Graph Explorer Access Token</label>
       <textarea id="graphExplorerToken" placeholder="Paste access token from Graph Explorer"></textarea>
-      <p class="note" style="margin-top: 8px;">After save, the token is hidden from the page and kept in an encrypted browser vault until the token's JWT expiry. Export/import uses an encrypted token file protected by the passphrase below.</p>
-      <label for="graphExplorerTokenPassphrase">Encrypted Token File Passphrase</label>
-      <input type="password" id="graphExplorerTokenPassphrase" autocomplete="new-password" placeholder="Required only to export or import an encrypted token file">
+      <p class="note" style="margin-top: 8px;">After save, the token is hidden from the page and kept encrypted in this browser until the token expires. Paste a fresh token after Microsoft Graph Explorer issues a new one.</p>
       <div class="actions">
-        <button class="primary" id="saveGraphExplorerTokenButton" type="button">Save encrypted token</button>
-        <button id="downloadGraphExplorerTokenButton" type="button">Save encrypted token file</button>
-        <label class="button-link" for="graphExplorerTokenFile">Load encrypted token file</label>
-        <input id="graphExplorerTokenFile" type="file" accept="application/json,.json" hidden>
+        <button class="primary" id="saveGraphExplorerTokenButton" type="button">Save token until it expires</button>
         <button id="clearGraphExplorerTokenButton" type="button">Clear saved token</button>
       </div>
       <div class="status" id="graphExplorerStatus">
@@ -409,7 +419,7 @@
       <section>
         <div class="panel">
           <h2>Step 2. Build NetSuite SC Roster</h2>
-          <p class="note">Open the SC roster search, copy the JSON or copied search rows, paste the data in the box below, then click Import and save roster.</p>
+          <p class="note">Only complete this step when the roster is empty or stale. The imported roster stays saved in this browser until you clear it or the browser storage is reset.</p>
           <div class="actions">
             <a class="button-link oracle-red" href="https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl?rectype=1572&amp;searchtype=Custom&amp;style=REPORT&amp;sortcol=Custom_NAME_raw&amp;sortdir=ASC&amp;csv=HTML&amp;OfficeXML=F&amp;pdf=&amp;size=50&amp;twbx=F&amp;report=T&amp;grid=&amp;searchid=1311451&amp;dle=T" target="_top" rel="noopener noreferrer">Open SC roster search</a>
           </div>
@@ -417,7 +427,7 @@
           <textarea id="netsuiteRosterText" placeholder='Paste saved-search JSON like {"people":[...]} or copied NetSuite result rows here'></textarea>
           <div class="actions">
             <button class="primary" id="importNetSuiteRosterButton" type="button">Import and save roster</button>
-            <button id="clearImportedRosterButton" type="button">Clear imported roster</button>
+            <button id="clearImportedRosterButton" type="button">Clear imported roster from this browser</button>
           </div>
           <div class="status" id="netsuiteRosterStatus">
             <span class="pill">No NetSuite roster imported</span>
@@ -426,15 +436,10 @@
 
         <div class="panel">
           <h2>Step 3. Refresh Via Saved Token</h2>
-          <p class="note">Choose the consultants and calendar window, then test or refresh through the saved Graph Explorer token. Test does not update the dashboard cache.</p>
+          <p class="note">Use Roster Configuration to choose the SCs, confirm the calendar window, then refresh through the saved Graph Explorer token. Test does not update the dashboard cache.</p>
 
           <label for="emails">Consultant Emails</label>
           <textarea id="emails" placeholder="one.person@oracle.com, another.person@oracle.com"></textarea>
-          <div class="actions">
-            <button id="loadFullRosterButton" type="button">Load full SC roster</button>
-            <button id="selectAllRefreshButton" type="button">Select all for refresh</button>
-            <button id="appendFullRosterButton" type="button">Append full roster</button>
-          </div>
           <div class="status" id="rosterStatus">
             <span class="pill">Roster not loaded</span>
           </div>
@@ -571,6 +576,7 @@
             </div>
           </div>
           <div class="actions">
+            <button id="selectAllRefreshButton" type="button">Select all roster</button>
             <button id="selectVisibleRosterButton" type="button">Select visible</button>
             <button id="clearVisibleRosterButton" type="button">Clear visible</button>
             <button id="selectUnsyncedRosterButton" type="button">Select missing sync</button>
@@ -1011,6 +1017,7 @@
             `<span class="pill">Saved ${new Date(imported.importedAt).toLocaleString()}</span>`
           ].join("")
         : '<span class="pill">No NetSuite roster imported</span>';
+      updateFormReadiness();
     }
 
     function saveImportedRoster(people, source = NETSUITE_SEARCH_URL) {
@@ -1073,6 +1080,8 @@
       }
 
       const deduped = saveImportedRoster(people, NETSUITE_SEARCH_URL);
+      qs("netsuiteRosterText").value = "";
+      updateFormReadiness();
       log("Imported NetSuite saved search roster.", {
         people: deduped.length,
         source: NETSUITE_SEARCH_URL
@@ -1101,11 +1110,13 @@
             `<span class="pill">${managers.length} SC manager${managers.length === 1 ? "" : "s"}</span>`
           ].join("")
         : '<span class="pill bad">Import the NetSuite SC saved search roster first</span>';
+      updateFormReadiness();
     }
 
     function setEmails(emails, options = {}) {
       qs("emails").value = [...new Set(emails.map(normalizeEmail).filter(Boolean))].sort().join(", ");
       updateRosterStatus();
+      updateFormReadiness();
       if (!options.skipRender) renderCacheStatus();
     }
 
@@ -1775,6 +1786,33 @@
       warning.hidden = Number(qs("days")?.value || 0) <= 21;
     }
 
+    function setInputReady(id, ready) {
+      const element = qs(id);
+      if (element) element.classList.toggle("input-ready", Boolean(ready));
+    }
+
+    function setButtonReady(id, ready) {
+      const button = qs(id);
+      if (button) button.classList.toggle("action-ready", Boolean(ready));
+    }
+
+    function updateFormReadiness() {
+      const tokenText = String(qs("graphExplorerToken")?.value || "").trim();
+      const rosterText = String(qs("netsuiteRosterText")?.value || "").trim();
+      const selectedEmails = parseEmails(qs("emails")?.value || "");
+      const hasSavedToken = Boolean(readGraphExplorerTokenVault());
+      const hasRoster = Boolean(getAvailableRoster().length);
+
+      setInputReady("graphExplorerToken", tokenText);
+      setButtonReady("saveGraphExplorerTokenButton", tokenText);
+      setInputReady("netsuiteRosterText", rosterText);
+      setButtonReady("importNetSuiteRosterButton", rosterText);
+      setInputReady("emails", selectedEmails.length);
+      setButtonReady("selectAllRefreshButton", hasRoster);
+      setButtonReady("refreshGraphExplorerButton", selectedEmails.length && (tokenText || hasSavedToken));
+      setButtonReady("probeGraphExplorerButton", selectedEmails.length && (tokenText || hasSavedToken));
+    }
+
     function compactRosterPerson(person) {
       return {
         id: person.id || "",
@@ -2402,10 +2440,6 @@
       }
     }
 
-    function getGraphExplorerTokenPassphrase() {
-      return String(qs("graphExplorerTokenPassphrase")?.value || "");
-    }
-
     function bytesToBase64(bytes) {
       let binary = "";
       for (let index = 0; index < bytes.length; index += 0x8000) {
@@ -2449,7 +2483,7 @@
 
     async function deriveGraphExplorerPassphraseKey(passphrase, saltBytes, iterations = 210000) {
       ensureGraphCrypto();
-      if (!passphrase) throw new Error("Enter the encrypted token file passphrase first.");
+      if (!passphrase) throw new Error("Enter the saved token passphrase first.");
       const baseKey = await window.crypto.subtle.importKey(
         "raw",
         new TextEncoder().encode(passphrase),
@@ -2520,7 +2554,7 @@
     async function decryptGraphExplorerTokenRecord(record, { passphrase = "" } = {}) {
       ensureGraphCrypto();
       if (!record || record.kind !== "sc-calendar-graph-explorer-token-vault" || !record.ciphertext || !record.iv) {
-        throw new Error("This is not a recognized encrypted Graph Explorer token file.");
+        throw new Error("This is not a recognized saved Graph Explorer token.");
       }
 
       const iv = base64ToBytes(record.iv);
@@ -2590,11 +2624,12 @@
       window.sessionStorage.removeItem(GRAPH_EXPLORER_TOKEN_SESSION_KEY);
       if (qs("graphExplorerToken")) {
         qs("graphExplorerToken").value = "";
-        qs("graphExplorerToken").placeholder = "Encrypted token saved. Paste a replacement token here after it expires.";
+        qs("graphExplorerToken").placeholder = "Token saved until it expires. Paste a fresh replacement token here after it expires.";
       }
+      updateFormReadiness();
       if (!silent) {
         setGraphExplorerStatus([
-          { text: "Encrypted token saved", tone: "good" },
+          { text: "Token saved", tone: "good" },
           record.expiresAt ? { text: formatTokenExpiry(record.expiresAt), tone: "good" } : null
         ]);
       }
@@ -2621,16 +2656,18 @@
       const stored = await getStoredGraphExplorerToken();
       if (!stored?.token) {
         setGraphExplorerStatus([{ text: "No saved token" }]);
+        updateFormReadiness();
         return;
       }
       if (qs("graphExplorerToken")) {
         qs("graphExplorerToken").value = "";
-        qs("graphExplorerToken").placeholder = "Encrypted token saved. Paste a replacement token here after it expires.";
+        qs("graphExplorerToken").placeholder = "Token saved until it expires. Paste a fresh replacement token here after it expires.";
       }
       setGraphExplorerStatus([
-        { text: "Encrypted token ready", tone: "good" },
+        { text: "Saved token ready", tone: "good" },
         stored.expiresAt ? { text: formatTokenExpiry(stored.expiresAt), tone: "good" } : null
       ]);
+      updateFormReadiness();
     }
 
     function clearGraphExplorerToken({ silent = false, keepField = false } = {}) {
@@ -2641,6 +2678,7 @@
         // Ignore storage cleanup failures.
       }
       if (!keepField && qs("graphExplorerToken")) qs("graphExplorerToken").value = "";
+      updateFormReadiness();
       if (!silent && qs("graphExplorerStatus")) {
         setGraphExplorerStatus([{ text: "Saved token cleared" }]);
       }
@@ -2653,71 +2691,9 @@
         const stored = await getStoredGraphExplorerToken();
         token = stored?.token || "";
       }
-      if (!token) throw new Error("Paste a Graph Explorer access token first, or load a saved encrypted token file.");
+      if (!token) throw new Error("Paste a Graph Explorer access token first, then save it or refresh while it is pasted.");
       await saveGraphExplorerToken(token, { silent: true });
       return token;
-    }
-
-    async function saveTextFile(fileName, text, type = "application/json") {
-      const blob = new Blob([text], { type });
-      if (window.showSaveFilePicker) {
-        try {
-          const handle = await window.showSaveFilePicker({
-            suggestedName: fileName,
-            types: [{ description: "JSON file", accept: { [type]: [".json"] } }]
-          });
-          const writable = await handle.createWritable();
-          await writable.write(blob);
-          await writable.close();
-          return true;
-        } catch (error) {
-          if (error.name === "AbortError") return false;
-        }
-      }
-
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(link.href);
-      return true;
-    }
-
-    async function downloadGraphExplorerTokenFile() {
-      const passphrase = getGraphExplorerTokenPassphrase();
-      if (!passphrase) throw new Error("Enter a passphrase before saving an encrypted token file.");
-      const token = await getGraphExplorerToken();
-      const record = await encryptGraphExplorerTokenRecord(token, { passphrase });
-      const saved = await saveTextFile("graph-explorer-token.encrypted.json", JSON.stringify(record, null, 2));
-      if (!saved) {
-        setGraphExplorerStatus([{ text: "Encrypted token file save cancelled" }]);
-        return;
-      }
-      setGraphExplorerStatus([
-        { text: "Encrypted token file saved", tone: "good" },
-        record.expiresAt ? { text: formatTokenExpiry(record.expiresAt), tone: "good" } : null
-      ]);
-    }
-
-    async function loadGraphExplorerTokenFile() {
-      const input = qs("graphExplorerTokenFile");
-      const file = input?.files?.[0];
-      if (!file) return;
-      try {
-        const passphrase = getGraphExplorerTokenPassphrase();
-        if (!passphrase) throw new Error("Enter the encrypted token file passphrase first.");
-        const record = JSON.parse(await file.text());
-        const payload = await decryptGraphExplorerTokenRecord(record, { passphrase });
-        await saveGraphExplorerToken(payload.token, { silent: true });
-        setGraphExplorerStatus([
-          { text: "Encrypted token file loaded", tone: "good" },
-          payload.expiresAt ? { text: formatTokenExpiry(payload.expiresAt), tone: "good" } : null
-        ]);
-      } finally {
-        input.value = "";
-      }
     }
 
     function setGraphExplorerStatus(items) {
@@ -3204,9 +3180,7 @@
       qs("copyRequestButton").addEventListener("click", () => copyConnectorRequest().catch(error => log("Copy request failed.", { message: error.message })));
       qs("importNetSuiteRosterButton").addEventListener("click", importNetSuiteRoster);
       qs("clearImportedRosterButton").addEventListener("click", clearImportedRoster);
-      qs("loadFullRosterButton").addEventListener("click", () => loadFullRoster());
       qs("selectAllRefreshButton").addEventListener("click", selectAllForRefresh);
-      qs("appendFullRosterButton").addEventListener("click", () => loadFullRoster({ append: true }));
       qs("useCurrentFolderButton").addEventListener("click", useCurrentPageFolder);
       qs("saveProjectFolderButton").addEventListener("click", () => saveProjectFolder());
       qs("saveSyncConfigButton").addEventListener("click", () => {
@@ -3263,9 +3237,18 @@
       qs("refreshGraphServiceButton").addEventListener("click", () => refreshWithGraphService());
       qs("days").addEventListener("input", updateDaysWarning);
       qs("days").addEventListener("change", updateDaysWarning);
+      qs("netsuiteRosterText").addEventListener("input", () => {
+        updateFormReadiness();
+        if (String(qs("netsuiteRosterText").value || "").trim()) {
+          qs("netsuiteRosterStatus").innerHTML = '<span class="pill good">Roster data pasted; click Import and save roster</span>';
+        } else {
+          updateNetSuiteRosterStatus();
+        }
+      });
       qs("graphExplorerToken").addEventListener("input", () => {
+        updateFormReadiness();
         if (String(qs("graphExplorerToken").value || "").trim()) {
-          setGraphExplorerStatus([{ text: "Token pasted; save or refresh to store encrypted", tone: "good" }]);
+          setGraphExplorerStatus([{ text: "Token pasted; click Save token or Refresh", tone: "good" }]);
         } else {
           loadGraphExplorerToken().catch(error => setGraphExplorerStatus([{ text: error.message, tone: "bad" }]));
         }
@@ -3276,23 +3259,12 @@
           { text: error.message, tone: "bad" }
         ]));
       });
-      qs("downloadGraphExplorerTokenButton").addEventListener("click", () => {
-        downloadGraphExplorerTokenFile().catch(error => setGraphExplorerStatus([
-          { text: "Token file not saved", tone: "bad" },
-          { text: error.message, tone: "bad" }
-        ]));
-      });
-      qs("graphExplorerTokenFile").addEventListener("change", () => {
-        loadGraphExplorerTokenFile().catch(error => setGraphExplorerStatus([
-          { text: "Token file not loaded", tone: "bad" },
-          { text: error.message, tone: "bad" }
-        ]));
-      });
       qs("clearGraphExplorerTokenButton").addEventListener("click", () => clearGraphExplorerToken());
       qs("probeGraphExplorerButton").addEventListener("click", () => refreshWithGraphExplorerToken({ probe: true }));
       qs("refreshGraphExplorerButton").addEventListener("click", () => refreshWithGraphExplorerToken());
       qs("emails").addEventListener("input", () => {
         updateRosterStatus();
+        updateFormReadiness();
         renderCacheStatus();
       });
       qs("saveResultButton").addEventListener("click", () => {
@@ -3315,8 +3287,9 @@
     runStartupStep("NetSuite roster status render", updateNetSuiteRosterStatus);
     runStartupStep("roster status render", updateRosterStatus);
     runStartupStep("days warning render", updateDaysWarning);
+    runStartupStep("action readiness render", updateFormReadiness);
     markRuntimeReady();
-    log("Calendar refresh ready. Save a Graph Explorer token, import the SC roster, select consultants, then refresh via saved token.");
+    log("Calendar refresh ready. Save a Graph Explorer token, confirm the SC roster selection, then refresh via saved token.");
   </script>
 </body>
 </html>
