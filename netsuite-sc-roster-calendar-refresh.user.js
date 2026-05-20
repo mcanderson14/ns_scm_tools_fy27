@@ -1,9 +1,11 @@
 // ==UserScript==
 // @name         NetSuite SC Roster Calendar Refresh Helper
 // @namespace    scm-tools-calendar-refresh
-// @version      27.0.0.8
+// @version      27.0.0.9
 // @description  Copies the NetSuite SC roster saved search into the calendar refresh page.
 // @author       Michael Anderson
+// @updateURL    https://mcanderson14.github.io/ns_scm_tools_fy27/netsuite-sc-roster-calendar-refresh.user.js
+// @downloadURL  https://mcanderson14.github.io/ns_scm_tools_fy27/netsuite-sc-roster-calendar-refresh.user.js
 // @include      https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl*searchid=1311451*
 // @match        https://mcanderson14.github.io/ns_scm_tools_fy27/calendar-refresh.html*
 // @match        https://raw.githack.com/mcanderson14/ns_scm_tools_fy27/*/calendar-refresh.html*
