@@ -714,7 +714,7 @@
       <div>
         <div class="title-row">
           <h1>SC Staffing Dashboard</h1>
-          <span class="version-pill">v27.0.3</span>
+          <span class="version-pill">v27.0.4</span>
         </div>
         <p class="header-subtitle">SC org calendar staffing view across a rolling 3-week window</p>
       </div>
@@ -8140,9 +8140,7 @@
       other: { label: "Review", pill: "review" }
     };
 
-    const STAFFING_WINDOW_START = "2026-05-06";
     const STAFFING_WINDOW_DAYS = 21;
-    const STAFFING_WINDOW_END = addDaysIso(STAFFING_WINDOW_START, STAFFING_WINDOW_DAYS - 1);
 
 const SNAPSHOT_LOADED_EMAILS = new Set([
     "abbey.vahhaji@oracle.com",
@@ -8269,18 +8267,70 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       return dates.filter(Boolean).sort().pop();
     }
 
-    function getActiveStaffingWindowStart() {
+    function isIsoDate(value) {
+      return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
+    }
+
+    function getLaunchStaffingWindowStart(params = getLaunchParams()) {
+      const candidates = [
+        params.get("windowStart"),
+        params.get("startDate"),
+        params.get("rangeStart"),
+        params.get("start"),
+        params.get("date")
+      ];
+      return candidates.find(isIsoDate) || "";
+    }
+
+    function getLaunchStaffingWindowDays(params = getLaunchParams()) {
+      const value = Number(params.get("days") || params.get("windowDays") || params.get("rangeDays") || 0);
+      return Number.isFinite(value) && value > 0 ? Math.min(62, Math.round(value)) : 0;
+    }
+
+    function getCacheStaffingWindow() {
+      const cache = readLocalGraphCache();
+      const start = isIsoDate(cache?.start) ? cache.start : "";
+      const endExclusive = isIsoDate(cache?.end) ? cache.end : "";
+      const days = start && endExclusive ? diffIsoDays(start, endExclusive) : 0;
+      return start && days > 0 ? { start, days } : null;
+    }
+
+    function getConfiguredStaffingWindow() {
+      const params = getLaunchParams();
+      const cacheWindow = getCacheStaffingWindow();
       const today = getIsoDateInZone();
-      const activeStart = maxIsoDate(STAFFING_WINDOW_START, today);
-      return activeStart > STAFFING_WINDOW_END ? STAFFING_WINDOW_END : activeStart;
+      const start = getLaunchStaffingWindowStart(params) || cacheWindow?.start || today;
+      const days = getLaunchStaffingWindowDays(params) || cacheWindow?.days || STAFFING_WINDOW_DAYS;
+      let endExclusive = addDaysIso(start, days);
+      let activeStart = maxIsoDate(start, today);
+      if (activeStart >= endExclusive) {
+        activeStart = today;
+        endExclusive = addDaysIso(today, days);
+      }
+
+      return {
+        start,
+        activeStart,
+        endExclusive,
+        endInclusive: addDaysIso(endExclusive, -1),
+        days: Math.max(1, diffIsoDays(activeStart, endExclusive))
+      };
+    }
+
+    function getActiveStaffingWindowStart() {
+      return getConfiguredStaffingWindow().activeStart;
     }
 
     function getActiveStaffingWindowEndExclusive() {
-      return addDaysIso(STAFFING_WINDOW_END, 1);
+      return getConfiguredStaffingWindow().endExclusive;
+    }
+
+    function getActiveStaffingWindowEndInclusive() {
+      return getConfiguredStaffingWindow().endInclusive;
     }
 
     function getActiveStaffingWindowDays() {
-      return Math.max(1, diffIsoDays(getActiveStaffingWindowStart(), getActiveStaffingWindowEndExclusive()));
+      return getConfiguredStaffingWindow().days;
     }
 
     function formatIsoDate(dateValue) {
@@ -8297,7 +8347,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     function formatStaffingWindow() {
       const activeStart = getActiveStaffingWindowStart();
       const start = formatIsoDate(activeStart);
-      const end = formatIsoDate(STAFFING_WINDOW_END);
+      const end = formatIsoDate(getActiveStaffingWindowEndInclusive());
       return `${start.replace(`, ${activeStart.slice(0, 4)}`, "")} - ${end}`;
     }
 
@@ -8305,10 +8355,11 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const input = document.getElementById("meetingDate");
       if (!input) return;
       const activeStart = getActiveStaffingWindowStart();
+      const activeEnd = getActiveStaffingWindowEndInclusive();
       input.min = activeStart;
-      input.max = STAFFING_WINDOW_END;
+      input.max = activeEnd;
       if (!input.value || input.value < activeStart) input.value = activeStart;
-      if (input.value > STAFFING_WINDOW_END) input.value = STAFFING_WINDOW_END;
+      if (input.value > activeEnd) input.value = activeEnd;
     }
 
     function normalizeEvents(events) {
@@ -10358,6 +10409,8 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         document.getElementById("meetingDate").value = date;
         configureDateWindow();
       } else {
+        const windowStart = getLaunchStaffingWindowStart(params);
+        if (windowStart) document.getElementById("meetingDate").value = windowStart;
         configureDateWindow();
       }
 
