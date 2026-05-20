@@ -55,6 +55,20 @@
       margin: 0 auto;
     }
 
+    .brand-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 260px;
+    }
+
+    .scout-logo {
+      width: 68px;
+      height: 68px;
+      object-fit: contain;
+      flex: 0 0 auto;
+    }
+
     h1 {
       margin: 0;
       font-size: 26px;
@@ -711,17 +725,20 @@
 <body>
   <header class="app-header">
     <div class="header-inner">
-      <div>
-        <div class="title-row">
-          <h1>SC Staffing Dashboard</h1>
-          <span class="version-pill">v27.0.7</span>
+      <div class="brand-row">
+        <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
+        <div>
+          <div class="title-row">
+            <h1>SC Staffing Dashboard</h1>
+            <span class="version-pill">v27.0.8</span>
+          </div>
+          <p class="header-subtitle">SC org calendar staffing view across a rolling 3-week window</p>
         </div>
-        <p class="header-subtitle">SC org calendar staffing view across a rolling 3-week window</p>
       </div>
       <div class="header-actions">
         <div class="refresh-panel">
           <div class="refresh-row">
-            <button class="refresh-button" id="refreshButton" type="button">Refresh selected</button>
+            <button class="refresh-button" id="refreshButton" type="button" title="Refresh the current dashboard scope with the saved Graph token">Refresh selected via token</button>
             <button class="refresh-button" id="openRefreshConsoleButton" type="button" title="Open the calendar refresh page with the current dashboard scope">Open token refresh</button>
             <div class="snapshot-pill" id="lastRefreshLabel">Last refresh pending</div>
           </div>
@@ -8986,6 +9003,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const focusEmail = getCalendarFocusEmail({ focusEmail: options.focusEmail, includeSelected: false });
       const selectedEmails = getLaunchSelectedEmailSet();
       const cached = readCalendarCache();
+      const localGraphCache = readLocalGraphCache();
       const cacheIsFresh = cached && Date.now() - Number(cached.cachedAt || cached.refreshedAt) < CACHE_TTL_MS;
       const selectedEmailList = [...selectedEmails];
 
@@ -9014,7 +9032,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         });
       } else {
         rawEvents = cloneEmbeddedEvents(focusEmail, selectedEmails);
-        lastRefreshAt = new Date();
+        lastRefreshAt = localGraphCache?.refreshedAt ? new Date(localGraphCache.refreshedAt) : null;
         refreshSource = focusEmail
           ? (force ? "focused manual refresh" : "focused snapshot refresh")
           : selectedEmails.size
@@ -9027,10 +9045,11 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
           selectedRefresh: Boolean(selectedEmails.size)
         });
         if (!focusEmail && !selectedEmails.size) {
-          writeCalendarCache(rawEvents, lastRefreshAt.toISOString());
+          const cacheTimestamp = lastRefreshAt ? lastRefreshAt.toISOString() : new Date().toISOString();
+          writeCalendarCache(rawEvents, cacheTimestamp);
           logCalendarActivity("cache-write", {
             eventsCached: rawEvents.length,
-            refreshedAt: lastRefreshAt.toISOString()
+            refreshedAt: cacheTimestamp
           });
         }
       }

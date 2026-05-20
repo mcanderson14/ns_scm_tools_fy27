@@ -42,6 +42,20 @@
       flex-wrap: wrap;
     }
 
+    .brand-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .scout-logo {
+      width: 68px;
+      height: 68px;
+      object-fit: contain;
+      flex: 0 0 auto;
+    }
+
     h1 {
       margin: 0;
       font-size: 24px;
@@ -65,6 +79,19 @@
       color: rgba(255, 255, 255, 0.74);
       line-height: 1.45;
     }
+
+    .field-warning {
+      margin-top: 8px;
+      color: #8b2b22;
+      background: #fff0ed;
+      border: 1px solid #efb9b2;
+      border-radius: 7px;
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .field-warning[hidden] { display: none; }
 
     main {
       padding: 22px 28px 32px;
@@ -337,11 +364,16 @@
 </head>
 <body>
   <header>
-    <div class="header-title-row">
-      <h1>SC Calendar Refresh</h1>
-      <span class="version-pill">v27.0.7</span>
+    <div class="brand-row">
+      <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
+      <div>
+        <div class="header-title-row">
+          <h1>SC Calendar Refresh</h1>
+          <span class="version-pill">v27.0.8</span>
+        </div>
+        <div class="subtitle">Get a Microsoft Graph Explorer token, build the NetSuite SC roster, then refresh staffing calendar availability for the dashboard.</div>
+      </div>
     </div>
-    <div class="subtitle">Get a Microsoft Graph Explorer token, build the NetSuite SC roster, then refresh staffing calendar availability for the dashboard.</div>
   </header>
 
   <main>
@@ -415,6 +447,7 @@
             <div>
               <label for="days">Days</label>
               <input type="number" id="days" min="1" max="62" value="21">
+              <div class="field-warning" id="daysWarning" hidden>Refreshing more than 21 days may exceed available browser cache. Use smaller batches if the sync fails.</div>
             </div>
           </div>
 
@@ -1734,6 +1767,12 @@
           setEmails([...current]);
         });
       });
+    }
+
+    function updateDaysWarning() {
+      const warning = qs("daysWarning");
+      if (!warning) return;
+      warning.hidden = Number(qs("days")?.value || 0) <= 21;
     }
 
     function compactRosterPerson(person) {
@@ -3222,6 +3261,8 @@
       });
       qs("checkGraphServiceButton").addEventListener("click", () => checkGraphService());
       qs("refreshGraphServiceButton").addEventListener("click", () => refreshWithGraphService());
+      qs("days").addEventListener("input", updateDaysWarning);
+      qs("days").addEventListener("change", updateDaysWarning);
       qs("graphExplorerToken").addEventListener("input", () => {
         if (String(qs("graphExplorerToken").value || "").trim()) {
           setGraphExplorerStatus([{ text: "Token pasted; save or refresh to store encrypted", tone: "good" }]);
@@ -3273,6 +3314,7 @@
     runStartupStep("cache status render", renderCacheStatus);
     runStartupStep("NetSuite roster status render", updateNetSuiteRosterStatus);
     runStartupStep("roster status render", updateRosterStatus);
+    runStartupStep("days warning render", updateDaysWarning);
     markRuntimeReady();
     log("Calendar refresh ready. Save a Graph Explorer token, import the SC roster, select consultants, then refresh via saved token.");
   </script>
