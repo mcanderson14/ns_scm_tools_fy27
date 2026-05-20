@@ -65,6 +65,7 @@
     }
 
     .quick-links,
+    .browser-warning,
     .step {
       background: var(--surface);
       border: 1px solid var(--line);
@@ -78,6 +79,11 @@
       display: grid;
       gap: 10px;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+
+    .browser-warning {
+      border-color: #efc9a8;
+      background: #fff8ef;
     }
 
     h2 {
@@ -118,6 +124,11 @@
       text-decoration: none;
     }
 
+    button.button {
+      cursor: pointer;
+      font: inherit;
+    }
+
     .button.primary {
       background: var(--oracle);
       border-color: #a63a2d;
@@ -128,6 +139,28 @@
       background: #eef8f7;
       border-color: #b9dcd8;
       color: #0d625d;
+    }
+
+    .button.copy {
+      background: #fff;
+      border-color: #c8d2dc;
+      color: #344457;
+      min-height: 34px;
+      padding: 6px 10px;
+    }
+
+    .link-row {
+      align-items: center;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .copy-status {
+      color: var(--teal);
+      font-size: 13px;
+      font-weight: 750;
+      min-height: 20px;
     }
 
     .note {
@@ -160,19 +193,35 @@
   </header>
 
   <main>
+    <section class="browser-warning">
+      <h2>Use Chrome Or Edge</h2>
+      <p>This guide works best in the browser where Tampermonkey is installed. If a link opens inside ChatGPT/Codex and shows a <strong>431 Request Header Fields Too Large</strong> error, click <strong>Copy link</strong> and paste it into Chrome or Edge.</p>
+      <div class="copy-status" id="copyStatus" aria-live="polite"></div>
+    </section>
+
     <section class="quick-links" aria-label="Quick links">
-      <a class="button primary" href="https://mcanderson14.github.io/ns_scm_tools_fy27/calendar-refresh.html" target="_blank" rel="noopener noreferrer">Open Calendar Refresh</a>
-      <a class="button secondary" href="https://mcanderson14.github.io/ns_scm_tools_fy27/staffing-dashboard.html" target="_blank" rel="noopener noreferrer">Open Staffing Dashboard</a>
-      <a class="button secondary" href="https://www.tampermonkey.net/" target="_blank" rel="noopener noreferrer">Install Tampermonkey</a>
-      <a class="button secondary" href="https://developer.microsoft.com/en-us/graph/graph-explorer" target="_blank" rel="noopener noreferrer">Open Graph Explorer</a>
+      <a class="button primary" href="https://mcanderson14.github.io/ns_scm_tools_fy27/calendar-refresh.html">Open Calendar Refresh</a>
+      <a class="button secondary" href="https://mcanderson14.github.io/ns_scm_tools_fy27/staffing-dashboard.html">Open Staffing Dashboard</a>
+      <a class="button secondary" href="https://www.tampermonkey.net/">Install Tampermonkey</a>
+      <a class="button secondary" href="https://developer.microsoft.com/en-us/graph/graph-explorer">Open Graph Explorer</a>
     </section>
 
     <section class="step">
       <h2>Step 1. Install Browser Scripts</h2>
       <p>Install Tampermonkey in Chrome or Edge, then open each userscript link below and install it when Tampermonkey prompts you.</p>
       <ol>
-        <li><a href="https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/scr-staffing-helper.user.js" target="_blank" rel="noopener noreferrer">Install SCOUT staffing helper</a>.</li>
-        <li><a href="https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/netsuite-sc-roster-calendar-refresh.user.js" target="_blank" rel="noopener noreferrer">Install NetSuite SC roster refresh helper</a>.</li>
+        <li>
+          <div class="link-row">
+            <a href="https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/scr-staffing-helper.user.js">Install SCOUT staffing helper</a>
+            <button class="button copy" type="button" data-copy="https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/scr-staffing-helper.user.js">Copy link</button>
+          </div>
+        </li>
+        <li>
+          <div class="link-row">
+            <a href="https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/netsuite-sc-roster-calendar-refresh.user.js">Install NetSuite SC roster refresh helper</a>
+            <button class="button copy" type="button" data-copy="https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/netsuite-sc-roster-calendar-refresh.user.js">Copy link</button>
+          </div>
+        </li>
       </ol>
       <p class="note">The roster helper is limited to NetSuite saved search <code>1311451</code> and includes an update URL for Tampermonkey.</p>
     </section>
@@ -180,14 +229,22 @@
     <section class="step">
       <h2>Step 2. Open Calendar Refresh</h2>
       <p>Open the shared refresh page and confirm it loads in the browser where Tampermonkey is installed.</p>
-      <p><a class="button primary" href="https://mcanderson14.github.io/ns_scm_tools_fy27/calendar-refresh.html" target="_blank" rel="noopener noreferrer">Open Calendar Refresh</a></p>
+      <p class="link-row">
+        <a class="button primary" href="https://mcanderson14.github.io/ns_scm_tools_fy27/calendar-refresh.html">Open Calendar Refresh</a>
+        <button class="button copy" type="button" data-copy="https://mcanderson14.github.io/ns_scm_tools_fy27/calendar-refresh.html">Copy link</button>
+      </p>
     </section>
 
     <section class="step">
       <h2>Step 3. Import The SC Roster</h2>
       <p>Use the roster saved search to load the current SC list, managers, industries, and emails into the refresh page.</p>
       <ol>
-        <li><a href="https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl?rectype=1572&amp;searchtype=Custom&amp;style=REPORT&amp;sortcol=Custom_NAME_raw&amp;sortdir=ASC&amp;csv=HTML&amp;OfficeXML=F&amp;pdf=&amp;size=50&amp;twbx=F&amp;report=T&amp;grid=&amp;searchid=1311451&amp;dle=T" target="_blank" rel="noopener noreferrer">Open the NetSuite SC roster saved search</a>.</li>
+        <li>
+          <div class="link-row">
+            <a href="https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl?rectype=1572&amp;searchtype=Custom&amp;style=REPORT&amp;sortcol=Custom_NAME_raw&amp;sortdir=ASC&amp;csv=HTML&amp;OfficeXML=F&amp;pdf=&amp;size=50&amp;twbx=F&amp;report=T&amp;grid=&amp;searchid=1311451&amp;dle=T">Open the NetSuite SC roster saved search</a>
+            <button class="button copy" type="button" data-copy="https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl?rectype=1572&amp;searchtype=Custom&amp;style=REPORT&amp;sortcol=Custom_NAME_raw&amp;sortdir=ASC&amp;csv=HTML&amp;OfficeXML=F&amp;pdf=&amp;size=50&amp;twbx=F&amp;report=T&amp;grid=&amp;searchid=1311451&amp;dle=T">Copy link</button>
+          </div>
+        </li>
         <li>Click <strong>Send roster to refresh</strong> on the NetSuite page.</li>
         <li>Return to Calendar Refresh and confirm the roster imported.</li>
       </ol>
@@ -196,7 +253,12 @@
     <section class="step">
       <h2>Step 4. Save A Graph Explorer Token</h2>
       <ol>
-        <li><a href="https://developer.microsoft.com/en-us/graph/graph-explorer" target="_blank" rel="noopener noreferrer">Open Microsoft Graph Explorer</a>.</li>
+        <li>
+          <div class="link-row">
+            <a href="https://developer.microsoft.com/en-us/graph/graph-explorer">Open Microsoft Graph Explorer</a>
+            <button class="button copy" type="button" data-copy="https://developer.microsoft.com/en-us/graph/graph-explorer">Copy link</button>
+          </div>
+        </li>
         <li>Sign in with your Oracle Microsoft Office 365 account.</li>
         <li>Open <strong>API Explorer</strong>, then the <strong>Access token</strong> tab.</li>
         <li>Copy the access token.</li>
@@ -215,7 +277,10 @@
         <li>Click <strong>Refresh selected via token</strong>.</li>
         <li>Open the dashboard when the refresh completes.</li>
       </ol>
-      <p><a class="button secondary" href="https://mcanderson14.github.io/ns_scm_tools_fy27/staffing-dashboard.html" target="_blank" rel="noopener noreferrer">Open Staffing Dashboard</a></p>
+      <p class="link-row">
+        <a class="button secondary" href="https://mcanderson14.github.io/ns_scm_tools_fy27/staffing-dashboard.html">Open Staffing Dashboard</a>
+        <button class="button copy" type="button" data-copy="https://mcanderson14.github.io/ns_scm_tools_fy27/staffing-dashboard.html">Copy link</button>
+      </p>
     </section>
 
     <section class="step">
@@ -228,5 +293,37 @@
       </ol>
     </section>
   </main>
+  <script>
+    function copyInstallGuideLink(value) {
+      const text = String(value || "");
+      const status = document.getElementById("copyStatus");
+      const done = () => {
+        if (status) status.textContent = "Link copied. Paste it into Chrome or Edge.";
+      };
+
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+      } else {
+        fallbackCopy(text, done);
+      }
+    }
+
+    function fallbackCopy(text, done) {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
+      done();
+    }
+
+    document.querySelectorAll("[data-copy]").forEach(button => {
+      button.addEventListener("click", () => copyInstallGuideLink(button.dataset.copy));
+    });
+  </script>
 </body>
 </html>
