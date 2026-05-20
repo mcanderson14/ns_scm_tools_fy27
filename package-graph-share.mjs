@@ -11,6 +11,7 @@ const DEFAULT_OUT_DIR = join(PROJECT_DIR, PACKAGE_NAME);
 const DIRECT_FILES = [
   "calendar-refresh.html",
   "staffing-dashboard.html",
+  "install-guide.html",
   "scr-staffing-helper.user.js",
   "sc-calendar-dashboard-bridge.user.js",
   "netsuite-sc-roster-calendar-refresh.user.js",
@@ -71,6 +72,7 @@ writeFileSync(join(outDir, "PACKAGE-CONTENTS.txt"), [
   "",
   "Start here:",
   "- INSTALL.txt",
+  "- install-guide.html for clickable setup links",
   "- INSTALL-GRAPH-EXPLORER-TOKEN.md for Graph token details",
   "- GITHUB-PAGES-SETUP.md for GitHub Pages publishing",
   "- netsuite-sc-roster-calendar-refresh.user.js for optional NetSuite roster import",

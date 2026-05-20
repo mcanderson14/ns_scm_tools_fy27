@@ -5,10 +5,11 @@ Run the SCOUT calendar dashboard from GitHub Pages:
 
 https://mcanderson14.github.io/ns_scm_tools_fy27/staffing-dashboard.html
 https://mcanderson14.github.io/ns_scm_tools_fy27/calendar-refresh.html
+https://mcanderson14.github.io/ns_scm_tools_fy27/install-guide.html
 
 Start here:
 
-1. Read INSTALL.txt.
+1. Open install-guide.html for clickable setup links, or read INSTALL.txt.
 2. Install the Tampermonkey userscripts.
 3. Open the GitHub Pages calendar refresh page.
 4. Import the NetSuite SC roster.
@@ -44,6 +45,9 @@ Core files:
 
 - GITHUB-PAGES-SETUP.md
   Publishing notes for the GitHub Pages repository.
+
+- install-guide.html
+  Clickable step-by-step setup guide for new users.
 
 - INSTALL-GRAPH-EXPLORER-TOKEN.md
   Detailed Graph Explorer token instructions.

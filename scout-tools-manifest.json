@@ -8,6 +8,7 @@
   "files": {
     "dashboard": "https://mcanderson14.github.io/ns_scm_tools_fy27/staffing-dashboard.html",
     "refresh": "https://mcanderson14.github.io/ns_scm_tools_fy27/calendar-refresh.html",
+    "installGuideHtml": "https://mcanderson14.github.io/ns_scm_tools_fy27/install-guide.html",
     "installGuide": "INSTALL.txt",
     "githubPagesSetupGuide": "GITHUB-PAGES-SETUP.md"
   },

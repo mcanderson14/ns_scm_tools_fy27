@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SCOUT Tools Install Guide</title>
+  <style>
+    :root {
+      --bg: #f5f7f8;
+      --ink: #1f2933;
+      --muted: #637282;
+      --line: #d9e2e8;
+      --navy: #183446;
+      --oracle: #c74634;
+      --teal: #137c75;
+      --surface: #ffffff;
+      --shadow: 0 12px 30px rgba(31, 41, 51, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.5 "Segoe UI", Inter, Arial, sans-serif;
+    }
+
+    header {
+      background: var(--navy);
+      color: #fff;
+      padding: 24px 28px;
+    }
+
+    .brand {
+      align-items: center;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px;
+      margin: 0 auto;
+      max-width: 1080px;
+    }
+
+    .brand img {
+      height: auto;
+      width: 172px;
+    }
+
+    h1 {
+      font-size: 28px;
+      letter-spacing: 0;
+      line-height: 1.15;
+      margin: 0;
+    }
+
+    .subtitle {
+      color: rgba(255, 255, 255, 0.76);
+      margin-top: 6px;
+    }
+
+    main {
+      margin: 0 auto;
+      max-width: 1080px;
+      padding: 22px 28px 36px;
+    }
+
+    .quick-links,
+    .step {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      margin-bottom: 14px;
+      padding: 18px;
+    }
+
+    .quick-links {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+
+    h2 {
+      font-size: 18px;
+      letter-spacing: 0;
+      margin: 0 0 8px;
+    }
+
+    p {
+      margin: 0 0 10px;
+    }
+
+    ol {
+      margin: 10px 0 0;
+      padding-left: 22px;
+    }
+
+    li + li {
+      margin-top: 8px;
+    }
+
+    a {
+      color: #0d625d;
+      font-weight: 750;
+    }
+
+    .button {
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      color: var(--ink);
+      display: inline-flex;
+      font-weight: 850;
+      justify-content: center;
+      min-height: 42px;
+      padding: 9px 12px;
+      text-align: center;
+      text-decoration: none;
+    }
+
+    .button.primary {
+      background: var(--oracle);
+      border-color: #a63a2d;
+      color: #fff;
+    }
+
+    .button.secondary {
+      background: #eef8f7;
+      border-color: #b9dcd8;
+      color: #0d625d;
+    }
+
+    .note {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    code {
+      background: #eef2f5;
+      border-radius: 5px;
+      padding: 2px 5px;
+    }
+
+    @media (max-width: 700px) {
+      header { padding: 20px 18px; }
+      main { padding: 18px; }
+      .brand img { width: 140px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <img src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
+      <div>
+        <h1>SCOUT Tools Install Guide</h1>
+        <div class="subtitle">Follow these steps to install the SCOUT staffing helper, roster helper, and calendar refresh workflow.</div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="quick-links" aria-label="Quick links">
+      <a class="button primary" href="https://mcanderson14.github.io/ns_scm_tools_fy27/calendar-refresh.html" target="_blank" rel="noopener noreferrer">Open Calendar Refresh</a>
+      <a class="button secondary" href="https://mcanderson14.github.io/ns_scm_tools_fy27/staffing-dashboard.html" target="_blank" rel="noopener noreferrer">Open Staffing Dashboard</a>
+      <a class="button secondary" href="https://www.tampermonkey.net/" target="_blank" rel="noopener noreferrer">Install Tampermonkey</a>
+      <a class="button secondary" href="https://developer.microsoft.com/en-us/graph/graph-explorer" target="_blank" rel="noopener noreferrer">Open Graph Explorer</a>
+    </section>
+
+    <section class="step">
+      <h2>Step 1. Install Browser Scripts</h2>
+      <p>Install Tampermonkey in Chrome or Edge, then open each userscript link below and install it when Tampermonkey prompts you.</p>
+      <ol>
+        <li><a href="https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/scr-staffing-helper.user.js" target="_blank" rel="noopener noreferrer">Install SCOUT staffing helper</a>.</li>
+        <li><a href="https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/netsuite-sc-roster-calendar-refresh.user.js" target="_blank" rel="noopener noreferrer">Install NetSuite SC roster refresh helper</a>.</li>
+      </ol>
+      <p class="note">The roster helper is limited to NetSuite saved search <code>1311451</code> and includes an update URL for Tampermonkey.</p>
+    </section>
+
+    <section class="step">
+      <h2>Step 2. Open Calendar Refresh</h2>
+      <p>Open the shared refresh page and confirm it loads in the browser where Tampermonkey is installed.</p>
+      <p><a class="button primary" href="https://mcanderson14.github.io/ns_scm_tools_fy27/calendar-refresh.html" target="_blank" rel="noopener noreferrer">Open Calendar Refresh</a></p>
+    </section>
+
+    <section class="step">
+      <h2>Step 3. Import The SC Roster</h2>
+      <p>Use the roster saved search to load the current SC list, managers, industries, and emails into the refresh page.</p>
+      <ol>
+        <li><a href="https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl?rectype=1572&amp;searchtype=Custom&amp;style=REPORT&amp;sortcol=Custom_NAME_raw&amp;sortdir=ASC&amp;csv=HTML&amp;OfficeXML=F&amp;pdf=&amp;size=50&amp;twbx=F&amp;report=T&amp;grid=&amp;searchid=1311451&amp;dle=T" target="_blank" rel="noopener noreferrer">Open the NetSuite SC roster saved search</a>.</li>
+        <li>Click <strong>Send roster to refresh</strong> on the NetSuite page.</li>
+        <li>Return to Calendar Refresh and confirm the roster imported.</li>
+      </ol>
+    </section>
+
+    <section class="step">
+      <h2>Step 4. Save A Graph Explorer Token</h2>
+      <ol>
+        <li><a href="https://developer.microsoft.com/en-us/graph/graph-explorer" target="_blank" rel="noopener noreferrer">Open Microsoft Graph Explorer</a>.</li>
+        <li>Sign in with your Oracle Microsoft Office 365 account.</li>
+        <li>Open <strong>API Explorer</strong>, then the <strong>Access token</strong> tab.</li>
+        <li>Copy the access token.</li>
+        <li>Paste it into <strong>Graph Explorer Access Token</strong> on Calendar Refresh.</li>
+        <li>Click <strong>Save token until it expires</strong>.</li>
+      </ol>
+      <p class="note">Do not share the token. Treat it like a temporary password.</p>
+    </section>
+
+    <section class="step">
+      <h2>Step 5. Refresh Calendar Data</h2>
+      <ol>
+        <li>In <strong>Roster Configuration</strong>, click <strong>Select all roster</strong> or select only the SCs you need.</li>
+        <li>Keep <strong>Days</strong> at 21 or less unless you are intentionally testing a larger range.</li>
+        <li>Click <strong>Test first 3</strong> to confirm Graph is working.</li>
+        <li>Click <strong>Refresh selected via token</strong>.</li>
+        <li>Open the dashboard when the refresh completes.</li>
+      </ol>
+      <p><a class="button secondary" href="https://mcanderson14.github.io/ns_scm_tools_fy27/staffing-dashboard.html" target="_blank" rel="noopener noreferrer">Open Staffing Dashboard</a></p>
+    </section>
+
+    <section class="step">
+      <h2>Troubleshooting</h2>
+      <ol>
+        <li>If the roster helper appears on the wrong NetSuite page, update the userscript in Tampermonkey and confirm it is version <code>27.0.0.10</code> or newer.</li>
+        <li>If Graph refresh fails with an authentication error, copy a fresh Graph Explorer token.</li>
+        <li>If the dashboard says no roster is available, repeat Step 3 and import the NetSuite roster again.</li>
+        <li>If a page looks stale, hard refresh the GitHub Pages tab or add <code>?v=latest</code> to the URL.</li>
+      </ol>
+    </section>
+  </main>
+</body>
+</html>
