@@ -63,7 +63,7 @@
     }
 
     .scout-logo {
-      width: 132px;
+      width: 172px;
       height: auto;
       object-fit: contain;
       flex: 0 0 auto;
@@ -490,6 +490,10 @@
       text-align: left;
     }
 
+    .alt-slot[role="group"] {
+      cursor: default;
+    }
+
     .alt-slot:hover {
       border-color: var(--teal);
       box-shadow: 0 0 0 3px rgba(19, 124, 117, 0.10);
@@ -498,6 +502,31 @@
     .alt-slot.selected {
       border-color: var(--teal);
       background: #edf8f7;
+    }
+
+    .slot-ranges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 8px;
+    }
+
+    .slot-range {
+      min-height: 30px;
+      border: 1px solid #b8d6d2;
+      border-radius: 999px;
+      background: #eef9f7;
+      color: #0f5f58;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 800;
+      padding: 5px 10px;
+    }
+
+    .slot-range:hover,
+    .slot-range.selected {
+      border-color: var(--teal);
+      background: #dff2ef;
     }
 
     .alt-top {
@@ -643,7 +672,7 @@
     }
 
     .weekly-day-cell.weekend {
-      background: #f4f6f8;
+      background: #e6f6f8;
     }
 
     .weekly-bar {
@@ -710,7 +739,7 @@
       .app-header,
       main { padding-left: 16px; padding-right: 16px; }
       .header-inner { align-items: flex-start; flex-direction: column; }
-      .scout-logo { width: 112px; }
+      .scout-logo { width: 140px; }
       .header-actions,
       .refresh-panel,
       .refresh-row { justify-content: flex-start; justify-items: start; }
@@ -728,7 +757,7 @@
     <div class="header-inner">
       <div class="brand-row">
         <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
-        <span class="version-pill">v27.0.9</span>
+        <span class="version-pill">v27.0.10</span>
       </div>
       <div class="header-actions">
         <div class="refresh-panel">
@@ -894,7 +923,7 @@
                 <th>Local Time</th>
                 <th>Status</th>
                 <th>Overlap</th>
-                <th>Calendar Items</th>
+                <th>Conflicts</th>
               </tr>
             </thead>
             <tbody id="availabilityBody"></tbody>
@@ -906,7 +935,7 @@
         <div class="panel-header">
           <div>
             <h2>Open Slots</h2>
-            <div class="subtle">Same date, same duration and buffer</div>
+            <div class="subtle">Open ranges by SC for the same date, duration, and buffer</div>
           </div>
         </div>
         <div class="panel-body">
@@ -941,45 +970,6 @@
           </div>
         </div>
       </aside>
-
-      <div class="panel">
-        <div class="panel-header">
-          <div>
-            <h2>Calendar Items</h2>
-            <div class="subtle" id="eventsSubtitle"></div>
-          </div>
-        </div>
-        <div class="event-controls">
-          <div class="control">
-            <label for="eventSeverityFilter">Severity</label>
-            <select id="eventSeverityFilter">
-              <option value="all">All</option>
-              <option value="hard">Hard</option>
-              <option value="soft">Soft</option>
-              <option value="other">Review</option>
-            </select>
-          </div>
-          <div class="control">
-            <label for="searchFilter">Search</label>
-            <input id="searchFilter" type="search" placeholder="demo, OOO, training, discovery" />
-          </div>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>Consultant</th>
-                <th>SC Manager</th>
-                <th>Status</th>
-                <th>Severity</th>
-                <th>Subject</th>
-              </tr>
-            </thead>
-            <tbody id="eventsBody"></tbody>
-          </table>
-        </div>
-      </div>
     </section>
 
     <div class="footnote">
@@ -9342,7 +9332,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     }
 
     function locationBadge(person) {
-      return `<span class="pill location">${person.location || "--"}</span>`;
+      return "";
     }
 
     function getManagerFilterValue(person) {
@@ -9699,8 +9689,6 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
                       <span class="pill status">${conflict.status}</span>
                     </div>
                     <div>${escapeHtml(conflict.subject)}</div>
-                    ${conflict.location ? `<div class="subtle">${escapeHtml(conflict.location)}</div>` : ""}
-                    <div class="subtle">${conflict.protectedOverlap} min in protected window; ${conflict.zone}</div>
                   </div>
                 `;
               }).join("")}</div>`
@@ -9739,42 +9727,76 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const selectedStart = Number(document.getElementById("meetingStart").value);
       const selectedDuration = Number(document.getElementById("meetingDuration").value);
       const container = document.getElementById("alternateSlots");
-      const candidates = [];
+      const byEmail = new Map();
       const workdayStart = 8 * 60;
       const workdayEnd = 17 * 60;
       const lastStart = Math.max(workdayStart, workdayEnd - selectedDuration);
+      const activeRows = getAvailabilityRows(getWindow());
+      const activeRank = new Map(activeRows.map((row, index) => [normalizeEmail(row.email), index]));
 
       for (let start = workdayStart; start <= lastStart; start += 30) {
         const windowConfig = getWindow(start);
         const rows = getAvailabilityRows(windowConfig);
         const clean = rows.filter(row => row.rank === 0);
         if (!clean.length) continue;
-        const noHardMeeting = rows.filter(row => row.calendarLoaded && row.hardMeeting === 0);
-        const bufferRisk = rows.filter(row => row.rank === 3);
-        const soft = rows.filter(row => row.rank === 1);
-        const partial = rows.filter(row => !row.calendarLoaded);
-        candidates.push({ start, windowConfig, rows, clean, noHardMeeting, bufferRisk, soft, partial });
+        clean.forEach(row => {
+          const email = normalizeEmail(row.email);
+          if (!byEmail.has(email)) byEmail.set(email, { person: row, starts: [] });
+          byEmail.get(email).starts.push(start);
+        });
       }
 
-      candidates.sort((a, b) => a.start - b.start);
+      const groups = [...byEmail.values()].map(group => {
+        const starts = [...new Set(group.starts)].sort((a, b) => a - b);
+        const ranges = [];
+        let rangeStart = starts[0];
+        let previous = starts[0];
 
-      if (!candidates.length) {
+        starts.slice(1).forEach(start => {
+          if (start === previous + 30) {
+            previous = start;
+            return;
+          }
+          ranges.push({ start: rangeStart, end: previous + selectedDuration, lastStart: previous });
+          rangeStart = start;
+          previous = start;
+        });
+
+        if (Number.isFinite(rangeStart)) {
+          ranges.push({ start: rangeStart, end: previous + selectedDuration, lastStart: previous });
+        }
+
+        return { ...group, ranges };
+      }).sort((a, b) => {
+        const rankA = activeRank.has(normalizeEmail(a.person.email)) ? activeRank.get(normalizeEmail(a.person.email)) : Number.MAX_SAFE_INTEGER;
+        const rankB = activeRank.has(normalizeEmail(b.person.email)) ? activeRank.get(normalizeEmail(b.person.email)) : Number.MAX_SAFE_INTEGER;
+        return rankA - rankB || a.person.name.localeCompare(b.person.name);
+      });
+
+      if (!groups.length) {
         container.innerHTML = `<div class="subtle">No open ${selectedDuration}-minute slots match the current consultant, date, and buffer.</div>`;
         return;
       }
 
-      container.innerHTML = candidates.map(candidate => {
-        const names = candidate.clean.slice(0, 3).map(row => row.name).join(", ");
-        const selectedClass = candidate.start === selectedStart ? " selected" : "";
+      const date = document.getElementById("meetingDate").value;
+      const timeZone = document.getElementById("planningZone").value;
+      container.innerHTML = groups.map(group => {
         return `
-          <button class="alt-slot${selectedClass}" type="button" data-start="${candidate.start}">
+          <div class="alt-slot" role="group" aria-label="${escapeHtml(`${group.person.name} open ranges`)}">
             <div class="alt-top">
-              <strong>${formatTimeRange(candidate.windowConfig.meetingStart, candidate.windowConfig.meetingEnd, candidate.windowConfig.timeZone)}</strong>
-              <span class="pill available">${candidate.clean.length} open</span>
+              <strong>${escapeHtml(group.person.name)}</strong>
+              <span class="pill available">${group.ranges.length} range${group.ranges.length === 1 ? "" : "s"}</span>
             </div>
-            <div class="subtle">${candidate.noHardMeeting.length} loaded without hard meeting conflict; ${candidate.bufferRisk.length} buffer risks; ${candidate.soft.length} soft; ${candidate.partial.length} snapshot gaps</div>
-            <div class="subtle">${names}</div>
-          </button>
+            <div class="subtle">${escapeHtml(getManagerLabel(group.person))}</div>
+            <div class="slot-ranges">
+              ${group.ranges.map(range => {
+                const selectedClass = selectedStart >= range.start && selectedStart <= range.lastStart ? " selected" : "";
+                const start = zonedDateTime(date, range.start, timeZone);
+                const end = zonedDateTime(date, range.end, timeZone);
+                return `<button class="slot-range${selectedClass}" type="button" data-start="${range.start}">${formatTimeRange(start, end, timeZone)}</button>`;
+              }).join("")}
+            </div>
+          </div>
         `;
       }).join("");
 
@@ -9885,16 +9907,14 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       `;
     }
 
-    function renderWeeklyAvailability() {
+    function renderWeeklyAvailability(availabilityRows = null) {
       const container = document.getElementById("weeklyAvailabilityChart");
       const subtitle = document.getElementById("weeklyAvailabilitySubtitle");
       if (!container || !subtitle) return;
 
       const dateKeys = getStaffingDateKeys();
       const zone = document.getElementById("planningZone").value;
-      const people = selectedRoster()
-        .slice()
-        .sort((a, b) => getManagerLabel(a).localeCompare(getManagerLabel(b)) || a.name.localeCompare(b.name));
+      const people = Array.isArray(availabilityRows) ? availabilityRows : getAvailabilityRows(getWindow());
       const eventsByEmail = buildEventsByEmail(normalizedEvents);
 
       subtitle.textContent = `${formatStaffingWindow()} - weekdays 8:00 AM-5:00 PM ${getZoneLabel(zone)} - ${people.length} consultant${people.length === 1 ? "" : "s"}`;
@@ -9918,9 +9938,9 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       `;
     }
 
-    function renderLoad() {
+    function renderLoad(availabilityRows = null) {
       const dayWindow = getDayWindow();
-      const people = selectedRoster();
+      const people = Array.isArray(availabilityRows) ? availabilityRows : getAvailabilityRows(getWindow());
       const stats = people.map(person => {
         const events = normalizedEvents.filter(event => event.email === person.email);
         const calendarLoaded = hasLoadedCalendar(person);
@@ -9930,7 +9950,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         const total = Math.min(dayWindow.workdayMinutes, hard + soft + other);
         const open = calendarLoaded ? Math.max(0, dayWindow.workdayMinutes - total) : 0;
         return { ...person, calendarLoaded, hard, soft, other, open, total };
-      }).sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+      });
 
       const max = dayWindow.workdayMinutes;
       document.getElementById("loadSubtitle").textContent = `${formatDate(dayWindow.start, dayWindow.zone)} 8:00 AM-5:00 PM ${getZoneLabel(dayWindow.zone)}`;
@@ -9962,39 +9982,6 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       }).join("");
     }
 
-    function renderEvents() {
-      const dayWindow = getDayWindow();
-      const severity = document.getElementById("eventSeverityFilter").value;
-      const search = document.getElementById("searchFilter").value.trim().toLowerCase();
-      const people = new Set(selectedRoster().map(person => person.email));
-      const events = normalizedEvents
-        .filter(event => people.has(event.email))
-        .filter(event => eventMinutesInDay(event, dayWindow) > 0)
-        .filter(event => severity === "all" || event.severity === severity)
-        .filter(event => !search || `${event.subject} ${event.location || ""} ${event.person.name} ${event.status}`.toLowerCase().includes(search))
-        .sort((a, b) => a.startDate - b.startDate || a.person.name.localeCompare(b.person.name));
-
-      document.getElementById("eventsSubtitle").textContent = `${events.length} item${events.length === 1 ? "" : "s"} from 8:00 AM-5:00 PM ${getZoneLabel(dayWindow.zone)} on ${formatDate(dayWindow.start, dayWindow.zone)}`;
-      document.getElementById("eventsBody").innerHTML = events.length
-        ? events.map(event => {
-            const meta = severityMeta[event.severity];
-            return `
-              <tr>
-                <td><strong>${formatTimeRange(event.startDate, event.endDate, dayWindow.zone)}</strong></td>
-                <td>
-                  <div class="person-line"><span class="person-name">${event.person.name}</span>${legacyOrgBadge(event.person)}${locationBadge(event.person)}</div>
-                  <div class="subtle">${event.person.email}</div>
-                </td>
-                <td><span class="pill status">${escapeHtml(getManagerLabel(event.person))}</span></td>
-                <td><span class="pill status">${event.status}</span></td>
-                <td><span class="pill ${meta.pill}">${meta.label}</span></td>
-                <td>${escapeHtml(event.subject)}${event.location ? `<div class="subtle">${escapeHtml(event.location)}</div>` : ""}</td>
-              </tr>
-            `;
-          }).join("")
-        : `<tr><td colspan="6" class="subtle">No calendar items match the current filters.</td></tr>`;
-    }
-
     function renderAll() {
       configureDateWindow();
       renderRefreshState();
@@ -10004,9 +9991,8 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       renderRecommendation(rows, windowConfig);
       renderAvailabilityTable(rows, windowConfig);
       renderAlternateSlots();
-      renderWeeklyAvailability();
-      renderLoad();
-      renderEvents();
+      renderWeeklyAvailability(rows);
+      renderLoad(rows);
       renderDebugConsole();
     }
 
@@ -10527,8 +10513,6 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const start = parseLaunchStart(params.get("start"));
       if (start) setSelectValue("meetingStart", start);
 
-      const search = params.get("search");
-      if (search) document.getElementById("searchFilter").value = search;
     }
 
     function wireEvents() {
@@ -10560,13 +10544,10 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         "meetingStart",
         "meetingDuration",
         "bufferMinutes",
-        "softMode",
-        "eventSeverityFilter"
+        "softMode"
       ].forEach(id => {
         document.getElementById(id).addEventListener("change", renderAll);
       });
-
-      document.getElementById("searchFilter").addEventListener("input", renderEvents);
     }
 
     mergeLaunchRosterPeople();
