@@ -339,7 +339,7 @@
   <header>
     <div class="header-title-row">
       <h1>SC Calendar Refresh</h1>
-      <span class="version-pill">v27.0.4</span>
+      <span class="version-pill">v27.0.5</span>
     </div>
     <div class="subtitle">Get a Microsoft Graph Explorer token, build the NetSuite SC roster, then refresh staffing calendar availability for the dashboard.</div>
   </header>
@@ -1482,9 +1482,88 @@
         email: normalizeEmail(event.email),
         status: String(event.status || "busy"),
         subject: String(event.subject || "Free/busy: Busy; subject unavailable"),
+        location: String(event.location || ""),
+        isPrivate: Boolean(event.isPrivate),
         start: new Date(event.start).toISOString(),
-        end: new Date(event.end).toISOString()
+        end: new Date(event.end).toISOString(),
+        source: event.source || ""
       };
+    }
+
+    function getTimeZoneOffset(date, timeZone) {
+      if (!timeZone || timeZone === "UTC" || timeZone === "Etc/UTC") return 0;
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        hour12: false,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      }).formatToParts(date).reduce((acc, part) => {
+        if (part.type !== "literal") acc[part.type] = part.value;
+        return acc;
+      }, {});
+
+      const localAsUtc = Date.UTC(
+        Number(parts.year),
+        Number(parts.month) - 1,
+        Number(parts.day),
+        Number(parts.hour),
+        Number(parts.minute),
+        Number(parts.second)
+      );
+      return localAsUtc - date.getTime();
+    }
+
+    function graphDateTimeToIso(value, timeZone) {
+      const raw = String(value?.dateTime || value || "").trim();
+      if (!raw) return "";
+      if (/[zZ]$|[+-]\d{2}:?\d{2}$/.test(raw)) return new Date(raw).toISOString();
+
+      const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?/);
+      if (!match) return new Date(raw).toISOString();
+
+      const [, year, month, day, hour, minute, second = "0"] = match;
+      const guess = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second)));
+      return new Date(guess.getTime() - getTimeZoneOffset(guess, timeZone)).toISOString();
+    }
+
+    function getScheduleItemLocation(item) {
+      const location = item?.location;
+      if (!location) return "";
+      if (typeof location === "string") return location;
+      return location.displayName || location.locationUri || "";
+    }
+
+    function normalizeScheduleItem(item, email, context) {
+      const status = String(item?.status || item?.showAs || "busy");
+      if (status.toLowerCase() === "free") return null;
+      const start = graphDateTimeToIso(item?.start, context.timeZone);
+      const end = graphDateTimeToIso(item?.end, context.timeZone);
+      if (!start || !end || Number.isNaN(Date.parse(start)) || Number.isNaN(Date.parse(end))) return null;
+
+      return {
+        email,
+        status,
+        subject: String(item?.subject || (item?.isPrivate ? "Private calendar item" : "Calendar item")),
+        location: getScheduleItemLocation(item),
+        isPrivate: Boolean(item?.isPrivate),
+        start,
+        end,
+        source: "Graph scheduleItems"
+      };
+    }
+
+    function eventsWithDetailedFallback(availability, directEvents) {
+      const detailedEmails = new Set(directEvents.map(event => normalizeEmail(event.email)).filter(Boolean));
+      return [
+        ...directEvents,
+        ...availability
+          .flatMap(expandAvailability)
+          .filter(event => !detailedEmails.has(normalizeEmail(event.email)))
+      ];
     }
 
     function buildExport(cache = readLocalCache()) {
@@ -2646,6 +2725,7 @@
       const expected = new Set(emails.map(normalizeEmail));
       const returned = new Set();
       const availability = [];
+      const directEvents = [];
       const errors = [];
       const intervalMinutes = Number(context.intervalMinutes || 30);
 
@@ -2673,6 +2753,16 @@
             view: String(view)
           });
         }
+
+        const scheduleItems = Array.isArray(schedule.scheduleItems)
+          ? schedule.scheduleItems
+          : Array.isArray(schedule.schedule_items)
+          ? schedule.schedule_items
+          : [];
+        scheduleItems.forEach(item => {
+          const normalized = normalizeScheduleItem(item, email, context);
+          if (normalized) directEvents.push(normalized);
+        });
       });
 
       [...expected].filter(email => !returned.has(email)).forEach(email => {
@@ -2687,6 +2777,7 @@
       return {
         loadedEmails: [...expected].sort(),
         availability,
+        directEvents,
         errors,
         roster: [...expected].map(email => rosterByEmail[email]).filter(Boolean)
       };
@@ -2707,6 +2798,7 @@
           intervalMinutes: context.intervalMinutes,
           loadedEmails: [],
           availability: [],
+          directEvents: [],
           events: [],
           errors: [],
           roster: []
@@ -2730,16 +2822,23 @@
           const normalized = normalizeGraphExplorerSchedules(payload, context, emails, rosterByEmail);
           combined.loadedEmails.push(...normalized.loadedEmails);
           combined.availability.push(...normalized.availability);
+          combined.directEvents.push(...normalized.directEvents);
           combined.errors.push(...normalized.errors);
           combined.roster.push(...normalized.roster);
           setGraphExplorerStatus([
             { text: probe ? "Probe response received" : `Processed chunk ${index + 1} of ${selectedChunks.length}`, tone: "good" },
             { text: `${combined.availability.length} snapshot${combined.availability.length === 1 ? "" : "s"}`, tone: "good" },
+            combined.directEvents.length ? { text: `${combined.directEvents.length} detailed item${combined.directEvents.length === 1 ? "" : "s"}`, tone: "good" } : null,
             combined.errors.length ? { text: `${combined.errors.length} warning${combined.errors.length === 1 ? "" : "s"}`, tone: "bad" } : null
           ]);
         }
 
         combined.loadedEmails = [...new Set(combined.loadedEmails)].sort();
+        combined.directEvents = [...new Map(combined.directEvents.map(event => [
+          `${normalizeEmail(event.email)}|${event.status}|${event.subject}|${event.start}|${event.end}`,
+          event
+        ])).values()];
+        combined.events = combined.directEvents;
         combined.roster = [...new Map(combined.roster.map(person => [normalizeEmail(person.email), person])).values()];
         qs("connectorResult").value = JSON.stringify(combined, null, 2);
 
@@ -2752,12 +2851,14 @@
           { text: probe ? "Probe complete" : "Refresh complete", tone: "good" },
           { text: `${combined.loadedEmails.length} loaded consultant${combined.loadedEmails.length === 1 ? "" : "s"}`, tone: "good" },
           { text: `${combined.availability.length} availability snapshot${combined.availability.length === 1 ? "" : "s"}`, tone: combined.availability.length ? "good" : "bad" },
+          combined.directEvents.length ? { text: `${combined.directEvents.length} detailed item${combined.directEvents.length === 1 ? "" : "s"}`, tone: "good" } : null,
           probe ? { text: "Test only; dashboard not updated" } : { text: "Dashboard cache updated", tone: "good" },
           combined.errors.length ? { text: `${combined.errors.length} warning${combined.errors.length === 1 ? "" : "s"}`, tone: "bad" } : null
         ]);
         log(probe ? "Microsoft Graph Explorer token probe complete." : "Microsoft Graph Explorer token refresh complete.", {
           loadedEmails: combined.loadedEmails,
           availabilitySnapshots: combined.availability.length,
+          detailedItems: combined.directEvents.length,
           errors: combined.errors,
           dashboardUrl: probe ? null : buildDashboardUrl()
         });
@@ -2920,9 +3021,9 @@
         intervalMinutes: Number(snapshot.intervalMinutes || intervalMinutes),
         view: String(snapshot.view || "")
       })).filter(snapshot => snapshot.email && snapshot.view) : [];
-      const directEvents = Array.isArray(data.events) ? data.events.map(normalizeEvent) : [];
-      const expandedEvents = availability.flatMap(expandAvailability);
-      const events = [...expandedEvents, ...directEvents];
+      const eventInput = Array.isArray(data.directEvents) ? data.directEvents : data.events;
+      const directEvents = Array.isArray(eventInput) ? eventInput.map(normalizeEvent) : [];
+      const events = eventsWithDetailedFallback(availability, directEvents);
       const loadedEmails = data.loadedEmails && Array.isArray(data.loadedEmails)
         ? data.loadedEmails.map(normalizeEmail).filter(Boolean)
         : [...new Set([...availability.map(item => item.email), ...directEvents.map(item => item.email)])];

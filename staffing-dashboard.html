@@ -714,7 +714,7 @@
       <div>
         <div class="title-row">
           <h1>SC Staffing Dashboard</h1>
-          <span class="version-pill">v27.0.4</span>
+          <span class="version-pill">v27.0.5</span>
         </div>
         <p class="header-subtitle">SC org calendar staffing view across a rolling 3-week window</p>
       </div>
@@ -8662,10 +8662,60 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       return payload;
     }
 
+    function graphDateTimeToIso(value, timeZone) {
+      const raw = String(value?.dateTime || value || "").trim();
+      if (!raw) return "";
+      if (/[zZ]$|[+-]\d{2}:?\d{2}$/.test(raw)) return new Date(raw).toISOString();
+
+      const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?/);
+      if (!match) return new Date(raw).toISOString();
+
+      const [, year, month, day, hour, minute, second = "0"] = match;
+      const guess = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second)));
+      return new Date(guess.getTime() - getTimeZoneOffset(guess, timeZone)).toISOString();
+    }
+
+    function getScheduleItemLocation(item) {
+      const location = item?.location;
+      if (!location) return "";
+      if (typeof location === "string") return location;
+      return location.displayName || location.locationUri || "";
+    }
+
+    function normalizeScheduleItem(item, email, context) {
+      const status = String(item?.status || item?.showAs || "busy");
+      if (status.toLowerCase() === "free") return null;
+      const start = graphDateTimeToIso(item?.start, context.timeZone);
+      const end = graphDateTimeToIso(item?.end, context.timeZone);
+      if (!start || !end || Number.isNaN(Date.parse(start)) || Number.isNaN(Date.parse(end))) return null;
+
+      return {
+        email,
+        status,
+        subject: String(item?.subject || (item?.isPrivate ? "Private calendar item" : "Calendar item")),
+        location: getScheduleItemLocation(item),
+        isPrivate: Boolean(item?.isPrivate),
+        start,
+        end,
+        source: "Graph scheduleItems"
+      };
+    }
+
+    function eventsWithDetailedFallback(availability, directEvents) {
+      const detailedEmails = new Set(directEvents.map(event => normalizeEmail(event.email)).filter(Boolean));
+      return [
+        ...directEvents,
+        ...availability
+          .flatMap(expandDashboardAvailability)
+          .filter(event => !detailedEmails.has(normalizeEmail(event.email)))
+      ];
+    }
+
     function normalizeDashboardGraphSchedules(payload, context, emails, rosterByEmail) {
       const expected = new Set(emails.map(normalizeEmail));
       const returned = new Set();
       const availability = [];
+      const directEvents = [];
       const errors = [];
       const intervalMinutes = Number(context.intervalMinutes || 30);
 
@@ -8693,6 +8743,16 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
             view: String(view)
           });
         }
+
+        const scheduleItems = Array.isArray(schedule.scheduleItems)
+          ? schedule.scheduleItems
+          : Array.isArray(schedule.schedule_items)
+          ? schedule.schedule_items
+          : [];
+        scheduleItems.forEach(item => {
+          const normalized = normalizeScheduleItem(item, email, context);
+          if (normalized) directEvents.push(normalized);
+        });
       });
 
       [...expected].filter(email => !returned.has(email)).forEach(email => {
@@ -8707,6 +8767,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       return {
         loadedEmails: [...expected].sort(),
         availability,
+        directEvents,
         errors,
         roster: [...expected].map(email => rosterByEmail[email]).filter(Boolean)
       };
@@ -9600,6 +9661,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
                       <span class="pill status">${conflict.status}</span>
                     </div>
                     <div>${escapeHtml(conflict.subject)}</div>
+                    ${conflict.location ? `<div class="subtle">${escapeHtml(conflict.location)}</div>` : ""}
                     <div class="subtle">${conflict.protectedOverlap} min in protected window; ${conflict.zone}</div>
                   </div>
                 `;
@@ -9871,7 +9933,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         .filter(event => people.has(event.email))
         .filter(event => eventMinutesInDay(event, dayWindow) > 0)
         .filter(event => severity === "all" || event.severity === severity)
-        .filter(event => !search || `${event.subject} ${event.person.name} ${event.status}`.toLowerCase().includes(search))
+        .filter(event => !search || `${event.subject} ${event.location || ""} ${event.person.name} ${event.status}`.toLowerCase().includes(search))
         .sort((a, b) => a.startDate - b.startDate || a.person.name.localeCompare(b.person.name));
 
       document.getElementById("eventsSubtitle").textContent = `${events.length} item${events.length === 1 ? "" : "s"} from 8:00 AM-5:00 PM ${getZoneLabel(dayWindow.zone)} on ${formatDate(dayWindow.start, dayWindow.zone)}`;
@@ -9888,7 +9950,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
                 <td><span class="pill status">${escapeHtml(getManagerLabel(event.person))}</span></td>
                 <td><span class="pill status">${event.status}</span></td>
                 <td><span class="pill ${meta.pill}">${meta.label}</span></td>
-                <td>${escapeHtml(event.subject)}</td>
+                <td>${escapeHtml(event.subject)}${event.location ? `<div class="subtle">${escapeHtml(event.location)}</div>` : ""}</td>
               </tr>
             `;
           }).join("")
@@ -9959,17 +10021,22 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
           const normalized = normalizeDashboardGraphSchedules(payload, context, emails, rosterByEmail);
           combined.loadedEmails.push(...normalized.loadedEmails);
           combined.availability.push(...normalized.availability);
+          combined.directEvents.push(...normalized.directEvents);
           combined.errors.push(...normalized.errors);
           combined.roster.push(...normalized.roster);
           setDashboardRefreshStatus(
             `Graph refresh ${index + 1}/${chunks.length}`,
-            `${combined.availability.length} availability snapshot${combined.availability.length === 1 ? "" : "s"} loaded`
+            `${combined.availability.length} availability snapshot${combined.availability.length === 1 ? "" : "s"}; ${combined.directEvents.length} detailed item${combined.directEvents.length === 1 ? "" : "s"}`
           );
         }
 
         combined.loadedEmails = [...new Set(combined.loadedEmails.map(normalizeEmail).filter(Boolean))].sort();
         combined.roster = [...new Map(combined.roster.map(person => [normalizeEmail(person.email), person])).values()];
-        combined.events = combined.availability.flatMap(expandDashboardAvailability);
+        combined.directEvents = [...new Map(combined.directEvents.map(event => [
+          `${normalizeEmail(event.email)}|${event.status}|${event.subject}|${event.start}|${event.end}`,
+          event
+        ])).values()];
+        combined.events = eventsWithDetailedFallback(combined.availability, combined.directEvents);
 
         const merged = mergeDashboardGraphCache(combined);
         writeDashboardGraphCaches(merged);
@@ -9979,11 +10046,12 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         renderAll();
         setDashboardRefreshStatus(
           "Graph refresh complete",
-          `${combined.loadedEmails.length} consultant${combined.loadedEmails.length === 1 ? "" : "s"} refreshed; ${combined.availability.length} availability snapshot${combined.availability.length === 1 ? "" : "s"}`
+          `${combined.loadedEmails.length} consultant${combined.loadedEmails.length === 1 ? "" : "s"} refreshed; ${combined.availability.length} availability snapshot${combined.availability.length === 1 ? "" : "s"}; ${combined.directEvents.length} detailed item${combined.directEvents.length === 1 ? "" : "s"}`
         );
         logCalendarActivity("dashboard-graph-refresh-complete", {
           loadedEmails: combined.loadedEmails,
           availabilitySnapshots: combined.availability.length,
+          detailedItems: combined.directEvents.length,
           expandedEvents: combined.events.length,
           errors: combined.errors
         });
