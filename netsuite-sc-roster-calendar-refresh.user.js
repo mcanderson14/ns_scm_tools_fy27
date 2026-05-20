@@ -1,11 +1,10 @@
 // ==UserScript==
 // @name         NetSuite SC Roster Calendar Refresh Helper
 // @namespace    scm-tools-calendar-refresh
-// @version      27.0.0.7
+// @version      27.0.0.8
 // @description  Copies the NetSuite SC roster saved search into the calendar refresh page.
 // @author       Michael Anderson
-// @match        https://*.app.netsuite.com/app/common/search/savedsearchresults.nl*
-// @match        https://*.netsuite.com/app/common/search/savedsearchresults.nl*
+// @include      https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl*searchid=1311451*
 // @match        https://mcanderson14.github.io/ns_scm_tools_fy27/calendar-refresh.html*
 // @match        https://raw.githack.com/mcanderson14/ns_scm_tools_fy27/*/calendar-refresh.html*
 // @include      file://*/calendar-refresh.html*
@@ -30,6 +29,22 @@
 	const REFRESH_URL_KEY = "netsuite-sc-roster-calendar-refresh-url-v1";
 	const ROSTER_TRANSFER_KEY = "netsuite-sc-roster-calendar-refresh-roster-v1";
 	const SEARCH_ID = "1311451";
+	const NETSUITE_ROSTER_HOST = "nlcorp.app.netsuite.com";
+	const NETSUITE_ROSTER_PATH = "/app/common/search/savedsearchresults.nl";
+	const NETSUITE_ROSTER_PARAMS = {
+		rectype: "1572",
+		searchtype: "Custom",
+		style: "REPORT",
+		sortcol: "Custom_NAME_raw",
+		sortdir: "ASC",
+		csv: "HTML",
+		OfficeXML: "F",
+		size: "50",
+		twbx: "F",
+		report: "T",
+		searchid: SEARCH_ID,
+		dle: "T",
+	};
 
 	function normalizeHeader(value) {
 		return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -59,6 +74,14 @@
 
 	function isCalendarRefreshPage() {
 		return /calendar-refresh\.html$/i.test(window.location.pathname);
+	}
+
+	function isRosterSearchPage() {
+		const url = new URL(window.location.href);
+		if (url.hostname !== NETSUITE_ROSTER_HOST) return false;
+		if (url.pathname !== NETSUITE_ROSTER_PATH) return false;
+		return Object.entries(NETSUITE_ROSTER_PARAMS)
+			.every(([key, value]) => url.searchParams.get(key) === value);
 	}
 
 	function setRefreshUrl() {
@@ -343,7 +366,7 @@
 
 	if (isCalendarRefreshPage()) {
 		tryImportIntoRefreshPage();
-	} else if (/savedsearchresults\.nl/i.test(window.location.pathname)) {
+	} else if (isRosterSearchPage()) {
 		addNetSuitePanel();
 	}
 })();
