@@ -339,7 +339,7 @@
   <header>
     <div class="header-title-row">
       <h1>SC Calendar Refresh</h1>
-      <span class="version-pill">v27.0.6</span>
+      <span class="version-pill">v27.0.7</span>
     </div>
     <div class="subtitle">Get a Microsoft Graph Explorer token, build the NetSuite SC roster, then refresh staffing calendar availability for the dashboard.</div>
   </header>
@@ -1636,12 +1636,6 @@
         window.localStorage.removeItem(DASHBOARD_CACHE_KEY);
         window.localStorage.removeItem(LOCAL_GRAPH_CACHE_KEY);
         writeJsonStorage(LOCAL_GRAPH_CACHE_KEY, storageCache);
-        writeJsonStorage(DASHBOARD_CACHE_KEY, {
-          events: [],
-          refreshedAt: storageCache.refreshedAt,
-          cachedAt: Date.now(),
-          source: "chatgpt-outlook-connector-refresh"
-        });
       };
       const compactCache = {
         ...cache,

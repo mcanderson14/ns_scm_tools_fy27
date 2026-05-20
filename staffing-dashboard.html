@@ -714,7 +714,7 @@
       <div>
         <div class="title-row">
           <h1>SC Staffing Dashboard</h1>
-          <span class="version-pill">v27.0.6</span>
+          <span class="version-pill">v27.0.7</span>
         </div>
         <p class="header-subtitle">SC org calendar staffing view across a rolling 3-week window</p>
       </div>
@@ -8450,6 +8450,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         if (!payload) return null;
         const parsed = JSON.parse(payload);
         if (!Array.isArray(parsed.events) || !parsed.refreshedAt) return null;
+        if (!parsed.events.length) return null;
         return parsed;
       } catch (error) {
         return null;
@@ -8856,12 +8857,6 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         window.localStorage.removeItem(CACHE_KEY);
         window.localStorage.removeItem(LOCAL_GRAPH_CACHE_KEY);
         writeJsonStorage(LOCAL_GRAPH_CACHE_KEY, storageCache);
-        writeJsonStorage(CACHE_KEY, {
-          events: [],
-          refreshedAt: storageCache.refreshedAt,
-          cachedAt: Date.now(),
-          source: "dashboard-graph-explorer-refresh"
-        });
       };
       const compactCache = {
         ...cache,
