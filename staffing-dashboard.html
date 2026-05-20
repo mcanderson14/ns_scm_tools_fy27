@@ -714,7 +714,7 @@
       <div>
         <div class="title-row">
           <h1>SC Staffing Dashboard</h1>
-          <span class="version-pill">v27.0.5</span>
+          <span class="version-pill">v27.0.6</span>
         </div>
         <p class="header-subtitle">SC org calendar staffing view across a rolling 3-week window</p>
       </div>
@@ -8475,8 +8475,17 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         const payload = window.localStorage.getItem(LOCAL_GRAPH_CACHE_KEY);
         if (!payload) return null;
         const parsed = JSON.parse(payload);
-        if (!Array.isArray(parsed.events) || !parsed.refreshedAt) return null;
-        return parsed;
+        if (!parsed.refreshedAt) return null;
+        const availability = Array.isArray(parsed.availability) ? parsed.availability : [];
+        const directEvents = Array.isArray(parsed.directEvents) ? parsed.directEvents : [];
+        return {
+          ...parsed,
+          availability,
+          directEvents,
+          events: Array.isArray(parsed.events) && parsed.events.length
+            ? parsed.events
+            : eventsWithDetailedFallback(availability, directEvents)
+        };
       } catch (error) {
         return null;
       }
@@ -8834,10 +8843,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
           ...(existing && Array.isArray(existing.directEvents) ? existing.directEvents.filter(keepForOtherEmail) : []),
           ...(next.directEvents || [])
         ],
-        events: [
-          ...(existing && Array.isArray(existing.events) ? existing.events.filter(keepForOtherEmail) : []),
-          ...(next.events || [])
-        ],
+        events: [],
         errors: [
           ...(existing && Array.isArray(existing.errors) ? existing.errors : []),
           ...(next.errors || [])
@@ -8846,13 +8852,36 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     }
 
     function writeDashboardGraphCaches(cache) {
-      writeJsonStorage(LOCAL_GRAPH_CACHE_KEY, cache);
-      writeJsonStorage(CACHE_KEY, {
-        events: cache.events,
-        refreshedAt: cache.refreshedAt,
-        cachedAt: Date.now(),
-        source: "dashboard-graph-explorer-refresh"
-      });
+      const writeCompactCache = storageCache => {
+        window.localStorage.removeItem(CACHE_KEY);
+        window.localStorage.removeItem(LOCAL_GRAPH_CACHE_KEY);
+        writeJsonStorage(LOCAL_GRAPH_CACHE_KEY, storageCache);
+        writeJsonStorage(CACHE_KEY, {
+          events: [],
+          refreshedAt: storageCache.refreshedAt,
+          cachedAt: Date.now(),
+          source: "dashboard-graph-explorer-refresh"
+        });
+      };
+      const compactCache = {
+        ...cache,
+        events: []
+      };
+
+      try {
+        writeCompactCache(compactCache);
+      } catch (error) {
+        const fallbackCache = {
+          ...compactCache,
+          directEvents: [],
+          storageWarning: "Detailed calendar items were omitted because browser storage quota was reached."
+        };
+        writeCompactCache(fallbackCache);
+        logCalendarActivity("dashboard-graph-storage-fallback", {
+          omittedDetailedItems: Array.isArray(cache.directEvents) ? cache.directEvents.length : 0,
+          message: fallbackCache.storageWarning
+        });
+      }
     }
 
     function getScopedRecordCounts(email, selectedEmails = getLaunchSelectedEmailSet()) {

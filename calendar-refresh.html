@@ -339,7 +339,7 @@
   <header>
     <div class="header-title-row">
       <h1>SC Calendar Refresh</h1>
-      <span class="version-pill">v27.0.5</span>
+      <span class="version-pill">v27.0.6</span>
     </div>
     <div class="subtitle">Get a Microsoft Graph Explorer token, build the NetSuite SC roster, then refresh staffing calendar availability for the dashboard.</div>
   </header>
@@ -1443,7 +1443,17 @@
 
     function readLocalCache() {
       const cache = readJsonStorage(LOCAL_GRAPH_CACHE_KEY);
-      return cache && Array.isArray(cache.events) ? cache : null;
+      if (!cache || !cache.refreshedAt) return null;
+      const availability = Array.isArray(cache.availability) ? cache.availability : [];
+      const directEvents = Array.isArray(cache.directEvents) ? cache.directEvents : [];
+      return {
+        ...cache,
+        availability,
+        directEvents,
+        events: Array.isArray(cache.events) && cache.events.length
+          ? cache.events
+          : eventsWithDetailedFallback(availability, directEvents)
+      };
     }
 
     function expandAvailability(snapshot) {
@@ -1613,10 +1623,7 @@
           ...(existing && Array.isArray(existing.directEvents) ? existing.directEvents.filter(keepEvent) : []),
           ...(next.directEvents || [])
         ],
-        events: [
-          ...(existing && Array.isArray(existing.events) ? existing.events.filter(keepEvent) : []),
-          ...(next.events || [])
-        ],
+        events: [],
         errors: [
           ...(existing && Array.isArray(existing.errors) ? existing.errors : []),
           ...(next.errors || [])
@@ -1625,13 +1632,35 @@
     }
 
     function writeDashboardCaches(cache) {
-      writeJsonStorage(LOCAL_GRAPH_CACHE_KEY, cache);
-      writeJsonStorage(DASHBOARD_CACHE_KEY, {
-        events: cache.events,
-        refreshedAt: cache.refreshedAt,
-        cachedAt: Date.now(),
-        source: "chatgpt-outlook-connector-refresh"
-      });
+      const writeCompactCache = storageCache => {
+        window.localStorage.removeItem(DASHBOARD_CACHE_KEY);
+        window.localStorage.removeItem(LOCAL_GRAPH_CACHE_KEY);
+        writeJsonStorage(LOCAL_GRAPH_CACHE_KEY, storageCache);
+        writeJsonStorage(DASHBOARD_CACHE_KEY, {
+          events: [],
+          refreshedAt: storageCache.refreshedAt,
+          cachedAt: Date.now(),
+          source: "chatgpt-outlook-connector-refresh"
+        });
+      };
+      const compactCache = {
+        ...cache,
+        events: []
+      };
+
+      try {
+        writeCompactCache(compactCache);
+      } catch (error) {
+        const fallbackCache = {
+          ...compactCache,
+          directEvents: [],
+          storageWarning: "Detailed calendar items were omitted because browser storage quota was reached."
+        };
+        writeCompactCache(fallbackCache);
+        log("Saved availability-only calendar cache because browser storage quota was reached.", {
+          omittedDetailedItems: Array.isArray(cache.directEvents) ? cache.directEvents.length : 0
+        });
+      }
     }
 
     function renderCacheStatus() {
