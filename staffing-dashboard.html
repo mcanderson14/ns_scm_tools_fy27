@@ -757,7 +757,7 @@
     <div class="header-inner">
       <div class="brand-row">
         <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
-        <span class="version-pill">v27.0.10</span>
+        <span class="version-pill">v27.0.11</span>
       </div>
       <div class="header-actions">
         <div class="refresh-panel">
@@ -806,7 +806,7 @@
       </div>
       <div class="control">
         <label for="meetingDate">Date</label>
-        <input id="meetingDate" type="date" value="2026-05-06" min="2026-05-06" max="2026-05-26" />
+        <input id="meetingDate" type="date" />
       </div>
       <div class="control">
         <label for="meetingStart">Start</label>
@@ -8353,15 +8353,47 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       return `${start.replace(`, ${activeStart.slice(0, 4)}`, "")} - ${end}`;
     }
 
+    function getSelectedMeetingDate() {
+      const value = document.getElementById("meetingDate")?.value || "";
+      return isIsoDate(value) ? value : getActiveStaffingWindowStart();
+    }
+
+    function isDateInActiveStaffingWindow(dateValue) {
+      return isIsoDate(dateValue)
+        && dateValue >= getActiveStaffingWindowStart()
+        && dateValue < getActiveStaffingWindowEndExclusive();
+    }
+
+    function getDashboardGraphRefreshWindow() {
+      const selectedDate = getSelectedMeetingDate();
+      if (!isDateInActiveStaffingWindow(selectedDate)) {
+        return {
+          start: selectedDate,
+          end: addDaysIso(selectedDate, 1),
+          days: 1,
+          selectedDateOnly: true
+        };
+      }
+
+      return {
+        start: getActiveStaffingWindowStart(),
+        end: getActiveStaffingWindowEndExclusive(),
+        days: getActiveStaffingWindowDays(),
+        selectedDateOnly: false
+      };
+    }
+
+    function formatDashboardGraphRefreshWindow(refreshWindow) {
+      if (refreshWindow.selectedDateOnly) return `${formatIsoDate(refreshWindow.start)} only`;
+      return `${formatIsoDate(refreshWindow.start)} - ${formatIsoDate(addDaysIso(refreshWindow.end, -1))}`;
+    }
+
     function configureDateWindow() {
       const input = document.getElementById("meetingDate");
       if (!input) return;
-      const activeStart = getActiveStaffingWindowStart();
-      const activeEnd = getActiveStaffingWindowEndInclusive();
-      input.min = activeStart;
-      input.max = activeEnd;
-      if (!input.value || input.value < activeStart) input.value = activeStart;
-      if (input.value > activeEnd) input.value = activeEnd;
+      input.removeAttribute("min");
+      input.removeAttribute("max");
+      if (!input.value) input.value = getActiveStaffingWindowStart();
     }
 
     function normalizeEvents(events) {
@@ -8634,12 +8666,15 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const people = selectedRoster();
       const emails = [...new Set(people.map(person => normalizeEmail(person.email)).filter(Boolean))];
       if (!emails.length) throw new Error("No consultants match the current dashboard filters.");
+      const refreshWindow = getDashboardGraphRefreshWindow();
 
       return {
         emails,
         roster: people.filter(person => emails.includes(normalizeEmail(person.email))),
-        start: getActiveStaffingWindowStart(),
-        end: getActiveStaffingWindowEndExclusive(),
+        start: refreshWindow.start,
+        end: refreshWindow.end,
+        days: refreshWindow.days,
+        selectedDateOnly: refreshWindow.selectedDateOnly,
         intervalMinutes: 30,
         timeZone: document.getElementById("planningZone")?.value || "America/New_York"
       };
@@ -8721,6 +8756,49 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
           .flatMap(expandDashboardAvailability)
           .filter(event => !detailedEmails.has(normalizeEmail(event.email)))
       ];
+    }
+
+    function dateWindowStartMs(dateValue) {
+      return Date.parse(`${dateValue}T00:00:00.000Z`);
+    }
+
+    function calendarRecordOverlapsDateWindow(record, startDate, endDate) {
+      const refreshStartMs = dateWindowStartMs(startDate);
+      const refreshEndMs = dateWindowStartMs(endDate);
+      const recordStartMs = Date.parse(record?.start);
+      const recordEndMs = Date.parse(record?.end || record?.start);
+      if (![refreshStartMs, refreshEndMs, recordStartMs, recordEndMs].every(Number.isFinite)) return true;
+      return recordStartMs < refreshEndMs && recordEndMs > refreshStartMs;
+    }
+
+    function splitAvailabilityOutsideDateWindow(snapshot, startDate, endDate) {
+      const view = String(snapshot?.view || "");
+      const intervalMs = Number(snapshot?.intervalMinutes || 30) * 60 * 1000;
+      const snapshotStartMs = Date.parse(snapshot?.start);
+      const refreshStartMs = dateWindowStartMs(startDate);
+      const refreshEndMs = dateWindowStartMs(endDate);
+      if (!view || !intervalMs || ![snapshotStartMs, refreshStartMs, refreshEndMs].every(Number.isFinite)) {
+        return [snapshot];
+      }
+
+      const snapshotEndMs = snapshotStartMs + view.length * intervalMs;
+      if (snapshotEndMs <= refreshStartMs || snapshotStartMs >= refreshEndMs) return [snapshot];
+
+      const pieces = [];
+      const pushPiece = (startIndex, endIndex) => {
+        if (endIndex <= startIndex) return;
+        pieces.push({
+          ...snapshot,
+          start: new Date(snapshotStartMs + startIndex * intervalMs).toISOString(),
+          view: view.slice(startIndex, endIndex)
+        });
+      };
+
+      const overlapStartIndex = Math.max(0, Math.floor((refreshStartMs - snapshotStartMs) / intervalMs));
+      const overlapEndIndex = Math.min(view.length, Math.ceil((refreshEndMs - snapshotStartMs) / intervalMs));
+      pushPiece(0, overlapStartIndex);
+      pushPiece(overlapEndIndex, view.length);
+      return pieces;
     }
 
     function normalizeDashboardGraphSchedules(payload, context, emails, rosterByEmail) {
@@ -8819,10 +8897,25 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     function mergeDashboardGraphCache(next) {
       const existing = readLocalGraphCache();
       const refreshedEmails = new Set((next.loadedEmails || []).map(normalizeEmail));
-      const keepForOtherEmail = item => !refreshedEmails.has(normalizeEmail(item.email));
+      const keepForOtherEmailOrDate = item => {
+        const email = normalizeEmail(item.email);
+        return !refreshedEmails.has(email) || !calendarRecordOverlapsDateWindow(item, next.start, next.end);
+      };
+      const retainAvailability = item => {
+        const email = normalizeEmail(item.email);
+        return refreshedEmails.has(email)
+          ? splitAvailabilityOutsideDateWindow(item, next.start, next.end)
+          : [item];
+      };
       const existingLoaded = existing && Array.isArray(existing.loadedEmails) ? existing.loadedEmails : [];
       const existingRoster = existing && Array.isArray(existing.roster) ? existing.roster : [];
       const rosterMap = new Map(existingRoster.map(person => [normalizeEmail(person.email), person]));
+      const preserveExistingWindow = Boolean(
+        next.selectedDateOnly
+        && isIsoDate(existing?.start)
+        && isIsoDate(existing?.end)
+        && diffIsoDays(existing.start, existing.end) > diffIsoDays(next.start, next.end)
+      );
 
       (next.roster || []).forEach(person => {
         const email = normalizeEmail(person.email);
@@ -8833,17 +8926,17 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         version: 1,
         source: "dashboard-graph-explorer-refresh",
         refreshedAt: next.refreshedAt,
-        start: next.start,
-        end: next.end,
+        start: preserveExistingWindow ? existing.start : next.start,
+        end: preserveExistingWindow ? existing.end : next.end,
         intervalMinutes: next.intervalMinutes,
         roster: [...rosterMap.values()].sort((a, b) => String(a.name || a.email).localeCompare(String(b.name || b.email))),
         loadedEmails: [...new Set([...existingLoaded, ...(next.loadedEmails || [])].map(normalizeEmail).filter(Boolean))].sort(),
         availability: [
-          ...(existing && Array.isArray(existing.availability) ? existing.availability.filter(keepForOtherEmail) : []),
+          ...(existing && Array.isArray(existing.availability) ? existing.availability.flatMap(retainAvailability) : []),
           ...(next.availability || [])
         ],
         directEvents: [
-          ...(existing && Array.isArray(existing.directEvents) ? existing.directEvents.filter(keepForOtherEmail) : []),
+          ...(existing && Array.isArray(existing.directEvents) ? existing.directEvents.filter(keepForOtherEmailOrDate) : []),
           ...(next.directEvents || [])
         ],
         events: [],
@@ -10018,6 +10111,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
           refreshedAt: new Date().toISOString(),
           start: context.start,
           end: context.end,
+          selectedDateOnly: context.selectedDateOnly,
           intervalMinutes: context.intervalMinutes,
           loadedEmails: [],
           availability: [],
@@ -10029,7 +10123,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
 
         setDashboardRefreshStatus(
           "Refreshing selected SCs...",
-          `${context.emails.length} consultant${context.emails.length === 1 ? "" : "s"}; ${chunks.length} Graph request${chunks.length === 1 ? "" : "s"}`
+          `${context.emails.length} consultant${context.emails.length === 1 ? "" : "s"}; ${formatDashboardGraphRefreshWindow(context)}; ${chunks.length} Graph request${chunks.length === 1 ? "" : "s"}`
         );
         logCalendarActivity("dashboard-graph-refresh-start", {
           consultants: context.emails.length,
@@ -10070,7 +10164,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         renderAll();
         setDashboardRefreshStatus(
           "Graph refresh complete",
-          `${combined.loadedEmails.length} consultant${combined.loadedEmails.length === 1 ? "" : "s"} refreshed; ${combined.availability.length} availability snapshot${combined.availability.length === 1 ? "" : "s"}; ${combined.directEvents.length} detailed item${combined.directEvents.length === 1 ? "" : "s"}`
+          `${combined.loadedEmails.length} consultant${combined.loadedEmails.length === 1 ? "" : "s"} refreshed; ${formatDashboardGraphRefreshWindow(context)}; ${combined.availability.length} availability snapshot${combined.availability.length === 1 ? "" : "s"}; ${combined.directEvents.length} detailed item${combined.directEvents.length === 1 ? "" : "s"}`
         );
         logCalendarActivity("dashboard-graph-refresh-complete", {
           loadedEmails: combined.loadedEmails,
@@ -10096,9 +10190,10 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const filteredEmails = selectedRoster().map(person => normalizeEmail(person.email)).filter(Boolean);
       const planningZone = document.getElementById("planningZone")?.value || "";
       const emails = selectedEmail ? [selectedEmail] : launchEmails.length ? launchEmails : filteredEmails;
+      const refreshWindow = getDashboardGraphRefreshWindow();
       if (emails.length) url.searchParams.set("emails", emails.join(","));
-      url.searchParams.set("start", getActiveStaffingWindowStart());
-      url.searchParams.set("days", String(getActiveStaffingWindowDays()));
+      url.searchParams.set("start", refreshWindow.start);
+      url.searchParams.set("days", String(refreshWindow.days));
       url.searchParams.set("interval", "30");
       if (planningZone) url.searchParams.set("zone", planningZone);
       url.searchParams.set("mode", "graph-explorer-token");
