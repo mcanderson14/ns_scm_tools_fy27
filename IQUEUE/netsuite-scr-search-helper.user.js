@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.69B
+// @version      27.0.0.70B
 // @description  Adds the IQUEUE SCR portlet to NetSuite saved search 1303392 with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -19,6 +19,7 @@
   "use strict";
 
   const SAVED_SEARCH_ID = "1303392";
+  const ON_HOLD_SEARCH_URL = "https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl?searchid=1317304";
   const SCR_RECORD_TYPE = "2840";
   const SCR_RECORD_SCRIPT_ID = "customrecord_sc_request";
   const STAFFING_NOTES_FIELD_ID = "custrecord_screq_scmanager_notes_2";
@@ -30,7 +31,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.69B";
+  const HELPER_VERSION = "27.0.0.70B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -5505,6 +5506,7 @@ Health & Hospitality	DIRECT	NL	West	West
           </div>
         </div>
         <div class="scr-helper-header-actions">
+          <button type="button" id="scr-helper-on-hold-launcher" class="scr-helper-icon-button scr-helper-on-hold-launcher" title="View my On Hold SCRs">On Hold</button>
           <button type="button" id="scr-helper-options-toggle" class="scr-helper-icon-button scr-helper-options-toggle" title="Options" aria-expanded="false" aria-controls="scr-helper-options-panel">⚙</button>
           <button type="button" id="scr-helper-maximize" class="scr-helper-icon-button" title="Maximize to full screen" aria-pressed="false">Maximize</button>
           <button type="button" id="scr-helper-refresh" class="scr-helper-icon-button" title="Refresh the full NetSuite page">Refresh</button>
@@ -5661,6 +5663,9 @@ Health & Hospitality	DIRECT	NL	West	West
     });
     document.getElementById("scr-helper-options-panel").addEventListener("click", event => {
       event.stopPropagation();
+    });
+    document.getElementById("scr-helper-on-hold-launcher").addEventListener("click", () => {
+      openEditUrlWithGm(ON_HOLD_SEARCH_URL);
     });
     document.getElementById("scr-helper-refresh-mapping").addEventListener("click", () => {
       loadExternalMapping({ force: true });
@@ -5982,6 +5987,16 @@ Health & Hospitality	DIRECT	NL	West	West
 
       #${HELPER_ID} .scr-helper-icon-button {
         padding: 7px 9px;
+      }
+
+      #${HELPER_ID} .scr-helper-on-hold-launcher {
+        background: var(--rw-brand-yellow);
+        color: var(--rw-slate-150);
+      }
+
+      #${HELPER_ID} .scr-helper-on-hold-launcher:hover {
+        background: #d79a28;
+        color: var(--rw-slate-150);
       }
 
       #${HELPER_ID} .scr-helper-edit {
