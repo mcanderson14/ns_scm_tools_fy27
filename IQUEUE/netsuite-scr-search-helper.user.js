@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.63B
+// @version      27.0.0.64B
 // @description  Adds the IQUEUE SCR portlet to NetSuite saved search 1303392 with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -11,8 +11,8 @@
 // @grant        GM_openInTab
 // @grant        unsafeWindow
 // @run-at       document-idle
-// @downloadURL  https://github.com/mcanderson14/ns_fy27_queue_test/raw/refs/heads/main/netsuite-scr-search-helper.user.js
-// @updateURL    https://github.com/mcanderson14/ns_fy27_queue_test/raw/refs/heads/main/netsuite-scr-search-helper.user.js
+// @downloadURL  https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js
+// @updateURL    https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js
 // ==/UserScript==
 
 (function () {
@@ -25,7 +25,10 @@
   const HASHTAGS_FIELD_ID = "custrecord_screq_hashtags";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.63B";
+  const HELPER_VERSION = "27.0.0.64B";
+  const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
+  const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
+  const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
   const HELPER_STATE_STORAGE_KEY = "fy27-unified-sc-staffing-queue-assistant-state-v1";
   const EXTERNAL_MAPPING_FILE_NAME = "SC_Industry_State_Region_Mapping.json";
   const EXTERNAL_MAPPING_FILE_ID = "482253421";
@@ -3998,6 +4001,102 @@ Health & Hospitality	DIRECT	NL	West	West
     });
   }
 
+  function scriptVersionFromText(text) {
+    const match = String(text || "").match(/^\s*\/\/\s*@version\s+([^\s]+)/m);
+    return match ? normalizeSpaces(match[1]) : "";
+  }
+
+  function versionTokens(value) {
+    return String(value || "").match(/\d+|[a-z]+/gi) || [];
+  }
+
+  function compareScriptVersions(left, right) {
+    const leftTokens = versionTokens(left);
+    const rightTokens = versionTokens(right);
+    const max = Math.max(leftTokens.length, rightTokens.length);
+    for (let index = 0; index < max; index += 1) {
+      const leftToken = leftTokens[index] || "0";
+      const rightToken = rightTokens[index] || "0";
+      const leftNumber = /^\d+$/.test(leftToken) ? Number(leftToken) : null;
+      const rightNumber = /^\d+$/.test(rightToken) ? Number(rightToken) : null;
+      if (leftNumber !== null && rightNumber !== null && leftNumber !== rightNumber) return leftNumber - rightNumber;
+      if (leftNumber !== null && rightNumber === null) return 1;
+      if (leftNumber === null && rightNumber !== null) return -1;
+      const compared = String(leftToken).localeCompare(String(rightToken));
+      if (compared) return compared;
+    }
+    return 0;
+  }
+
+  function readUpdateCheckCache() {
+    try {
+      const cached = JSON.parse(localStorage.getItem(SCRIPT_UPDATE_CHECK_CACHE_KEY) || "null");
+      return cached && typeof cached === "object" ? cached : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function writeUpdateCheckCache(value) {
+    try {
+      localStorage.setItem(SCRIPT_UPDATE_CHECK_CACHE_KEY, JSON.stringify({
+        checkedAt: Date.now(),
+        ...value
+      }));
+    } catch (error) {
+      console.warn("IQUEUE could not cache update check", error);
+    }
+  }
+
+  function setScriptUpdateAvailable(remoteVersion) {
+    const portlet = document.getElementById(HELPER_ID);
+    const version = document.getElementById("scr-helper-version");
+    const link = document.getElementById("scr-helper-update-link");
+    if (!portlet || !version || !link) return;
+
+    portlet.classList.add("scr-helper-update-available");
+    version.textContent = `Version ${HELPER_VERSION} · Update ${remoteVersion} available`;
+    link.hidden = false;
+    link.href = SCRIPT_UPDATE_URL;
+    link.textContent = "Update available";
+  }
+
+  function clearScriptUpdateAvailable() {
+    const portlet = document.getElementById(HELPER_ID);
+    const version = document.getElementById("scr-helper-version");
+    const link = document.getElementById("scr-helper-update-link");
+    if (!portlet || !version || !link) return;
+
+    portlet.classList.remove("scr-helper-update-available");
+    version.textContent = `Version ${HELPER_VERSION}`;
+    link.hidden = true;
+  }
+
+  async function checkForScriptUpdate(options = {}) {
+    const force = Boolean(options.force);
+    const cached = readUpdateCheckCache();
+    if (!force && cached && Date.now() - cached.checkedAt < SCRIPT_UPDATE_CHECK_INTERVAL_MS) {
+      if (cached.updateAvailable && cached.remoteVersion) setScriptUpdateAvailable(cached.remoteVersion);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${SCRIPT_UPDATE_URL}?t=${Date.now()}`, {
+        cache: "no-cache",
+        credentials: "omit"
+      });
+      if (!response.ok) throw new Error(`Update check failed: ${response.status}`);
+      const remoteVersion = scriptVersionFromText(await response.text());
+      const updateAvailable = Boolean(remoteVersion && compareScriptVersions(HELPER_VERSION, remoteVersion) < 0);
+      writeUpdateCheckCache({ remoteVersion, updateAvailable });
+      if (updateAvailable) setScriptUpdateAvailable(remoteVersion);
+      else clearScriptUpdateAvailable();
+    } catch (error) {
+      console.warn("IQUEUE update check failed", error);
+      writeUpdateCheckCache({ error: error.message || "Update check failed", updateAvailable: false });
+    }
+  }
+
   function optionValueFor(control, value) {
     const normalized = normalizeSpaces(value);
     if (!control || !normalized) return "";
@@ -5039,7 +5138,8 @@ Health & Hospitality	DIRECT	NL	West	West
             referrerpolicy="no-referrer"
           >
           <div class="scr-helper-header-meta">
-            <div class="scr-helper-version">Version ${escapeHtml(HELPER_VERSION)}</div>
+            <div id="scr-helper-version" class="scr-helper-version">Version ${escapeHtml(HELPER_VERSION)}</div>
+            <a id="scr-helper-update-link" class="scr-helper-update-link" href="${escapeHtml(SCRIPT_UPDATE_URL)}" target="_blank" rel="noopener noreferrer" hidden>Update available</a>
             <div id="scr-helper-status" class="scr-helper-status">Loading saved search ${SAVED_SEARCH_ID}.</div>
           </div>
         </div>
@@ -5057,6 +5157,7 @@ Health & Hospitality	DIRECT	NL	West	West
             </span>
           </label>
           <button type="button" id="scr-helper-refresh-mapping" class="scr-helper-options-button">Refresh Mapping JSON</button>
+          <button type="button" id="scr-helper-check-update" class="scr-helper-options-button">Check for IQUEUE Update</button>
         </div>
       </div>
       <div class="scr-helper-filter-shell">
@@ -5203,6 +5304,9 @@ Health & Hospitality	DIRECT	NL	West	West
     document.getElementById("scr-helper-refresh-mapping").addEventListener("click", () => {
       loadExternalMapping({ force: true });
     });
+    document.getElementById("scr-helper-check-update").addEventListener("click", () => {
+      checkForScriptUpdate({ force: true });
+    });
     document.addEventListener("click", event => {
       const portlet = document.getElementById(HELPER_ID);
       if (portlet && !portlet.contains(event.target)) {
@@ -5270,6 +5374,7 @@ Health & Hospitality	DIRECT	NL	West	West
     setPortletMaximized(Boolean(helperState.maximized), { persist: false });
     setFiltersCollapsed(filtersCollapsed, { persist: false });
     hydrateCurrentUserName();
+    checkForScriptUpdate();
   }
 
   function removeExistingHelperArtifacts() {
@@ -5369,6 +5474,12 @@ Health & Hospitality	DIRECT	NL	West	West
         flex: 0 0 auto;
       }
 
+      #${HELPER_ID}.scr-helper-update-available .scr-helper-header {
+        border-bottom-color: #7a4a00;
+        background: var(--rw-brand-yellow);
+        color: var(--rw-slate-150);
+      }
+
       #${HELPER_ID} .scr-helper-brand {
         display: flex;
         align-items: center;
@@ -5407,6 +5518,35 @@ Health & Hospitality	DIRECT	NL	West	West
         font-size: 11px;
         font-weight: 700;
         line-height: 1.25;
+      }
+
+      #${HELPER_ID}.scr-helper-update-available .scr-helper-version,
+      #${HELPER_ID}.scr-helper-update-available .scr-helper-status {
+        color: var(--rw-slate-150);
+      }
+
+      #${HELPER_ID} .scr-helper-update-link {
+        display: inline-flex;
+        width: fit-content;
+        margin-top: 3px;
+        border: 1px solid rgba(122, 74, 0, 0.45);
+        border-radius: 4px;
+        padding: 2px 6px;
+        background: #ffffff;
+        color: #7a4a00;
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1.25;
+        text-decoration: none;
+      }
+
+      #${HELPER_ID} .scr-helper-update-link[hidden] {
+        display: none;
+      }
+
+      #${HELPER_ID} .scr-helper-update-link:hover {
+        border-color: #7a4a00;
+        text-decoration: underline;
       }
 
       #${HELPER_ID} .scr-helper-status {
