@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.70B
-// @description  Adds the IQUEUE SCR portlet to NetSuite saved search 1303392 with spreadsheet-based SC staffing region overrides.
+// @version      27.0.0.71B
+// @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
 // @match        https://nlcorp-sb2.app.netsuite.com/app/common/search/searchresults.nl*
@@ -18,7 +18,9 @@
 (function () {
   "use strict";
 
-  const SAVED_SEARCH_ID = "1303392";
+  const ACTIVE_SEARCH_ID = "1303392";
+  const ON_HOLD_SEARCH_ID = "1317304";
+  const ACTIVE_SEARCH_URL = "https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl?searchid=1303392";
   const ON_HOLD_SEARCH_URL = "https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl?searchid=1317304";
   const SCR_RECORD_TYPE = "2840";
   const SCR_RECORD_SCRIPT_ID = "customrecord_sc_request";
@@ -31,7 +33,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.70B";
+  const HELPER_VERSION = "27.0.0.71B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -77,6 +79,38 @@
     teal100: "#4F7D7B",
     tigerPurple: "#5F3DC4",
     tigerPurpleSoft: "#F0ECFF"
+  };
+  const QUEUE_CONFIGS = {
+    [ACTIVE_SEARCH_ID]: {
+      key: "active",
+      searchId: ACTIVE_SEARCH_ID,
+      label: "Active Queue",
+      loadingLabel: "active staffing queue",
+      launcherLabel: "On Hold",
+      launcherTitle: "View my On Hold SCRs",
+      launcherUrl: ON_HOLD_SEARCH_URL,
+      launcherClass: "scr-helper-queue-switch",
+      headerClass: "scr-helper-queue-active",
+      primaryColor: REDWOOD_COLORS.netsuiteOcean,
+      primarySoft: REDWOOD_COLORS.ocean30,
+      primaryMid: REDWOOD_COLORS.ocean60,
+      headerAccent: REDWOOD_COLORS.ocean60
+    },
+    [ON_HOLD_SEARCH_ID]: {
+      key: "onHold",
+      searchId: ON_HOLD_SEARCH_ID,
+      label: "On Hold Queue",
+      loadingLabel: "on hold queue",
+      launcherLabel: "Active",
+      launcherTitle: "Return to the active staffing queue",
+      launcherUrl: ACTIVE_SEARCH_URL,
+      launcherClass: "scr-helper-queue-switch",
+      headerClass: "scr-helper-queue-on-hold",
+      primaryColor: REDWOOD_COLORS.sky120,
+      primarySoft: REDWOOD_COLORS.sky30,
+      primaryMid: REDWOOD_COLORS.ocean60,
+      headerAccent: REDWOOD_COLORS.sky30
+    }
   };
   const INDUSTRY_GROUP_BRANDING = {
     "Business Services": { emoji: "💼", color: REDWOOD_COLORS.netsuiteOcean, soft: REDWOOD_COLORS.ocean30 },
@@ -165,7 +199,10 @@
   ];
 
   const params = new URLSearchParams(window.location.search);
-  if (params.get("searchid") !== SAVED_SEARCH_ID) return;
+  const CURRENT_SEARCH_ID = params.get("searchid") || "";
+  const CURRENT_QUEUE = QUEUE_CONFIGS[CURRENT_SEARCH_ID];
+  if (!CURRENT_QUEUE) return;
+  const SAVED_SEARCH_ID = CURRENT_QUEUE.searchId;
 
   const MAPPING_TSV = `
 Industry Family	Direct/AMO	State	Sales Region	SC_Staffing_Region
@@ -4797,7 +4834,7 @@ Health & Hospitality	DIRECT	NL	West	West
     if (parsed.origin !== window.location.origin) return false;
     if (!/\/app\/common\/search\/(?:searchresults|savedsearchresults)\.nl$/i.test(parsed.pathname)) return false;
     const searchId = parsed.searchParams.get("searchid");
-    if (searchId && searchId !== SAVED_SEARCH_ID) return false;
+    if (searchId && searchId !== CURRENT_SEARCH_ID) return false;
 
     const text = normalizeSpaces(anchor.textContent);
     if (/export|excel|csv|pdf|email|customize|edit\s+this\s+search/i.test(text)) return false;
@@ -4884,7 +4921,7 @@ Health & Hospitality	DIRECT	NL	West	West
   async function refreshRows() {
     const sequence = ++refreshSequence;
     const status = document.getElementById("scr-helper-status");
-    if (status) status.textContent = `Loading saved search ${SAVED_SEARCH_ID}.`;
+    if (status) status.textContent = `Loading ${CURRENT_QUEUE.loadingLabel} (${SAVED_SEARCH_ID}).`;
 
     const currentRows = parseSearchResults(document, "scr-row");
     searchResultTotal = Math.max(findSearchResultTotal(document), currentRows.length);
@@ -5489,8 +5526,9 @@ Health & Hospitality	DIRECT	NL	West	West
     const portlet = document.createElement("section");
     portlet.id = HELPER_ID;
     portlet.dataset.helperVersion = HELPER_VERSION;
+    portlet.dataset.queueMode = CURRENT_QUEUE.key;
     portlet.innerHTML = `
-      <div class="scr-helper-header">
+      <div class="scr-helper-header ${escapeHtml(CURRENT_QUEUE.headerClass)}">
         <div class="scr-helper-brand">
           <img
             id="scr-helper-logo"
@@ -5502,11 +5540,11 @@ Health & Hospitality	DIRECT	NL	West	West
           <div class="scr-helper-header-meta">
             <div id="scr-helper-version" class="scr-helper-version">Version ${escapeHtml(HELPER_VERSION)}</div>
             <a id="scr-helper-update-link" class="scr-helper-update-link" href="${escapeHtml(SCRIPT_UPDATE_URL)}" target="_blank" rel="noopener noreferrer" hidden>Update available</a>
-            <div id="scr-helper-status" class="scr-helper-status">Loading saved search ${SAVED_SEARCH_ID}.</div>
+            <div id="scr-helper-status" class="scr-helper-status">Loading ${escapeHtml(CURRENT_QUEUE.loadingLabel)} (${escapeHtml(SAVED_SEARCH_ID)}).</div>
           </div>
         </div>
         <div class="scr-helper-header-actions">
-          <button type="button" id="scr-helper-on-hold-launcher" class="scr-helper-icon-button scr-helper-on-hold-launcher" title="View my On Hold SCRs">On Hold</button>
+          <button type="button" id="scr-helper-queue-launcher" class="scr-helper-icon-button ${escapeHtml(CURRENT_QUEUE.launcherClass)}" title="${escapeHtml(CURRENT_QUEUE.launcherTitle)}">${escapeHtml(CURRENT_QUEUE.launcherLabel)}</button>
           <button type="button" id="scr-helper-options-toggle" class="scr-helper-icon-button scr-helper-options-toggle" title="Options" aria-expanded="false" aria-controls="scr-helper-options-panel">⚙</button>
           <button type="button" id="scr-helper-maximize" class="scr-helper-icon-button" title="Maximize to full screen" aria-pressed="false">Maximize</button>
           <button type="button" id="scr-helper-refresh" class="scr-helper-icon-button" title="Refresh the full NetSuite page">Refresh</button>
@@ -5664,8 +5702,8 @@ Health & Hospitality	DIRECT	NL	West	West
     document.getElementById("scr-helper-options-panel").addEventListener("click", event => {
       event.stopPropagation();
     });
-    document.getElementById("scr-helper-on-hold-launcher").addEventListener("click", () => {
-      openEditUrlWithGm(ON_HOLD_SEARCH_URL);
+    document.getElementById("scr-helper-queue-launcher").addEventListener("click", () => {
+      openEditUrlWithGm(CURRENT_QUEUE.launcherUrl);
     });
     document.getElementById("scr-helper-refresh-mapping").addEventListener("click", () => {
       loadExternalMapping({ force: true });
@@ -5781,9 +5819,10 @@ Health & Hospitality	DIRECT	NL	West	West
         --rw-teal-100: ${REDWOOD_COLORS.teal100};
         --scr-tiger-purple: ${REDWOOD_COLORS.tigerPurple};
         --scr-tiger-purple-soft: ${REDWOOD_COLORS.tigerPurpleSoft};
-        --ns-ui-primary: ${REDWOOD_COLORS.netsuiteOcean};
-        --ns-ui-primary-soft: ${REDWOOD_COLORS.ocean30};
-        --ns-ui-primary-mid: ${REDWOOD_COLORS.ocean60};
+        --ns-ui-primary: ${CURRENT_QUEUE.primaryColor};
+        --ns-ui-primary-soft: ${CURRENT_QUEUE.primarySoft};
+        --ns-ui-primary-mid: ${CURRENT_QUEUE.primaryMid};
+        --ns-ui-header-accent: ${CURRENT_QUEUE.headerAccent};
         --ns-ui-accent: ${REDWOOD_COLORS.oracleRed};
         position: fixed;
         right: 18px;
@@ -5838,6 +5877,19 @@ Health & Hospitality	DIRECT	NL	West	West
         background: var(--ns-ui-primary);
         color: var(--rw-neutral-30);
         flex: 0 0 auto;
+      }
+
+      #${HELPER_ID} .scr-helper-header.scr-helper-queue-on-hold {
+        border-bottom-color: var(--ns-ui-header-accent);
+        background:
+          repeating-linear-gradient(
+            135deg,
+            rgba(255, 255, 255, 0.14) 0,
+            rgba(255, 255, 255, 0.14) 8px,
+            transparent 8px,
+            transparent 18px
+          ),
+          linear-gradient(90deg, var(--rw-sky-120), var(--rw-netsuite-ocean));
       }
 
       #${HELPER_ID}.scr-helper-update-available .scr-helper-header {
@@ -5989,14 +6041,15 @@ Health & Hospitality	DIRECT	NL	West	West
         padding: 7px 9px;
       }
 
-      #${HELPER_ID} .scr-helper-on-hold-launcher {
-        background: var(--rw-brand-yellow);
-        color: var(--rw-slate-150);
+      #${HELPER_ID} .scr-helper-queue-switch {
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        background: rgba(255, 255, 255, 0.16);
+        color: #ffffff;
       }
 
-      #${HELPER_ID} .scr-helper-on-hold-launcher:hover {
-        background: #d79a28;
-        color: var(--rw-slate-150);
+      #${HELPER_ID} .scr-helper-queue-switch:hover {
+        background: rgba(255, 255, 255, 0.25);
+        color: #ffffff;
       }
 
       #${HELPER_ID} .scr-helper-edit {
@@ -6021,6 +6074,11 @@ Health & Hospitality	DIRECT	NL	West	West
       #${HELPER_ID} .scr-helper-icon-button:hover,
       #${HELPER_ID} .scr-helper-edit:hover {
         background: #24495a;
+      }
+
+      #${HELPER_ID} .scr-helper-icon-button.scr-helper-queue-switch:hover {
+        background: rgba(255, 255, 255, 0.25);
+        color: #ffffff;
       }
 
       #${HELPER_ID} .scr-helper-card.is-request-amo .scr-helper-edit:hover,
