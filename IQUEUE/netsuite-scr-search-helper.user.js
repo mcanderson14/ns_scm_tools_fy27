@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.67B
+// @version      27.0.0.69B
 // @description  Adds the IQUEUE SCR portlet to NetSuite saved search 1303392 with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -23,13 +23,14 @@
   const SCR_RECORD_SCRIPT_ID = "customrecord_sc_request";
   const STAFFING_NOTES_FIELD_ID = "custrecord_screq_scmanager_notes_2";
   const HASHTAGS_FIELD_ID = "custrecord_screq_hashtags";
+  const CROSS_VERTICAL_FIELD_ID = "custrecord_screq_cross_vertical";
   const ASSIGNEE_FIELD_ID = "custrecord_screq_assignee";
   const ROSTER_RECORD_TYPE = "customrecord_emproster";
   const ROSTER_COST_CENTER_ID = "M5M1";
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.67B";
+  const HELPER_VERSION = "27.0.0.69B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -1286,9 +1287,18 @@ Health & Hospitality	DIRECT	NL	West	West
     return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 
+  function crossIndustryTagKey(value) {
+    return normalizeKey(value).replace(/^hash/, "");
+  }
+
   function hasCrossIndustryTag(notes, tag) {
     if (!notes || !tag) return false;
-    return new RegExp(`(^|[^\\w-])${escapeRegExp(tag)}(?=$|[^\\w-])`, "i").test(String(notes));
+    const text = String(notes);
+    if (new RegExp(`(^|[^\\w-])${escapeRegExp(tag)}(?=$|[^\\w-])`, "i").test(text)) return true;
+
+    const tagKey = crossIndustryTagKey(tag);
+    const textKey = crossIndustryTagKey(text);
+    return Boolean(tagKey && textKey.includes(tagKey));
   }
 
   function getCrossIndustryInfo(notes) {
@@ -1305,7 +1315,10 @@ Health & Hospitality	DIRECT	NL	West	West
 
   function crossIndustryTextForRow(row) {
     if (!row) return "";
-    return [row.hashtags, row.staffingNotes].filter(Boolean).join("\n");
+    const returnedFieldsText = (row.allFields || row.fields || []).map(field => (
+      [field.label, field.value, field.rawValue].filter(Boolean).join(" ")
+    ));
+    return [row.hashtags, row.staffingNotes].concat(returnedFieldsText).filter(Boolean).join("\n");
   }
 
   function getCrossIndustryInfoForRow(row) {
@@ -1353,6 +1366,15 @@ Health & Hospitality	DIRECT	NL	West	West
     return personMatchesNames(getCurrentUserName(), epmOwnerNamesForRow(row));
   }
 
+  function rowHasCrossVerticalFlag(row) {
+    if (!row) return false;
+    if (normalizeYesNo(row.crossVertical) === "Yes") return true;
+    return (row.fields || []).some(field => (
+      /cross[\s-]*vertical|cross[\s-]*vert/i.test(`${field.label} ${field.value}`)
+      && normalizeYesNo(field.value) === "Yes"
+    ));
+  }
+
   function rowMatchesEpmQueue(row) {
     if (!row) return false;
     const epmKey = normalizeKey(EPM_INDUSTRY_GROUP);
@@ -1384,6 +1406,8 @@ Health & Hospitality	DIRECT	NL	West	West
   }
 
   function effectiveIndustryFamilyKeys(row) {
+    const epmKey = normalizeKey(EPM_INDUSTRY_GROUP);
+    if (rowMatchesEpmQueue(row)) return [epmKey];
     const overrideKeys = crossIndustryFamilyKeysForRow(row);
     if (overrideKeys.length) return overrideKeys;
     if (isUnmappedReviewRow(row)) return industryOptions.map(normalizeKey);
@@ -1459,17 +1483,20 @@ Health & Hospitality	DIRECT	NL	West	West
   }
 
   function stripCrossIndustryTags(value) {
+    const tags = CROSS_INDUSTRY_TARGETS.flatMap(target => [target.tag, target.markerTag].filter(Boolean))
+      .concat(CROSS_INDUSTRY_GLOBAL_TAGS)
+      .concat(["#xvr", "xvr"]);
     return normalizeMultiline(value)
-      .split("\n")
-      .map(line => normalizeSpaces(line.replace(/#xvr(?:-[a-z0-9]+)?\b|#epm-requested-sc\b/gi, "")))
-      .filter(Boolean)
-      .join("\n");
+      .split(/[\n,;]+/)
+      .map(normalizeSpaces)
+      .filter(part => part && !tags.some(tag => hasCrossIndustryTag(part, tag)))
+      .join(", ");
   }
 
   function valueWithCrossIndustryTag(value, tag, markerTag = "") {
     const cleaned = stripCrossIndustryTags(value);
-    const tagLine = normalizeSpaces(`#xvr ${tag}`);
-    return [cleaned, tagLine, markerTag].filter(Boolean).join("\n");
+    const tags = ["#xvr", tag, markerTag].map(normalizeSpaces).filter(Boolean);
+    return [cleaned].concat(tags).filter(Boolean).join(", ");
   }
 
   function cleanPersonName(value) {
@@ -2774,6 +2801,9 @@ Health & Hospitality	DIRECT	NL	West	West
       const industryLeader = getByIndex(paddedCells, indexes, "industryLeader") || getConciseFieldValue(fields, [
         /industry.*leader/, /industryleader/, /industry.*avp/
       ], [], labeledValuePatterns.industryLeader);
+      const crossVertical = getConciseFieldValue(fields, [
+        /cross.*vertical/, /crossvertical/, /cross.*vert/
+      ], [], labeledValuePatterns.crossVertical);
       const scrAge = getByIndex(paddedCells, indexes, "scrAge") || getConciseFieldValue(fields, [
         /scr.*age/, /request.*age/
       ], [], labeledValuePatterns.scrAge);
@@ -2801,6 +2831,7 @@ Health & Hospitality	DIRECT	NL	West	West
           salesDirector,
           regionalVp,
           industryLeader,
+          crossVertical,
           scrAge,
           salesVertical,
           amoDirect,
@@ -2833,6 +2864,7 @@ Health & Hospitality	DIRECT	NL	West	West
         salesDirector,
         regionalVp,
         industryLeader,
+        crossVertical,
         scrAge,
         salesVertical,
         mappedSalesRegion: override ? override.salesRegion : "",
@@ -3849,7 +3881,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const allianceInfo = getConciseFieldValue(fields, [
       /alliance/, /partner/
     ], [], labeledValuePatterns.allianceInfo);
-    const crossVertical = getConciseFieldValue(fields, [
+    const crossVertical = row.crossVertical || getConciseFieldValue(fields, [
       /cross.*vertical/, /crossvertical/
     ], [], labeledValuePatterns.crossVertical);
     const staffingNotesField = getStaffingNotesField(allFields);
@@ -4864,6 +4896,7 @@ Health & Hospitality	DIRECT	NL	West	West
     updateIndustrySubgroupFilterOptions();
     restoreStoredFilters({ includeDynamic: true, dynamicOnly: true });
     renderResults();
+    scheduleRoutingHashtagHydration(searchRows, sequence);
 
     const extraRows = await fetchAdditionalSearchRows();
     if (sequence !== refreshSequence) return;
@@ -4878,6 +4911,7 @@ Health & Hospitality	DIRECT	NL	West	West
     updateIndustrySubgroupFilterOptions();
     restoreStoredFilters({ includeDynamic: true, dynamicOnly: true });
     renderResults();
+    scheduleRoutingHashtagHydration(searchRows, sequence);
   }
 
   function openEditUrl(url) {
@@ -5009,6 +5043,43 @@ Health & Hospitality	DIRECT	NL	West	West
     }
 
     return "";
+  }
+
+  function rowHasReturnedHashtagsField(row) {
+    return Boolean(getHashtagsField(row && (row.allFields || row.fields) || []));
+  }
+
+  function rowNeedsRoutingHashtagHydration(row) {
+    if (!row || !row.internalId || row.hashtagsHydrated) return false;
+    if (getCrossIndustryInfoForRow(row).targets.length) return false;
+    return !rowHasReturnedHashtagsField(row) || rowHasCrossVerticalFlag(row);
+  }
+
+  async function hydrateMissingRoutingHashtags(rows, sequence) {
+    const candidates = (rows || []).filter(rowNeedsRoutingHashtagHydration).slice(0, 150);
+    if (!candidates.length) return;
+
+    let changed = false;
+    for (const row of candidates) {
+      if (sequence !== refreshSequence) return;
+      row.hashtagsHydrated = true;
+      const value = await lookupSingleField(row, HASHTAGS_FIELD_ID);
+      if (value && value !== row.hashtags) {
+        updateRowHashtags(row, value);
+        changed = true;
+      }
+    }
+
+    if (changed && sequence === refreshSequence) {
+      updateIndustrySubgroupFilterOptions();
+      renderResults();
+    }
+  }
+
+  function scheduleRoutingHashtagHydration(rows, sequence) {
+    hydrateMissingRoutingHashtags(rows, sequence).catch(error => {
+      console.warn("SCR helper could not hydrate routing hashtags", error);
+    });
   }
 
   function waitForFrameLoad(frame, timeoutMs, errorMessage) {
@@ -5149,6 +5220,10 @@ Health & Hospitality	DIRECT	NL	West	West
     return submitSingleField(row, HASHTAGS_FIELD_ID, value, "hashtags");
   }
 
+  function submitCrossVertical(row, value) {
+    return submitSingleField(row, CROSS_VERTICAL_FIELD_ID, value, "Cross-Vertical");
+  }
+
   function submitAssignee(row, value) {
     return submitSingleField(row, ASSIGNEE_FIELD_ID, value, "Assigned To");
   }
@@ -5175,6 +5250,7 @@ Health & Hospitality	DIRECT	NL	West	West
         row.salesDirector,
         row.regionalVp,
         row.industryLeader,
+        row.crossVertical,
         row.scrAge,
         row.salesVertical,
         row.amoDirect,
@@ -5317,6 +5393,11 @@ Health & Hospitality	DIRECT	NL	West	West
       const currentHashtags = row.hashtags || await lookupSingleField(row, HASHTAGS_FIELD_ID);
       const nextValue = valueWithCrossIndustryTag(currentHashtags, tag, target && target.markerTag);
       await submitHashtags(row, nextValue);
+      try {
+        await submitCrossVertical(row, "T");
+      } catch (crossVerticalError) {
+        console.warn("SCR helper could not set Cross-Vertical flag", crossVerticalError);
+      }
       updateRowHashtags(row, nextValue);
       updateIndustrySubgroupFilterOptions();
       renderResults();
