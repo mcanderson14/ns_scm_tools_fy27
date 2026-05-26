@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.65B
+// @version      27.0.0.67B
 // @description  Adds the IQUEUE SCR portlet to NetSuite saved search 1303392 with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -23,9 +23,13 @@
   const SCR_RECORD_SCRIPT_ID = "customrecord_sc_request";
   const STAFFING_NOTES_FIELD_ID = "custrecord_screq_scmanager_notes_2";
   const HASHTAGS_FIELD_ID = "custrecord_screq_hashtags";
+  const ASSIGNEE_FIELD_ID = "custrecord_screq_assignee";
+  const ROSTER_RECORD_TYPE = "customrecord_emproster";
+  const ROSTER_COST_CENTER_ID = "M5M1";
+  const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.65B";
+  const HELPER_VERSION = "27.0.0.67B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -41,8 +45,14 @@
   const EPM_INDUSTRY_GROUP = "EPM";
   const EPM_REQUESTED_TAG = "#epm-requested-sc";
   const EPM_OWNER_BY_REQUEST_TYPE = {
-    Direct: ["Tim Horan", "Horan, Tim"],
-    AMO: ["Dennis Anderson", "Anderson, Dennis"]
+    Direct: {
+      displayName: "Horan, Timothy",
+      aliases: ["Tim Horan", "Timothy Horan", "Horan, Tim", "Horan, Timothy"]
+    },
+    AMO: {
+      displayName: "Anderson, Dennis",
+      aliases: ["Dennis Anderson", "Anderson, Dennis"]
+    }
   };
   const ADDITIONAL_INDUSTRY_GROUPS = [EPM_INDUSTRY_GROUP];
   const REDWOOD_COLORS = {
@@ -1036,10 +1046,14 @@ Health & Hospitality	DIRECT	NL	West	West
       "documentnumber",
       "number"
     ],
-    internalId: [
-      "id",
+    scrDisplayId: [
       "scrid",
       "screquestid",
+      "screqid",
+      "requestid"
+    ],
+    internalId: [
+      "id",
       "internalid",
       "internalidnumber",
       "recordid"
@@ -1122,6 +1136,7 @@ Health & Hospitality	DIRECT	NL	West	West
   let searchRows = [];
   let searchResultTotal = 0;
   let currentUserNameCache;
+  const rosterAssigneeLookupCache = new Map();
   let refreshSequence = 0;
   let helperState = readHelperState();
   if (!Object.prototype.hasOwnProperty.call(helperState, "maximized")) helperState.maximized = true;
@@ -1309,9 +1324,15 @@ Health & Hospitality	DIRECT	NL	West	West
     return info.targets.map(target => normalizeKey(findCanonicalIndustry(target.family) || target.family)).filter(Boolean);
   }
 
-  function epmOwnerNamesForRow(row) {
+  function epmOwnerConfigForRow(row) {
     const requestType = normalizeAmoDirect(row && row.amoDirect);
-    return EPM_OWNER_BY_REQUEST_TYPE[requestType] || [];
+    return EPM_OWNER_BY_REQUEST_TYPE[requestType] || null;
+  }
+
+  function epmOwnerNamesForRow(row) {
+    const config = epmOwnerConfigForRow(row);
+    if (!config) return [];
+    return [config.displayName].concat(config.aliases || []).filter(Boolean);
   }
 
   function personMatchesNames(person, names) {
@@ -1381,6 +1402,7 @@ Health & Hospitality	DIRECT	NL	West	West
   function displayedIndustryFamiliesForRow(row) {
     const info = getCrossIndustryInfoForRow(row);
     if (info.targets.length) return info.targets.map(target => findCanonicalIndustry(target.family) || target.family);
+    if (rowAssignedToEpmOwner(row)) return [EPM_INDUSTRY_GROUP];
     return [row && row.industryFamily].filter(Boolean);
   }
 
@@ -1482,6 +1504,177 @@ Health & Hospitality	DIRECT	NL	West	West
     }
 
     return [...keys].filter(Boolean);
+  }
+
+  function normalizeRosterName(value) {
+    return normalizeSpaces(value)
+      .toLowerCase()
+      .replace(/&/g, " and ")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim()
+      .replace(/\s+/g, " ");
+  }
+
+  function rosterNameVariants(value) {
+    const raw = normalizeSpaces(value);
+    if (!raw) return [];
+    const variants = [raw];
+    if (raw.includes(",")) {
+      const parts = raw.split(",");
+      const last = normalizeSpaces(parts[0]);
+      const first = normalizeSpaces(parts.slice(1).join(","));
+      if (first && last) variants.push(`${first} ${last}`);
+    } else {
+      const parts = raw.split(/\s+/).filter(Boolean);
+      if (parts.length >= 2) {
+        const first = parts[0];
+        const last = parts[parts.length - 1];
+        variants.push(`${last}, ${first}`);
+        variants.push(`${last} ${first}`);
+      }
+    }
+    return [...new Set(variants.map(normalizeRosterName).filter(Boolean))];
+  }
+
+  function rosterSearchTerms(names) {
+    const terms = [];
+    names.forEach(name => {
+      const raw = normalizeSpaces(name);
+      if (!raw) return;
+      const last = raw.includes(",") ? raw.split(",")[0].trim() : raw.split(/\s+/).slice(-1)[0];
+      if (last) terms.push(last);
+      const compactLast = last.replace(/[^A-Za-z0-9]/g, "");
+      if (compactLast && compactLast !== last) terms.push(compactLast);
+    });
+    return [...new Set(terms.filter(Boolean))];
+  }
+
+  function rosterLookupFilterSets() {
+    return [
+      [
+        ["custrecord_emproster_rosterstatus", "is", "1"],
+        ["custrecord_emproster_eminactive", "is", "F"],
+        ["custrecord_emproster_ocostcenter", "is", ROSTER_COST_CENTER_ID],
+        ["custrecord_emproster_salesregion", "is", ROSTER_SALES_REGION_ID]
+      ],
+      [
+        ["custrecord_emproster_rosterstatus", "is", "1"],
+        ["custrecord_emproster_eminactive", "is", "F"]
+      ],
+      []
+    ];
+  }
+
+  function pickRosterMatch(rows, names) {
+    const variants = [...new Set(names.flatMap(rosterNameVariants))];
+    if (!rows.length || !variants.length) return null;
+
+    const exact = rows.find(row => {
+      const rowName = normalizeRosterName(row.name);
+      return rowName && variants.some(variant => rowName === variant || rowName.includes(variant) || variant.includes(rowName));
+    });
+    return exact || (rows.length === 1 ? rows[0] : null);
+  }
+
+  function lookupRosterAssigneeWithNlapi(pageWindow, names) {
+    const terms = rosterSearchTerms(names);
+    for (const term of terms) {
+      for (const filterSet of rosterLookupFilterSets()) {
+        const filters = [new pageWindow.nlobjSearchFilter("name", null, "contains", term)]
+          .concat(filterSet.map(([fieldId, operator, value]) => new pageWindow.nlobjSearchFilter(fieldId, null, operator, value)));
+        const columns = [
+          new pageWindow.nlobjSearchColumn("internalid"),
+          new pageWindow.nlobjSearchColumn("name")
+        ];
+        const results = pageWindow.nlapiSearchRecord(ROSTER_RECORD_TYPE, null, filters, columns) || [];
+        const rows = results.map(result => ({
+          id: normalizeSpaces(result.getValue("internalid") || result.getId && result.getId()),
+          name: normalizeSpaces(result.getValue("name") || result.getText("name"))
+        })).filter(row => row.id && row.name);
+        const match = pickRosterMatch(rows, names);
+        if (match) return match;
+      }
+    }
+    return null;
+  }
+
+  function nSearchFilterExpression(term, filterSet) {
+    const filters = [["name", "contains", term]];
+    filterSet.forEach(([fieldId, operator, value]) => {
+      filters.push("AND", [fieldId, operator, value]);
+    });
+    return filters;
+  }
+
+  function lookupRosterAssigneeWithRequire(pageWindow, names) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      let timer;
+      const finish = callback => result => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        callback(result);
+      };
+      timer = setTimeout(finish(reject), 10000, new Error("Timed out resolving EPM assignee."));
+
+      try {
+        pageWindow.require(["N/search"], search => {
+          try {
+            for (const term of rosterSearchTerms(names)) {
+              for (const filterSet of rosterLookupFilterSets()) {
+                const results = search.create({
+                  type: ROSTER_RECORD_TYPE,
+                  filters: nSearchFilterExpression(term, filterSet),
+                  columns: ["internalid", "name"]
+                }).run().getRange({ start: 0, end: 25 }) || [];
+                const rows = results.map(result => ({
+                  id: normalizeSpaces(result.getValue({ name: "internalid" })),
+                  name: normalizeSpaces(result.getValue({ name: "name" }))
+                })).filter(row => row.id && row.name);
+                const match = pickRosterMatch(rows, names);
+                if (match) {
+                  finish(resolve)(match);
+                  return;
+                }
+              }
+            }
+            finish(resolve)(null);
+          } catch (error) {
+            finish(reject)(error);
+          }
+        }, finish(reject));
+      } catch (error) {
+        finish(reject)(error);
+      }
+    });
+  }
+
+  async function lookupRosterAssignee(names) {
+    const cleanNames = names.map(normalizeSpaces).filter(Boolean);
+    const cacheKey = cleanNames.map(normalizeRosterName).sort().join("|");
+    if (!cacheKey) return null;
+    if (rosterAssigneeLookupCache.has(cacheKey)) return rosterAssigneeLookupCache.get(cacheKey);
+
+    const pageWindow = getPageWindow();
+    let match = null;
+    if (pageWindow && typeof pageWindow.nlapiSearchRecord === "function" && typeof pageWindow.nlobjSearchFilter === "function") {
+      try {
+        match = lookupRosterAssigneeWithNlapi(pageWindow, cleanNames);
+      } catch (error) {
+        console.warn("SCR helper nlapi roster lookup failed", error);
+      }
+    }
+    if (!match && pageWindow && typeof pageWindow.require === "function") {
+      try {
+        match = await lookupRosterAssigneeWithRequire(pageWindow, cleanNames);
+      } catch (error) {
+        console.warn("SCR helper N/search roster lookup failed", error);
+      }
+    }
+
+    rosterAssigneeLookupCache.set(cacheKey, match);
+    return match;
   }
 
   function detectCurrentUserName() {
@@ -2057,10 +2250,15 @@ Health & Hospitality	DIRECT	NL	West	West
         || normalized === "documentnumber";
     }
 
+    if (key === "scrDisplayId") {
+      return normalized === "scrid"
+        || normalized === "screquestid"
+        || normalized === "screqid"
+        || normalized === "requestid";
+    }
+
     if (key === "internalId") {
       return normalized === "id"
-        || normalized === "scrid"
-        || normalized === "screquestid"
         || normalized.includes("internalid")
         || normalized === "recordid";
     }
@@ -2301,6 +2499,25 @@ Health & Hospitality	DIRECT	NL	West	West
 
     const numeric = text.match(/\b(\d{2,})\b/);
     return numeric ? numeric[1] : "";
+  }
+
+  function normalizeScrDisplayId(value) {
+    let text = normalizeSpaces(value);
+    if (!text) return "";
+
+    const labeled = text.match(/\b(?:scr\s*)?(?:request\s*)?id\s*:?\s*#?\s*([a-z0-9][a-z0-9-]*)\b/i);
+    if (labeled) return labeled[1];
+
+    text = text
+      .replace(/^scr\s*(?:request\s*)?(?:id)?\s*:?\s*/i, "")
+      .replace(/^#\s*/, "")
+      .trim();
+    return text;
+  }
+
+  function formatScrTitlePrefix(value) {
+    const id = normalizeScrDisplayId(value);
+    return id ? `SCR # ${id}` : "";
   }
 
   function getInternalIdValue(cells, indexes, allFields) {
@@ -2566,6 +2783,7 @@ Health & Hospitality	DIRECT	NL	West	West
       const amoDirect = inferAmoDirect(getByIndex(paddedCells, indexes, "amoDirect"), fields);
       const override = lookupOverride(industryFamily, state, amoDirect);
       const link = getScrLink(row);
+      const scrDisplayId = normalizeScrDisplayId(getByIndex(paddedCells, indexes, "scrDisplayId"));
       const internalId = getInternalIdValue(paddedCells, indexes, allFields) || recordIdFromUrl(link && link.href);
       const editUrl = makeEditUrl(link && link.href, internalId);
       const title = getByIndex(paddedCells, indexes, "name") || (link && link.text) || `SCR ${rowIndex + 1}`;
@@ -2586,6 +2804,7 @@ Health & Hospitality	DIRECT	NL	West	West
           scrAge,
           salesVertical,
           amoDirect,
+          scrDisplayId,
           hashtags,
           staffingNotes,
           assignedTo
@@ -2596,6 +2815,7 @@ Health & Hospitality	DIRECT	NL	West	West
       return {
         id: `${idPrefix}-${rowIndex}`,
         title,
+        scrDisplayId,
         fields,
         allFields,
         state,
@@ -3770,6 +3990,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const requestKey = requestTypeKey(row.amoDirect);
     const requestColor = requestTypeColor(requestKey);
     const requestClass = requestKey ? ` is-request-${requestKey}` : "";
+    const titleScrPrefix = formatScrTitlePrefix(row.scrDisplayId);
     const titleOpportunity = opportunityValue || "No linked opportunity";
     const titleCompany = summary.companyDisplay;
     const industryBranding = getIndustryGroupBranding(displayIndustryFamily) || getIndustryGroupBranding(row.industryFamily);
@@ -3857,6 +4078,7 @@ Health & Hospitality	DIRECT	NL	West	West
         <div class="scr-helper-card-head">
           <div>
             <div class="scr-helper-card-title" ${requestColor ? `style="color: ${escapeHtml(requestColor)};"` : ""}>
+              ${titleScrPrefix ? `<strong class="scr-helper-title-scr">${escapeHtml(titleScrPrefix)}</strong><span class="scr-helper-title-separator">|</span>` : ""}
               <span>${escapeHtml(titleOpportunity)}</span>
               ${titleCompany ? `<span class="scr-helper-title-separator">|</span><strong>${escapeHtml(titleCompany)}</strong>` : ""}
             </div>
@@ -4927,6 +5149,10 @@ Health & Hospitality	DIRECT	NL	West	West
     return submitSingleField(row, HASHTAGS_FIELD_ID, value, "hashtags");
   }
 
+  function submitAssignee(row, value) {
+    return submitSingleField(row, ASSIGNEE_FIELD_ID, value, "Assigned To");
+  }
+
   function setStaffingNotesStatus(card, message, state = "") {
     const status = card && card.querySelector(".scr-helper-notes-status");
     if (!status) return;
@@ -4953,7 +5179,8 @@ Health & Hospitality	DIRECT	NL	West	West
         row.salesVertical,
         row.amoDirect,
         row.hashtags,
-        row.staffingNotes
+        row.staffingNotes,
+        row.assignedTo
       ]);
     row.allText = allTextParts.join(" ").toLowerCase();
     row.allKeyText = normalizeKey(allTextParts.join(" "));
@@ -4996,6 +5223,52 @@ Health & Hospitality	DIRECT	NL	West	West
     updateRowSearchText(row);
   }
 
+  function updateRowAssignedTo(row, value) {
+    const normalized = normalizeSpaces(value);
+    const fields = row.allFields || row.fields;
+    let field = findField(fields, [
+      /assigned\s*to/, /assignedto/, /assignee/, /assigned\s*sc/, /solution\s*consultant/
+    ], [/manager/, /lead\s*source/]);
+    if (!field && row.allFields) {
+      field = {
+        label: "Assigned To",
+        value: "",
+        rawValue: "",
+        rawHtml: "",
+        links: [],
+        index: row.allFields.length
+      };
+      row.allFields.push(field);
+    }
+    if (field) {
+      field.value = normalized;
+      field.rawValue = normalized;
+    }
+    if (field && normalized && !row.fields.includes(field)) {
+      row.fields.push(field);
+    }
+    row.assignedTo = normalized;
+    row.assignedToKey = normalizeKey(normalized);
+    updateRowSearchText(row);
+  }
+
+  async function routeRowToEpmAssignee(row, card) {
+    const ownerConfig = epmOwnerConfigForRow(row);
+    if (!ownerConfig) throw new Error("Could not determine EPM owner because this row is not AMO or Direct.");
+
+    const ownerNames = epmOwnerNamesForRow(row);
+    setStaffingNotesStatus(card, `Resolving EPM owner ${ownerConfig.displayName}...`);
+    const match = await lookupRosterAssignee(ownerNames);
+    if (!match || !match.id) {
+      throw new Error(`Could not find EPM owner ${ownerConfig.displayName} in the SC roster.`);
+    }
+
+    setStaffingNotesStatus(card, `Assigning EPM owner ${match.name || ownerConfig.displayName}...`);
+    await submitAssignee(row, match.id);
+    updateRowAssignedTo(row, match.name || ownerConfig.displayName);
+    return match;
+  }
+
   async function handleStaffingNotesSave(button) {
     const card = button.closest(".scr-helper-card");
     const textarea = card && card.querySelector(".scr-helper-notes-input");
@@ -5010,6 +5283,10 @@ Health & Hospitality	DIRECT	NL	West	West
     try {
       await submitStaffingNotes(row, value);
       updateRowStaffingNotes(row, value);
+      const notesEpmRoute = getCrossIndustryInfo(value).targets.some(target => normalizeKey(target.family) === normalizeKey(EPM_INDUSTRY_GROUP));
+      if (notesEpmRoute && !rowAssignedToEpmOwner(row)) {
+        await routeRowToEpmAssignee(row, card);
+      }
       if (crossIndustryRoutingKey(row) !== previousRoutingKey) {
         updateIndustrySubgroupFilterOptions();
         renderResults();
@@ -5031,11 +5308,13 @@ Health & Hospitality	DIRECT	NL	West	West
 
     const buttons = card ? Array.from(card.querySelectorAll(".scr-helper-xvr-button")) : [];
     buttons.forEach(item => { item.disabled = true; });
-    setStaffingNotesStatus(card, "Saving cross-industry hashtag...");
+    const target = CROSS_INDUSTRY_TARGETS.find(item => item.tag === tag);
+    const isEpmRoute = target && normalizeKey(target.family) === normalizeKey(EPM_INDUSTRY_GROUP);
+    setStaffingNotesStatus(card, isEpmRoute ? "Saving EPM route..." : "Saving cross-industry hashtag...");
 
     try {
+      if (isEpmRoute) await routeRowToEpmAssignee(row, card);
       const currentHashtags = row.hashtags || await lookupSingleField(row, HASHTAGS_FIELD_ID);
-      const target = CROSS_INDUSTRY_TARGETS.find(item => item.tag === tag);
       const nextValue = valueWithCrossIndustryTag(currentHashtags, tag, target && target.markerTag);
       await submitHashtags(row, nextValue);
       updateRowHashtags(row, nextValue);
