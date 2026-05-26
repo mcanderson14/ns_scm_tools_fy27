@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.71B
+// @version      27.0.0.72B
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -33,7 +33,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.71B";
+  const HELPER_VERSION = "27.0.0.72B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -86,10 +86,6 @@
       searchId: ACTIVE_SEARCH_ID,
       label: "Active Queue",
       loadingLabel: "active staffing queue",
-      launcherLabel: "On Hold",
-      launcherTitle: "View my On Hold SCRs",
-      launcherUrl: ON_HOLD_SEARCH_URL,
-      launcherClass: "scr-helper-queue-switch",
       headerClass: "scr-helper-queue-active",
       primaryColor: REDWOOD_COLORS.netsuiteOcean,
       primarySoft: REDWOOD_COLORS.ocean30,
@@ -101,10 +97,6 @@
       searchId: ON_HOLD_SEARCH_ID,
       label: "On Hold Queue",
       loadingLabel: "on hold queue",
-      launcherLabel: "Active",
-      launcherTitle: "Return to the active staffing queue",
-      launcherUrl: ACTIVE_SEARCH_URL,
-      launcherClass: "scr-helper-queue-switch",
       headerClass: "scr-helper-queue-on-hold",
       primaryColor: REDWOOD_COLORS.sky120,
       primarySoft: REDWOOD_COLORS.sky30,
@@ -5527,6 +5519,24 @@ Health & Hospitality	DIRECT	NL	West	West
     portlet.id = HELPER_ID;
     portlet.dataset.helperVersion = HELPER_VERSION;
     portlet.dataset.queueMode = CURRENT_QUEUE.key;
+    const queueNav = [
+      { key: "active", label: "Requested", icon: "▶", url: ACTIVE_SEARCH_URL, title: "View requested SCR queue" },
+      { key: "onHold", label: "On Hold", icon: "⏸", url: ON_HOLD_SEARCH_URL, title: "View on hold SCR queue" }
+    ].map(item => {
+      const active = item.key === CURRENT_QUEUE.key;
+      return `
+        <button
+          type="button"
+          class="scr-helper-queue-nav-button${active ? " is-active" : ""}"
+          data-queue-url="${escapeHtml(item.url)}"
+          title="${escapeHtml(active ? `${item.label} queue is active` : item.title)}"
+          aria-pressed="${active ? "true" : "false"}"
+        >
+          <span class="scr-helper-queue-nav-icon" aria-hidden="true">${escapeHtml(item.icon)}</span>
+          <span>${escapeHtml(item.label)}</span>
+        </button>
+      `;
+    }).join("");
     portlet.innerHTML = `
       <div class="scr-helper-header ${escapeHtml(CURRENT_QUEUE.headerClass)}">
         <div class="scr-helper-brand">
@@ -5544,7 +5554,7 @@ Health & Hospitality	DIRECT	NL	West	West
           </div>
         </div>
         <div class="scr-helper-header-actions">
-          <button type="button" id="scr-helper-queue-launcher" class="scr-helper-icon-button ${escapeHtml(CURRENT_QUEUE.launcherClass)}" title="${escapeHtml(CURRENT_QUEUE.launcherTitle)}">${escapeHtml(CURRENT_QUEUE.launcherLabel)}</button>
+          <div id="scr-helper-queue-nav" class="scr-helper-queue-nav" aria-label="Queue selector">${queueNav}</div>
           <button type="button" id="scr-helper-options-toggle" class="scr-helper-icon-button scr-helper-options-toggle" title="Options" aria-expanded="false" aria-controls="scr-helper-options-panel">⚙</button>
           <button type="button" id="scr-helper-maximize" class="scr-helper-icon-button" title="Maximize to full screen" aria-pressed="false">Maximize</button>
           <button type="button" id="scr-helper-refresh" class="scr-helper-icon-button" title="Refresh the full NetSuite page">Refresh</button>
@@ -5702,8 +5712,10 @@ Health & Hospitality	DIRECT	NL	West	West
     document.getElementById("scr-helper-options-panel").addEventListener("click", event => {
       event.stopPropagation();
     });
-    document.getElementById("scr-helper-queue-launcher").addEventListener("click", () => {
-      openEditUrlWithGm(CURRENT_QUEUE.launcherUrl);
+    document.getElementById("scr-helper-queue-nav").addEventListener("click", event => {
+      const button = closestElement(event.target, ".scr-helper-queue-nav-button");
+      if (!button || button.classList.contains("is-active")) return;
+      openEditUrlWithGm(button.dataset.queueUrl);
     });
     document.getElementById("scr-helper-refresh-mapping").addEventListener("click", () => {
       loadExternalMapping({ force: true });
@@ -5977,7 +5989,53 @@ Health & Hospitality	DIRECT	NL	West	West
         position: relative;
         display: flex;
         flex: 0 0 auto;
+        align-items: center;
         gap: 6px;
+      }
+
+      #${HELPER_ID} .scr-helper-queue-nav {
+        display: inline-flex;
+        align-items: center;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.38);
+        border-radius: 5px;
+        background: rgba(255, 255, 255, 0.12);
+      }
+
+      #${HELPER_ID} .scr-helper-queue-nav-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border: 0;
+        border-right: 1px solid rgba(255, 255, 255, 0.28);
+        padding: 7px 9px;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.82);
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.2;
+        white-space: nowrap;
+      }
+
+      #${HELPER_ID} .scr-helper-queue-nav-button:last-child {
+        border-right: 0;
+      }
+
+      #${HELPER_ID} .scr-helper-queue-nav-button:hover {
+        background: rgba(255, 255, 255, 0.18);
+        color: #ffffff;
+      }
+
+      #${HELPER_ID} .scr-helper-queue-nav-button.is-active {
+        background: #ffffff;
+        color: var(--ns-ui-primary);
+        cursor: default;
+      }
+
+      #${HELPER_ID} .scr-helper-queue-nav-icon {
+        font-size: 11px;
+        line-height: 1;
       }
 
       #${HELPER_ID} .scr-helper-options-toggle {
