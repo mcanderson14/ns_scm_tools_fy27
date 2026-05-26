@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.64B
+// @version      27.0.0.65B
 // @description  Adds the IQUEUE SCR portlet to NetSuite saved search 1303392 with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -25,7 +25,7 @@
   const HASHTAGS_FIELD_ID = "custrecord_screq_hashtags";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.64B";
+  const HELPER_VERSION = "27.0.0.65B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -72,6 +72,9 @@
     "Construction & Energy": { emoji: "🚧", color: REDWOOD_COLORS.sienna60, soft: REDWOOD_COLORS.neutral30 },
     "Consumer Services": { emoji: "🛍️", color: REDWOOD_COLORS.plum100, soft: REDWOOD_COLORS.neutral30 },
     "EPM": { emoji: "📈", color: REDWOOD_COLORS.tigerPurple, soft: REDWOOD_COLORS.tigerPurpleSoft },
+    "Enterprise Performance Management": { emoji: "📈", color: REDWOOD_COLORS.tigerPurple, soft: REDWOOD_COLORS.tigerPurpleSoft },
+    "Life Science": { emoji: "🧬", color: REDWOOD_COLORS.pine90, soft: REDWOOD_COLORS.neutral30 },
+    "Life Sciences": { emoji: "🧬", color: REDWOOD_COLORS.pine90, soft: REDWOOD_COLORS.neutral30 },
     "Products": { emoji: "📦", color: REDWOOD_COLORS.teal100, soft: REDWOOD_COLORS.ocean30 },
     "Software": { emoji: "💻", color: REDWOOD_COLORS.sky120, soft: REDWOOD_COLORS.sky30 },
     "Health & Hospitality": { emoji: "🏨", color: REDWOOD_COLORS.pine90, soft: REDWOOD_COLORS.neutral30 }
@@ -1188,7 +1191,6 @@ Health & Hospitality	DIRECT	NL	West	West
     if (!emojiMappings || typeof emojiMappings !== "object") return;
 
     applyIndustryGroupEmojiOverrides(emojiMappings.scIndustryGroups);
-    applyGtmEmojiOverrides(emojiMappings.gtmIndustries);
     applyGtmEmojiOverrides(emojiMappings.gtmIndustrySubgroups || emojiMappings.gtmSubgroups);
   }
 
@@ -2720,10 +2722,9 @@ Health & Hospitality	DIRECT	NL	West	West
     });
   }
 
-  function renderGtmTaxonomyValue(value) {
+  function renderGtmIndustryValue(value) {
     const text = normalizeSpaces(value);
-    if (!text) return "";
-    return getGtmSubgroupEmoji(text) ? renderGtmSubgroupBadge(text) : escapeHtml(text);
+    return text ? escapeHtml(text) : "";
   }
 
   function isTigerEnterpriseValue(value) {
@@ -3786,7 +3787,7 @@ Health & Hospitality	DIRECT	NL	West	West
       renderSummaryColumn("Industry & Assignment", [
         renderSummaryItem("Request Type", requestType || "Not found"),
         renderSummaryItem("SC Industry Group", "", { html: industryGroupBadges || "Not found" }),
-        renderSummaryItem("FY27 GTM Industry", "", { html: renderGtmTaxonomyValue(summary.gtmIndustry) || "Not found" }),
+        renderSummaryItem("FY27 GTM Industry", "", { html: renderGtmIndustryValue(summary.gtmIndustry) || "Not found" }),
         renderSummaryItem("FY27 GTM Industry Subgroup", "", { html: renderGtmSubgroupBadge(summary.gtmIndustrySubgroup) || "Not found" }),
         renderSummaryItem("Sales Region", "", { html: salesRegionHtml }),
         renderSummaryItem("SC Staffing Region", "", { html: staffingRegionHtml }),
@@ -3878,7 +3879,7 @@ Health & Hospitality	DIRECT	NL	West	West
     };
 
     add("SC Industry Group", controls.industry.value, industryOptionLabel(controls.industry.value), { removeType: "select", removeKey: "industry" });
-    add("FY27 GTM Industry", controls.gtmIndustry.value, gtmSubgroupOptionLabel(controls.gtmIndustry.value), { removeType: "select", removeKey: "gtmIndustry" });
+    add("FY27 GTM Industry", controls.gtmIndustry.value, controls.gtmIndustry.value, { removeType: "select", removeKey: "gtmIndustry" });
     add("FY27 GTM Industry Subgroup", controls.industrySubgroup.value, gtmSubgroupOptionLabel(controls.industrySubgroup.value), { removeType: "select", removeKey: "industrySubgroup" });
     add("Sales Region", controls.salesRegion.value, controls.salesRegion.value, { removeType: "select", removeKey: "salesRegion" });
     add("Sales Vertical", controls.salesVertical.value, controls.salesVertical.value, { removeType: "select", removeKey: "salesVertical" });
@@ -4424,7 +4425,7 @@ Health & Hospitality	DIRECT	NL	West	West
 
     const selected = control.value;
     const options = uniqueSorted(searchRows.map(row => row.gtmIndustry));
-    control.innerHTML = optionHtml(options, "All FY27 GTM industries", gtmSubgroupOptionLabel);
+    control.innerHTML = optionHtml(options, "All FY27 GTM industries");
     if (selected && options.some(option => normalizeKey(option) === normalizeKey(selected))) {
       control.value = selected;
     }
