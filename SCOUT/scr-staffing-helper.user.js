@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
-// @namespace    https://github.com/mcanderson14/FY26_scm_tools
-// @version      b26.5.51
+// @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
+// @version      b26.5.52
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -17,12 +17,12 @@
 // @connect      nlcorp-sb2.app.netsuite.com
 // @grant        unsafeWindow
 // @run-at       document-idle
-// @downloadURL  https://github.com/mcanderson14/fy26_scm_staffing_w_amo/raw/refs/heads/main/scr-staffing-helper.user.js
-// @updateURL    https://github.com/mcanderson14/fy26_scm_staffing_w_amo/raw/refs/heads/main/scr-staffing-helper.user.js
+// @downloadURL  https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/scr-staffing-helper.user.js
+// @updateURL    https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/scr-staffing-helper.user.js
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  b26.5.51
+   SCOUT — SC Operations Utility Tool  b26.5.52
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,15 +32,15 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = 'b26.5.51';
+  const SCRIPT_VERSION = 'b26.5.52';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
   const SCOUT_GPT_URL = 'https://chatgpt.com/';
-  const SCOUT_INSTALL_URL = 'https://github.com/mcanderson14/fy26_scm_staffing_w_amo/raw/refs/heads/main/scr-staffing-helper.user.js';
-  const SCOUT_UPDATE_CHECK_URL = 'https://raw.githubusercontent.com/mcanderson14/fy26_scm_staffing_w_amo/main/scr-staffing-helper.user.js';
-  const SCOUT_TESTING_INSTALL_URL = 'https://github.com/mcanderson14/fy26_scm_staffing_w_amo/raw/refs/heads/main/testing/scr-staffing-helper.user.js';
-  const SCOUT_TESTING_UPDATE_CHECK_URL = 'https://raw.githubusercontent.com/mcanderson14/fy26_scm_staffing_w_amo/main/testing/scr-staffing-helper.user.js';
+  const SCOUT_INSTALL_URL = 'https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/scr-staffing-helper.user.js';
+  const SCOUT_UPDATE_CHECK_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_tools_fy27/main/SCOUT/scr-staffing-helper.user.js';
+  const SCOUT_TESTING_INSTALL_URL = 'https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/testing/scr-staffing-helper.user.js';
+  const SCOUT_TESTING_UPDATE_CHECK_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_tools_fy27/main/SCOUT/testing/scr-staffing-helper.user.js';
   const SCOUT_UPDATE_CACHE_KEY = 'scout_update_check_cache_v2';
   const SCOUT_UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
   const SCOUT_LOGO_SRC_UNUSED = [
