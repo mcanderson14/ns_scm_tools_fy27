@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.77B
+// @version      27.0.0.78B
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -33,7 +33,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.77B";
+  const HELPER_VERSION = "27.0.0.78B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -1611,6 +1611,19 @@ Health & Hospitality	DIRECT	NL	West	West
     if (!owner || !owner.scm) return false;
     const targetKeys = personNameKeys(ownerName);
     return Boolean(targetKeys.length && personNameKeys(owner.scm).some(key => targetKeys.includes(key)));
+  }
+
+  function rowMatchesProductsScmOwnerFilter(row, ownerNames, includeUnmappedOwnerRows) {
+    const owner = productsScmOwnerForRow(row);
+    if (!owner) return false;
+    if (owner.scm) {
+      const rowOwnerKeys = personNameKeys(owner.scm);
+      return ownerNames.some(name => {
+        const targetKeys = personNameKeys(name);
+        return Boolean(targetKeys.length && rowOwnerKeys.some(key => targetKeys.includes(key)));
+      });
+    }
+    return Boolean(includeUnmappedOwnerRows && owner.source === "unmapped");
   }
 
   function displayedIndustryFamiliesForRow(row) {
@@ -4559,9 +4572,12 @@ Health & Hospitality	DIRECT	NL	West	West
     if (salesVertical && normalizeKey(row.salesVertical) !== salesVerticalKey) return false;
     if (!rowMatchesPeopleFilters(row)) return false;
     if (productsScmUserIsAuthorized() && (productsScmOwnerMe || productsScmOwner)) {
-      const matchesMe = productsScmOwnerMe && productsScmOwnerMatchesName(row, currentProductsScmUserName() || getCurrentUserName());
-      const matchesSelected = productsScmOwner && productsScmOwnerMatchesName(row, productsScmOwner);
-      if (!matchesMe && !matchesSelected) return false;
+      const selectedProductsScms = [
+        productsScmOwnerMe ? currentProductsScmUserName() || getCurrentUserName() : "",
+        productsScmOwner
+      ].filter(Boolean);
+      const includeUnmappedProductsScmOwners = industryKey === normalizeKey(PRODUCTS_SCM_INDUSTRY_GROUP) && Boolean(staffingRegion);
+      if (!rowMatchesProductsScmOwnerFilter(row, selectedProductsScms, includeUnmappedProductsScmOwners)) return false;
     }
     if (staffingRegion && !effectiveStaffingRegionKeys(row, industryKey).includes(staffingRegionKey)) return false;
     if (amoDirect && normalizeKey(normalizeAmoDirect(row.amoDirect)) !== amoDirectKey) return false;
