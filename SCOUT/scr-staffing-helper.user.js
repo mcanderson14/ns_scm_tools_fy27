@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      b26.5.52
+// @version      b26.5.59
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  b26.5.52
+   SCOUT — SC Operations Utility Tool  b26.5.59
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = 'b26.5.52';
+  const SCRIPT_VERSION = 'b26.5.59';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -4929,6 +4929,17 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       `${todayFullString()} - Staffed Deal [${staffedBy}]`,
     ].join('\n');
   }
+  function buildEngagementNotesTemplate(empName) {
+    const initials = getInitials(empName);
+    return [
+      todayFullString(),
+      'Last Steps:',
+      'Next Steps:',
+      'Red Flags: ',
+      'Value/Impact:',
+      `[${initials}]`,
+    ].join('\n');
+  }
   function setDirectManagerNotes(empName) {
     appendScManagerNotes(buildDirectManagerNotesTemplate(empName), /Staffed Deal\s*\[/i);
   }
@@ -5498,6 +5509,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     prependRequestDetails(requestDetailsScript);
     setDirectManagerNotes(empName);
     setStaffingPopupNotes(notes);
+    appendEngagementNotesTemplate(empName);
     syncProductIdsToForm(productIds, true, { submitRecord: true });
   }
 
@@ -5515,6 +5527,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     setScoutHashtag();
     prependRequestDetails(wrapStaffingNote(requestDetailsBaseScript, empName, requestDetailsNote));
     setStaffingPopupNotes(notes);
+    appendEngagementNotesTemplate(empName);
     if (deliverable && isValidAmoDeliverableName(deliverable)) syncDeliverableToForm(deliverable);
     syncProductIdsToForm(productIds, true, { submitRecord: true });
     return deliverable;
@@ -5778,6 +5791,10 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   }
 
   function setOnHold(meId) {
+    if (!meId) {
+      showToast('SCOUT could not resolve your roster record, so On Hold self-assignment is unavailable for this role.', 'error', 8000);
+      return;
+    }
     if (!confirm('Place this request On Hold and assign it to yourself?')) return;
     showNotesDialog('Place Request On Hold', function (dialog) {
       const notes = dialog.staffingNotes;
@@ -6623,15 +6640,18 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   ──────────────────────────────────────────────────────────────── */
 
   function baseFilters(empRec, joinField) {
-    const teamId = empRec.getValue('custrecord_emproster_salesteam');
-    return [
+    const teamId = empRec && typeof empRec.getValue === 'function'
+      ? empRec.getValue('custrecord_emproster_salesteam')
+      : '';
+    const filters = [
       new nlobjSearchFilter('custrecord_emproster_rosterstatus', joinField, 'is', 1),
       new nlobjSearchFilter('custrecord_emproster_eminactive',   joinField, 'is', 'F'),
       new nlobjSearchFilter('custrecord_emproster_ocostcenter',  joinField, 'is', ROSTER_COST_CENTER_ID),
       new nlobjSearchFilter('custrecord_emproster_salesregion',  joinField, 'is', ROSTER_SALES_REGION_ID),
-      new nlobjSearchFilter('custrecord_emproster_salesteam',    joinField, 'is', teamId),
       new nlobjSearchFilter('custrecord_emproster_sales_qb',     joinField, 'is', 25),
     ];
+    if (teamId) filters.push(new nlobjSearchFilter('custrecord_emproster_salesteam', joinField, 'is', teamId));
+    return filters;
   }
 
   /**
@@ -7793,6 +7813,18 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     if (notes) setTimeout(() => appendScManagerNotes2(notes, notes), 250);
   }
 
+  /** Append the standard post-staffing engagement notes template. */
+  function appendEngagementNotesTemplate(empName) {
+    const notes = buildEngagementNotesTemplate(empName);
+    try {
+      const current = readFormTextField(SCR_FIELD_ENGAGEMENT_NOTES);
+      if (alreadyContainsNote(current, notes)) return;
+      setFormTextField(SCR_FIELD_ENGAGEMENT_NOTES, appendNotesText(current, notes));
+    } catch (e) {
+      console.warn('[Staffing Helper] appendEngagementNotesTemplate error:', e.message || e);
+    }
+  }
+
   /* ── Form-sync helpers (items 5 & 6) ───────────────────────────── */
   /**
    * Sync the panel's product selection to the Products field on the SCR.
@@ -8141,6 +8173,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   }
 
   function getMyTeamRoster(empIds) {
+    if (!empIds || !empIds.me) return [];
     try {
       const filters = [
         new nlobjSearchFilter('custrecord_emproster_mgrroster',  null, 'is', empIds.me),
@@ -9237,10 +9270,18 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       { re: new RegExp('previously\\s+worked\\s+with\\s+' + NAME, 'i'), allowLowercase: false },
       // "Working with Ron Traum for NSIP ecommerce integration"
       { re: new RegExp('\\bworking\\s+with\\s+' + NAME, 'i'), allowLowercase: false },
+      // "Hoping we can work with Mark Newkirk on this one"
+      { re: new RegExp('\\bhoping\\s+(?:we\\s+can\\s+)?work\\s+with\\s+' + NAME, 'i'), allowLowercase: false },
+      // "Andrew Kravet is available and coordinated with him on this, Please staff"
+      { re: new RegExp(NAME + '\\s+is\\s+available[^.\\n\\r]{0,160}\\bplease\\s+staff\\b', 'i'), allowLowercase: false },
+      // "Looking to get Corey Tenanes assigned here if possible"
+      { re: new RegExp('\\blooking\\s+to\\s+get\\s+' + NAME + '\\s+assigned\\b', 'i'), allowLowercase: false },
       // "Melanie Igel would be a good fit"
       { re: new RegExp(NAME + '\\s+(?:would\\s+be|is)\\s+a\\s+good\\s+fit', 'i'), allowLowercase: false },
-      // "Please use / assign / get / tag Austin Schaub"
-      { re: new RegExp('please\\s+(?:use|assign|request|get|tag)\\s+' + NAME, 'i'), allowLowercase: true },
+      // "Please use / assign / assign to / get / tag Austin Schaub"
+      { re: new RegExp('please\\s+(?:use|assign|request|get|tag)\\s+(?:to\\s+)?' + NAME, 'i'), allowLowercase: true },
+      // "Assign to Quinn Dagley"
+      { re: new RegExp('\\bassign\\s+to\\s+' + NAME, 'i'), allowLowercase: true },
       // "Tag Elaine Smith"
       { re: new RegExp('\\btag\\s+' + NAME, 'i'), allowLowercase: true },
       // "Preferred SC: Name" / "Prefer SC: Name" — require "sc" to avoid "prefer Standard SOW"
@@ -9283,9 +9324,45 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     return String(value || '').trim().toLowerCase();
   }
 
+  const REQUESTED_SC_NICKNAMES = {
+    pat: ['patrick', 'patricia'],
+    mike: ['michael'],
+    michael: ['mike'],
+    tom: ['thomas'],
+    thomas: ['tom'],
+    bob: ['robert'],
+    robert: ['bob'],
+    dave: ['david'],
+    david: ['dave'],
+    dan: ['daniel'],
+    daniel: ['dan'],
+    alex: ['alexander', 'alexandra'],
+  };
+
+  function normalizeRequestedNameTokens(value) {
+    return normalizeLoose(String(value || '').replace(/['’]/g, '')).split(/\s+/).filter(Boolean);
+  }
+
+  function firstNameMatchesRequested(memberFirst, requestedFirst) {
+    if (!memberFirst || !requestedFirst) return false;
+    if (memberFirst === requestedFirst) return true;
+    const requestedAliases = REQUESTED_SC_NICKNAMES[requestedFirst] || [];
+    const memberAliases = REQUESTED_SC_NICKNAMES[memberFirst] || [];
+    return requestedAliases.includes(memberFirst) || memberAliases.includes(requestedFirst);
+  }
+
+  function requestedRosterSearchTerms(fullName) {
+    const parts = String(fullName || '').trim().split(/\s+/).filter(Boolean);
+    const last = parts.length > 1 ? parts[parts.length - 1] : (parts[0] || '');
+    const terms = [last];
+    const compact = last.replace(/[^A-Za-z0-9]/g, '');
+    if (compact && compact !== last) terms.push(compact);
+    return [...new Set(terms.filter(Boolean))];
+  }
+
   function requestedRosterMemberMatches(member, requestedName) {
-    const memberTokens = normalizeLoose(member && member.employee).split(/\s+/).filter(Boolean);
-    const requestTokens = normalizeLoose(requestedName).split(/\s+/).filter(Boolean);
+    const memberTokens = normalizeRequestedNameTokens(member && member.employee);
+    const requestTokens = normalizeRequestedNameTokens(requestedName);
     if (memberTokens.length < 2 || requestTokens.length < 2) return false;
 
     const reqFirst = requestTokens[0];
@@ -9293,8 +9370,8 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     if (!reqFirst || !reqLast) return false;
 
     // Support both "First Last" and NetSuite-style "Last, First" roster names.
-    if (memberTokens[0] === reqFirst && memberTokens.indexOf(reqLast) > 0) return true;
-    if (memberTokens[0] === reqLast && memberTokens.slice(1).indexOf(reqFirst) !== -1) return true;
+    if (firstNameMatchesRequested(memberTokens[0], reqFirst) && memberTokens.indexOf(reqLast) > 0) return true;
+    if (memberTokens[0] === reqLast && memberTokens.slice(1).some(token => firstNameMatchesRequested(token, reqFirst))) return true;
 
     return memberTokens.join(' ') === requestTokens.join(' ');
   }
@@ -9444,20 +9521,23 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       const trimmed = (fullName || '').trim();
       if (!trimmed) return { members: [], searched: 0, lastName: '', enriched: true };
 
-      const parts    = trimmed.split(/\s+/);
-      const searchTerm = parts.length > 1 ? parts[parts.length - 1] : trimmed;
+      const searchTerms = requestedRosterSearchTerms(trimmed);
+      const searchTerm = searchTerms[0] || '';
       if (!searchTerm) return { members: [], searched: 0, lastName: '', enriched: true };
 
       const cacheKey = rosterLookupCacheKey((strictName ? 'strict:' : 'loose:') + searchTerm + (strictName ? ':' + trimmed : ''));
       const cached = _quickAssignRosterCache.get(cacheKey);
       if (cached) return cloneRosterLookupResult(cached);
 
-      let result;
-      try {
-        result = searchRosterByName(searchTerm);
-      } catch (rosterError) {
-        console.warn('[Staffing Helper] fast roster lookup failed; falling back to skill lookup:', rosterError);
-        result = searchSkillEntriesByRosterName(searchTerm);
+      let result = null;
+      for (const term of searchTerms) {
+        try {
+          result = searchRosterByName(term);
+        } catch (rosterError) {
+          console.warn('[Staffing Helper] fast roster lookup failed; falling back to skill lookup:', rosterError);
+          result = searchSkillEntriesByRosterName(term);
+        }
+        if (!strictName || (result.members || []).some(member => requestedRosterMemberMatches(member, trimmed))) break;
       }
 
       if (strictName) {
@@ -11826,6 +11906,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   const SCR_FIELD_SCM_NOTES    = 'custrecord_screq_scm_notes';      // SCM Staffing Notes field
   const SCR_FIELD_SC_MANAGER_NOTES = 'custrecord_screq_scmanager_notes'; // SC Manager Notes field
   const SCR_FIELD_SC_MANAGER_NOTES_2 = 'custrecord_screq_scmanager_notes_2'; // Staffing popup notes field
+  const SCR_FIELD_ENGAGEMENT_NOTES = 'custrecord_screq_engmnt_notes'; // Engagement notes field
   const SCR_REQUEST_DETAILS_MAX_CHARS = 4000;
   const SCR_FIELD_MEETING_DATE = 'custrecord_screq_meeting_date';   // Anticipated Customer Meeting date
   const SCR_FIELD_MEETING_DATE_CANDIDATES = [
@@ -12567,6 +12648,12 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       });
     });
 
+    ['sc-btn-onhold', 'sc-amo-btn-onhold'].forEach(btnId => {
+      const btn = document.getElementById(btnId);
+      if (!btn || empIds.me) return;
+      btn.disabled = true;
+      btn.title = 'Current roster record unavailable for this role.';
+    });
     document.getElementById('sc-btn-onhold').addEventListener('click', () => setOnHold(empIds.me));
     document.getElementById('sc-btn-cancel').addEventListener('click', () => cancelRequest(empName));
 
@@ -12651,9 +12738,48 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     }
   }
 
-  function getCurrentEmp() {
+  function getLookupValue(payload, fieldId) {
+    if (!payload || typeof payload !== 'object') return '';
+    const value = payload[fieldId];
+    if (value && typeof value === 'object') return value.text || value.name || value.value || '';
+    return value || '';
+  }
+
+  function lookupCurrentUserName(curUser) {
+    if (!curUser) return '';
     try {
-      const curUser = nlapiGetUser();
+      const employeeFields = nlapiLookupField('employee', curUser, ['entityid', 'altname', 'firstname', 'lastname', 'email']) || {};
+      const first = getLookupValue(employeeFields, 'firstname');
+      const last = getLookupValue(employeeFields, 'lastname');
+      return getLookupValue(employeeFields, 'altname') ||
+        getLookupValue(employeeFields, 'entityid') ||
+        [first, last].filter(Boolean).join(' ') ||
+        getLookupValue(employeeFields, 'email') ||
+        '';
+    } catch (e) {
+      console.warn('[Staffing Helper] Could not resolve current employee name:', e.message || e);
+      return '';
+    }
+  }
+
+  function makeLimitedCurrentEmp(curUser, reason) {
+    const userName = lookupCurrentUserName(curUser) || 'SCOUT User';
+    return {
+      _scoutLimitedMode: true,
+      _scoutUserId: curUser || '',
+      _scoutLimitedReason: reason || '',
+      getId() { return ''; },
+      getValue(fieldId) {
+        return fieldId === 'name' ? userName : '';
+      },
+      getText() { return ''; },
+    };
+  }
+
+  function getCurrentEmp() {
+    let curUser = '';
+    try {
+      curUser = nlapiGetUser();
       const filters = [new nlobjSearchFilter('custrecord_emproster_emp', null, 'is', curUser)];
       const cols = [
         new nlobjSearchColumn('name'),
@@ -12663,23 +12789,26 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         new nlobjSearchColumn('custrecord_emproster_sales_tier'),
       ];
       const res = nlapiSearchRecord('customrecord_emproster', null, filters, cols);
-      return (res && res.length > 0) ? res[0] : null;
+      if (res && res.length > 0) return res[0];
+      console.warn('[Staffing Helper] Employee roster record not found; loading SCOUT in limited role mode.');
+      return makeLimitedCurrentEmp(curUser, 'Roster record not found');
     } catch (e) {
-      console.error('[Staffing Helper] Could not load employee record:', e);
-      return null;
+      console.error('[Staffing Helper] Could not load employee roster record; loading SCOUT in limited role mode:', e);
+      return makeLimitedCurrentEmp(curUser, e.message || String(e));
     }
   }
 
   waitForNlapi(() => {
     const empRec = getCurrentEmp();
     if (!empRec) {
-      console.warn('[Staffing Helper] Employee roster record not found — panel will not inject.');
+      console.warn('[Staffing Helper] Current employee context unavailable; panel will not inject.');
       return;
     }
 
-    const empName = empRec.getValue('name') || 'SC Manager';
+    const limitedMode = Boolean(empRec._scoutLimitedMode);
+    const empName = empRec.getValue('name') || 'SCOUT User';
     const empIds  = {
-      me:      empRec.getId(),
+      me:      limitedMode ? '' : empRec.getId(),
       rob:     71312,
       jeff:    727821,
       karl:    106513,
@@ -12689,6 +12818,9 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       mikec:   239718,
       jason:   null,   // EPM route stays disabled until Jason's internal ID is configured
     };
+    if (limitedMode) {
+      console.warn('[Staffing Helper] Limited role mode active. Manager-specific team features may be unavailable.', empRec._scoutLimitedReason || '');
+    }
 
     injectPanel(empRec, empIds, empName);
   });
