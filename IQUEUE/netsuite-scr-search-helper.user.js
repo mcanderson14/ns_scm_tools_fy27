@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.74B
+// @version      27.0.0.77B
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -33,7 +33,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.74B";
+  const HELPER_VERSION = "27.0.0.77B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -44,6 +44,8 @@
   const EXTERNAL_MAPPING_CACHE_KEY = "fy27-unified-sc-staffing-queue-assistant-region-mapping-v1";
   const EXTERNAL_MAPPING_REFRESH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
   const PRODUCTS_SCM_MAPPING_FILE_NAME = "Products_SCM_Relationship_Mapping.json";
+  const PRODUCTS_SCM_MAPPING_FILE_ID = "482833928";
+  const PRODUCTS_SCM_MAPPING_FILE_URL = "https://nlcorp.app.netsuite.com/app/common/media/482833928?folder=482833928&ifrmcntnr=T";
   const PRODUCTS_SCM_MAPPING_CACHE_KEY = "iqueue-products-scm-relationship-mapping-v1";
   const PRODUCTS_SCM_MAPPING_REFRESH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
   const PRODUCTS_SCM_INDUSTRY_GROUP = "Products";
@@ -2258,7 +2260,17 @@ Health & Hospitality	DIRECT	NL	West	West
     ]);
   }
 
-  function extractMappingDownloadUrls(html, baseUrl) {
+  function productsScmMappingUrlCandidates() {
+    const origin = window.location.origin || "https://nlcorp.app.netsuite.com";
+    return orderedUnique([
+      PRODUCTS_SCM_MAPPING_FILE_URL,
+      `${origin}/core/media/media.nl?id=${encodeURIComponent(PRODUCTS_SCM_MAPPING_FILE_ID)}&c=NLCORP&_xt=.json`,
+      `${origin}/core/media/media.nl?id=${encodeURIComponent(PRODUCTS_SCM_MAPPING_FILE_ID)}&_xt=.json`,
+      `${origin}/app/common/media/mediaitem.nl?id=${encodeURIComponent(PRODUCTS_SCM_MAPPING_FILE_ID)}`
+    ]);
+  }
+
+  function extractMappingDownloadUrls(html, baseUrl, fileName = EXTERNAL_MAPPING_FILE_NAME, fileId = EXTERNAL_MAPPING_FILE_ID) {
     const urls = [];
     const text = String(html || "");
 
@@ -2269,9 +2281,9 @@ Health & Hospitality	DIRECT	NL	West	West
         if (!href) return;
         const absolute = new URL(href, baseUrl || window.location.href).href;
         if (
-          absolute.includes(EXTERNAL_MAPPING_FILE_NAME)
-          || (absolute.includes("/core/media/media.nl") && absolute.includes(`id=${EXTERNAL_MAPPING_FILE_ID}`))
-          || (absolute.includes("/app/common/media/") && absolute.includes(EXTERNAL_MAPPING_FILE_ID))
+          absolute.includes(fileName)
+          || (absolute.includes("/core/media/media.nl") && absolute.includes(`id=${fileId}`))
+          || (absolute.includes("/app/common/media/") && absolute.includes(fileId))
         ) {
           urls.push(absolute);
         }
@@ -2283,13 +2295,13 @@ Health & Hospitality	DIRECT	NL	West	West
     const regex = /https?:\/\/[^"'<>\s]+(?:media\.nl|mediaitem\.nl)[^"'<>\s]*/gi;
     Array.from(text.matchAll(regex)).forEach(match => {
       const url = match[0].replace(/&amp;/g, "&");
-      if (url.includes(EXTERNAL_MAPPING_FILE_ID) || url.includes(EXTERNAL_MAPPING_FILE_NAME)) urls.push(url);
+      if (url.includes(fileId) || url.includes(fileName)) urls.push(url);
     });
 
     return orderedUnique(urls).filter(url => url !== baseUrl);
   }
 
-  async function fetchMappingJsonFromUrl(url, visited = new Set()) {
+  async function fetchMappingJsonFromUrl(url, visited = new Set(), fileName = EXTERNAL_MAPPING_FILE_NAME, fileId = EXTERNAL_MAPPING_FILE_ID) {
     if (!url || visited.has(url)) throw new Error("No unused mapping URL candidate was available.");
     visited.add(url);
 
@@ -2303,10 +2315,10 @@ Health & Hospitality	DIRECT	NL	West	West
     try {
       return parseMappingJsonText(text);
     } catch (parseError) {
-      const nestedUrls = extractMappingDownloadUrls(text, url);
+      const nestedUrls = extractMappingDownloadUrls(text, url, fileName, fileId);
       for (const nestedUrl of nestedUrls) {
         try {
-          return await fetchMappingJsonFromUrl(nestedUrl, visited);
+          return await fetchMappingJsonFromUrl(nestedUrl, visited, fileName, fileId);
         } catch (nestedError) {
           console.warn("IQUEUE mapping nested URL failed", nestedError);
         }
@@ -2606,13 +2618,16 @@ Health & Hospitality	DIRECT	NL	West	West
       try {
         pageWindow.require(["N/file", "N/search"], (file, search) => {
           try {
-            const results = search.create({
-              type: "file",
-              filters: [["name", "is", PRODUCTS_SCM_MAPPING_FILE_NAME]],
-              columns: ["internalid", "name"]
-            }).run().getRange({ start: 0, end: 1 }) || [];
-            const result = results[0];
-            const fileId = result && (result.getValue({ name: "internalid" }) || result.id);
+            let fileId = PRODUCTS_SCM_MAPPING_FILE_ID;
+            if (!fileId) {
+              const results = search.create({
+                type: "file",
+                filters: [["name", "is", PRODUCTS_SCM_MAPPING_FILE_NAME]],
+                columns: ["internalid", "name"]
+              }).run().getRange({ start: 0, end: 1 }) || [];
+              const result = results[0];
+              fileId = result && (result.getValue({ name: "internalid" }) || result.id);
+            }
             if (!fileId) throw new Error(`${PRODUCTS_SCM_MAPPING_FILE_NAME} was not found in the NetSuite File Cabinet.`);
             const mappingFile = file.load({ id: fileId });
             finish(resolve)(parseMappingJsonText(mappingFile.getContents()));
@@ -2626,17 +2641,46 @@ Health & Hospitality	DIRECT	NL	West	West
     });
   }
 
+  async function fetchProductsScmMappingData() {
+    const errors = [];
+
+    try {
+      const data = await loadProductsScmMappingWithSuiteScript();
+      return {
+        data,
+        label: `N/file ${PRODUCTS_SCM_MAPPING_FILE_NAME}`
+      };
+    } catch (error) {
+      errors.push(`N/file: ${error.message || error}`);
+    }
+
+    for (const url of productsScmMappingUrlCandidates()) {
+      try {
+        const data = await fetchMappingJsonFromUrl(url, new Set(), PRODUCTS_SCM_MAPPING_FILE_NAME, PRODUCTS_SCM_MAPPING_FILE_ID);
+        return {
+          data,
+          label: `File Cabinet ${PRODUCTS_SCM_MAPPING_FILE_NAME}`
+        };
+      } catch (error) {
+        errors.push(error.message || String(error));
+      }
+    }
+
+    throw new Error(errors.join(" | "));
+  }
+
   async function loadProductsScmMapping(options = {}) {
     const force = Boolean(options.force);
     if (!force && !shouldFetchProductsScmMapping()) return;
 
     try {
-      const data = await loadProductsScmMappingWithSuiteScript();
+      const result = await fetchProductsScmMappingData();
+      const data = result.data || result;
       writeCachedProductsScmMapping(data);
       applyProductsScmMappingData(data, {
         fromCache: false,
         loadedAt: Date.now(),
-        label: `N/file ${PRODUCTS_SCM_MAPPING_FILE_NAME}`
+        label: result.label
       });
       updateProductsScmControls();
       updateFilterSummary();
