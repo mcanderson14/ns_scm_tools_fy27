@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      b26.5.59
+// @version      b26.5.60
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  b26.5.59
+   SCOUT — SC Operations Utility Tool  b26.5.60
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = 'b26.5.59';
+  const SCRIPT_VERSION = 'b26.5.60';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -492,6 +492,25 @@ Good luck with ${sc}!
     return new unsafeWindow.nlobjSearchColumn(name, join, summary);
   };
   /* eslint-enable no-var */
+
+  let SCOUT_CAN_READ_MANAGER_AVAIL_RES = false;
+
+  function managerAvailResColumns(joinField) {
+    return SCOUT_CAN_READ_MANAGER_AVAIL_RES
+      ? [new nlobjSearchColumn('custrecord_emproster_avail_notes_res', joinField)]
+      : [];
+  }
+
+  function readManagerAvailRes(result, joinField) {
+    if (!SCOUT_CAN_READ_MANAGER_AVAIL_RES) return '';
+    try {
+      return (joinField
+        ? result.getValue('custrecord_emproster_avail_notes_res', joinField)
+        : result.getValue('custrecord_emproster_avail_notes_res')) || '';
+    } catch (e) {
+      return '';
+    }
+  }
 
   // Guard: only SC Request records (rectype=2840)
   if (!window.location.search.includes('rectype=2840')) return;
@@ -6694,7 +6713,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       new nlobjSearchColumn('internalid',                           join),
       new nlobjSearchColumn('custrecord_emproster_avail',           join),
       new nlobjSearchColumn('custrecord_emproster_avail_notes',     join),
-      new nlobjSearchColumn('custrecord_emproster_avail_notes_res', join),
+      ...managerAvailResColumns(join),
       new nlobjSearchColumn('custrecord_emproster_mgrroster',       join),
       new nlobjSearchColumn('custrecord_emproster_olocation',       join),
       new nlobjSearchColumn('custrecord_emproster_salessubregion',  join),
@@ -6713,7 +6732,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       manager:      r.getText('custrecord_emproster_mgrroster', join),
       availability: r.getText('custrecord_emproster_avail', join),
       availNotes:   r.getValue('custrecord_emproster_avail_notes', join),
-      availRes:     r.getValue('custrecord_emproster_avail_notes_res', join),
+      availRes:     readManagerAvailRes(r, join),
       location:     r.getText('custrecord_emproster_olocation', join),
       region:       r.getText('custrecord_emproster_salessubregion', join),
       vertical:     r.getText('custrecord_emproster_vertical_amo', join),
@@ -7082,7 +7101,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         new nlobjSearchColumn('internalid'),
         new nlobjSearchColumn('custrecord_emproster_avail'),
         new nlobjSearchColumn('custrecord_emproster_avail_notes'),
-        new nlobjSearchColumn('custrecord_emproster_avail_notes_res'),
+        ...managerAvailResColumns(null),
         new nlobjSearchColumn('custrecord_emproster_emp'),
         new nlobjSearchColumn('custrecord_emproster_salesteam'),
         new nlobjSearchColumn('email', 'custrecord_emproster_emp'),
@@ -7096,7 +7115,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         map[id] = {
           availability: (r.getText('custrecord_emproster_avail')             || '').toLowerCase(),
           availNotes:    r.getValue('custrecord_emproster_avail_notes')       || '',
-          availRes:      r.getValue('custrecord_emproster_avail_notes_res')   || '',
+          availRes:      readManagerAvailRes(r, null),
           employeeRecId: r.getValue('custrecord_emproster_emp')               || '',
           salesteam:     r.getText('custrecord_emproster_salesteam')          || '',
           email:         r.getValue('email', 'custrecord_emproster_emp')      || '',
@@ -8018,7 +8037,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       new nlobjSearchColumn('internalid'),
       new nlobjSearchColumn('custrecord_emproster_avail'),
       new nlobjSearchColumn('custrecord_emproster_avail_notes'),
-      new nlobjSearchColumn('custrecord_emproster_avail_notes_res'),
+      ...managerAvailResColumns(null),
       new nlobjSearchColumn('custrecord_emproster_olocation'),
       new nlobjSearchColumn('custrecord_emproster_salessubregion'),
       new nlobjSearchColumn('custrecord_emproster_vertical_amo'),
@@ -8043,7 +8062,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       manager:       sourceLabel || '',
       availability:  (r.getText('custrecord_emproster_avail') || '').toLowerCase(),
       availNotes:    r.getValue('custrecord_emproster_avail_notes')    || '',
-      availRes:      r.getValue('custrecord_emproster_avail_notes_res') || '',
+      availRes:      readManagerAvailRes(r, null),
       location:      extractShortLocation(r.getText('custrecord_emproster_olocation')),
       region:        r.getText('custrecord_emproster_salessubregion')  || '',
       vertical:      r.getText('custrecord_emproster_vertical_amo')    || '',
@@ -8864,7 +8883,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
             new nlobjSearchColumn('internalid',                           join),
             new nlobjSearchColumn('custrecord_emproster_avail',           join),
             new nlobjSearchColumn('custrecord_emproster_avail_notes',     join),
-            new nlobjSearchColumn('custrecord_emproster_avail_notes_res', join),
+            ...managerAvailResColumns(join),
             new nlobjSearchColumn('custrecord_emproster_mgrroster',       join),
             new nlobjSearchColumn('custrecord_emproster_olocation',       join),
             new nlobjSearchColumn('custrecord_emproster_salessubregion',  join),
@@ -8883,7 +8902,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               manager:      r.getText('custrecord_emproster_mgrroster', join),
               availability: r.getText('custrecord_emproster_avail', join),
               availNotes:   r.getValue('custrecord_emproster_avail_notes', join),
-              availRes:     r.getValue('custrecord_emproster_avail_notes_res', join),
+              availRes:     readManagerAvailRes(r, join),
               location:     r.getText('custrecord_emproster_olocation', join),
               region:       r.getText('custrecord_emproster_salessubregion', join),
               vertical:     r.getText('custrecord_emproster_vertical_amo', join),
@@ -9383,7 +9402,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       manager:      r.getText('custrecord_emproster_mgrroster') || '',
       availability: (r.getText('custrecord_emproster_avail') || '').toLowerCase(),
       availNotes:   r.getValue('custrecord_emproster_avail_notes') || '',
-      availRes:     r.getValue('custrecord_emproster_avail_notes_res') || '',
+      availRes:     readManagerAvailRes(r, null),
       location:     extractShortLocation(r.getText('custrecord_emproster_olocation')),
       region:       r.getText('custrecord_emproster_salessubregion') || '',
       vertical:     r.getText('custrecord_emproster_vertical_amo') || '',
@@ -9414,7 +9433,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       new nlobjSearchColumn('name'),
       new nlobjSearchColumn('custrecord_emproster_avail'),
       new nlobjSearchColumn('custrecord_emproster_avail_notes'),
-      new nlobjSearchColumn('custrecord_emproster_avail_notes_res'),
+      ...managerAvailResColumns(null),
       new nlobjSearchColumn('custrecord_emproster_olocation'),
       new nlobjSearchColumn('custrecord_emproster_salessubregion'),
       new nlobjSearchColumn('custrecord_emproster_vertical_amo'),
@@ -9445,7 +9464,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       new nlobjSearchColumn('name'),
       new nlobjSearchColumn('custrecord_emproster_avail'),
       new nlobjSearchColumn('custrecord_emproster_avail_notes'),
-      new nlobjSearchColumn('custrecord_emproster_avail_notes_res'),
+      ...managerAvailResColumns(null),
       new nlobjSearchColumn('custrecord_emproster_olocation'),
       new nlobjSearchColumn('custrecord_emproster_salessubregion'),
       new nlobjSearchColumn('custrecord_emproster_vertical_amo'),
@@ -9472,7 +9491,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       new nlobjSearchColumn('internalid',                           join),
       new nlobjSearchColumn('custrecord_emproster_avail',           join),
       new nlobjSearchColumn('custrecord_emproster_avail_notes',     join),
-      new nlobjSearchColumn('custrecord_emproster_avail_notes_res', join),
+      ...managerAvailResColumns(join),
       new nlobjSearchColumn('custrecord_emproster_olocation',       join),
       new nlobjSearchColumn('custrecord_emproster_salessubregion',  join),
       new nlobjSearchColumn('custrecord_emproster_vertical_amo',    join),
@@ -9497,7 +9516,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         manager:      r.getText('custrecord_emproster_mgrroster',       join) || '',
         availability: (r.getText('custrecord_emproster_avail',          join) || '').toLowerCase(),
         availNotes:   r.getValue('custrecord_emproster_avail_notes',    join) || '',
-        availRes:     r.getValue('custrecord_emproster_avail_notes_res', join) || '',
+        availRes:     readManagerAvailRes(r, join),
         location:     extractShortLocation(r.getText('custrecord_emproster_olocation', join)),
         region:       r.getText('custrecord_emproster_salessubregion',  join) || '',
         vertical:     r.getText('custrecord_emproster_vertical_amo',    join) || '',
@@ -12776,6 +12795,22 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     };
   }
 
+  function detectManagerAvailabilityResolutionAccess(rosterId) {
+    if (!rosterId) return false;
+    try {
+      nlapiSearchRecord('customrecord_emproster', null, [
+        new nlobjSearchFilter('internalid', null, 'is', rosterId),
+      ], [
+        new nlobjSearchColumn('internalid'),
+        new nlobjSearchColumn('custrecord_emproster_avail_notes_res'),
+      ]);
+      return true;
+    } catch (e) {
+      console.warn('[Staffing Helper] Manager-only availability resolution notes unavailable for this role:', e.message || e);
+      return false;
+    }
+  }
+
   function getCurrentEmp() {
     let curUser = '';
     try {
@@ -12807,6 +12842,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
     const limitedMode = Boolean(empRec._scoutLimitedMode);
     const empName = empRec.getValue('name') || 'SCOUT User';
+    SCOUT_CAN_READ_MANAGER_AVAIL_RES = detectManagerAvailabilityResolutionAccess(limitedMode ? '' : empRec.getId());
     const empIds  = {
       me:      limitedMode ? '' : empRec.getId(),
       rob:     71312,
