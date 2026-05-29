@@ -79,6 +79,12 @@ p {
   margin-top: 0;
 }
 
+.app-version {
+  color: var(--slate-50);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 h1 {
   margin-bottom: 0;
   font-size: 24px;
