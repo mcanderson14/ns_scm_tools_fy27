@@ -3,6 +3,8 @@
 
   const SCHEMA = "ns-scm-tools.region-map.v3";
   const PRODUCTS_SCM_SCHEMA = "ns-scm-tools.scm-relationships.v3";
+  const TOOL_VERSION = "27.0.1";
+  const TOOL_NAME = "FY27 Queue Mapping JSON Maker";
   const CONFIG_STORAGE_KEY = "ns-scm-tools-region-map-industry-config-v1";
   const REGION_MAPPING_TYPE = "region";
   const PRODUCTS_SCM_MAPPING_TYPE = "productsScm";
@@ -129,6 +131,7 @@
   document.addEventListener("DOMContentLoaded", () => {
     [
       "workbook-file",
+      "app-version",
       "file-name",
       "source-description",
       "sharepoint-url",
@@ -161,6 +164,7 @@
     });
 
     elements["workbook-file"].addEventListener("change", handleFileInput);
+    if (elements["app-version"]) elements["app-version"].textContent = `Version ${TOOL_VERSION}`;
     elements["load-url"].addEventListener("click", handleUrlLoad);
     document.querySelectorAll("input[name='mapping-type']").forEach(input => {
       input.addEventListener("change", handleMappingTypeChange);
@@ -365,6 +369,10 @@
 
     return {
       schema: SCHEMA,
+      generator: {
+        name: TOOL_NAME,
+        version: TOOL_VERSION
+      },
       generatedAt: new Date().toISOString(),
       source: {
         fileName: fileName || "",
@@ -477,6 +485,10 @@
 
     return {
       schema: PRODUCTS_SCM_SCHEMA,
+      generator: {
+        name: TOOL_NAME,
+        version: TOOL_VERSION
+      },
       generatedAt: new Date().toISOString(),
       source: {
         fileName: fileName || "",

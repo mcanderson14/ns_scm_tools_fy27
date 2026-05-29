@@ -2,6 +2,8 @@
 
 Static browser tool for converting FY27 queue mapping Excel workbooks into JSON mapping files.
 
+Current tool version: `27.0.1`.
+
 The tool currently supports two outputs:
 
 - `SC_Industry_State_Region_Mapping.json`
@@ -27,6 +29,7 @@ Use the `SCM Relationships` mode for a workbook with these columns:
 
 The generated JSON uses schema `ns-scm-tools.scm-relationships.v3` and includes:
 
+- `generator`: tool name and version used to create the file.
 - `authorizedScms`: SCM names allowed to use SCM owner controls.
 - `relationships`: one row per RD/RSM to SCM relationship.
 - `lookup`: exact lookup keyed as `requestTypeKey|regionalDirectorKey|salesRegionKey`.
@@ -68,6 +71,7 @@ The URL field attempts to fetch a workbook directly from a SharePoint link using
 
 The generated file uses schema `ns-scm-tools.region-map.v3` and includes:
 
+- `generator`: tool name and version used to create the file.
 - `source`: workbook and parser metadata.
 - `counts`: row, state, industry, mode, and staffing-region counts.
 - `states`, `sourceIndustries`, `industryGroups`, `amoDirectModes`, `staffingRegions`: distinct values.
