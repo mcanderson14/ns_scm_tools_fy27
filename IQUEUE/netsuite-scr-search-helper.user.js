@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.78B
+// @version      27.0.0.79B
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -33,7 +33,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.78B";
+  const HELPER_VERSION = "27.0.0.79B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -1154,6 +1154,7 @@ Health & Hospitality	DIRECT	NL	West	West
   let productsScmAuthorizedScms = [];
   let productsScmByExactKey = new Map();
   let productsScmByDirectorKey = new Map();
+  let productsScmIndustryKeys = new Set([normalizeKey(PRODUCTS_SCM_INDUSTRY_GROUP)]);
   let productsScmMetadata = {
     source: "not-loaded",
     label: "Not loaded",
@@ -1474,9 +1475,13 @@ Health & Hospitality	DIRECT	NL	West	West
     return !crossIndustryFamilyKeysForRow(row).length && isUnmappedReviewRow(row);
   }
 
+  function rowScmRelationshipIndustryKeys(row) {
+    if (!row) return [];
+    return effectiveIndustryFamilyKeys(row).filter(industryKey => productsScmIndustryKeys.has(industryKey));
+  }
+
   function rowIsProductsScmCandidate(row) {
-    if (!row) return false;
-    return effectiveIndustryFamilyKeys(row).includes(normalizeKey(PRODUCTS_SCM_INDUSTRY_GROUP));
+    return rowScmRelationshipIndustryKeys(row).length > 0;
   }
 
   function productsScmUserIsAuthorized(name = getCurrentUserName()) {
@@ -1500,7 +1505,7 @@ Health & Hospitality	DIRECT	NL	West	West
         scm: "",
         scmKey: "",
         source: "ambiguous",
-        sourceLabel: "Ambiguous Products SCM owner"
+        sourceLabel: "Ambiguous SCM owner"
       };
     }
     return {
@@ -1523,23 +1528,23 @@ Health & Hospitality	DIRECT	NL	West	West
         scm: fieldValue,
         scmKey: normalizeKey(fieldValue),
         source: "explicit",
-        sourceLabel: "Explicit Products SCM owner"
+        sourceLabel: "Explicit SCM owner"
       };
     }
 
     const text = [row.hashtags, row.staffingNotes].concat(fields.map(field => `${field.label}: ${field.value}`)).join("\n");
-    const match = text.match(/(?:#products-scm-owner|#pscm-owner|products\s+scm\s+(?:queue\s+)?owner)\s*[:=]\s*([^#\n;]+)/i);
+    const match = text.match(/(?:#scm-owner|#products-scm-owner|#pscm-owner|(?:products\s+)?scm\s+(?:queue\s+)?owner)\s*[:=]\s*([^#\n;]+)/i);
     const owner = match ? cleanPersonName(match[1]) : "";
     if (owner) {
       return {
         scm: owner,
         scmKey: normalizeKey(owner),
         source: "explicit",
-        sourceLabel: "Explicit Products SCM owner"
+        sourceLabel: "Explicit SCM owner"
       };
     }
 
-    const ownerTag = text.match(/#pscm-owner-([a-z0-9]+)/i);
+    const ownerTag = text.match(/#(?:scm-owner|pscm-owner)-([a-z0-9]+)/i);
     const ownerKey = ownerTag ? normalizeKey(ownerTag[1]) : "";
     const taggedOwner = ownerKey
       ? productsScmAuthorizedScms.find(scm => normalizeKey(scm) === ownerKey)
@@ -1549,7 +1554,7 @@ Health & Hospitality	DIRECT	NL	West	West
         scm: taggedOwner,
         scmKey: normalizeKey(taggedOwner),
         source: "explicit",
-        sourceLabel: "Explicit Products SCM owner"
+        sourceLabel: "Explicit SCM owner"
       }
       : null;
   }
@@ -1572,7 +1577,7 @@ Health & Hospitality	DIRECT	NL	West	West
         scm: "",
         scmKey: "",
         source: "not-loaded",
-        sourceLabel: "Products SCM mapping not loaded"
+        sourceLabel: "SCM relationship mapping not loaded"
       };
     }
 
@@ -1587,22 +1592,29 @@ Health & Hospitality	DIRECT	NL	West	West
       };
     }
 
-    for (const salesRegionKey of productsScmSalesRegionKeysForRow(row)) {
-      const exactOwner = productsScmOwnerFromGroup(
-        productsScmByExactKey.get(`${requestTypeKey}|${directorKey}|${salesRegionKey}`),
-        "exact"
-      );
-      if (exactOwner) return exactOwner;
+    for (const industryKey of rowScmRelationshipIndustryKeys(row)) {
+      for (const salesRegionKey of productsScmSalesRegionKeysForRow(row)) {
+        const exactOwner = productsScmOwnerFromGroup(
+          productsScmByExactKey.get(`${industryKey}|${requestTypeKey}|${directorKey}|${salesRegionKey}`),
+          "exact"
+        );
+        if (exactOwner) return exactOwner;
+      }
     }
 
-    return productsScmOwnerFromGroup(
-      productsScmByDirectorKey.get(`${requestTypeKey}|${directorKey}`),
-      "director"
-    ) || {
+    for (const industryKey of rowScmRelationshipIndustryKeys(row)) {
+      const directorOwner = productsScmOwnerFromGroup(
+        productsScmByDirectorKey.get(`${industryKey}|${requestTypeKey}|${directorKey}`),
+        "director"
+      );
+      if (directorOwner) return directorOwner;
+    }
+
+    return {
       scm: "",
       scmKey: "",
       source: "unmapped",
-      sourceLabel: "No Products SCM relationship mapping"
+      sourceLabel: "No SCM relationship mapping"
     };
   }
 
@@ -2471,7 +2483,7 @@ Health & Hospitality	DIRECT	NL	West	West
     if (mappingMetadata.rowCount) parts.push(`${mappingMetadata.rowCount.toLocaleString()} rows`);
     if (mappingMetadata.stale) parts.push("cached");
     if (mappingMetadata.error) parts.push(`fallback active: ${shortMappingError(mappingMetadata.error)}`);
-    const productsParts = [`Products SCM: ${productsScmMetadata.label}`];
+    const productsParts = [`SCM relationships: ${productsScmMetadata.label}`];
     if (productsScmMetadata.rowCount) productsParts.push(`${productsScmMetadata.rowCount.toLocaleString()} rels`);
     if (productsScmMetadata.stale) productsParts.push("cached");
     if (productsScmMetadata.error) productsParts.push(`not loaded: ${shortMappingError(productsScmMetadata.error)}`);
@@ -2506,12 +2518,17 @@ Health & Hospitality	DIRECT	NL	West	West
   function parseProductsScmRelationships(data) {
     const rows = Array.isArray(data && data.relationships) ? data.relationships : [];
     return rows.map(record => {
+      const industryFamily = findCanonicalIndustry(
+        record.scIndustryGroup || record.scIndustry || record.industryGroup || record.industryFamily || record.productsScmIndustryGroup || PRODUCTS_SCM_INDUSTRY_GROUP
+      ) || normalizeSpaces(record.scIndustryGroup || record.scIndustry || record.industryGroup || record.industryFamily || record.productsScmIndustryGroup || PRODUCTS_SCM_INDUSTRY_GROUP);
       const salesRegion = normalizeSpaces(record.salesRegion || "");
       const requestType = normalizeAmoDirect(record.requestType || record.amoDirect || record.directAmo || "");
       const regionalDirector = cleanPersonName(record.regionalDirector || record.rd || record.rsm || record.salesDirector || "");
       const scm = cleanPersonName(record.scm || record.productsScmOwner || record.queueOwner || "");
       return {
         sourceRow: record.sourceRow || "",
+        industryFamily,
+        industryKey: normalizeKey(industryFamily),
         salesRegion,
         salesRegionKey: normalizeKey(salesRegion),
         requestType,
@@ -2521,7 +2538,7 @@ Health & Hospitality	DIRECT	NL	West	West
         scm,
         scmKey: normalizeKey(scm)
       };
-    }).filter(row => row.requestType && row.regionalDirector && row.scm);
+    }).filter(row => row.industryKey && row.requestType && row.regionalDirector && row.scm);
   }
 
   function buildProductsScmRelationshipMap(rows, keyGetter) {
@@ -2538,7 +2555,7 @@ Health & Hospitality	DIRECT	NL	West	West
 
   function applyProductsScmMappingData(data, options = {}) {
     const rows = parseProductsScmRelationships(data);
-    if (!rows.length) throw new Error("Products SCM relationship JSON did not produce any usable rows.");
+    if (!rows.length) throw new Error("SCM relationship JSON did not produce any usable rows.");
 
     const authorized = Array.isArray(data.authorizedScms)
       ? data.authorizedScms.map(cleanPersonName).filter(Boolean)
@@ -2546,13 +2563,14 @@ Health & Hospitality	DIRECT	NL	West	West
 
     productsScmRelationships = rows;
     productsScmAuthorizedScms = uniqueSorted(authorized.concat(rows.map(row => row.scm)));
+    productsScmIndustryKeys = new Set(rows.map(row => row.industryKey).filter(Boolean));
     productsScmByExactKey = buildProductsScmRelationshipMap(
       rows,
-      row => `${row.requestTypeKey}|${row.regionalDirectorKey}|${row.salesRegionKey}`
+      row => `${row.industryKey}|${row.requestTypeKey}|${row.regionalDirectorKey}|${row.salesRegionKey}`
     );
     productsScmByDirectorKey = buildProductsScmRelationshipMap(
       rows,
-      row => `${row.requestTypeKey}|${row.regionalDirectorKey}`
+      row => `${row.industryKey}|${row.requestTypeKey}|${row.regionalDirectorKey}`
     );
     productsScmMetadata = {
       source: options.fromCache ? "cache" : "file-cabinet",
@@ -2572,7 +2590,7 @@ Health & Hospitality	DIRECT	NL	West	West
       if (!cached || !cached.data || !cached.loadedAt) return null;
       return cached;
     } catch (error) {
-      console.warn("IQUEUE could not read cached Products SCM relationship JSON", error);
+      console.warn("IQUEUE could not read cached SCM relationship JSON", error);
       return null;
     }
   }
@@ -2584,7 +2602,7 @@ Health & Hospitality	DIRECT	NL	West	West
         data
       }));
     } catch (error) {
-      console.warn("IQUEUE could not cache Products SCM relationship JSON", error);
+      console.warn("IQUEUE could not cache SCM relationship JSON", error);
     }
   }
 
@@ -2600,7 +2618,7 @@ Health & Hospitality	DIRECT	NL	West	West
       });
       return true;
     } catch (error) {
-      console.warn("IQUEUE ignored invalid cached Products SCM relationship JSON", error);
+      console.warn("IQUEUE ignored invalid cached SCM relationship JSON", error);
       return false;
     }
   }
@@ -2626,7 +2644,7 @@ Health & Hospitality	DIRECT	NL	West	West
         clearTimeout(timer);
         callback(value);
       };
-      timer = setTimeout(finish(reject), 12000, new Error("Timed out loading Products SCM relationship JSON."));
+      timer = setTimeout(finish(reject), 12000, new Error("Timed out loading SCM relationship JSON."));
 
       try {
         pageWindow.require(["N/file", "N/search"], (file, search) => {
@@ -2699,10 +2717,10 @@ Health & Hospitality	DIRECT	NL	West	West
       updateFilterSummary();
       renderResults();
     } catch (error) {
-      console.warn("IQUEUE could not load Products SCM relationship JSON", error);
+      console.warn("IQUEUE could not load SCM relationship JSON", error);
       productsScmMetadata = {
         ...productsScmMetadata,
-        error: error.message || "Products SCM relationship load failed"
+        error: error.message || "SCM relationship load failed"
       };
       updateProductsScmControls();
       renderResults();
@@ -4261,11 +4279,11 @@ Health & Hospitality	DIRECT	NL	West	West
       return `
         <span class="scr-helper-products-scm-owner">
           <strong>${escapeHtml(owner.scm)}</strong>
-          <span class="scr-helper-muted">${escapeHtml(owner.sourceLabel || "Products SCM owner")}</span>
+          <span class="scr-helper-muted">${escapeHtml(owner.sourceLabel || "SCM owner")}</span>
         </span>
       `;
     }
-    return `<span class="scr-helper-muted">${escapeHtml(owner.sourceLabel || "Products SCM owner not mapped")}</span>`;
+    return `<span class="scr-helper-muted">${escapeHtml(owner.sourceLabel || "SCM owner not mapped")}</span>`;
   }
 
   function renderCrossIndustryStaffingControls(row) {
@@ -4548,7 +4566,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const staffingRegion = controls.staffingRegion.value;
     const amoDirect = controls.amoDirect.value;
     const productsScmOwnerMe = controls.productsScmOwnerMe && controls.productsScmOwnerMe.checked;
-    const productsScmOwner = controls.productsScmOwner ? controls.productsScmOwner.value : "";
+    const productsScmOwners = controls.productsScmOwner ? productsScmOwnerValuesFromString(controls.productsScmOwner.value) : [];
     const assignedToMe = controls.assignedToMe && controls.assignedToMe.checked;
     const unmappedOnly = controls.unmappedOnly && controls.unmappedOnly.checked;
     const hideTigerEnterprise = controls.hideTigerEnterprise && controls.hideTigerEnterprise.checked;
@@ -4571,12 +4589,12 @@ Health & Hospitality	DIRECT	NL	West	West
     if (salesRegion && !isUnmappedReviewRow(row) && normalizeKey(canonicalSalesRegion(row.originalSalesRegion) || row.mappedSalesRegion) !== salesRegionKey) return false;
     if (salesVertical && normalizeKey(row.salesVertical) !== salesVerticalKey) return false;
     if (!rowMatchesPeopleFilters(row)) return false;
-    if (productsScmUserIsAuthorized() && (productsScmOwnerMe || productsScmOwner)) {
+    if (productsScmUserIsAuthorized() && (productsScmOwnerMe || productsScmOwners.length)) {
       const selectedProductsScms = [
         productsScmOwnerMe ? currentProductsScmUserName() || getCurrentUserName() : "",
-        productsScmOwner
+        ...productsScmOwners
       ].filter(Boolean);
-      const includeUnmappedProductsScmOwners = industryKey === normalizeKey(PRODUCTS_SCM_INDUSTRY_GROUP) && Boolean(staffingRegion);
+      const includeUnmappedProductsScmOwners = Boolean(industryKey && staffingRegion && productsScmIndustryKeys.has(industryKey));
       if (!rowMatchesProductsScmOwnerFilter(row, selectedProductsScms, includeUnmappedProductsScmOwners)) return false;
     }
     if (staffingRegion && !effectiveStaffingRegionKeys(row, industryKey).includes(staffingRegionKey)) return false;
@@ -4642,7 +4660,7 @@ Health & Hospitality	DIRECT	NL	West	West
         renderSummaryItem("FY27 GTM Industry Subgroup", "", { html: renderGtmSubgroupBadge(summary.gtmIndustrySubgroup) || "Not found" }),
         renderSummaryItem("Sales Region", "", { html: salesRegionHtml }),
         renderSummaryItem("SC Staffing Region", "", { html: staffingRegionHtml }),
-        renderSummaryItem("Products SCM Owner", "", { html: renderProductsScmOwnerValue(row) }),
+        renderSummaryItem("SCM Owner", "", { html: renderProductsScmOwnerValue(row) }),
         renderSummaryItem("Assigned To", "", { html: renderAssignedToWithOwnership(row, summary.assignedTo) }),
         renderSummaryItem("Cross-Vertical", summary.crossVertical || "No")
       ]),
@@ -4742,10 +4760,12 @@ Health & Hospitality	DIRECT	NL	West	West
       });
     });
     if (controls.productsScmOwnerMe && controls.productsScmOwnerMe.checked) {
-      add("Products SCM Owner", currentProductsScmUserName() ? `Me (${currentProductsScmUserName()})` : "Me", undefined, { removeType: "checkbox", removeKey: "productsScmOwnerMe" });
+      add("SCM Owner", currentProductsScmUserName() ? `Me (${currentProductsScmUserName()})` : "Me", undefined, { removeType: "checkbox", removeKey: "productsScmOwnerMe" });
     }
-    if (controls.productsScmOwner && controls.productsScmOwner.value) {
-      add("Products SCM Owner", controls.productsScmOwner.value, controls.productsScmOwner.value, { removeType: "productsScmOwner" });
+    if (controls.productsScmOwner) {
+      productsScmOwnerValuesFromString(controls.productsScmOwner.value).forEach(owner => {
+        add("SCM Owner", owner, owner, { removeType: "productsScmOwner" });
+      });
     }
     add("SC Region", controls.staffingRegion.value, controls.staffingRegion.value, { removeType: "select", removeKey: "staffingRegion" });
     add("Type", controls.amoDirect.value, controls.amoDirect.value, { removeType: "select", removeKey: "amoDirect" });
@@ -4788,7 +4808,7 @@ Health & Hospitality	DIRECT	NL	West	West
       return;
     }
     if (type === "productsScmOwner") {
-      removeProductsScmOwnerFilter();
+      removeProductsScmOwnerFilter(value);
       return;
     }
 
@@ -4830,7 +4850,8 @@ Health & Hospitality	DIRECT	NL	West	West
       salesVertical: controls.salesVertical ? controls.salesVertical.value : "",
       peopleFilters: selectedPeopleFilterMap(),
       productsScmOwnerMe: Boolean(controls.productsScmOwnerMe && controls.productsScmOwnerMe.checked),
-      productsScmOwner: controls.productsScmOwner ? controls.productsScmOwner.value : "",
+      productsScmOwners: controls.productsScmOwner ? productsScmOwnerValuesFromString(controls.productsScmOwner.value) : [],
+      productsScmOwner: controls.productsScmOwner ? productsScmOwnerValuesFromString(controls.productsScmOwner.value)[0] || "" : "",
       staffingRegion: controls.staffingRegion ? controls.staffingRegion.value : "",
       amoDirect: controls.amoDirect ? controls.amoDirect.value : "",
       assignedToMe: Boolean(controls.assignedToMe && controls.assignedToMe.checked),
@@ -5089,9 +5110,21 @@ Health & Hospitality	DIRECT	NL	West	West
     return productsScmAuthorizedScms.slice().sort((a, b) => a.localeCompare(b));
   }
 
-  function selectedProductsScmOwner() {
+  function productsScmOwnerValuesFromString(value) {
+    const raw = normalizeSpaces(value);
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return uniqueSorted(parsed.map(cleanPersonName).filter(Boolean));
+    } catch (error) {
+      // Older saved state stored a single SCM owner as plain text.
+    }
+    return [cleanPersonName(raw)].filter(Boolean);
+  }
+
+  function selectedProductsScmOwners() {
     const control = document.getElementById("scr-helper-products-scm-owner-value");
-    return control ? normalizeSpaces(control.value) : "";
+    return control ? productsScmOwnerValuesFromString(control.value) : [];
   }
 
   function closestProductsScmOwnerOption(value) {
@@ -5105,13 +5138,13 @@ Health & Hospitality	DIRECT	NL	West	West
       || "";
   }
 
-  function renderProductsScmOwnerToken(value) {
+  function renderProductsScmOwnerTokens(values) {
     const container = document.getElementById("scr-helper-products-scm-owner-tokens");
     const control = document.getElementById("scr-helper-products-scm-owner-value");
-    const owner = normalizeSpaces(value);
-    if (control) control.value = owner;
+    const owners = uniqueSorted((Array.isArray(values) ? values : [values]).map(cleanPersonName).filter(Boolean));
+    if (control) control.value = owners.length ? JSON.stringify(owners) : "";
     if (!container) return;
-    container.innerHTML = owner ? `
+    container.innerHTML = owners.map(owner => `
       <span class="scr-helper-token" data-value="${escapeHtml(owner)}">
         <span>${escapeHtml(owner)}</span>
         <button
@@ -5119,10 +5152,10 @@ Health & Hospitality	DIRECT	NL	West	West
           class="scr-helper-token-remove"
           data-filter-remove="productsScmOwner"
           data-filter-value="${escapeHtml(owner)}"
-          aria-label="Remove Products SCM owner ${escapeHtml(owner)}"
+          aria-label="Remove SCM owner ${escapeHtml(owner)}"
         >×</button>
       </span>
-    ` : "";
+    `).join("");
   }
 
   function addProductsScmOwnerFilter(value) {
@@ -5131,15 +5164,19 @@ Health & Hospitality	DIRECT	NL	West	West
     if (!owner) return;
     const input = document.getElementById("scr-helper-products-scm-owner-filter");
     if (input) input.value = "";
-    renderProductsScmOwnerToken(owner);
+    renderProductsScmOwnerTokens(selectedProductsScmOwners().concat([owner]));
     hideProductsScmOwnerSuggestions();
     saveHelperState();
     updateFilterSummary();
     renderResults();
   }
 
-  function removeProductsScmOwnerFilter() {
-    renderProductsScmOwnerToken("");
+  function removeProductsScmOwnerFilter(value = "") {
+    const normalized = normalizeKey(value);
+    const nextOwners = normalized
+      ? selectedProductsScmOwners().filter(owner => normalizeKey(owner) !== normalized)
+      : [];
+    renderProductsScmOwnerTokens(nextOwners);
     const input = document.getElementById("scr-helper-products-scm-owner-filter");
     if (input) input.value = "";
     saveHelperState();
@@ -5148,10 +5185,10 @@ Health & Hospitality	DIRECT	NL	West	West
   }
 
   function matchingProductsScmOwnerOptions(query) {
-    const selectedKey = normalizeKey(selectedProductsScmOwner());
+    const selectedKeys = new Set(selectedProductsScmOwners().map(normalizeKey));
     const queryKey = normalizeKey(query);
     return productsScmOwnerOptions()
-      .filter(option => !selectedKey || normalizeKey(option) !== selectedKey)
+      .filter(option => !selectedKeys.has(normalizeKey(option)))
       .filter(option => !queryKey || normalizeKey(option).includes(queryKey))
       .slice(0, 30);
   }
@@ -5241,8 +5278,8 @@ Health & Hospitality	DIRECT	NL	West	West
       setSelectValue(controls.staffingRegion, filters.staffingRegion);
       setSelectValue(controls.amoDirect, filters.amoDirect);
       if (controls.productsScmOwnerMe) controls.productsScmOwnerMe.checked = Boolean(filters.productsScmOwnerMe);
-      if (controls.productsScmOwner) controls.productsScmOwner.value = filters.productsScmOwner || "";
-      renderProductsScmOwnerToken(filters.productsScmOwner || "");
+      const savedScmOwners = Array.isArray(filters.productsScmOwners) ? filters.productsScmOwners : [filters.productsScmOwner].filter(Boolean);
+      renderProductsScmOwnerTokens(savedScmOwners);
       if (controls.assignedToMe) controls.assignedToMe.checked = Boolean(filters.assignedToMe);
       if (controls.unmappedOnly) controls.unmappedOnly.checked = Boolean(filters.unmappedOnly);
       if (controls.hideTigerEnterprise) controls.hideTigerEnterprise.checked = Boolean(filters.hideTigerEnterprise);
@@ -5327,8 +5364,8 @@ Health & Hospitality	DIRECT	NL	West	West
     const slaText = controls.slaHotlist && controls.slaHotlist.checked
       ? `; ${visibleRows.length} past SLA`
       : "";
-    const productsOwnerText = productsScmUserIsAuthorized() && (controls.productsScmOwnerMe && controls.productsScmOwnerMe.checked || controls.productsScmOwner && controls.productsScmOwner.value)
-      ? "; Products SCM owner view"
+    const productsOwnerText = productsScmUserIsAuthorized() && (controls.productsScmOwnerMe && controls.productsScmOwnerMe.checked || controls.productsScmOwner && productsScmOwnerValuesFromString(controls.productsScmOwner.value).length)
+      ? "; SCM owner view"
       : "";
     status.textContent = `${visibleRows.length} of ${loadedText} shown${unmappedCount ? `; ${unmappedCount} unmapped` : ""}${slaText}${assignedText}${productsOwnerText}. ${mappingStatusText()}.`;
     list.querySelectorAll(".scr-helper-edit").forEach(button => {
@@ -5366,7 +5403,7 @@ Health & Hospitality	DIRECT	NL	West	West
     input.disabled = !authorized;
     if (!authorized) {
       checkbox.checked = false;
-      renderProductsScmOwnerToken("");
+      renderProductsScmOwnerTokens([]);
       hideProductsScmOwnerSuggestions();
     }
 
@@ -5378,13 +5415,13 @@ Health & Hospitality	DIRECT	NL	West	West
 
     if (note) {
       if (!productsScmMetadata.rowCount && productsScmMetadata.error) {
-        note.textContent = `Products SCM mapping not loaded: ${shortMappingError(productsScmMetadata.error)}`;
+        note.textContent = `SCM relationship mapping not loaded: ${shortMappingError(productsScmMetadata.error)}`;
       } else if (!productsScmMetadata.rowCount) {
-        note.textContent = "Products SCM mapping not loaded";
+        note.textContent = "SCM relationship mapping not loaded";
       } else if (authorized) {
-        note.textContent = `Products SCM: ${currentProductsScmUserName() || getCurrentUserName()}`;
+        note.textContent = `SCM owner: ${currentProductsScmUserName() || getCurrentUserName()}`;
       } else {
-        note.textContent = "Products SCM controls hidden for this user";
+        note.textContent = "SCM owner controls hidden for this user";
       }
     }
     updateFilterSummary();
@@ -6415,7 +6452,7 @@ Health & Hospitality	DIRECT	NL	West	West
           </div>
           <div id="scr-helper-products-scm-filter-row" class="scr-helper-products-scm-filter-row" hidden>
             <label class="scr-helper-checkbox-filter">
-              <span>Products SCM Owner</span>
+              <span>SCM Owner</span>
               <span class="scr-helper-checkbox-row">
                 <input id="scr-helper-products-scm-owner-me-filter" type="checkbox">
                 Me
@@ -6423,7 +6460,7 @@ Health & Hospitality	DIRECT	NL	West	West
               <span id="scr-helper-products-scm-note" class="scr-helper-filter-note"></span>
             </label>
             <label class="scr-helper-people-token-filter scr-helper-products-scm-token-filter">
-              <span>View Products SCM queue</span>
+              <span>View SCM queue</span>
               <input id="scr-helper-products-scm-owner-filter" type="search" list="scr-helper-products-scm-owner-options" placeholder="Type SCM, press Enter">
               <input id="scr-helper-products-scm-owner-value" type="hidden" value="">
               <datalist id="scr-helper-products-scm-owner-options"></datalist>
