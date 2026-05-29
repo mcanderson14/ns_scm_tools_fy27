@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.79B
+// @version      27.0.0.80B
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -33,7 +33,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.79B";
+  const HELPER_VERSION = "27.0.0.80B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -4546,6 +4546,7 @@ Health & Hospitality	DIRECT	NL	West	West
       salesRegion: document.getElementById("scr-helper-sales-region-filter"),
       salesVertical: document.getElementById("scr-helper-sales-vertical-filter"),
       staffingRegion: document.getElementById("scr-helper-staffing-region-filter"),
+      staffingRegions: document.getElementById("scr-helper-staffing-region-values"),
       amoDirect: document.getElementById("scr-helper-amo-direct-filter"),
       productsScmOwnerMe: document.getElementById("scr-helper-products-scm-owner-me-filter"),
       productsScmOwner: document.getElementById("scr-helper-products-scm-owner-value"),
@@ -4563,7 +4564,9 @@ Health & Hospitality	DIRECT	NL	West	West
     const industrySubgroup = controls.industrySubgroup.value;
     const salesRegion = controls.salesRegion.value;
     const salesVertical = controls.salesVertical.value;
-    const staffingRegion = controls.staffingRegion.value;
+    const staffingRegions = controls.staffingRegions
+      ? staffingRegionValuesFromString(controls.staffingRegions.value)
+      : (controls.staffingRegion && controls.staffingRegion.value ? [controls.staffingRegion.value] : []);
     const amoDirect = controls.amoDirect.value;
     const productsScmOwnerMe = controls.productsScmOwnerMe && controls.productsScmOwnerMe.checked;
     const productsScmOwners = controls.productsScmOwner ? productsScmOwnerValuesFromString(controls.productsScmOwner.value) : [];
@@ -4577,7 +4580,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const industrySubgroupKey = normalizeKey(industrySubgroup);
     const salesRegionKey = normalizeKey(salesRegion);
     const salesVerticalKey = normalizeKey(salesVertical);
-    const staffingRegionKey = normalizeKey(staffingRegion);
+    const staffingRegionKeys = staffingRegions.map(normalizeKey).filter(Boolean);
     const amoDirectKey = normalizeKey(normalizeAmoDirect(amoDirect));
 
     if (hideTigerEnterprise && rowIsTigerEnterpriseOpp(row)) return false;
@@ -4594,10 +4597,13 @@ Health & Hospitality	DIRECT	NL	West	West
         productsScmOwnerMe ? currentProductsScmUserName() || getCurrentUserName() : "",
         ...productsScmOwners
       ].filter(Boolean);
-      const includeUnmappedProductsScmOwners = Boolean(industryKey && staffingRegion && productsScmIndustryKeys.has(industryKey));
+      const includeUnmappedProductsScmOwners = Boolean(industryKey && staffingRegionKeys.length && productsScmIndustryKeys.has(industryKey));
       if (!rowMatchesProductsScmOwnerFilter(row, selectedProductsScms, includeUnmappedProductsScmOwners)) return false;
     }
-    if (staffingRegion && !effectiveStaffingRegionKeys(row, industryKey).includes(staffingRegionKey)) return false;
+    if (staffingRegionKeys.length) {
+      const rowStaffingRegionKeys = effectiveStaffingRegionKeys(row, industryKey);
+      if (!staffingRegionKeys.some(regionKey => rowStaffingRegionKeys.includes(regionKey))) return false;
+    }
     if (amoDirect && normalizeKey(normalizeAmoDirect(row.amoDirect)) !== amoDirectKey) return false;
     if (assignedToMe) {
       const epmAssignedToMe = industryKey === normalizeKey(EPM_INDUSTRY_GROUP)
@@ -4767,7 +4773,13 @@ Health & Hospitality	DIRECT	NL	West	West
         add("SCM Owner", owner, owner, { removeType: "productsScmOwner" });
       });
     }
-    add("SC Region", controls.staffingRegion.value, controls.staffingRegion.value, { removeType: "select", removeKey: "staffingRegion" });
+    if (controls.staffingRegions) {
+      staffingRegionValuesFromString(controls.staffingRegions.value).forEach(region => {
+        add("SC Region", region, region, { removeType: "staffingRegion" });
+      });
+    } else {
+      add("SC Region", controls.staffingRegion.value, controls.staffingRegion.value, { removeType: "select", removeKey: "staffingRegion" });
+    }
     add("Type", controls.amoDirect.value, controls.amoDirect.value, { removeType: "select", removeKey: "amoDirect" });
     if (controls.assignedToMe && controls.assignedToMe.checked) {
       add("Assigned", getCurrentUserName() ? `Me (${getCurrentUserName()})` : "Me", undefined, { removeType: "checkbox", removeKey: "assignedToMe" });
@@ -4811,6 +4823,10 @@ Health & Hospitality	DIRECT	NL	West	West
       removeProductsScmOwnerFilter(value);
       return;
     }
+    if (type === "staffingRegion") {
+      removeStaffingRegionFilter(value);
+      return;
+    }
 
     if (type === "select" && controls[key]) {
       controls[key].value = "";
@@ -4852,7 +4868,8 @@ Health & Hospitality	DIRECT	NL	West	West
       productsScmOwnerMe: Boolean(controls.productsScmOwnerMe && controls.productsScmOwnerMe.checked),
       productsScmOwners: controls.productsScmOwner ? productsScmOwnerValuesFromString(controls.productsScmOwner.value) : [],
       productsScmOwner: controls.productsScmOwner ? productsScmOwnerValuesFromString(controls.productsScmOwner.value)[0] || "" : "",
-      staffingRegion: controls.staffingRegion ? controls.staffingRegion.value : "",
+      staffingRegions: controls.staffingRegions ? staffingRegionValuesFromString(controls.staffingRegions.value) : [],
+      staffingRegion: controls.staffingRegions ? staffingRegionValuesFromString(controls.staffingRegions.value)[0] || "" : (controls.staffingRegion ? controls.staffingRegion.value : ""),
       amoDirect: controls.amoDirect ? controls.amoDirect.value : "",
       assignedToMe: Boolean(controls.assignedToMe && controls.assignedToMe.checked),
       unmappedOnly: Boolean(controls.unmappedOnly && controls.unmappedOnly.checked),
@@ -5110,21 +5127,87 @@ Health & Hospitality	DIRECT	NL	West	West
     return productsScmAuthorizedScms.slice().sort((a, b) => a.localeCompare(b));
   }
 
-  function productsScmOwnerValuesFromString(value) {
+  function listValuesFromString(value) {
     const raw = normalizeSpaces(value);
     if (!raw) return [];
     try {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return uniqueSorted(parsed.map(cleanPersonName).filter(Boolean));
+      if (Array.isArray(parsed)) return uniqueSorted(parsed.map(normalizeSpaces).filter(Boolean));
     } catch (error) {
-      // Older saved state stored a single SCM owner as plain text.
+      // Older saved state stored a single value as plain text.
     }
-    return [cleanPersonName(raw)].filter(Boolean);
+    return [raw].filter(Boolean);
+  }
+
+  function productsScmOwnerValuesFromString(value) {
+    return listValuesFromString(value).map(cleanPersonName).filter(Boolean);
   }
 
   function selectedProductsScmOwners() {
     const control = document.getElementById("scr-helper-products-scm-owner-value");
     return control ? productsScmOwnerValuesFromString(control.value) : [];
+  }
+
+  function staffingRegionValuesFromString(value) {
+    return listValuesFromString(value);
+  }
+
+  function selectedStaffingRegions() {
+    const control = document.getElementById("scr-helper-staffing-region-values");
+    return control ? staffingRegionValuesFromString(control.value) : [];
+  }
+
+  function closestStaffingRegionOption(value) {
+    const text = normalizeSpaces(value);
+    if (!text) return "";
+    const normalized = normalizeKey(text);
+    return staffingRegionOptions.find(option => normalizeKey(option) === normalized)
+      || staffingRegionOptions.find(option => normalizeKey(option).startsWith(normalized))
+      || "";
+  }
+
+  function renderStaffingRegionTokens(values) {
+    const container = document.getElementById("scr-helper-staffing-region-tokens");
+    const control = document.getElementById("scr-helper-staffing-region-values");
+    const regions = uniqueSorted((Array.isArray(values) ? values : [values]).map(normalizeSpaces).filter(Boolean));
+    if (control) control.value = regions.length ? JSON.stringify(regions) : "";
+    if (!container) return;
+    container.innerHTML = regions.map(region => `
+      <span class="scr-helper-token" data-value="${escapeHtml(region)}">
+        <span>${escapeHtml(region)}</span>
+        <button
+          type="button"
+          class="scr-helper-token-remove"
+          data-filter-remove="staffingRegion"
+          data-filter-value="${escapeHtml(region)}"
+          aria-label="Remove SC region ${escapeHtml(region)}"
+        >×</button>
+      </span>
+    `).join("");
+  }
+
+  function addStaffingRegionFilter(value) {
+    const region = closestStaffingRegionOption(value);
+    const select = document.getElementById("scr-helper-staffing-region-filter");
+    if (select) select.value = "";
+    if (!region) return;
+    renderStaffingRegionTokens(selectedStaffingRegions().concat([region]));
+    saveHelperState();
+    updateFilterSummary();
+    renderResults();
+  }
+
+  function removeStaffingRegionFilter(value = "") {
+    const normalized = normalizeKey(value);
+    const nextRegions = normalized
+      ? selectedStaffingRegions().filter(region => normalizeKey(region) !== normalized)
+      : [];
+    renderStaffingRegionTokens(nextRegions);
+    const select = document.getElementById("scr-helper-staffing-region-filter");
+    if (select) select.value = "";
+    saveHelperState();
+    updateFilterSummary();
+    renderResults();
   }
 
   function closestProductsScmOwnerOption(value) {
@@ -5275,7 +5358,8 @@ Health & Hospitality	DIRECT	NL	West	West
     if (!options.dynamicOnly) {
       setSelectValue(controls.industry, filters.industry);
       setSelectValue(controls.salesRegion, filters.salesRegion);
-      setSelectValue(controls.staffingRegion, filters.staffingRegion);
+      if (controls.staffingRegion) controls.staffingRegion.value = "";
+      renderStaffingRegionTokens(Array.isArray(filters.staffingRegions) ? filters.staffingRegions : [filters.staffingRegion].filter(Boolean));
       setSelectValue(controls.amoDirect, filters.amoDirect);
       if (controls.productsScmOwnerMe) controls.productsScmOwnerMe.checked = Boolean(filters.productsScmOwnerMe);
       const savedScmOwners = Array.isArray(filters.productsScmOwners) ? filters.productsScmOwners : [filters.productsScmOwner].filter(Boolean);
@@ -5443,16 +5527,18 @@ Health & Hospitality	DIRECT	NL	West	West
 
     const selectedIndustry = controls.industry.value;
     const selectedAmoDirect = controls.amoDirect.value;
-    const selectedStaffingRegion = controls.staffingRegion.value;
+    const selectedRegionValues = selectedStaffingRegions();
 
     controls.industry.innerHTML = optionHtml(industryFilterOptions, "All SC industry groups", industryOptionLabel);
     controls.amoDirect.innerHTML = optionHtml(amoDirectOptions, "All requests");
-    controls.staffingRegion.innerHTML = optionHtml(staffingRegionOptions, "All regions");
+    controls.staffingRegion.innerHTML = optionHtml(staffingRegionOptions, "Add region");
 
     preserveSelectValue(controls.industry, industryFilterOptions);
     if (selectedIndustry) setSelectValue(controls.industry, selectedIndustry);
     if (selectedAmoDirect) setSelectValue(controls.amoDirect, selectedAmoDirect);
-    if (selectedStaffingRegion) setSelectValue(controls.staffingRegion, selectedStaffingRegion);
+    renderStaffingRegionTokens(staffingRegionOptions.length
+      ? selectedRegionValues.filter(region => staffingRegionOptions.some(option => normalizeKey(option) === normalizeKey(region)))
+      : selectedRegionValues);
     updateSalesRegionFilterOptions();
     updateFilterSummary();
   }
@@ -6416,7 +6502,9 @@ Health & Hospitality	DIRECT	NL	West	West
             </label>
             <label>
               <span>SC Staffing Region</span>
-              <select id="scr-helper-staffing-region-filter">${optionHtml(staffingRegionOptions, "All regions")}</select>
+              <select id="scr-helper-staffing-region-filter">${optionHtml(staffingRegionOptions, "Add region")}</select>
+              <input id="scr-helper-staffing-region-values" type="hidden" value="">
+              <div id="scr-helper-staffing-region-tokens" class="scr-helper-token-list"></div>
             </label>
             <label>
               <span>AMO vs Direct</span>
@@ -6520,9 +6608,12 @@ Health & Hospitality	DIRECT	NL	West	West
       saveHelperState();
       renderResults();
     });
-    [controls.industrySubgroup, controls.salesRegion, controls.salesVertical, controls.staffingRegion, controls.amoDirect, controls.productsScmOwnerMe, controls.assignedToMe, controls.unmappedOnly, controls.slaHotlist].forEach(control => {
+    [controls.industrySubgroup, controls.salesRegion, controls.salesVertical, controls.amoDirect, controls.productsScmOwnerMe, controls.assignedToMe, controls.unmappedOnly, controls.slaHotlist].forEach(control => {
       if (control) control.addEventListener("change", handleFilterChange);
     });
+    if (controls.staffingRegion) {
+      controls.staffingRegion.addEventListener("change", () => addStaffingRegionFilter(controls.staffingRegion.value));
+    }
     const productsScmInput = document.getElementById("scr-helper-products-scm-owner-filter");
     if (productsScmInput) {
       productsScmInput.addEventListener("focus", () => {
