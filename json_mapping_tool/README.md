@@ -20,18 +20,17 @@ The parser fills industry names across columns, so it supports either repeated i
 
 Use the `SCM Relationships` mode for a workbook with these columns:
 
-- `SC Industry Group` optional; defaults to `Products` when blank or missing
 - `Sales Region`
 - `AMO/Direct`
 - `RD` or `Regional Director` or `Regional Sales Manager`
 - `SCM`
 
-The generated JSON uses schema `ns-scm-tools.scm-relationships.v2` and includes:
+The generated JSON uses schema `ns-scm-tools.scm-relationships.v3` and includes:
 
 - `authorizedScms`: SCM names allowed to use SCM owner controls.
 - `relationships`: one row per RD/RSM to SCM relationship.
-- `lookup`: exact lookup keyed as `scIndustryGroupKey|requestTypeKey|regionalDirectorKey|salesRegionKey`.
-- `directorLookup`: fallback lookup keyed as `scIndustryGroupKey|requestTypeKey|regionalDirectorKey`.
+- `lookup`: exact lookup keyed as `requestTypeKey|regionalDirectorKey|salesRegionKey`.
+- `directorLookup`: fallback lookup keyed as `requestTypeKey|regionalDirectorKey`.
 - `scmLookup`: all relationships by SCM owner.
 - `review`: skipped or ambiguous rows to inspect before uploading.
 

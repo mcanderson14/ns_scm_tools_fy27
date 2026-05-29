@@ -2,7 +2,7 @@
   "use strict";
 
   const SCHEMA = "ns-scm-tools.region-map.v3";
-  const PRODUCTS_SCM_SCHEMA = "ns-scm-tools.scm-relationships.v2";
+  const PRODUCTS_SCM_SCHEMA = "ns-scm-tools.scm-relationships.v3";
   const CONFIG_STORAGE_KEY = "ns-scm-tools-region-map-industry-config-v1";
   const REGION_MAPPING_TYPE = "region";
   const PRODUCTS_SCM_MAPPING_TYPE = "productsScm";
@@ -10,10 +10,9 @@
   const PRODUCTS_SCM_OUTPUT_FILE_NAME = "Products_SCM_Relationship_Mapping.json";
   const SOURCE_DESCRIPTIONS = {
     [REGION_MAPPING_TYPE]: "Use an Excel workbook where row 1 contains SC industry groups, row 2 contains Direct/AMO, and column A contains state/province codes.",
-    [PRODUCTS_SCM_MAPPING_TYPE]: "Use an Excel workbook with columns for SC Industry Group, Sales Region, AMO/Direct, Regional Director or RSM, and SCM owner. If SC Industry Group is blank or missing, rows default to Products."
+    [PRODUCTS_SCM_MAPPING_TYPE]: "Use an Excel workbook with columns for Sales Region, AMO/Direct, Regional Director or RSM, and SCM owner. SCM ownership applies across SC Industry Groups."
   };
   const PRODUCTS_SCM_HEADER_ALIASES = {
-    scIndustryGroup: ["scindustrygroup", "industrygroup", "industryfamily", "scindustry", "queueindustrygroup"],
     salesRegion: ["salesregion", "region", "salesarea"],
     requestType: ["amodirect", "directamo", "requesttype", "type"],
     regionalDirector: ["rd", "regionaldirector", "regionalsalesmanager", "rsm", "salesdirector", "salesdir", "regionaldirectorregionalsalesmanager"],
@@ -420,7 +419,6 @@
 
     const relationships = [];
     const incompleteRows = [];
-    const scIndustryGroups = new Set();
     const salesRegions = new Set();
     const requestTypes = new Set();
     const regionalDirectors = new Set();
@@ -433,8 +431,6 @@
       const row = matrix[rowIndex] || [];
       if (!row.some(cleanCell)) continue;
 
-      const rawScIndustryGroup = header.indexes.scIndustryGroup >= 0 ? cleanCell(row[header.indexes.scIndustryGroup]) : "";
-      const scIndustryGroup = resolveIndustryGroup(rawScIndustryGroup) || rawScIndustryGroup || "Products";
       const salesRegion = cleanCell(row[header.indexes.salesRegion]);
       const requestType = normalizeAmoDirect(row[header.indexes.requestType]);
       const regionalDirector = cleanPersonName(row[header.indexes.regionalDirector]);
@@ -455,8 +451,6 @@
 
       const record = {
         sourceRow: rowIndex + 1,
-        scIndustryGroup,
-        scIndustryGroupKey: normalizeKey(scIndustryGroup),
         salesRegion,
         salesRegionKey: normalizeKey(salesRegion),
         requestType,
@@ -468,7 +462,6 @@
       };
 
       relationships.push(record);
-      scIndustryGroups.add(scIndustryGroup);
       if (salesRegion) salesRegions.add(salesRegion);
       requestTypes.add(requestType);
       regionalDirectors.add(regionalDirector);
@@ -494,7 +487,6 @@
       },
       counts: {
         relationships: relationships.length,
-        scIndustryGroups: scIndustryGroups.size,
         scms: scms.size,
         regionalDirectors: regionalDirectors.size,
         salesRegions: salesRegions.size,
@@ -505,7 +497,6 @@
       },
       scms: scmSummaries,
       authorizedScms: scmSummaries.map(item => item.scm),
-      scIndustryGroups: [...scIndustryGroups].sort(alphaSort),
       regionalDirectors: [...regionalDirectors].sort(alphaSort),
       salesRegions: [...salesRegions].sort(alphaSort),
       requestTypes: [...requestTypes].sort(alphaSort),
@@ -567,14 +558,13 @@
       const row = matrix[rowIndex] || [];
       const normalizedHeaders = row.map(normalizeKey);
       const indexes = {
-        scIndustryGroup: findProductsHeaderIndex(normalizedHeaders, PRODUCTS_SCM_HEADER_ALIASES.scIndustryGroup),
         salesRegion: findProductsHeaderIndex(normalizedHeaders, PRODUCTS_SCM_HEADER_ALIASES.salesRegion),
         requestType: findProductsHeaderIndex(normalizedHeaders, PRODUCTS_SCM_HEADER_ALIASES.requestType),
         regionalDirector: findProductsHeaderIndex(normalizedHeaders, PRODUCTS_SCM_HEADER_ALIASES.regionalDirector),
         scm: findProductsHeaderIndex(normalizedHeaders, PRODUCTS_SCM_HEADER_ALIASES.scm)
       };
       const requiredCount = ["requestType", "regionalDirector", "scm"].filter(key => indexes[key] >= 0).length;
-      const score = requiredCount * 5 + (indexes.salesRegion >= 0 ? 2 : 0) + (indexes.scIndustryGroup >= 0 ? 2 : 0);
+      const score = requiredCount * 5 + (indexes.salesRegion >= 0 ? 2 : 0);
       if (requiredCount === 3) candidates.push({ rowIndex, row, indexes, score });
     }
 
@@ -586,7 +576,6 @@
       rowIndex: winner.rowIndex,
       indexes: winner.indexes,
       detectedHeaders: {
-        scIndustryGroup: productsHeaderCellInfo(winner.row, winner.indexes.scIndustryGroup),
         salesRegion: productsHeaderCellInfo(winner.row, winner.indexes.salesRegion),
         requestType: productsHeaderCellInfo(winner.row, winner.indexes.requestType),
         regionalDirector: productsHeaderCellInfo(winner.row, winner.indexes.regionalDirector),
@@ -614,8 +603,6 @@
   function addProductsLookupRecord(lookup, key, record) {
     if (!lookup[key]) lookup[key] = [];
     lookup[key].push({
-      scIndustryGroup: record.scIndustryGroup,
-      scIndustryGroupKey: record.scIndustryGroupKey,
       salesRegion: record.salesRegion,
       salesRegionKey: record.salesRegionKey,
       requestType: record.requestType,
@@ -629,11 +616,11 @@
   }
 
   function productsExactLookupKey(record) {
-    return `${record.scIndustryGroupKey}|${record.requestTypeKey}|${record.regionalDirectorKey}|${record.salesRegionKey}`;
+    return `${record.requestTypeKey}|${record.regionalDirectorKey}|${record.salesRegionKey}`;
   }
 
   function productsDirectorLookupKey(record) {
-    return `${record.scIndustryGroupKey}|${record.requestTypeKey}|${record.regionalDirectorKey}`;
+    return `${record.requestTypeKey}|${record.regionalDirectorKey}`;
   }
 
   function productsLookupGroupsWithMultipleOwners(lookup) {
@@ -653,7 +640,6 @@
         scm: rows[0].scm,
         scmKey,
         relationshipCount: rows.length,
-        scIndustryGroups: uniqueSorted(rows.map(row => row.scIndustryGroup)),
         requestTypes: uniqueSorted(rows.map(row => row.requestType)),
         salesRegions: uniqueSorted(rows.map(row => row.salesRegion || "Any/blank")),
         regionalDirectors: uniqueSorted(rows.map(row => row.regionalDirector))
@@ -736,7 +722,6 @@
 
     renderStats([
       ["Relationships", output.counts.relationships],
-      ["SC Industry Groups", output.counts.scIndustryGroups],
       ["SCM Owners", output.counts.scms],
       ["RD/RSMs", output.counts.regionalDirectors],
       ["Sales Regions", output.counts.salesRegions || "Any/blank"],
@@ -744,9 +729,8 @@
     ]);
 
     elements["columns-preview"].innerHTML = renderTable(
-      ["SC Industry Group", "Type", "Sales Region", "Regional Director/RSM", "SCM Owner", "Source Row"],
+      ["Type", "Sales Region", "Regional Director/RSM", "SCM Owner", "Source Row"],
       output.relationships.map(row => [
-        row.scIndustryGroup,
         row.requestType,
         row.salesRegion || "Any/blank",
         row.regionalDirector,
@@ -756,11 +740,10 @@
     );
 
     elements["spot-checks"].innerHTML = renderTable(
-      ["SCM Owner", "Relationships", "SC Industry Groups", "Request Types", "Sales Regions", "RD/RSMs"],
+      ["SCM Owner", "Relationships", "Request Types", "Sales Regions", "RD/RSMs"],
       output.scms.map(row => [
         row.scm,
         row.relationshipCount,
-        row.scIndustryGroups.join(", "),
         row.requestTypes.join(", "),
         row.salesRegions.join(", "),
         row.regionalDirectors.join(", ")
