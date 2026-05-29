@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FY27 Queue Mapping JSON Maker</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">NetSuite SCM Tools</p>
+        <h1>FY27 Queue Mapping JSON Maker</h1>
+      </div>
+      <span id="status-pill" class="status-pill">Waiting for Excel</span>
+    </header>
+
+    <section class="panel input-panel">
+      <div class="panel-head">
+        <h2>Source</h2>
+        <p id="source-description">Use an Excel workbook where row 1 contains SC industry groups, row 2 contains Direct/AMO, and column A contains state/province codes.</p>
+      </div>
+
+      <div class="mode-grid" role="radiogroup" aria-label="Mapping type">
+        <label class="mode-card">
+          <input type="radio" name="mapping-type" value="region" checked>
+          <span>
+            <strong>SC Industry State Region Mapping</strong>
+            <small>Generates the queue staffing-region JSON used by IQUEUE.</small>
+          </span>
+        </label>
+        <label class="mode-card">
+          <input type="radio" name="mapping-type" value="productsScm">
+          <span>
+            <strong>SCM Relationships</strong>
+            <small>Generates the SCM owner mapping for regional relationships.</small>
+          </span>
+        </label>
+      </div>
+
+      <div class="input-grid">
+        <label class="file-drop" for="workbook-file">
+          <span>Upload Excel File</span>
+          <strong id="file-name">Choose .xlsx file</strong>
+          <input id="workbook-file" type="file" accept=".xlsx,.xls,.xlsm,.xlsb">
+        </label>
+
+        <label class="url-box">
+          <span>SharePoint URL</span>
+          <div class="url-row">
+            <input id="sharepoint-url" type="url" placeholder="Paste a SharePoint workbook link">
+            <button id="load-url" type="button">Try URL</button>
+          </div>
+          <small>Works only when the URL allows browser download access from this page. Manual upload is the reliable fallback.</small>
+        </label>
+      </div>
+
+      <details id="region-parsing-settings" class="advanced">
+        <summary>Parsing settings</summary>
+        <div class="settings-grid">
+          <label>
+            <span>Industry header row</span>
+            <input id="industry-row" type="number" min="1" value="1">
+          </label>
+          <label>
+            <span>Direct/AMO row</span>
+            <input id="mode-row" type="number" min="1" value="2">
+          </label>
+          <label>
+            <span>First state row</span>
+            <input id="data-row" type="number" min="1" value="3">
+          </label>
+          <label>
+            <span>State column</span>
+            <input id="state-column" type="text" maxlength="3" value="A">
+          </label>
+        </div>
+      </details>
+    </section>
+
+    <section class="panel" id="industry-map-panel" hidden>
+      <div class="panel-head row">
+        <div>
+          <h2>SC Industry Group Mapping</h2>
+          <p id="industry-map-summary">Upload a workbook to review detected industry labels.</p>
+        </div>
+        <label class="add-group">
+          <span>Add SC Industry Group</span>
+          <div class="url-row">
+            <input id="new-industry-group" type="text" placeholder="New canonical group">
+            <button id="add-industry-group" type="button">Add</button>
+          </div>
+        </label>
+      </div>
+
+      <div class="mapping-toolbar">
+        <label>
+          <span>Filter mappings</span>
+          <input id="industry-map-filter" type="search" placeholder="Type raw or canonical group">
+        </label>
+        <label class="checkbox-row">
+          <input id="industry-map-unresolved-only" type="checkbox">
+          Show only needs clarification
+        </label>
+      </div>
+
+      <div id="industry-map-table" class="table-wrap mapping-table"></div>
+    </section>
+
+    <section class="panel" id="results-panel" hidden>
+      <div class="panel-head row">
+        <div>
+          <h2>Generated Mapping</h2>
+          <p id="summary-text"></p>
+        </div>
+        <div class="actions">
+          <button id="copy-json" type="button">Copy JSON</button>
+          <button id="download-json" type="button">Download JSON</button>
+        </div>
+      </div>
+
+      <div class="stats-grid" id="stats-grid"></div>
+
+      <div class="preview-grid">
+        <section>
+          <h3 id="columns-preview-title">Detected Columns</h3>
+          <div id="columns-preview" class="table-wrap"></div>
+        </section>
+        <section>
+          <h3 id="spot-checks-title">Spot Checks</h3>
+          <div id="spot-checks" class="table-wrap"></div>
+        </section>
+      </div>
+
+      <label class="json-output">
+        <span>JSON Output</span>
+        <textarea id="json-output" spellcheck="false"></textarea>
+      </label>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
