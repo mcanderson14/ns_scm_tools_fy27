@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
-// @namespace    https://github.com/mcanderson14/FY26_scm_tools
-// @version      27.0.2
+// @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
+// @version      b26.5.64
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -11,12 +11,18 @@
 // @grant        GM_setClipboard
 // @grant        GM_xmlhttpRequest
 // @connect      hooks.slack.com
+// @connect      github.com
+// @connect      raw.githubusercontent.com
+// @connect      nlcorp.app.netsuite.com
+// @connect      nlcorp-sb2.app.netsuite.com
 // @grant        unsafeWindow
 // @run-at       document-idle
+// @downloadURL  https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/scr-staffing-helper.user.js
+// @updateURL    https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/scr-staffing-helper.user.js
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.0.2
+   SCOUT — SC Operations Utility Tool  b26.5.64
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -26,11 +32,17 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.0.2';
+  const SCRIPT_VERSION = 'b26.5.64';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
   const SCOUT_GPT_URL = 'https://chatgpt.com/';
+  const SCOUT_INSTALL_URL = 'https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/scr-staffing-helper.user.js';
+  const SCOUT_UPDATE_CHECK_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_tools_fy27/main/SCOUT/scr-staffing-helper.user.js';
+  const SCOUT_TESTING_INSTALL_URL = 'https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/testing/scr-staffing-helper.user.js';
+  const SCOUT_TESTING_UPDATE_CHECK_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_tools_fy27/main/SCOUT/testing/scr-staffing-helper.user.js';
+  const SCOUT_UPDATE_CACHE_KEY = 'scout_update_check_cache_v2';
+  const SCOUT_UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
   const SCOUT_LOGO_SRC_UNUSED = [
     'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIwAAAA1CAYAAACTBQODAAAuu0lEQVR42pV9d3hU17Wv/3jPCBWwb14MokoaaYq6EOAadzuJDZKmCINLbEBdc2ZEMyF2HHdjMGC6427Hvk67adiACiBckpubl7zk5d7ETpzYYGyDJQGqoxlp9HvfXrucvc8oee/p+843M6fsvc/ev736Wrrggn/ylzmv5L2MvEXILLgM6TkVmDq/AhmuxZiaswBT55cjPW8R/z6vDOm5lUjPW4ip7D52sN/smjw/v5w/k7sQ6a7Fqr10OleJjLyFyMhfjPTcBaof6iu3kvqg9tl3uncR3avGQdcWIj2P35vB7mF90LlFyMy/TLRbzvumd+DjZGNLdy0S41+EDBd7p3I6n5l/Ke8zpwKZroX8PXIX0NjT1bh4H9QG+836l8+x92B95yxA2rwyZNI7LRJzx9tLF+9D33N423zslUiT45XvJ/qkOcmrpLboWTEOOVd8XAtoTum9ZZtifdJz7D75GlQYc33B/89fZk7pIT7oRcgquAxps4oxJbsQabNL6TsdM8VndhGmZBchbXYJpsws5Ae7f1YxLswuxhR2nn2nNorEUYwpM4twobx/tjhH7bB2SzFlVgmmZJcgbVYJ0uhasbqHXeN9y/5le0V2H7N4v2mz7c80arNYu27/vlCMWbU/u5RfU/cU87GIe9gn769YjK9Iu6dEjSNN9iPHkl2CC2eydkvtMc0uQ1p2iWirhM+b6JeN40LRP5uvC/U2aaz8GT4uPiY5LrkOdI98D3WuRMxjCabSutpzkUWbq1JuqI//KVgIyfNLcT4xjtOxMRz708cIbnoawU074d+4HYFv7qDPmo3bUL1xO6o2PIXAxh3wb3oa1eJc9b3bUMPu+eYO1Ny7A1UbtmHJuq3wf/Np+DfuoOvs8G/chsDGbfB/U57bbj9Hx9P82MjPs/sCrI1NO1G9cQcC33oagU276Hu1GAP18c2d/Hk2FvbsvdtRde82BOj6Dt4PXedH9b07sJQdG7artqrEd97eDpqD0P27qM2lG7bRUU3t8j7Y51LxvUY8V7OJt8Xap7Ft4u/J3qlq49N0nl1nY2HPs/GFvrWT+qtS9+2wD3H/Ejaf67ep+eFtPE1t1Ij7jHdh4xS/azbtRID6eFqb5x0IbGRzuRPVG7Zhy4878clwAqdHEshg1HJ+',
     '2eQUZ+r8MmS5FuJcfBzumla4A2F4Aha8QQueQASeUAS+EP/t9ofpYOczc8uQPtcHbzBC93vYc/SMRZ/uAD/kOf5cGN5QBBlzi1CwtFE8J+7x8/7cgYg6z+5VB+snyL5H+WeA/6Z+/Lx/Gp9sTxsLvQfdb9njDfL2+b12ux7tea94zmucj9j3BSx1nR0+mquo+u0JibbpGTHukPiu3slS70bthyL2uALyeXZ/FD7Rhkf0IcftFtc9Ke2JI6S9n7aucmxeOd9BPn4GnKm5nFWalGVu0QPpuRU4E0vwQbGHxMPugP2y3pA9MaxDX8DCbHcFsvPLkJlXLhY6rD1nqQUiIPktfj1oYWZeCeZ4KpCZt4ADyx/WFjJ1YbxiHGqB9AUR96u+/bwv+aw7oE26Ak1EnTOAErIn0aM/F9TASoc8rwPLHpdPLahcxCgHgAJCxPHbni+31o+xObQxUrtBMQfivDsUVW07x6wf9j1R4159Y/M1sXBieAyZrkWYMsf3bRswORX4dChOqLIfCJs7U0esmMiMeaU49W+1ONsZxix3OeZft0xRELXLFYjC6tosdwXOd65E75t34JK8EhoYUQd95xJ1EgseDKsdwBZcgcdBKTiFCttgF+1JKqeDxSt2sT2xUW0nRvmODVg2BVDU1koFjgKgTU3UgoSior2Iep5TTYsvtNr19mKr9wtFUxbfK+7nz7bxQ+vPLcYnP433MigQb1+BJGQ/JzcYzXcwig/7R0mRUIDJyF2AM0OjnAoosmS/nJx4oi4B8YIBCzM9l+KLQ6vxp1cDyMp2Y1ZBOX/GL3a6vvuDHCzpc4swz1uOd3YtRe+hlch2l8Gn+nXufgEQfbc4KY/YYV6NEkiWRhMQnITaBS1FIXQqo+80Y3Nou44mUe8vYJNzm2JEHRQrOumu9wajqdRDnLPZmRyPzTK9EoAKOFH13R0w58ZuO6ra8xj9RlKoulvjLmyT/21glLRAAkvavIpX0+eX4c6H9tOg+ARMApiAzePkBMz0LMSdoZvRe3A1znW1EGtigHD7W1EgKY3GngqDYcx0laLv0N04e/Ae9B5eBevOqzF1fqlgJZZGAXT5wF5ctTjGpERTSbAAh6RO/FzYlF10ahO0N8JkQJHyGbtXUWKHnGAvcjRl4eWceuVG0sGhA0oCQWcjGtUw2KR61kE5gibl9EnW6ACpZ7I51vop',
@@ -82,8 +94,12 @@
     const defaults = {
       calendarIntegrationEnabled: false,
       gptAssistEnabled: false,
+      debugModeEnabled: false,
+      earlyAdopterUpdatesEnabled: false,
+      testingUpdateUrl: '',
       extraTeamMembers: '',
       extraTeamManagers: '',
+      extraAmoDeliverables: '',
       feedbackWebhookUrl: '',
     };
     let cfg = {};
@@ -102,8 +118,12 @@
       merged.calendarIntegrationEnabled = legacyCalendar === 'true';
     }
     merged.gptAssistEnabled = Boolean(merged.gptAssistEnabled);
+    merged.debugModeEnabled = Boolean(merged.debugModeEnabled);
+    merged.earlyAdopterUpdatesEnabled = Boolean(merged.earlyAdopterUpdatesEnabled);
+    merged.testingUpdateUrl = String(merged.testingUpdateUrl || '').trim();
     merged.extraTeamMembers = String(merged.extraTeamMembers || '');
     merged.extraTeamManagers = String(merged.extraTeamManagers || '');
+    merged.extraAmoDeliverables = String(merged.extraAmoDeliverables || '');
     merged.feedbackWebhookUrl = String(merged.feedbackWebhookUrl || '').trim();
     return merged;
   }
@@ -112,9 +132,13 @@
     const cfg = { ...getLocalConfig(), ...(patch || {}) };
     cfg.extraTeamMembers = String(cfg.extraTeamMembers || '');
     cfg.extraTeamManagers = String(cfg.extraTeamManagers || '');
+    cfg.extraAmoDeliverables = String(cfg.extraAmoDeliverables || '');
     cfg.feedbackWebhookUrl = String(cfg.feedbackWebhookUrl || '').trim();
     cfg.calendarIntegrationEnabled = Boolean(cfg.calendarIntegrationEnabled);
     cfg.gptAssistEnabled = Boolean(cfg.gptAssistEnabled);
+    cfg.debugModeEnabled = Boolean(cfg.debugModeEnabled);
+    cfg.earlyAdopterUpdatesEnabled = Boolean(cfg.earlyAdopterUpdatesEnabled);
+    cfg.testingUpdateUrl = String(cfg.testingUpdateUrl || '').trim();
     localStorage.setItem(LOCAL_CONFIG_KEY, JSON.stringify(cfg));
     localStorage.setItem('sc_cal_integration_enabled', cfg.calendarIntegrationEnabled ? 'true' : 'false');
     return cfg;
@@ -148,8 +172,26 @@
   function getFeedbackWebhookUrl() {
     return getLocalConfig().feedbackWebhookUrl || '';
   }
+  function getExtraAmoDeliverablesText() {
+    return getLocalConfig().extraAmoDeliverables || '';
+  }
+  function getExtraAmoDeliverableOptions() {
+    return getExtraAmoDeliverablesText()
+      .split(/[\n;]+/)
+      .map(normalizeAmoDeliverableName)
+      .filter(Boolean);
+  }
   function getGptAssistEnabled() {
     return Boolean(getLocalConfig().gptAssistEnabled);
+  }
+  function getDebugModeEnabled() {
+    return Boolean(getLocalConfig().debugModeEnabled);
+  }
+  function getEarlyAdopterUpdatesEnabled() {
+    return Boolean(getLocalConfig().earlyAdopterUpdatesEnabled);
+  }
+  function getTestingUpdateUrl() {
+    return getLocalConfig().testingUpdateUrl || SCOUT_TESTING_UPDATE_CHECK_URL;
   }
 
   /* ────────────────────────────────────────────────────────────────
@@ -235,6 +277,53 @@ Good luck with ${sc}!
 `,
   };
 
+  const AMO_DELIVERABLE_NO_TEMPLATE_OPTIONS = [
+    'Business Discussion',
+  ];
+
+  let _amoDeliverableRemoteOptions = [];
+  let _amoDeliverableFetchStarted = false;
+
+  function normalizeAmoDeliverableName(value) {
+    const text = String(value || '').replace(/\s+/g, ' ').trim();
+    if (!text) return '';
+    if (/^upsell\s*-/i.test(text)) return 'Upsell';
+    return text;
+  }
+
+  function isValidAmoDeliverableName(value) {
+    const text = normalizeAmoDeliverableName(value);
+    if (!text || /^\d+$/.test(text)) return false;
+    if (/^more options\b/i.test(text)) return false;
+    if (/\bfunction\s*\(/i.test(text)) return false;
+    if (/[{};]/.test(text)) return false;
+    return text.length <= 80;
+  }
+
+  function getBaseAmoDeliverableOptions() {
+    const seen = new Set();
+    return [
+      ...Object.keys(AMO_DELIVERABLE_TEMPLATES),
+      ...AMO_DELIVERABLE_NO_TEMPLATE_OPTIONS,
+      ..._amoDeliverableRemoteOptions,
+      ...getExtraAmoDeliverableOptions(),
+    ].map(normalizeAmoDeliverableName)
+      .filter(name => {
+        const key = name.toLowerCase();
+        if (!isValidAmoDeliverableName(name) || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  }
+
+  function buildAmoDeliverableOptionMarkup(options) {
+    return (options || getBaseAmoDeliverableOptions()).map(name => {
+      const hasTemplate = Boolean(AMO_DELIVERABLE_TEMPLATES[name]);
+      const attrs = hasTemplate ? '' : ' data-no-template="true"';
+      return `<option value="${escAttr(name)}"${attrs}>${escHtml(name)}</option>`;
+    }).join('');
+  }
+
   /* ────────────────────────────────────────────────────────────────
      TIMEZONE INFERENCE
      Maps US state / CA province location codes to IANA timezones.
@@ -279,21 +368,28 @@ Good luck with ${sc}!
 
   // Keyed by employeeId; value is the consultant payload for the helper
   const _selectedMap = new Map();
-  const _routeAssigneeCache = new Map();
   const _quickAssignRosterCache = new Map();
   let MY_TEAM_ROSTER_IDS = new Set();
   const QUICK_ASSIGN_RESULT_LIMIT = 12;
   const SEARCH_PAGE_SIZE = 10;
   const STAFFING_PENDING_KEY = 'sc_staffing_helper_pending_action_v1';
+  const PENDING_STAFFING_SAVE_DELAY_MS = 1800;
   const SEARCH_RESULT_CACHE = {};
   const RECENT_LOAD_CACHE = new Map();
   const RECENT_LOAD_CACHE_TTL_MS = 2 * 60 * 1000;
+  const RECENT_LOAD_SEARCH_ID = '1316256';
+  const PREVIOUS_SC_HISTORY_SEARCH_ID = '1316506';
+  const CUSTOMER_LICENSE_SEARCH_ID = '1316575';
+  const ASSIGNEE_EMPLOYEE_CACHE = {};
   const EXCLUDED_VERTICALS = ['SDT', 'TCOE', 'Productivity'];
   let INDUSTRY_OPTIONS_CACHE = null;
   let PRODUCT_SKILL_OPTIONS_CACHE = null;
   let GPT_ASSIST_DRAFT = null;
   let _quickAssignRequestSeq = 0;
   let _productSelectionSyncing = false;
+  let _previousHistoryCollapsed = false;
+  let _customerLicenseCollapsed = true;
+  const CUSTOMER_LICENSE_CACHE = {};
 
   // Item 1: cached lead-on-opp flag — set by loadStaffingContext on panel open
   let _hasLeadOnOpp = false;
@@ -396,6 +492,80 @@ Good luck with ${sc}!
   };
   /* eslint-enable no-var */
 
+  let SCOUT_CAN_READ_AVAIL_NOTES = false;
+  let SCOUT_CAN_READ_MANAGER_AVAIL_RES = false;
+  let SCOUT_CAN_READ_VERTICAL_AMO = false;
+  let SCOUT_CAN_READ_SALES_SUBREGION = false;
+  let SCOUT_ROLE_CONTEXT = { roleId: '', roleCenter: '', roleText: '', isScIc: false, isScManager: false };
+
+  function availabilityNotesColumns(joinField) {
+    return SCOUT_CAN_READ_AVAIL_NOTES
+      ? [new nlobjSearchColumn('custrecord_emproster_avail_notes', joinField)]
+      : [];
+  }
+
+  function readAvailabilityNotes(result, joinField) {
+    if (!SCOUT_CAN_READ_AVAIL_NOTES) return '';
+    try {
+      return (joinField
+        ? result.getValue('custrecord_emproster_avail_notes', joinField)
+        : result.getValue('custrecord_emproster_avail_notes')) || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function managerAvailResColumns(joinField) {
+    return SCOUT_CAN_READ_MANAGER_AVAIL_RES
+      ? [new nlobjSearchColumn('custrecord_emproster_avail_notes_res', joinField)]
+      : [];
+  }
+
+  function readManagerAvailRes(result, joinField) {
+    if (!SCOUT_CAN_READ_MANAGER_AVAIL_RES) return '';
+    try {
+      return (joinField
+        ? result.getValue('custrecord_emproster_avail_notes_res', joinField)
+        : result.getValue('custrecord_emproster_avail_notes_res')) || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function verticalAmoColumns(joinField) {
+    return SCOUT_CAN_READ_VERTICAL_AMO
+      ? [new nlobjSearchColumn('custrecord_emproster_vertical_amo', joinField)]
+      : [];
+  }
+
+  function readVerticalAmo(result, joinField) {
+    if (!SCOUT_CAN_READ_VERTICAL_AMO) return '';
+    try {
+      return (joinField
+        ? result.getText('custrecord_emproster_vertical_amo', joinField)
+        : result.getText('custrecord_emproster_vertical_amo')) || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function salesSubregionColumns(joinField) {
+    return SCOUT_CAN_READ_SALES_SUBREGION
+      ? [new nlobjSearchColumn('custrecord_emproster_salessubregion', joinField)]
+      : [];
+  }
+
+  function readSalesSubregion(result, joinField) {
+    if (!SCOUT_CAN_READ_SALES_SUBREGION) return '';
+    try {
+      return (joinField
+        ? result.getText('custrecord_emproster_salessubregion', joinField)
+        : result.getText('custrecord_emproster_salessubregion')) || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
   // Guard: only SC Request records (rectype=2840)
   if (!window.location.search.includes('rectype=2840')) return;
   // Guard: don't double-inject
@@ -462,6 +632,11 @@ Good luck with ${sc}!
 }
 #sc-skills-toggle:hover { background: var(--sc-blue-dark); }
 #sc-skills-toggle.panel-open { right: var(--sc-panel-w); }
+#sc-skills-toggle.sc-update-available {
+  background: var(--sc-brand-yellow);
+  color: var(--sc-brand-navy);
+}
+#sc-skills-toggle.sc-update-available:hover { background: #f0cf7c; }
 
 /* ── Panel Shell ─────────────────────────────────────────────────── */
 #sc-skills-panel {
@@ -574,6 +749,49 @@ html.sc-resizing #sc-skills-toggle { transition: none !important; }
   align-items: center;
   gap: 5px;
   flex-shrink: 0;
+}
+.sc-update-banner {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 8px 10px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--sc-brand-yellow);
+  background: #fff8e5;
+  color: var(--sc-brand-navy);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.3;
+}
+.sc-update-banner.show { display: flex; }
+.sc-update-banner-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.sc-update-banner-text strong { font-weight: 800; }
+.sc-update-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.sc-update-banner button {
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 8px;
+  white-space: nowrap;
+}
+#sc-update-install-btn {
+  background: var(--sc-brand-yellow);
+  color: var(--sc-brand-navy);
+}
+#sc-update-copy-btn {
+  background: var(--sc-brand-navy);
+  color: #fff;
 }
 #sc-feedback-btn {
   background: var(--sc-brand-yellow);
@@ -716,49 +934,6 @@ html.sc-resizing #sc-skills-toggle { transition: none !important; }
   transition: opacity 0.3s;
 }
 .sc-save-confirm.show { opacity: 1; }
-
-/* ── Cross-Vertical Routing Buttons ─────────────────────────────── */
-.sc-xvert-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 6px;
-}
-.sc-xvert-btn {
-  padding: 7px 6px;
-  border: none;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  color: #fff;
-  transition: filter 0.15s, transform 0.1s;
-  white-space: nowrap;
-}
-.sc-xvert-btn:hover  { filter: brightness(0.88); }
-.sc-xvert-btn:active { transform: scale(0.97); }
-.sc-xvert-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-  filter: grayscale(0.4);
-}
-.sc-xvert-btn:disabled:hover,
-.sc-xvert-btn:disabled:active {
-  filter: grayscale(0.4);
-  transform: none;
-}
-.sc-xvert-btn.orange { background: var(--sc-orange); }
-.sc-xvert-btn.blue   { background: var(--sc-blue); }
-.sc-xvert-btn.green  { background: var(--sc-green-dark); }
-.sc-xvert-btn.teal   { background: var(--sc-teal); }
-.sc-xvert-btn.yellow { background: var(--sc-yellow-dark); }
-.sc-amo-xvert-grid {
-  grid-template-columns: 1fr 1fr;
-}
-.sc-amo-xvert-grid .sc-xvert-btn {
-  min-height: 34px;
-  white-space: normal;
-  line-height: 1.15;
-}
 
 /* ── Status Action Buttons ───────────────────────────────────────── */
 .sc-action-row {
@@ -1492,6 +1667,38 @@ html.sc-resizing #sc-skills-toggle { transition: none !important; }
   flex-direction: column;
   gap: 10px;
 }
+.sc-amo-deliverable-warning-dialog {
+  width: 390px;
+  border-top: 5px solid var(--sc-brand-yellow);
+}
+.sc-amo-deliverable-warning-message {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  color: var(--sc-brand-navy);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+.sc-amo-deliverable-warning-icon {
+  flex: 0 0 auto;
+  font-size: 24px;
+  line-height: 1;
+}
+.sc-amo-deliverable-warning-detail {
+  margin: 0;
+  color: var(--sc-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.sc-warning-continue-btn {
+  background: var(--sc-brand-yellow);
+  color: var(--sc-brand-navy);
+}
+.sc-warning-continue-btn:hover {
+  background: #f0cf7c;
+}
 .sc-gpt-dialog {
   width: 620px;
 }
@@ -1780,6 +1987,343 @@ html.sc-resizing #sc-skills-toggle { transition: none !important; }
   font-size: 11px;
   color: var(--sc-text-muted);
   padding: 1px 0;
+}
+.sc-prev-history-panel {
+  grid-column: 1 / -1;
+  border: 1px solid #1c6b45;
+  border-radius: 6px;
+  background: #07160f;
+  color: #72f58a;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(114,245,138,0.12), 0 1px 2px rgba(0,0,0,0.12);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.sc-prev-history-panel.collapsed .sc-prev-history-body {
+  display: none;
+}
+.sc-prev-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(114,245,138,0.18);
+  background: #07160f;
+}
+.sc-prev-history-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  color: #a5ffb4;
+  cursor: pointer;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  padding: 0;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.sc-prev-history-toggle:hover {
+  color: #d6ffe0;
+}
+.sc-prev-history-title {
+  color: inherit;
+}
+.sc-prev-history-status {
+  font-size: 10px;
+  color: #72f58a;
+  text-align: right;
+  min-height: 14px;
+}
+.sc-prev-history-terminal {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #72f58a;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+.sc-prev-history-sequence {
+  display: inline-block;
+  position: relative;
+  min-width: 190px;
+  min-height: 12px;
+  text-align: left;
+}
+.sc-prev-history-sequence span {
+  position: absolute;
+  inset: 0 auto auto 0;
+  opacity: 0;
+  animation: sc-history-message-once 30s steps(1, end) forwards;
+}
+.sc-prev-history-sequence span:nth-child(1) { animation-delay: 0s; }
+.sc-prev-history-sequence span:nth-child(2) { animation-delay: 5s; }
+.sc-prev-history-sequence span:nth-child(3) { animation-delay: 10s; }
+.sc-prev-history-sequence span:nth-child(4) { animation-delay: 15s; }
+.sc-prev-history-sequence span:nth-child(5) { animation-delay: 20s; }
+.sc-prev-history-sequence span:nth-child(6) {
+  animation-name: sc-history-message-final;
+  animation-delay: 25s;
+}
+@keyframes sc-history-message-once {
+  0%, 16.66% { opacity: 1; }
+  16.67%, 100% { opacity: 0; }
+}
+@keyframes sc-history-message-final {
+  0%, 100% { opacity: 1; }
+}
+.sc-prev-history-cursor {
+  display: inline-block;
+  width: 6px;
+  height: 10px;
+  background: #72f58a;
+  animation: sc-history-cursor-blink 1s steps(1, end) infinite;
+}
+@keyframes sc-history-cursor-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+.sc-prev-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 11px;
+  color: #d6ffe0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.sc-prev-history-table th,
+.sc-prev-history-table td {
+  padding: 5px 7px;
+  border-bottom: 1px solid rgba(114,245,138,0.16);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.sc-prev-history-table th {
+  color: #72f58a;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: rgba(114,245,138,0.06);
+}
+.sc-prev-history-type {
+  display: inline-block;
+  min-width: 34px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 800;
+  text-align: center;
+}
+.sc-prev-history-type-amo {
+  background: #fff2ef;
+  color: #a63428;
+  border: 1px solid #efb5aa;
+}
+.sc-prev-history-type-direct {
+  background: #edf7fb;
+  color: var(--sc-blue-dark);
+  border: 1px solid #b9d8e5;
+}
+.sc-prev-history-type-unknown {
+  background: rgba(214,255,224,0.06);
+  color: rgba(214,255,224,0.72);
+  border: 1px solid rgba(214,255,224,0.28);
+}
+.sc-prev-history-count-btn {
+  background: rgba(114,245,138,0.08);
+  border: 1px solid rgba(114,245,138,0.72);
+  border-radius: 3px;
+  color: #72f58a;
+  cursor: pointer;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 3px 6px;
+  min-width: 34px;
+  text-align: center;
+}
+.sc-prev-history-count-btn:hover {
+  background: rgba(114,245,138,0.18);
+}
+.sc-prev-history-products-summary {
+  color: #d6ffe0;
+}
+.sc-prev-history-meta {
+  display: block;
+  margin-top: 1px;
+  color: rgba(214,255,224,0.68);
+  font-size: 9px;
+  font-weight: 600;
+}
+.sc-prev-history-detail-row {
+  display: none;
+  background: rgba(114,245,138,0.035);
+}
+.sc-prev-history-detail-cell {
+  padding: 4px 8px 6px !important;
+}
+.sc-prev-history-detail-list {
+  display: grid;
+  gap: 3px;
+}
+.sc-prev-history-detail-item {
+  display: grid;
+  grid-template-columns: 62px 1fr 1.2fr;
+  gap: 8px;
+  color: rgba(214,255,224,0.82);
+  font-size: 10px;
+}
+.sc-prev-history-detail-scr {
+  color: #72f58a;
+  font-weight: 800;
+}
+.sc-prev-history-empty {
+  padding: 7px 8px;
+  font-size: 11px;
+  color: rgba(214,255,224,0.72);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.sc-customer-license-panel {
+  grid-column: 1 / -1;
+  border: 1px solid rgba(114,245,138,0.45);
+  border-radius: 6px;
+  background: #020906;
+  overflow: hidden;
+}
+.sc-customer-license-panel.collapsed .sc-customer-license-body {
+  display: none;
+}
+.sc-customer-license-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  background: #07160f;
+  border-bottom: 1px solid rgba(114,245,138,0.18);
+}
+.sc-customer-license-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  color: #a5ffb4;
+  cursor: pointer;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 0;
+  text-transform: uppercase;
+}
+.sc-customer-license-toggle:hover {
+  color: #d6ffe0;
+}
+.sc-customer-license-status {
+  color: #72f58a;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  text-align: right;
+}
+.sc-customer-license-body {
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 7px 8px;
+}
+.sc-customer-license-empty {
+  color: rgba(214,255,224,0.78);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+.sc-customer-license-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 11px;
+  color: #d6ffe0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.sc-customer-license-table th,
+.sc-customer-license-table td {
+  border-bottom: 1px solid rgba(114,245,138,0.16);
+  overflow-wrap: anywhere;
+  padding: 5px 6px;
+  text-align: left;
+  vertical-align: top;
+}
+.sc-customer-license-table th {
+  background: #07160f;
+  color: #72f58a;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  position: sticky;
+  top: 0;
+  text-transform: uppercase;
+  z-index: 1;
+}
+.sc-customer-license-terminal {
+  display: flex;
+  align-items: center;
+  color: #72f58a;
+  gap: 4px;
+  min-height: 18px;
+}
+.sc-customer-license-debug {
+  border-top: 1px solid rgba(114,245,138,0.18);
+  color: rgba(214,255,224,0.68);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 9px;
+  line-height: 1.35;
+  margin-top: 6px;
+  padding-top: 5px;
+}
+.sc-customer-license-debug summary {
+  color: #72f58a;
+  cursor: pointer;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.sc-history-debug {
+  grid-column: 1 / -1;
+  border: 1px dashed #c7d4db;
+  background: #f8fbfc;
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+.sc-history-debug summary {
+  cursor: pointer;
+  color: var(--sc-blue-dark);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.sc-history-debug-body {
+  margin-top: 5px;
+  font-size: 10px;
+  color: var(--sc-text-muted);
+  line-height: 1.35;
+  word-break: break-word;
+  max-height: 185px;
+  overflow: auto;
+  padding-right: 4px;
+}
+.sc-history-debug-row {
+  margin-top: 3px;
+  padding-top: 3px;
+  border-top: 1px solid #e3ebef;
+}
+.sc-history-debug-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--sc-text);
+  overflow-wrap: anywhere;
 }
 
 /* ── Tab Bar ─────────────────────────────────────────────────────── */
@@ -2431,6 +2975,10 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     return normalizeIndustryText(text).replace(/\s+/g, ' ');
   }
 
+  function isLikelyInternalIdText(text) {
+    return /^\d+(?:\s*,\s*\d+)*$/.test(String(text || '').trim());
+  }
+
   function simplifyIndustryPart(text) {
     const raw = String(text || '').trim();
     if (!raw) return '';
@@ -2664,6 +3212,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     return optionFamily === family;
   }
 
+  function optionMatchesIndustryFamily(option, familyText) {
+    if (!option) return false;
+    const family = normalizeIndustryText(familyText);
+    if (!family) return true;
+    return normalizeIndustryText(option.family || '') === family ||
+           normalizeIndustryText(option.industry || '') === family;
+  }
+
   function findSelfFamilyIndustryOption(options, familyText) {
     const family = normalizeIndustryText(familyText);
     if (!family) return null;
@@ -2778,16 +3334,285 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
   function getFirstReadableField(fieldIds) {
     for (const fieldId of fieldIds) {
-      const value = readFormFieldValue(fieldId);
+      let value = readFormFieldValue(fieldId);
       const text = readFormField(fieldId);
-      if (value || text) return { value, text };
+      if (!value && isLikelyInternalIdText(text)) value = text;
+      if (value || text) return { value, text, fieldId };
     }
-    return { value: '', text: '' };
+    return { value: '', text: '', fieldId: '' };
+  }
+
+  function isScoutPanelElement(el) {
+    return Boolean(el && el.closest && el.closest('#sc-skills-panel'));
+  }
+
+  function isLikelyVisibleElement(el) {
+    try {
+      if (!el || isScoutPanelElement(el)) return false;
+      const style = el.ownerDocument.defaultView.getComputedStyle(el);
+      if (style.display === 'none' || style.visibility === 'hidden') return false;
+      return true;
+    } catch (e) {
+      return Boolean(el && !isScoutPanelElement(el));
+    }
+  }
+
+  function cleanVisibleFieldText(text) {
+    return String(text || '')
+      .replace(/\*/g, '')
+      .replace(/\s+/g, ' ')
+      .replace(/^[:\-|]+|[:\-|]+$/g, '')
+      .trim();
+  }
+
+  function isLikelyNetSuiteFieldContainer(el) {
+    if (!el || isScoutPanelElement(el)) return false;
+    const selector = [
+      '.uir-field-wrapper',
+      '.uir-field',
+      '.uir-field-wrapper-content',
+      '.uir-field-wrapper-content-visible',
+      '.field_widget',
+      'td',
+      'th',
+    ].join(',');
+    return Boolean(el.closest && el.closest(selector));
+  }
+
+  function stripVisibleLabel(text, labelPatterns) {
+    let out = cleanVisibleFieldText(text);
+    (labelPatterns || []).forEach(pattern => {
+      out = out.replace(pattern, '').replace(/^[:\-|]+/, '').trim();
+    });
+    return cleanVisibleFieldText(out);
+  }
+
+  function isUsableVisibleIndustryValue(value, labelPatterns) {
+    const text = cleanVisibleFieldText(value);
+    if (!text || text.length > 120) return false;
+    if (labelPatterns.some(pattern => pattern.test(text))) return false;
+    if (/\bindustry\s+sub[- ]?group\b/i.test(text)) return false;
+    if (/\b(?:industry family|industry group|sub[- ]?industry)\b/i.test(text)) return false;
+    if (/^(sku|integrations?|partners?|competitors?|why we win|red flags?)\b/i.test(text)) return false;
+    if (/staffed deal|sc manager notes|scm staffing notes|forecast notes/i.test(text)) return false;
+    return true;
+  }
+
+  function readInlineTextAfterLabel(text, labelPatterns) {
+    let out = cleanVisibleFieldText(text);
+    for (const pattern of labelPatterns || []) {
+      if (!pattern.test(out)) continue;
+      out = out.replace(pattern, '').replace(/^[:\-|]+/, '').trim();
+      return cleanVisibleFieldText(out);
+    }
+    return '';
+  }
+
+  function readUsableVisibleValue(el, labelPatterns) {
+    if (!isLikelyVisibleElement(el)) return '';
+    const value = stripVisibleLabel(el.textContent || el.value || '', labelPatterns);
+    return isUsableVisibleIndustryValue(value, labelPatterns) ? value : '';
+  }
+
+  function readSiblingTextAfterLabel(labelEl, labelPatterns) {
+    let sibling = labelEl && labelEl.nextElementSibling;
+    while (sibling) {
+      const value = readUsableVisibleValue(sibling, labelPatterns);
+      if (value) return value;
+      sibling = sibling.nextElementSibling;
+    }
+    return '';
+  }
+
+  function readTableCellTextAfterLabel(labelEl, labelPatterns) {
+    const cell = labelEl && labelEl.closest && labelEl.closest('td, th');
+    const row = cell && cell.parentElement;
+    if (!row) return '';
+    const cells = Array.from(row.children || []);
+    const index = cells.indexOf(cell);
+    for (let i = index + 1; i < cells.length; i++) {
+      const value = readUsableVisibleValue(cells[i], labelPatterns);
+      if (value) return value;
+    }
+    return '';
+  }
+
+  function readNextRowCellTextAfterLabel(labelEl, labelPatterns) {
+    const cell = labelEl && labelEl.closest && labelEl.closest('td, th');
+    const row = cell && cell.parentElement;
+    const nextRow = row && row.nextElementSibling;
+    if (!row || !nextRow) return '';
+    const cells = Array.from(row.children || []);
+    const nextCells = Array.from(nextRow.children || []);
+    const index = cells.indexOf(cell);
+    if (index < 0 || !nextCells[index] || !isLikelyVisibleElement(nextCells[index])) return '';
+    return readUsableVisibleValue(nextCells[index], labelPatterns);
+  }
+
+  function readAncestorSiblingTextAfterLabel(labelEl, labelPatterns) {
+    let node = labelEl;
+    let depth = 0;
+    while (node && depth < 5) {
+      let sibling = node.nextElementSibling;
+      let siblingCount = 0;
+      while (sibling && siblingCount < 6) {
+        const value = readUsableVisibleValue(sibling, labelPatterns);
+        if (value) return value;
+        sibling = sibling.nextElementSibling;
+        siblingCount += 1;
+      }
+      node = node.parentElement;
+      depth += 1;
+    }
+    return '';
+  }
+
+  function readContainerTextAfterLabel(labelEl, labelPatterns) {
+    const containers = [
+      labelEl && labelEl.closest && labelEl.closest('.uir-field-wrapper, .uir-field, .uir-field-wrapper-content, .uir-field-wrapper-content-visible, .field_widget'),
+      labelEl && labelEl.parentElement,
+    ].filter(Boolean);
+    for (const container of containers) {
+      if (!isLikelyVisibleElement(container)) continue;
+      const text = stripVisibleLabel(container.textContent || container.value || '', labelPatterns);
+      if (text && text.length <= 160 && isUsableVisibleIndustryValue(text, labelPatterns)) return text;
+    }
+    return '';
+  }
+
+  function readVisiblePageValueByLabels(labelPatterns) {
+    const labelEls = [];
+    getAccessibleDocuments().forEach(doc => {
+      try {
+        doc.querySelectorAll('label, span, div, td, th').forEach(el => {
+          if (!isLikelyVisibleElement(el)) return;
+          const text = cleanVisibleFieldText(el.textContent || '');
+          if (!text || text.length > 180) return;
+          const inlineValue = readInlineTextAfterLabel(text, labelPatterns);
+          if (inlineValue && isUsableVisibleIndustryValue(inlineValue, labelPatterns)) {
+            labelEls.push({ el, inlineValue });
+            return;
+          }
+          if (labelPatterns.some(pattern => pattern.test(text)) && isLikelyNetSuiteFieldContainer(el)) {
+            labelEls.push({ el, inlineValue: '' });
+            return;
+          }
+          if (labelPatterns.some(pattern => pattern.test(text)) && text.length <= 40) {
+            labelEls.push({ el, inlineValue: '' });
+          }
+        });
+      } catch (e) { /* keep scanning other documents */ }
+    });
+
+    for (const item of labelEls) {
+      const el = item.el || item;
+      const values = [
+        item.inlineValue,
+        readSiblingTextAfterLabel(el, labelPatterns) ||
+          '',
+        readTableCellTextAfterLabel(el, labelPatterns),
+        readNextRowCellTextAfterLabel(el, labelPatterns),
+        readAncestorSiblingTextAfterLabel(el, labelPatterns),
+        readContainerTextAfterLabel(el, labelPatterns),
+      ];
+      const value = values.find(candidate => isUsableVisibleIndustryValue(candidate, labelPatterns));
+      if (isUsableVisibleIndustryValue(value, labelPatterns)) return value;
+    }
+    return '';
+  }
+
+  function getVisibleDocumentTextWithoutScout(doc) {
+    try {
+      if (!doc || !doc.body) return '';
+      const clone = doc.body.cloneNode(true);
+      clone.querySelectorAll('#sc-skills-panel, #sc-skills-toggle, script, style, noscript').forEach(el => el.remove());
+      return clone.innerText || clone.textContent || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function readVisibleValueFromLines(lines, startIndex, labelPatterns, stopPatterns) {
+    const maxIndex = Math.min(lines.length, startIndex + 7);
+    const inlineValue = readInlineTextAfterLabel(lines[startIndex], labelPatterns);
+    if (isUsableVisibleIndustryValue(inlineValue, labelPatterns)) return inlineValue;
+
+    const valueLines = [];
+    for (let i = startIndex + 1; i < maxIndex; i++) {
+      const line = cleanVisibleFieldText(lines[i]);
+      if (!line) continue;
+      if ((stopPatterns || []).some(pattern => pattern.test(line))) break;
+      const lineInlineValue = readInlineTextAfterLabel(line, labelPatterns);
+      if (isUsableVisibleIndustryValue(lineInlineValue, labelPatterns)) return lineInlineValue;
+      if (isUsableVisibleIndustryValue(line, labelPatterns)) valueLines.push(line);
+    }
+    const joinedValue = cleanVisibleFieldText(valueLines.join(' '));
+    if (isUsableVisibleIndustryValue(joinedValue, labelPatterns)) return joinedValue;
+    return '';
+  }
+
+  function readVisibleScrIndustryPairFromPageText() {
+    const familyPatterns = [
+      /^(?:industry family|industry group|industry)(?!\s+sub[- ]?group)\s*(?:[:\-|]\s*|\s+|$)/i,
+    ];
+    const subPatterns = [
+      /^(?:industry sub[- ]?group|industry subgroup|sub[- ]?industry)\s*(?:[:\-|]\s*|\s+|$)/i,
+    ];
+
+    for (const doc of getAccessibleDocuments()) {
+      const lines = getVisibleDocumentTextWithoutScout(doc)
+        .split(/\r?\n/)
+        .map(cleanVisibleFieldText)
+        .filter(Boolean);
+      if (!lines.length) continue;
+
+      for (let i = 0; i < lines.length; i++) {
+        if (!familyPatterns.some(pattern => pattern.test(lines[i]))) continue;
+        const family = readVisibleValueFromLines(lines, i, familyPatterns, subPatterns);
+        if (!family) continue;
+
+        const maxSubIndex = Math.min(lines.length, i + 12);
+        for (let j = i + 1; j < maxSubIndex; j++) {
+          if (!subPatterns.some(pattern => pattern.test(lines[j]))) continue;
+          const sub = readVisibleValueFromLines(lines, j, subPatterns, familyPatterns);
+          if (sub) return { family, sub };
+        }
+      }
+    }
+    return { family: '', sub: '' };
+  }
+
+  function getVisibleScrIndustryPair() {
+    const labelPair = {
+      family: readVisiblePageValueByLabels([
+        /^(?:industry family|industry group|industry)(?!\s+sub[- ]?group)\s*(?:[:\-|]\s*|\s+|$)/i,
+      ]),
+      sub: readVisiblePageValueByLabels([
+        /^(?:industry sub[- ]?group|industry subgroup|sub[- ]?industry)\s*(?:[:\-|]\s*|\s+|$)/i,
+      ]),
+    };
+    if (labelPair.family && labelPair.sub) return labelPair;
+
+    const pageTextPair = readVisibleScrIndustryPairFromPageText();
+    return {
+      family: labelPair.family || pageTextPair.family,
+      sub: labelPair.sub || pageTextPair.sub,
+    };
   }
 
   function getScrIndustryDefault(options) {
     let sub = getFirstReadableField(SCR_FIELD_INDUSTRY_SUBGROUP_CANDIDATES);
     let family = getFirstReadableField(SCR_FIELD_INDUSTRY_FAMILY_CANDIDATES);
+    const hasGtmSub = sub.fieldId === SCR_FIELD_GTM_INDUSTRY_SUBGROUP;
+    const hasGtmFamily = family.fieldId === SCR_FIELD_GTM_INDUSTRY;
+    const visibleIndustry = getVisibleScrIndustryPair();
+
+    if (!hasGtmSub && visibleIndustry.sub && !isLikelyInternalIdText(visibleIndustry.sub)) {
+      sub = { ...sub, text: visibleIndustry.sub };
+    }
+    if (!hasGtmFamily && visibleIndustry.family && !isLikelyInternalIdText(visibleIndustry.family)) {
+      family = { ...family, text: visibleIndustry.family };
+    }
 
     if ((!sub.value && !sub.text) || (!family.value && !family.text)) {
       try {
@@ -2818,28 +3643,47 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       } catch (e) { /* company fallback is best-effort */ }
     }
 
-    if (sub.value) {
-      const byValue = options.find(o => String(o.id).split(',').includes(String(sub.value)));
-      if (byValue) return byValue.id;
-    }
     const subLabel = sub.text || sub.value;
     const familyLabel = family.text || family.value;
     const subText = normalizeIndustryText(subLabel);
     const familyText = normalizeIndustryText(familyLabel);
+    const hasReadableSubLabel = subText && !isLikelyInternalIdText(subLabel);
+    const hasReadableFamilyLabel = familyText && !isLikelyInternalIdText(familyLabel);
 
-    if (subText) {
-      const rollup = getGtmRollupsForSubIndustry(subLabel)
+    if (hasReadableSubLabel) {
+      const exactPair = options.find(o => optionMatchesIndustryPair(o, familyLabel, subLabel));
+      if (exactPair) return exactPair.id;
+
+      const rollups = getGtmRollupsForSubIndustry(subLabel)
+        .filter(option => optionMatchesIndustryFamily(option, familyLabel));
+      const rollup = rollups
         .map(option => gtmIndustryKey(option.industry, option.subgroup));
       const gtmMatch = options.find(o => o.gtmKey && rollup.includes(o.gtmKey));
       if (gtmMatch) return gtmMatch.id;
-
-      const exactPair = options.find(o => optionMatchesIndustryPair(o, familyLabel, subLabel));
-      if (exactPair) return exactPair.id;
 
       const exactSub = !familyText
         ? options.find(o => optionMatchesIndustryPart(o, subLabel))
         : null;
       if (exactSub) return exactSub.id;
+    }
+
+    if (sub.value) {
+      const byValue = options.find(o => String(o.id).split(',').includes(String(sub.value)));
+      if (byValue) {
+        if (sub.fieldId === SCR_FIELD_GTM_INDUSTRY_SUBGROUP) return byValue.id;
+        if (!hasReadableSubLabel) return byValue.id;
+        if (familyText && !hasReadableFamilyLabel) return byValue.id;
+        if (optionMatchesIndustryPair(byValue, familyLabel, subLabel) ||
+            (!familyText && optionMatchesIndustryPart(byValue, subLabel))) {
+          return byValue.id;
+        }
+        console.warn('[SCOUT] Ignoring SCR industry internal ID because visible text points elsewhere:', {
+          subValue: sub.value,
+          subLabel,
+          familyLabel,
+          matchedOption: byValue.name,
+        });
+      }
     }
 
     const selfFamily = findSelfFamilyIndustryOption(options, familyLabel);
@@ -2875,6 +3719,15 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
   function normalizeProductName(name) {
     return String(name || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, ' ').trim();
+  }
+
+  const RETIRED_PRODUCT_SKILL_KEYS = new Set([
+    'WMS-Lite',
+    'WMS-Advanced',
+  ].map(normalizeProductName));
+
+  function isRetiredProductSkillName(name) {
+    return RETIRED_PRODUCT_SKILL_KEYS.has(normalizeProductName(name));
   }
 
   function productNamesCompatible(a, b) {
@@ -3186,11 +4039,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     let lastInternalId = 0;
     let guard = 0;
     const join = 'custrecord_ssm_skill_employee';
+    const skillEntryJoin = 'custrecord_ssm_skill_entry';
+    let skillActiveFilterSupported = true;
 
     function addSkill(skillId, skillText) {
       skillId = String(skillId || '').trim();
       skillText = String(skillText || '').trim();
       if (!skillId || !skillText || bySkill[skillId]) return;
+      if (isRetiredProductSkillName(skillText)) return;
       const scrMatch = resolveScrProductForSkill(skillId, skillText, scrOptions);
       bySkill[skillId] = {
         value: skillId,
@@ -3200,16 +4056,25 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       };
     }
 
-    try {
-      const skillCol = new nlobjSearchColumn('custrecord_ssm_skill_entry', null, 'group');
-      const rows = nlapiSearchRecord('customrecord_ssm_entry', null, [
+    function buildSkillOptionFilters(extraFilters) {
+      const filters = [
+        ...(extraFilters || []),
         new nlobjSearchFilter('custrecord_ssm_skill_entry', null, 'noneof', '@NONE@'),
         new nlobjSearchFilter('custrecord_emproster_rosterstatus', join, 'is', 1),
         new nlobjSearchFilter('custrecord_emproster_eminactive',   join, 'is', 'F'),
         new nlobjSearchFilter('custrecord_emproster_sales_qb',     join, 'is', 25),
         new nlobjSearchFilter('custrecord_emproster_ocostcenter',  join, 'is', ROSTER_COST_CENTER_ID),
         new nlobjSearchFilter('custrecord_emproster_salesregion',  join, 'is', ROSTER_SALES_REGION_ID),
-      ], [skillCol]) || [];
+      ];
+      if (skillActiveFilterSupported) {
+        filters.push(new nlobjSearchFilter('isinactive', skillEntryJoin, 'is', 'F'));
+      }
+      return filters;
+    }
+
+    try {
+      const skillCol = new nlobjSearchColumn('custrecord_ssm_skill_entry', null, 'group');
+      const rows = nlapiSearchRecord('customrecord_ssm_entry', null, buildSkillOptionFilters(), [skillCol]) || [];
       rows.forEach(row => {
         addSkill(
           row.getValue('custrecord_ssm_skill_entry', null, 'group') || row.getValue('custrecord_ssm_skill_entry'),
@@ -3225,22 +4090,27 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
     while (guard < 30) {
       guard += 1;
-      const filters = [
+      const filters = buildSkillOptionFilters([
         new nlobjSearchFilter('internalidnumber', null, 'greaterthan', lastInternalId),
-        new nlobjSearchFilter('custrecord_ssm_skill_entry', null, 'noneof', '@NONE@'),
-        new nlobjSearchFilter('custrecord_emproster_rosterstatus', join, 'is', 1),
-        new nlobjSearchFilter('custrecord_emproster_eminactive',   join, 'is', 'F'),
-        new nlobjSearchFilter('custrecord_emproster_sales_qb',     join, 'is', 25),
-        new nlobjSearchFilter('custrecord_emproster_ocostcenter',  join, 'is', ROSTER_COST_CENTER_ID),
-        new nlobjSearchFilter('custrecord_emproster_salesregion',  join, 'is', ROSTER_SALES_REGION_ID),
-      ];
+      ]);
       const idCol = new nlobjSearchColumn('internalid');
       try { idCol.setSort(false); } catch (e) { /* best effort sort */ }
       const cols = [
         idCol,
         new nlobjSearchColumn('custrecord_ssm_skill_entry'),
       ];
-      const rows = nlapiSearchRecord('customrecord_ssm_entry', null, filters, cols) || [];
+      let rows = [];
+      try {
+        rows = nlapiSearchRecord('customrecord_ssm_entry', null, filters, cols) || [];
+      } catch (e) {
+        if (skillActiveFilterSupported) {
+          skillActiveFilterSupported = false;
+          console.warn('[SCOUT] Product skill active filter failed; retrying matrix scan with retired-skill guard only.', e);
+          continue;
+        }
+        console.warn('[SCOUT] Product skill option matrix scan failed.', e);
+        break;
+      }
       if (!rows.length) break;
 
       rows.forEach(row => {
@@ -3272,34 +4142,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     }
   }
 
-  const AMO_XVERT_ROUTES = [
-    { label: 'Emerging',           assignee: 'Malone, Moira',     color: 'teal' },
-    { label: 'EPM',                assignee: 'Anderson, Dennis',  color: 'teal' },
-    { label: 'PR - East',          assignee: 'Yazbeck, David',    color: 'orange' },
-    { label: 'PR - Midwest',       assignee: 'Heyne, Bob',        color: 'orange' },
-    { label: 'PR - Southeast',     assignee: 'Cillo, Daniel',     color: 'orange' },
-    { label: 'PR - Mountain',      assignee: 'Schwandt, Brad',    color: 'orange' },
-    { label: 'PR - West',          assignee: 'Hatch, Ryan',       color: 'orange' },
-    { label: 'GB - East',          assignee: 'Mumford, Tyler',    color: 'blue' },
-    { label: 'GB - Mountain',      assignee: 'Garrison, Allison', color: 'blue' },
-    { label: 'GB - West',          assignee: 'Kim, Todd',         color: 'blue' },
-    { label: 'High Tech - East',   assignee: 'Bradford, Alex',    color: 'green' },
-    { label: 'High Tech - Southeast', assignee: 'Chelmow, Ben',   color: 'green' },
-    { label: 'High Tech - Mountain',  assignee: 'Ma, Jaclyn',     color: 'green' },
-    { label: "High Tech - West",   assignee: "O'Brien, Charlie", color: 'green' },
-  ];
-
-  function buildAmoXvertButtons() {
-    return AMO_XVERT_ROUTES.map((route, index) => `
-      <button class="sc-xvert-btn ${route.color} sc-amo-xvert-btn"
-        id="sc-amo-xvert-${index}"
-        data-label="${escAttr(route.label)}"
-        data-assignee="${escAttr(route.assignee)}"
-        title="Set Requested status and assign to ${escAttr(route.assignee)}">
-        ${escHtml(route.label)}
-      </button>`).join('');
-  }
-
   function buildPanelHTML() {
     return `
       <div id="sc-resize-handle" title="Drag to resize panel"></div>
@@ -3314,6 +4156,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           <button id="sc-feedback-btn" title="Open Slack to report a bug or request an enhancement">Bug / Idea</button>
           <button id="sc-settings-btn" title="Configure SCOUT settings">⚙</button>
           <button id="sc-skills-close" title="Close panel">✕</button>
+        </div>
+      </div>
+
+      <div id="sc-update-banner" class="sc-update-banner" hidden>
+        <div class="sc-update-banner-text"></div>
+        <div class="sc-update-banner-actions">
+          <button id="sc-update-install-btn" type="button">Update</button>
+          <button id="sc-update-copy-btn" type="button">Copy Link</button>
         </div>
       </div>
 
@@ -3350,6 +4200,29 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               Shows an <strong>Ask AI Agent</strong> prompt builder that opens ChatGPT with the staffing prompt.
             </div>
           </div>
+          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#222">
+              <input type="checkbox" id="sc-debug-mode-toggle" style="width:14px;height:14px">
+              <span>Enable Debug Mode</span>
+            </label>
+            <div style="font-size:10px;color:var(--sc-text-muted);margin-top:4px;margin-left:22px">
+              Shows History Debug and License Debug details for troubleshooting NetSuite parsing.
+            </div>
+          </div>
+          <div class="sc-field" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#222">
+              <input type="checkbox" id="sc-early-adopter-toggle" style="width:14px;height:14px">
+              <span>Check Testing Updates</span>
+            </label>
+            <div class="sc-field-hint" style="margin-left:22px">
+              Early-adopter mode checks the testing folder for SCOUT update banners. Tampermonkey native auto-update still follows the installed script URL.
+            </div>
+            <label class="sc-label" for="sc-testing-update-url-input" style="margin-top:8px">Testing Update URL</label>
+            <input type="url" id="sc-testing-update-url-input"
+              autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" inputmode="url"
+              value="${escAttr(getTestingUpdateUrl())}"
+              placeholder="${escAttr(SCOUT_TESTING_UPDATE_CHECK_URL)}">
+          </div>
           <div class="sc-field" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
             <label class="sc-label">Slack Feedback Webhook URL</label>
             <input type="url" id="sc-feedback-webhook-input"
@@ -3375,6 +4248,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               placeholder="One per line: manager roster ID, employee ID, or manager name">${escHtml(getExtraTeamManagersText())}</textarea>
             <div class="sc-field-hint">
               Adds each manager's active NOAM M5M1 team to <strong>My Team</strong>. Saved locally and preserved through upgrades.
+            </div>
+          </div>
+          <div class="sc-field" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
+            <label class="sc-label">Additional AMO Deliverables</label>
+            <textarea id="sc-extra-amo-deliverables-input" class="sc-settings-textarea"
+              placeholder="One per line: deliverable name">${escHtml(getExtraAmoDeliverablesText())}</textarea>
+            <div class="sc-field-hint">
+              Optional no-template deliverables to show if NetSuite does not expose the full AMO deliverable list.
             </div>
           </div>
           <div style="margin-top:8px">
@@ -3455,24 +4336,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
              DIRECT STAFFING PANE
         ═══════════════════════════════════════════════════════ -->
         <div id="sc-direct-pane" class="sc-tab-pane active">
-
-          <!-- Cross-Vertical Routing (Direct tab only) -->
-          <div class="sc-card sc-collapsible-card collapsed" id="sc-direct-xvert-card">
-            <div class="sc-card-title" id="sc-direct-xvert-toggle" role="button" tabindex="0" aria-expanded="false">
-              <span>Cross-Vertical Routing</span>
-              <span class="sc-collapsible-chevron">▼</span>
-            </div>
-            <div class="sc-collapsible-body">
-              <div class="sc-xvert-grid">
-                <button class="sc-xvert-btn orange" id="sc-xvert-prod-west">PR West</button>
-                <button class="sc-xvert-btn orange" id="sc-xvert-prod-east">PR East</button>
-                <button class="sc-xvert-btn blue"   id="sc-xvert-gb-west">GB West</button>
-                <button class="sc-xvert-btn blue"   id="sc-xvert-gb-east">GB East</button>
-                <button class="sc-xvert-btn green"  id="sc-xvert-ht">High Tech</button>
-                <button class="sc-xvert-btn teal"   id="sc-xvert-epm">EPM</button>
-              </div>
-            </div>
-          </div>
 
           <!-- Status Actions -->
           <div class="sc-card sc-collapsible-card collapsed" id="sc-direct-status-card">
@@ -3661,19 +4524,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         ═══════════════════════════════════════════════════════ -->
         <div id="sc-amo-pane" class="sc-tab-pane">
 
-          <!-- Cross-Vertical Routing (AMO tab) -->
-          <div class="sc-card sc-collapsible-card collapsed" id="sc-amo-xvert-card">
-            <div class="sc-card-title" id="sc-amo-xvert-toggle" role="button" tabindex="0" aria-expanded="false">
-              <span>Cross-Vertical Routing</span>
-              <span class="sc-collapsible-chevron">▼</span>
-            </div>
-            <div class="sc-collapsible-body">
-              <div class="sc-xvert-grid sc-amo-xvert-grid">
-                ${buildAmoXvertButtons()}
-              </div>
-            </div>
-          </div>
-
           <!-- Status Actions (duplicated on AMO tab) -->
           <div class="sc-card sc-collapsible-card collapsed" id="sc-amo-status-card">
             <div class="sc-card-title" id="sc-amo-status-toggle" role="button" tabindex="0" aria-expanded="false">
@@ -3695,17 +4545,9 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               <label class="sc-label">Deliverable Type</label>
               <select id="sc-amo-deliverable">
                 <option value="">— Select deliverable (optional) —</option>
-                <option>Upsell</option>
-                <option>Platform</option>
-                <option>Business Review</option>
-                <option>ACS/LCS</option>
-                <option>Customer Satisfaction</option>
-                <option>Net New</option>
-                <option>Revenue Save/Renewal</option>
-                <option>Whitespacing</option>
-                <option>Professional Services</option>
+                ${buildAmoDeliverableOptionMarkup()}
               </select>
-              <div class="sc-field-hint">When selected, the deliverable-specific instructions are prepended to Request Details on staffing.</div>
+              <div class="sc-field-hint">Template-backed deliverables prepend instructions to Request Details; other deliverables only update the SCR field.</div>
             </div>
 
           </div>
@@ -3934,6 +4776,18 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
   function getRequestDetails() { return nlapiGetFieldValue('custrecord_screq_details') || ''; }
   function getHashtags()       { return nlapiGetFieldValue('custrecord_screq_hashtags') || ''; }
+  function hasHashtag(current, tag) {
+    const escaped = String(tag || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(^|[\\s,;])${escaped}(?=$|[\\s,;])`, 'i').test(String(current || ''));
+  }
+  function addHashtagOnce(tag) {
+    const current = getHashtags();
+    if (hasHashtag(current, tag)) return;
+    nlapiSetFieldValue('custrecord_screq_hashtags', current ? `${tag},${current}` : tag, true);
+  }
+  function setScoutHashtag() {
+    addHashtagOnce('#scout');
+  }
 
   /** Read SC Request date-needed field and return YYYY-MM-DD. */
   function getReqDateYMD() {
@@ -3947,14 +4801,80 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     return raw;
   }
 
-  function setStatus(id)   { nlapiSetFieldValue('custrecord_screq_status',        id,  true); }
-  function setAssignee(id) { nlapiSetFieldValue('custrecord_screq_assignee',       id,  true); }
+  function triggerNetSuiteFieldEvents(fieldId) {
+    try {
+      findFieldControls(fieldId).forEach(el => dispatchFieldEvents(el));
+    } catch (e) { /* best effort */ }
+  }
+
+  function setFieldValueWithSyncSourcing(fieldId, value) {
+    let wrote = false;
+    try {
+      nlapiSetFieldValue(fieldId, value, true, true);
+      wrote = true;
+    } catch (e) {
+      try {
+        nlapiSetFieldValue(fieldId, value, true);
+        wrote = true;
+      } catch (inner) { /* try current-record fallback below */ }
+    }
+
+    try {
+      const rec = unsafeWindow.nlapiGetCurrentRecord && unsafeWindow.nlapiGetCurrentRecord();
+      if (rec && typeof rec.setValue === 'function') {
+        rec.setValue({
+          fieldId,
+          value,
+          ignoreFieldChange: false,
+          forceSyncSourcing: true,
+        });
+        wrote = true;
+      } else if (rec && typeof rec.setFieldValue === 'function') {
+        rec.setFieldValue(fieldId, value);
+        wrote = true;
+      }
+    } catch (e) { /* current-record fallback may not be available */ }
+
+    triggerNetSuiteFieldEvents(fieldId);
+    return wrote;
+  }
+
+  function getRosterEmployeeId(rosterId) {
+    const key = String(rosterId || '').trim();
+    if (!key) return '';
+    if (Object.prototype.hasOwnProperty.call(ASSIGNEE_EMPLOYEE_CACHE, key)) {
+      return ASSIGNEE_EMPLOYEE_CACHE[key];
+    }
+    let employeeId = '';
+    try {
+      employeeId = String(nlapiLookupField('customrecord_emproster', key, 'custrecord_emproster_emp') || '').trim();
+    } catch (e) {
+      console.warn('[Staffing Helper] Could not resolve assignee employee for roster:', key, e.message || e);
+    }
+    ASSIGNEE_EMPLOYEE_CACHE[key] = employeeId;
+    return employeeId;
+  }
+
+  function setStatus(id)   { setFieldValueWithSyncSourcing('custrecord_screq_status', id); }
+  function setAssignee(id) {
+    setFieldValueWithSyncSourcing(SCR_FIELD_ASSIGNEE, id);
+    const employeeId = getRosterEmployeeId(id);
+    if (employeeId) setFieldValueWithSyncSourcing(SCR_FIELD_ASSIGNEE_EMPLOYEE, employeeId);
+    setTimeout(() => triggerNetSuiteFieldEvents(SCR_FIELD_ASSIGNEE), 250);
+  }
   function setLeadAssigned(assignAsLead) {
     nlapiSetFieldValue('custrecord_screq_assigned_lead', assignAsLead ? 'T' : 'F', true);
   }
   function setLeadTrue()   { setLeadAssigned(true); }
   function prependRequestDetails(text) {
-    nlapiSetFieldValue('custrecord_screq_details', text + getRequestDetails(), true);
+    const prefix = String(text || '');
+    const existing = getRequestDetails();
+    const remaining = Math.max(0, SCR_REQUEST_DETAILS_MAX_CHARS - prefix.length);
+    let nextValue = prefix + String(existing || '').slice(0, remaining);
+    if (nextValue.length > SCR_REQUEST_DETAILS_MAX_CHARS) {
+      nextValue = nextValue.slice(0, SCR_REQUEST_DETAILS_MAX_CHARS);
+    }
+    nlapiSetFieldValue('custrecord_screq_details', nextValue, true);
   }
   function getInitials(name) {
     return String(name || '')
@@ -3980,25 +4900,37 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       `${todayFullString()} - Staffed Deal [${staffedBy}]`,
     ].join('\n');
   }
+  function buildEngagementNotesTemplate(empName) {
+    const initials = getInitials(empName);
+    return [
+      todayFullString(),
+      'Last Steps:',
+      'Next Steps:',
+      'Red Flags: ',
+      'Value/Impact:',
+      `[${initials}]`,
+    ].join('\n');
+  }
   function setDirectManagerNotes(empName) {
     appendScManagerNotes(buildDirectManagerNotesTemplate(empName), /Staffed Deal\s*\[/i);
   }
-  function setXvert() {
-    const tag = '#xvr,', current = getHashtags();
-    if (!/(#xvr[|,]?)/i.test(current))
-      nlapiSetFieldValue('custrecord_screq_hashtags', tag + current, true);
-    nlapiSetFieldValue('custrecord_screq_cross_vertical', 'T', true);
+  function buildAdditionalRequestDetailsBlock(details) {
+    const cleaned = String(details || '').trim();
+    return cleaned ? `Additional staffing details:\n${cleaned}\n` : '';
   }
 
   /** Wrap a staffing note with the standard ADDED/end markers (item 3). */
-  function wrapStaffingNote(note, empName) {
+  function wrapStaffingNote(requestDetailsScript, empName, requestDetailsNote) {
     const d = new Date();
     const mm = String(d.getMonth() + 1).padStart(2, '0');
     const dd = String(d.getDate()).padStart(2, '0');
     const yy = String(d.getFullYear()).slice(2);
     const header = `-- ADDED by ${empName} on ${mm}/${dd}/${yy} --\n`;
     const footer = `----- end of SC assignment ----\n\n`;
-    return header + note + footer;
+    const baseNote = String(requestDetailsScript || '');
+    const additionalDetails = buildAdditionalRequestDetailsBlock(requestDetailsNote);
+    const separator = additionalDetails && baseNote && !/\n$/.test(baseNote) ? '\n' : '';
+    return header + baseNote + separator + additionalDetails + footer;
   }
 
   function getCurrentScrId() {
@@ -4050,7 +4982,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       scrId: getCurrentScrId(),
       savedAt: Date.now(),
     }));
-    showToast('Opening edit mode to apply and save staffing changes…', 'info', 5000);
+    showToast('Opening edit mode to apply and save SCOUT changes…', 'info', 5000);
     goToEditMode();
   }
 
@@ -4528,33 +5460,60 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     }
   }
 
-  function applyDirectStaffing(scId, scName, empName, hasLeadOnOpp, notes, productIds, assignAsLead) {
+  function buildDefaultStaffingRequestNote(scName) {
+    return `${scName} has been staffed, please schedule upcoming strategy meeting with the SC.\n`;
+  }
+
+  function applyDirectStaffing(scId, scName, empName, hasLeadOnOpp, notes, productIds, assignAsLead, requestDetailsNote) {
     assignAsLead = assignAsLead !== false;
-    const innerNote = `${scName} has been staffed, please schedule upcoming strategy meeting with the SC.\n`;
-    const note = wrapStaffingNote(innerNote, empName);
+    const requestDetailsBaseScript = buildDefaultStaffingRequestNote(scName);
+    const requestDetailsScript = wrapStaffingNote(requestDetailsBaseScript, empName, requestDetailsNote);
     setStatus(2);
     setAssignee(scId);
     setLeadAssigned(assignAsLead);
-    prependRequestDetails(note);
+    setScoutHashtag();
+    prependRequestDetails(requestDetailsScript);
     setDirectManagerNotes(empName);
     setStaffingPopupNotes(notes);
+    appendEngagementNotesTemplate(empName);
     syncProductIdsToForm(productIds, true, { submitRecord: true });
   }
 
-  function applyAmoStaffing(scId, scName, empName, hasLeadOnOpp, notes, deliverableOverride, productIds, assignAsLead) {
+  function applyAmoStaffing(scId, scName, empName, hasLeadOnOpp, notes, deliverableOverride, productIds, assignAsLead, requestDetailsNote) {
     assignAsLead = assignAsLead !== false;
-    const deliverable = deliverableOverride || getSelectedAmoDeliverable();
-    const tmplFn = deliverable ? AMO_DELIVERABLE_TEMPLATES[deliverable] : null;
-    const deliverableBlock = tmplFn ? tmplFn(scName, empName) : '';
-    const note = wrapStaffingNote(deliverableBlock, empName);
+    const hasDeliverableOverride = arguments.length >= 6;
+    const deliverable = hasDeliverableOverride
+      ? normalizeAmoDeliverableName(deliverableOverride)
+      : getSelectedAmoDeliverable();
+    const tmplFn = deliverable && isValidAmoDeliverableName(deliverable) ? AMO_DELIVERABLE_TEMPLATES[deliverable] : null;
+    const requestDetailsBaseScript = tmplFn ? tmplFn(scName, empName) : buildDefaultStaffingRequestNote(scName);
     setStatus(2);
     setAssignee(scId);
     setLeadAssigned(assignAsLead);
-    prependRequestDetails(note);
+    setScoutHashtag();
+    prependRequestDetails(wrapStaffingNote(requestDetailsBaseScript, empName, requestDetailsNote));
     setStaffingPopupNotes(notes);
-    if (deliverable) syncDeliverableToForm(deliverable);
+    appendEngagementNotesTemplate(empName);
+    if (deliverable && isValidAmoDeliverableName(deliverable)) syncDeliverableToForm(deliverable);
     syncProductIdsToForm(productIds, true, { submitRecord: true });
     return deliverable;
+  }
+
+  function applyOnHold(meId, notes) {
+    setStatus(3);
+    setAssignee(meId);
+    setScoutHashtag();
+    setStaffingPopupNotes(notes);
+  }
+
+  function applyCancelRequest(empName, notes) {
+    const note = `SC Request cancelled by SC Manager (${empName}). \nPlease create a new request if needed.\n---\n\n`;
+    prependRequestDetails(note);
+    setStatus(4);
+    setScoutHashtag();
+    setStaffingPopupNotes(notes);
+    try { nlapiSetFieldValue('custrecord_screq_engmnt_status', 5, true); } catch (_) {}
+    nlapiSetFieldValue('custrecord_screq_assigned_lead', 'F', true);
   }
 
   function resumePendingStaffAction() {
@@ -4570,20 +5529,37 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       sessionStorage.removeItem(STAFFING_PENDING_KEY);
       return;
     }
+    if (pending.type && !['direct', 'amo', 'onhold', 'cancel'].includes(pending.type)) {
+      sessionStorage.removeItem(STAFFING_PENDING_KEY);
+      showToast('This pending SCOUT action is no longer available.', 'info', 6000);
+      return;
+    }
     if (!isScrEditMode()) return;
 
     try {
       if (pending.type === 'amo') {
-        applyAmoStaffing(pending.scId, pending.scName, pending.empName, pending.hasLeadOnOpp, pending.notes, pending.deliverable, pending.productIds, pending.assignAsLead !== false);
+        applyAmoStaffing(pending.scId, pending.scName, pending.empName, pending.hasLeadOnOpp, pending.notes, pending.deliverable, pending.productIds, pending.assignAsLead !== false, pending.requestDetailsNote);
+      } else if (pending.type === 'onhold') {
+        applyOnHold(pending.meId, pending.notes);
+      } else if (pending.type === 'cancel') {
+        applyCancelRequest(pending.empName, pending.notes);
       } else {
-        applyDirectStaffing(pending.scId, pending.scName, pending.empName, pending.hasLeadOnOpp, pending.notes, pending.productIds, pending.assignAsLead !== false);
+        applyDirectStaffing(pending.scId, pending.scName, pending.empName, pending.hasLeadOnOpp, pending.notes, pending.productIds, pending.assignAsLead !== false, pending.requestDetailsNote);
       }
       sessionStorage.removeItem(STAFFING_PENDING_KEY);
-      showToast(`✔ Applied staffing changes for ${pending.scName}; saving record…`, 'success', 5000);
-      setTimeout(saveNetSuiteForm, 400);
+      const actionLabel = pending.type === 'onhold'
+        ? 'on hold changes'
+        : pending.type === 'cancel'
+          ? 'cancellation changes'
+          : `staffing changes for ${pending.scName}`;
+      showToast(`✔ Applied ${actionLabel}; saving record…`, 'success', 5000);
+      setTimeout(function () {
+        triggerNetSuiteFieldEvents(SCR_FIELD_ASSIGNEE);
+        saveNetSuiteForm();
+      }, PENDING_STAFFING_SAVE_DELAY_MS);
     } catch (e) {
       console.error('[Staffing Helper] Pending staffing action failed:', e);
-      showToast('Could not apply pending staffing action. Check console for details.', 'error', 8000);
+      showToast('Could not apply pending SCOUT action. Check console for details.', 'error', 8000);
     }
   }
 
@@ -4592,23 +5568,49 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
    * 7 (no confirm), 8 (notes popup).
    */
   function staffSC(scId, scName, empName, hasLeadOnOpp) {
-    showNotesDialog('Staff ' + scName, function (notes, assignAsLead) {
+    showNotesDialog('Staff ' + scName, function (dialog) {
+      const notes = dialog.staffingNotes;
+      const assignAsLead = dialog.assignAsLead;
+      const requestDetailsNote = dialog.requestDetailsNote;
       const assignmentLabel = assignAsLead ? 'Lead SC' : 'Secondary SC';
       if (!isScrEditMode()) {
-        storePendingStaffAction({ type: 'direct', scId, scName, empName, hasLeadOnOpp, notes, assignAsLead, productIds: getProductsForStaffing('sc-products', 'sc-product-skills') });
+        storePendingStaffAction({ type: 'direct', scId, scName, empName, hasLeadOnOpp, notes, requestDetailsNote, assignAsLead, productIds: getProductsForStaffing('sc-products', 'sc-product-skills') });
         return;
       }
-      applyDirectStaffing(scId, scName, empName, hasLeadOnOpp, notes, getProductsForStaffing('sc-products', 'sc-product-skills'), assignAsLead);
+      applyDirectStaffing(scId, scName, empName, hasLeadOnOpp, notes, getProductsForStaffing('sc-products', 'sc-product-skills'), assignAsLead, requestDetailsNote);
       showToast(`✔ Staffed: ${scName} as ${assignmentLabel} — save the record to confirm.`, 'success', 6000);
-    }, { showLeadToggle: true });
+    }, { showLeadToggle: true, showRequestDetailsBox: true });
   }
 
-  function getSelectedAmoDeliverable() {
+  function getSelectedAmoDeliverableFromPicker() {
     const picker = document.getElementById('sc-amo-deliverable');
-    if (picker && picker.value) return picker.value;
+    const selected = normalizeAmoDeliverableName(picker && picker.value);
+    return isValidAmoDeliverableName(selected) ? selected : '';
+  }
+
+  function getCurrentAmoDeliverableFromForm() {
+    const rawValue = String(readFormFieldValue(SCR_FIELD_DELIVERABLE) || '').trim();
+    if (!rawValue) return '';
 
     const formValue = readFormField(SCR_FIELD_DELIVERABLE);
-    return AMO_DELIVERABLE_TEMPLATES[formValue] ? formValue : '';
+    const normalized = normalizeAmoDeliverableName(formValue);
+    if (isValidAmoDeliverableName(normalized)) return normalized;
+
+    const rawNormalized = normalizeAmoDeliverableName(rawValue);
+    return isValidAmoDeliverableName(rawNormalized) ? rawNormalized : '';
+  }
+
+  function getSelectedAmoDeliverable(options) {
+    const opts = options || {};
+    const pickerValue = getSelectedAmoDeliverableFromPicker();
+    if (pickerValue) return pickerValue;
+    if (opts.requirePickerSelection) return '';
+    return getCurrentAmoDeliverableFromForm();
+  }
+
+  function isCurrentScrAmo() {
+    const reqType = `${readFormField(SCR_FIELD_TYPE)} ${readFormField('custrecord_screq_request_type')}`;
+    return /amo/i.test(reqType);
   }
 
   /**
@@ -4616,39 +5618,36 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
    * 5 (deliverable field sync), 7 (no confirm), 8 (notes popup).
    */
   function staffSCWithDeliverable(scId, scName, empName, hasLeadOnOpp) {
-    showNotesDialog('Staff ' + scName + ' (AMO)', function (notes, assignAsLead) {
-      const deliverable = getSelectedAmoDeliverable();
+    showNotesDialog('Staff ' + scName + ' (AMO)', function (dialog) {
+      const notes = dialog.staffingNotes;
+      const assignAsLead = dialog.assignAsLead;
+      const requestDetailsNote = dialog.requestDetailsNote;
+      const deliverable = getSelectedAmoDeliverable({ requirePickerSelection: true });
       const assignmentLabel = assignAsLead ? 'Lead SC' : 'Secondary SC';
-      if (!isScrEditMode()) {
-        storePendingStaffAction({ type: 'amo', scId, scName, empName, hasLeadOnOpp, notes, deliverable, assignAsLead, productIds: getProductsForStaffing('sc-amo-products', 'sc-amo-product-skills') });
+      const continueStaffing = function () {
+        if (!isScrEditMode()) {
+          storePendingStaffAction({ type: 'amo', scId, scName, empName, hasLeadOnOpp, notes, requestDetailsNote, deliverable, assignAsLead, productIds: getProductsForStaffing('sc-amo-products', 'sc-amo-product-skills') });
+          return;
+        }
+        applyAmoStaffing(scId, scName, empName, hasLeadOnOpp, notes, deliverable, getProductsForStaffing('sc-amo-products', 'sc-amo-product-skills'), assignAsLead, requestDetailsNote);
+        const label = deliverable ? ` (${deliverable})` : '';
+        showToast(`✔ Staffed: ${scName}${label} as ${assignmentLabel} — save the record to confirm.`, 'success', 6000);
+      };
+      if (!deliverable) {
+        showAmoBlankDeliverableWarning(continueStaffing);
         return;
       }
-      applyAmoStaffing(scId, scName, empName, hasLeadOnOpp, notes, deliverable, getProductsForStaffing('sc-amo-products', 'sc-amo-product-skills'), assignAsLead);
-      const label = deliverable ? ` (${deliverable})` : '';
-      showToast(`✔ Staffed: ${scName}${label} as ${assignmentLabel} — save the record to confirm.`, 'success', 6000);
-    }, { showLeadToggle: true });
+      continueStaffing();
+    }, { showLeadToggle: true, showRequestDetailsBox: true });
   }
 
   function staffFromActiveTab(scId, scName, empName, hasLeadOnOpp) {
     const amoPane = document.getElementById('sc-amo-pane');
-    if (amoPane && amoPane.classList.contains('active')) {
+    if (isCurrentScrAmo() || (amoPane && amoPane.classList.contains('active'))) {
       staffSCWithDeliverable(scId, scName, empName, hasLeadOnOpp);
     } else {
       staffSC(scId, scName, empName, hasLeadOnOpp);
     }
-  }
-
-  function routeXvert(assigneeId, label) {
-    if (!assigneeId) {
-      showToast(`Route target missing for ${label}. Add the internal ID before using this route.`, 'error', 7000);
-      console.warn('[Staffing Helper] Cross-vertical route target missing:', label);
-      return;
-    }
-    showNotesDialog('Route to ' + label, function (notes) {
-      setStatus(1); setAssignee(assigneeId); setXvert();
-      setStaffingPopupNotes(notes);
-      showToast(`✔ Routed to ${label} — save the record to confirm.`, 'info', 5000);
-    });
   }
 
   function normalizeRouteName(name) {
@@ -4672,79 +5671,34 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     return [...new Set(variants.map(normalizeRouteName).filter(Boolean))];
   }
 
-  function routeSearchTerms(name) {
-    const raw = String(name || '').trim();
-    const last = raw.includes(',') ? raw.split(',')[0].trim() : raw.split(/\s+/).slice(-1)[0];
-    const terms = [last];
-    const simplified = last.replace(/[^A-Za-z0-9]/g, '');
-    if (simplified && simplified !== last) terms.push(simplified);
-    const apostropheTail = last.split("'").slice(-1)[0];
-    if (apostropheTail && apostropheTail !== last) terms.push(apostropheTail);
-    return [...new Set(terms.filter(Boolean))];
-  }
-
-  function findRosterAssigneeIdByName(targetName) {
-    const cacheKey = normalizeRouteName(targetName);
-    if (_routeAssigneeCache.has(cacheKey)) return _routeAssigneeCache.get(cacheKey);
-
-    const variants = routeNameVariants(targetName);
-    for (const term of routeSearchTerms(targetName)) {
-      try {
-        const rows = nlapiSearchRecord('customrecord_emproster', null, [
-          new nlobjSearchFilter('name', null, 'contains', term),
-          new nlobjSearchFilter('custrecord_emproster_rosterstatus', null, 'is', 1),
-          new nlobjSearchFilter('custrecord_emproster_eminactive', null, 'is', 'F'),
-          new nlobjSearchFilter('custrecord_emproster_ocostcenter', null, 'is', ROSTER_COST_CENTER_ID),
-          new nlobjSearchFilter('custrecord_emproster_salesregion', null, 'is', ROSTER_SALES_REGION_ID),
-        ], [
-          new nlobjSearchColumn('internalid'),
-          new nlobjSearchColumn('name'),
-        ]) || [];
-
-        const exact = rows.find(r => {
-          const rowName = normalizeRouteName(r.getValue('name'));
-          if (!rowName) return false;
-          return variants.some(v => rowName === v || rowName.includes(v) || v.includes(rowName));
-        });
-        const match = exact || (rows.length === 1 ? rows[0] : null);
-        if (match) {
-          const id = match.getValue('internalid');
-          _routeAssigneeCache.set(cacheKey, id);
-          return id;
-        }
-      } catch (e) {
-        console.warn('[Staffing Helper] AMO route assignee lookup failed:', targetName, e.message || e);
-        break;
-      }
-    }
-
-    _routeAssigneeCache.set(cacheKey, null);
-    return null;
-  }
-
-  function routeXvertByName(targetName, label) {
-    const assigneeId = findRosterAssigneeIdByName(targetName);
-    if (!assigneeId) {
-      showToast(`Could not find route target ${targetName}.`, 'error', 7000);
-      console.warn('[Staffing Helper] AMO route target not found:', { label, targetName });
+  function setOnHold(meId) {
+    if (!meId) {
+      showToast('SCOUT could not resolve your roster record, so On Hold self-assignment is unavailable for this role.', 'error', 8000);
       return;
     }
-    routeXvert(assigneeId, `${label} (${targetName})`);
-  }
-
-  function setOnHold(meId) {
     if (!confirm('Place this request On Hold and assign it to yourself?')) return;
-    setStatus(3); setAssignee(meId);
-    showToast('✔ Status set to On Hold — save the record to confirm.', 'info');
+    showNotesDialog('Place Request On Hold', function (dialog) {
+      const notes = dialog.staffingNotes;
+      if (!isScrEditMode()) {
+        storePendingStaffAction({ type: 'onhold', meId, notes });
+        return;
+      }
+      applyOnHold(meId, notes);
+      showToast('✔ Status set to On Hold — save the record to confirm.', 'info');
+    });
   }
 
   function cancelRequest(empName) {
     if (!confirm('Cancel this SC Request?\n\nThis will:\n• Set both statuses to Cancelled\n• Set Lead SC to false\n• Prepend a cancellation note to Request Details')) return;
-    const note = `SC Request cancelled by SC Manager (${empName}). \nPlease create a new request if needed.\n---\n\n`;
-    prependRequestDetails(note); setStatus(4);
-    try { nlapiSetFieldValue('custrecord_screq_engmnt_status', 5, true); } catch (_) {}
-    nlapiSetFieldValue('custrecord_screq_assigned_lead', 'F', true);
-    showToast('✔ Request cancelled — save the record to confirm.', 'error', 6000);
+    showNotesDialog('Cancel SC Request', function (dialog) {
+      const notes = dialog.staffingNotes;
+      if (!isScrEditMode()) {
+        storePendingStaffAction({ type: 'cancel', empName, notes });
+        return;
+      }
+      applyCancelRequest(empName, notes);
+      showToast('✔ Request cancelled — save the record to confirm.', 'error', 6000);
+    });
   }
 
   /* ────────────────────────────────────────────────────────────────
@@ -4845,6 +5799,187 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     setTimeout(() => link.remove(), 1000);
   }
 
+  function requestText(url) {
+    return new Promise((resolve, reject) => {
+      const requestUrl = `${url}${url.includes('?') ? '&' : '?'}_scout=${Date.now()}`;
+      if (typeof GM_xmlhttpRequest !== 'undefined') {
+        GM_xmlhttpRequest({
+          method: 'GET',
+          url: requestUrl,
+          headers: { 'Cache-Control': 'no-cache' },
+          onload: res => {
+            if (res.status >= 200 && res.status < 300) resolve(res.responseText || '');
+            else reject(new Error(`Request returned ${res.status}`));
+          },
+          onerror: () => reject(new Error('Request failed')),
+          ontimeout: () => reject(new Error('Request timed out')),
+          timeout: 10000,
+        });
+        return;
+      }
+      fetch(requestUrl, { cache: 'no-store' })
+        .then(res => {
+          if (!res.ok) throw new Error(`Request returned ${res.status}`);
+          return res.text();
+        })
+        .then(resolve)
+        .catch(reject);
+    });
+  }
+
+  function extractUserscriptMetaValue(text, key) {
+    const re = new RegExp(`^\\s*//\\s*@${key}\\s+(.+?)\\s*$`, 'mi');
+    const match = String(text || '').match(re);
+    return match ? match[1].trim() : '';
+  }
+
+  function tokenizeScoutVersion(version) {
+    const normalized = String(version || '')
+      .trim()
+      .replace(/^[bv](?=\d)/i, '');
+    const tokens = (normalized.match(/\d+|[a-z]+/gi) || []).map(token => {
+      const isNumber = /^\d+$/.test(token);
+      return isNumber ? { type: 'number', value: Number(token) } : { type: 'text', value: token.toLowerCase() };
+    });
+    while (tokens.length && tokens[tokens.length - 1].type === 'number' && tokens[tokens.length - 1].value === 0) {
+      tokens.pop();
+    }
+    return tokens;
+  }
+
+  function compareScoutVersions(a, b) {
+    const aa = tokenizeScoutVersion(a);
+    const bb = tokenizeScoutVersion(b);
+    const len = Math.max(aa.length, bb.length);
+    for (let i = 0; i < len; i++) {
+      const av = aa[i] || { type: 'number', value: 0 };
+      const bv = bb[i] || { type: 'number', value: 0 };
+      if (av.type === bv.type) {
+        if (av.value > bv.value) return 1;
+        if (av.value < bv.value) return -1;
+        continue;
+      }
+      return av.type === 'number' ? 1 : -1;
+    }
+    return 0;
+  }
+
+  function readCachedScoutUpdate() {
+    try {
+      const cached = JSON.parse(localStorage.getItem(SCOUT_UPDATE_CACHE_KEY) || 'null');
+      if (!cached || !cached.version) return null;
+      return cached;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function writeCachedScoutUpdate(updateInfo) {
+    try {
+      localStorage.setItem(SCOUT_UPDATE_CACHE_KEY, JSON.stringify(updateInfo));
+    } catch (e) { /* storage can fail in restricted browser contexts */ }
+  }
+
+  function getScoutUpdateChannel() {
+    if (getEarlyAdopterUpdatesEnabled()) {
+      const configuredTestingUrl = String(getLocalConfig().testingUpdateUrl || '').trim();
+      const testingUrl = configuredTestingUrl || SCOUT_TESTING_UPDATE_CHECK_URL;
+      return {
+        key: 'testing',
+        label: 'Testing',
+        checkUrl: testingUrl,
+        installUrl: configuredTestingUrl || SCOUT_TESTING_INSTALL_URL,
+      };
+    }
+    return {
+      key: 'stable',
+      label: 'Stable',
+      checkUrl: SCOUT_UPDATE_CHECK_URL,
+      installUrl: SCOUT_INSTALL_URL,
+    };
+  }
+
+  function renderScoutUpdateBanner(updateInfo) {
+    const banner = document.getElementById('sc-update-banner');
+    const toggle = document.getElementById('sc-skills-toggle');
+    if (!banner) return;
+    const remoteVersion = updateInfo && updateInfo.version;
+    const hasUpdate = remoteVersion && compareScoutVersions(remoteVersion, SCRIPT_VERSION) > 0;
+    banner.hidden = !hasUpdate;
+    banner.classList.toggle('show', Boolean(hasUpdate));
+    if (toggle) {
+      toggle.classList.toggle('sc-update-available', Boolean(hasUpdate));
+      toggle.title = hasUpdate
+        ? `SCOUT update available: ${SCRIPT_VERSION} -> ${remoteVersion}`
+        : 'SCOUT - SC Operations Utility Tool';
+    }
+    if (!hasUpdate) return;
+
+    const channelLabel = updateInfo.channelLabel || 'Stable';
+    const installUrl = updateInfo.downloadUrl || updateInfo.updateUrl || SCOUT_INSTALL_URL;
+    banner.dataset.installUrl = installUrl;
+    const text = banner.querySelector('.sc-update-banner-text');
+    if (text) {
+      const label = channelLabel === 'Testing' ? 'SCOUT testing update available' : 'SCOUT update available';
+      text.innerHTML = `<strong>${escHtml(label)}:</strong> ${escHtml(SCRIPT_VERSION)} -> ${escHtml(remoteVersion)}`;
+    }
+  }
+
+  async function checkScoutUpdate(force) {
+    const channel = getScoutUpdateChannel();
+    let cached = readCachedScoutUpdate();
+    if (cached && (cached.channelKey !== channel.key || cached.checkUrl !== channel.checkUrl)) {
+      cached = null;
+    }
+    const now = Date.now();
+    if (!force && cached && now - Number(cached.checkedAt || 0) < SCOUT_UPDATE_CHECK_INTERVAL_MS) {
+      renderScoutUpdateBanner(cached);
+      return cached;
+    }
+
+    try {
+      const text = await requestText(channel.checkUrl);
+      const version = extractUserscriptMetaValue(text, 'version');
+      if (!version) throw new Error('Remote userscript version not found');
+      const updateInfo = {
+        version,
+        updateUrl: extractUserscriptMetaValue(text, 'updateURL') || channel.checkUrl,
+        downloadUrl: extractUserscriptMetaValue(text, 'downloadURL') || channel.installUrl,
+        checkedAt: now,
+        channelKey: channel.key,
+        channelLabel: channel.label,
+        checkUrl: channel.checkUrl,
+      };
+      writeCachedScoutUpdate(updateInfo);
+      renderScoutUpdateBanner(updateInfo);
+      return updateInfo;
+    } catch (e) {
+      console.warn('[SCOUT] Update check failed:', e.message || e);
+      if (cached) renderScoutUpdateBanner(cached);
+      return null;
+    }
+  }
+
+  function wireScoutUpdateBanner() {
+    const banner = document.getElementById('sc-update-banner');
+    const installBtn = document.getElementById('sc-update-install-btn');
+    const copyBtn = document.getElementById('sc-update-copy-btn');
+    if (installBtn) {
+      installBtn.addEventListener('click', () => {
+        const url = (banner && banner.dataset.installUrl) || SCOUT_INSTALL_URL;
+        showToast('Opening SCOUT update...', 'info', 5000);
+        gmOpenUrl(url);
+      });
+    }
+    if (copyBtn) {
+      copyBtn.addEventListener('click', () => {
+        const url = (banner && banner.dataset.installUrl) || SCOUT_INSTALL_URL;
+        const copied = copyToClipboardQuietly(url);
+        showToast(copied ? 'SCOUT update link copied.' : 'Could not copy update link.', copied ? 'success' : 'error', 5000);
+      });
+    }
+  }
+
   function triggerSlackWorkflowWebhook(webhookUrl) {
     const payload = {
       source: 'SCOUT',
@@ -4916,7 +6051,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
   function activeStaffingModeLabel() {
     const amoPane = document.getElementById('sc-amo-pane');
-    return amoPane && amoPane.classList.contains('active') ? 'AMO' : 'Direct';
+    return isCurrentScrAmo() || (amoPane && amoPane.classList.contains('active')) ? 'AMO' : 'Direct';
   }
 
   function selectedOptionTexts(selectId) {
@@ -4980,24 +6115,88 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     return dates.join('\n');
   }
 
+  function readSearchValue(row, fieldId, join) {
+    if (!row) return '';
+    try {
+      const text = join ? row.getText(fieldId, join) : row.getText(fieldId);
+      if (text) return text;
+    } catch (e) { /* try value */ }
+    try {
+      const value = join ? row.getValue(fieldId, join) : row.getValue(fieldId);
+      return value || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function normalizeCustomerLocationParts(city, state, countryRaw) {
+    const countryText = String(countryRaw || '').trim();
+    const isCanada = /^ca$/i.test(countryText) || /^canada$/i.test(countryText);
+    const isUnitedStates = /^us$/i.test(countryText) || /^usa$/i.test(countryText) || /^united states$/i.test(countryText);
+    return {
+      city: String(city || '').trim(),
+      state: String(state || '').trim(),
+      country: isCanada ? 'Canada' : (isUnitedStates ? '' : countryText),
+    };
+  }
+
+  function readLocationFromSearchRow(row, join) {
+    return normalizeCustomerLocationParts(
+      readSearchValue(row, 'city', join),
+      readSearchValue(row, 'state', join),
+      readSearchValue(row, 'country', join));
+  }
+
+  function hasLocationParts(location) {
+    return Boolean(location && (location.city || location.state || location.country));
+  }
+
+  function lookupCompanyLocation(companyId, defaultBillingOnly) {
+    const attempts = defaultBillingOnly
+      ? [
+        { join: 'address', defaultField: 'isdefaultbilling' },
+        { join: 'address', defaultField: 'defaultbilling' },
+        { join: 'addressbook', defaultField: 'isdefaultbilling' },
+        { join: 'addressbook', defaultField: 'defaultbilling' },
+        { join: null, defaultField: 'isdefaultbilling' },
+        { join: null, defaultField: 'defaultbilling' },
+      ]
+      : [{ join: null, defaultField: '' }];
+
+    for (const attempt of attempts) {
+      try {
+        const filters = [new nlobjSearchFilter('internalid', null, 'is', companyId)];
+        if (attempt.defaultField) {
+          filters.push(new nlobjSearchFilter(attempt.defaultField, attempt.join, 'is', 'T'));
+        }
+        const rows = nlapiSearchRecord('entity', null, filters, [
+          new nlobjSearchColumn('city', attempt.join),
+          new nlobjSearchColumn('state', attempt.join),
+          new nlobjSearchColumn('country', attempt.join),
+        ]) || [];
+        if (!rows.length) continue;
+        const location = readLocationFromSearchRow(rows[0], attempt.join);
+        if (hasLocationParts(location)) return location;
+      } catch (e) { /* try the next default-billing field/join shape */ }
+    }
+    return { city: '', state: '', country: '' };
+  }
+
+  function getCompanyDefaultBillingLocation(companyId) {
+    return lookupCompanyLocation(companyId, true) || { city: '', state: '', country: '' };
+  }
+
+  function getCompanyLocationFallback(companyId) {
+    return lookupCompanyLocation(companyId, false) || { city: '', state: '', country: '' };
+  }
+
   function getGptCustomerLocationText() {
     try {
       const companyId = (nlapiGetFieldValue(SCR_FIELD_COMPANY) || '').trim();
       if (!companyId) return '';
-      const rows = nlapiSearchRecord('entity', null, [
-        new nlobjSearchFilter('internalid', null, 'is', companyId),
-      ], [
-        new nlobjSearchColumn('city'),
-        new nlobjSearchColumn('state'),
-        new nlobjSearchColumn('country'),
-      ]) || [];
-      if (!rows.length) return '';
-      const r = rows[0];
-      const city = r.getValue('city') || '';
-      const state = r.getText('state') || r.getValue('state') || '';
-      const countryRaw = r.getText('country') || r.getValue('country') || '';
-      const country = /^us|united states$/i.test(String(countryRaw).trim()) ? '' : countryRaw;
-      return [city, state, country].filter(Boolean).join(', ');
+      const location = getCompanyDefaultBillingLocation(companyId);
+      const finalLocation = hasLocationParts(location) ? location : getCompanyLocationFallback(companyId);
+      return [finalLocation.city, finalLocation.state, finalLocation.country].filter(Boolean).join(', ');
     } catch (e) {
       return '';
     }
@@ -5008,6 +6207,24 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       return (readFormTextField('custrecord_screq_details') || getRequestDetails() || '').trim();
     } catch (e) {
       return '';
+    }
+  }
+
+  function getGptScrUrl() {
+    try {
+      const url = new URL(window.location.href);
+      const scrId = url.searchParams.get('id') || getCurrentScrId();
+      const rectype = url.searchParams.get('rectype') || '2840';
+      if (scrId) {
+        const clean = new URL(`${url.origin}${url.pathname}`);
+        clean.searchParams.set('rectype', rectype);
+        clean.searchParams.set('id', scrId);
+        return clean.toString();
+      }
+      url.searchParams.delete('e');
+      return url.toString();
+    } catch (e) {
+      return String(window.location.href || '');
     }
   }
 
@@ -5026,13 +6243,31 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     lines.push('8. Supporting SC Load context when relevant.');
     lines.push('9. Elimination logic.');
     lines.push('10. Data sources section.');
-    lines.push("11. A Slack link to message the SC's manager to gather more information on availability; if a Slack link cannot be generated, provide the manager email and state that the Slack link was unavailable.");
+    lines.push('11. Offer to create a Slack draft to the SC manager for availability confirmation.');
+    lines.push('- If user confirms and Slack resolution succeeds:');
+    lines.push('  - Create the draft and return the Slack draft/channel link.');
+    lines.push('- If Slack resolution fails:');
+    lines.push('  - Provide manager email and state Slack resolution was unavailable.');
+    lines.push('- Do not send Slack messages autonomously.');
     lines.push('');
     lines.push('CALENDAR RULE (LOCKED)');
     lines.push('- Any request with date/time must check Outlook.');
     lines.push('- Separate calendar availability from SC Load.');
     lines.push('- Include: ✅ Email retrieved.');
     lines.push('- Include: ✅ Calendar data retrieved OR the calendar retrieval error.');
+    lines.push('');
+    lines.push('SLACK INTERACTION RULE (LOCKED)');
+    lines.push('- When manager outreach or staffing follow-up would be helpful, offer Slack draft creation as an optional next step.');
+    lines.push('- Do not autonomously send Slack messages.');
+    lines.push('- Slack drafts may be created after user confirmation.');
+    lines.push('- Preferred phrasing: "Would you like me to create a Slack draft to the manager with this staffing context?"');
+    lines.push('- If Slack is connected and the manager Slack ID can be resolved:');
+    lines.push('  - Create a Slack DM draft using the Slack connector.');
+    lines.push('  - Return the Slack draft/channel link.');
+    lines.push('- If Slack resolution fails:');
+    lines.push('  - Return the manager email and state that Slack resolution was unavailable.');
+    lines.push('- Never fabricate Slack links.');
+    lines.push('- If a draft already exists, notify the user instead of creating duplicates.');
     lines.push('');
     lines.push('DATA SOURCES (STRICT)');
     lines.push('- SC Load source of truth is SharePoint only:');
@@ -5073,6 +6308,10 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     lines.push('Please recommend Solution Consultants for this NetSuite SC Request using the source-of-truth rules above.');
     lines.push('');
     lines.push('Staffing mode: ' + (values.mode || 'Direct'));
+    if (values.scrUrl) {
+      lines.push('NetSuite SCR URL: ' + values.scrUrl);
+      lines.push('Use this NetSuite SCR URL in the Slack manager outreach message so the manager can open the request directly.');
+    }
     if (values.includeIndustry && values.industry) {
       lines.push('Industry / Sub-Industry: ' + values.industry);
     } else {
@@ -5105,7 +6344,13 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     return lines.join('\n');
   }
 
+  function isFirefoxBrowser() {
+    const ua = String(navigator.userAgent || '');
+    return /firefox|fxios/i.test(ua);
+  }
+
   function buildGptAssistUrl(prompt) {
+    if (isFirefoxBrowser()) return SCOUT_GPT_URL;
     try {
       const url = new URL(SCOUT_GPT_URL);
       if (prompt) url.searchParams.set('q', prompt);
@@ -5126,8 +6371,9 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       location: getGptCustomerLocationText(),
       dates: getGptDateText(),
       details: getGptRequestDetailsText(),
+      scrUrl: getGptScrUrl(),
     };
-    const initialValues = GPT_ASSIST_DRAFT ? { ...defaultValues, ...GPT_ASSIST_DRAFT, mode } : defaultValues;
+    const initialValues = GPT_ASSIST_DRAFT ? { ...defaultValues, ...GPT_ASSIST_DRAFT, mode, scrUrl: defaultValues.scrUrl } : defaultValues;
 
     const overlay = document.createElement('div');
     overlay.className = 'sc-notes-overlay';
@@ -5193,6 +6439,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         skills: controls.skills.value.trim(),
         dates: controls.dates.value.trim(),
         details: controls.details.value.trim(),
+        scrUrl: getGptScrUrl(),
       };
     }
     function saveDraft() {
@@ -5229,8 +6476,16 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     overlay.querySelector('#sc-gpt-open').addEventListener('click', function () {
       const prompt = controls.preview.value;
       const copied = copyPrompt(false);
-      showToast(copied ? 'AI prompt copied to clipboard. Opening GPT.' : 'Opening GPT. Copy the prompt manually if needed.', copied ? 'success' : 'info', 6500);
-      showPageToast(copied ? 'AI prompt copied to clipboard.' : 'Opening GPT. Copy the prompt manually if needed.', copied ? 'success' : 'info', 6500);
+      const firefoxMode = isFirefoxBrowser();
+      const successMsg = firefoxMode
+        ? 'AI prompt copied. Paste it into ChatGPT.'
+        : 'Opening ChatGPT with the prompt in the URL.';
+      const fallbackMsg = firefoxMode
+        ? 'Opening ChatGPT. Copy the prompt manually if needed.'
+        : 'Opening ChatGPT with the prompt URL. Copy the prompt manually if needed.';
+      const messageMs = firefoxMode ? 8000 : 6500;
+      showToast(copied ? successMsg : fallbackMsg, copied ? 'success' : 'info', messageMs);
+      showPageToast(copied ? successMsg : fallbackMsg, copied ? 'success' : 'info', messageMs);
       cleanup();
       setTimeout(() => gmOpenUrl(buildGptAssistUrl(prompt)), 500);
     });
@@ -5266,15 +6521,18 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   ──────────────────────────────────────────────────────────────── */
 
   function baseFilters(empRec, joinField) {
-    const teamId = empRec.getValue('custrecord_emproster_salesteam');
-    return [
+    const teamId = empRec && typeof empRec.getValue === 'function'
+      ? empRec.getValue('custrecord_emproster_salesteam')
+      : '';
+    const filters = [
       new nlobjSearchFilter('custrecord_emproster_rosterstatus', joinField, 'is', 1),
       new nlobjSearchFilter('custrecord_emproster_eminactive',   joinField, 'is', 'F'),
       new nlobjSearchFilter('custrecord_emproster_ocostcenter',  joinField, 'is', ROSTER_COST_CENTER_ID),
       new nlobjSearchFilter('custrecord_emproster_salesregion',  joinField, 'is', ROSTER_SALES_REGION_ID),
-      new nlobjSearchFilter('custrecord_emproster_salesteam',    joinField, 'is', teamId),
       new nlobjSearchFilter('custrecord_emproster_sales_qb',     joinField, 'is', 25),
     ];
+    if (teamId) filters.push(new nlobjSearchFilter('custrecord_emproster_salesteam', joinField, 'is', teamId));
+    return filters;
   }
 
   /**
@@ -5295,11 +6553,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const f = [];
     if (opts.myTeam && empIds && empIds.me)
       f.push(new nlobjSearchFilter('custrecord_emproster_mgrroster', joinField, 'is', empIds.me));
-    if (opts.vertical && opts.vertical.length > 0)
+    if (SCOUT_CAN_READ_VERTICAL_AMO && opts.vertical && opts.vertical.length > 0)
       f.push(new nlobjSearchFilter('custrecord_emproster_vertical_amo', joinField, 'anyof', opts.vertical));
     if (opts.tier && opts.tier.length > 0)
       f.push(new nlobjSearchFilter('custrecord_emproster_sales_tier', joinField, 'anyof', opts.tier));
-    if (opts.region && opts.region.length > 0)
+    if (SCOUT_CAN_READ_SALES_SUBREGION && opts.region && opts.region.length > 0)
       f.push(new nlobjSearchFilter('custrecord_emproster_salessubregion', joinField, 'anyof', opts.region));
     return f;
   }
@@ -5316,12 +6574,12 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       new nlobjSearchColumn('custrecord_ssm_skill_employee'),
       new nlobjSearchColumn('internalid',                           join),
       new nlobjSearchColumn('custrecord_emproster_avail',           join),
-      new nlobjSearchColumn('custrecord_emproster_avail_notes',     join),
-      new nlobjSearchColumn('custrecord_emproster_avail_notes_res', join),
+      ...availabilityNotesColumns(join),
+      ...managerAvailResColumns(join),
       new nlobjSearchColumn('custrecord_emproster_mgrroster',       join),
       new nlobjSearchColumn('custrecord_emproster_olocation',       join),
-      new nlobjSearchColumn('custrecord_emproster_salessubregion',  join),
-      new nlobjSearchColumn('custrecord_emproster_vertical_amo',    join),
+      ...salesSubregionColumns(join),
+      ...verticalAmoColumns(join),
       new nlobjSearchColumn('custrecord_emproster_sales_tier',      join),
       new nlobjSearchColumn('custrecord_emproster_salesteam',       join),
       new nlobjSearchColumn('custrecord_emproster_emp',             join),
@@ -5335,11 +6593,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       employee:     r.getText('custrecord_ssm_skill_employee'),
       manager:      r.getText('custrecord_emproster_mgrroster', join),
       availability: r.getText('custrecord_emproster_avail', join),
-      availNotes:   r.getValue('custrecord_emproster_avail_notes', join),
-      availRes:     r.getValue('custrecord_emproster_avail_notes_res', join),
+      availNotes:   readAvailabilityNotes(r, join),
+      availRes:     readManagerAvailRes(r, join),
       location:     r.getText('custrecord_emproster_olocation', join),
-      region:       r.getText('custrecord_emproster_salessubregion', join),
-      vertical:     r.getText('custrecord_emproster_vertical_amo', join),
+      region:       readSalesSubregion(r, join),
+      vertical:     readVerticalAmo(r, join),
       tier:         r.getText('custrecord_emproster_sales_tier', join),
       salesteam:    r.getText('custrecord_emproster_salesteam', join),
       employeeRecId: r.getValue('custrecord_emproster_emp', join) || '',
@@ -5387,7 +6645,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       new nlobjSearchColumn('custrecord_sr_ind_rating'),
       new nlobjSearchColumn('custrecord_emproster_emp', join),
       new nlobjSearchColumn('custrecord_emproster_salesteam', join),
-      new nlobjSearchColumn('custrecord_emproster_vertical_amo', join),
+      ...verticalAmoColumns(join),
     ];
     const results = nlapiSearchRecord('customrecord_sr_industry_rating_entry', null, filters, cols);
     if (!results) return [];
@@ -5396,7 +6654,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       employee:       r.getText('custrecord_sr_ind_rating_employee'),
       employeeRecId:  r.getValue('custrecord_emproster_emp', join) || '',
       salesteam:      r.getText('custrecord_emproster_salesteam', join) || '',
-      vertical:       r.getText('custrecord_emproster_vertical_amo', join) || '',
+      vertical:       readVerticalAmo(r, join),
       industryRating: parseRatingValue(r.getText('custrecord_sr_ind_rating') || r.getValue('custrecord_sr_ind_rating')),
     })).filter(r => parseInt(r.industryRating, 10) >= 1);
   }
@@ -5513,6 +6771,39 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       return parts.join(' ').toLowerCase();
     }
 
+    function parseLoadCountValue(value) {
+      const normalized = String(value == null ? '' : value).replace(/,/g, '').trim();
+      if (!/^\d+(?:\.\d+)?$/.test(normalized)) return null;
+      return Math.max(0, Math.round(Number(normalized)));
+    }
+
+    function loadCountFromSavedSearchColumns(r) {
+      let cols = [];
+      try { cols = typeof r.getAllColumns === 'function' ? (r.getAllColumns() || []) : []; }
+      catch (e) { cols = []; }
+      const candidates = [];
+      cols.forEach(col => {
+        const hint = columnDescriptor(col);
+        const rawValue = readColumnValue(r, col, false);
+        const rawText = readColumnValue(r, col, true);
+        const value = parseLoadCountValue(rawValue);
+        const textValue = parseLoadCountValue(rawText);
+        const count = value != null ? value : textValue;
+        if (count == null) return;
+        if (/assignee|consultant|employee|manager|email|name|region|vertical|team/i.test(hint)) return;
+
+        let score = 0;
+        if (/\b(scr|request|load)\b/i.test(hint)) score += 25;
+        if (/(last|lst)\s*7|7\s*(?:days|dys)|assigned.*7/i.test(hint)) score += 80;
+        if (/count|sum|formula|numeric/i.test(hint)) score += 30;
+        if (/\bcount\b|\bsum\b/i.test(hint)) score += 20;
+        if (score > 0) candidates.push({ score, count, hint });
+      });
+      if (!candidates.length) return null;
+      candidates.sort((a, b) => b.score - a.score);
+      return candidates[0].count;
+    }
+
     function rosterIdFromNameText(text) {
       const nameKey = normalizeLoose(text);
       if (!nameKey) return '';
@@ -5585,27 +6876,37 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       return rosterIdFromSavedSearchColumns(r);
     }
 
-    function addRows(rows) {
+    function addRows(rows, opts) {
+      const options = opts || {};
+      let matched = 0;
       (rows || []).forEach(r => {
         const assignee = rosterIdFromLoadRow(r);
         if (!assignee || !missingSet.has(assignee)) return;
+        const savedSearchMetric = options.useSavedSearchMetric ? loadCountFromSavedSearchColumns(r) : null;
+        if (savedSearchMetric != null) {
+          counts[assignee] = Math.max(Number(counts[assignee] || 0), savedSearchMetric);
+          matched += 1;
+          return;
+        }
         const scrId = r.getValue('internalid') || `${assignee}:${counts[assignee]}`;
         const seenKey = `${assignee}:${scrId}`;
         if (seenScrs.has(seenKey)) return;
         seenScrs.add(seenKey);
         counts[assignee] = (counts[assignee] || 0) + 1;
+        matched += 1;
       });
+      return matched;
     }
 
-    function runLoadSearch(searchId, filters, cols) {
+    function runLoadSearch(searchId, filters, cols, opts) {
       const searchTypes = searchId ? [SCR_RECORD_TYPE, null] : [SCR_RECORD_TYPE];
       for (const recordType of searchTypes) {
         try {
           const rows = nlapiSearchRecord(recordType, searchId || null, filters, cols) || [];
           if (searchId && recordType && rows.length === 0) continue;
           if (searchId && rows.length) sampleLoadRow(rows[0], rows.length, searchId, recordType);
-          addRows(rows);
-          return true;
+          const matched = addRows(rows, opts);
+          return { ok: true, rows: rows.length, matched };
         } catch (e) {
           console.warn('[Staffing Helper] Recent SCR load lookup failed:', {
             searchId,
@@ -5614,94 +6915,22 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           });
         }
       }
-      return false;
+      return { ok: false, rows: 0, matched: 0 };
     }
 
     function hasAnyLoadCount() {
       return missing.some(id => Number(counts[id] || 0) > 0);
     }
 
-    const today = new Date();
-    const neededFrom = nsDateString(addDays(today, -7));
-    const neededTo = nsDateString(addDays(today, 14));
-    const assignedFrom = nsDateString(addDays(today, -7));
-    const assignedTo = nsDateString(today);
-    const rosterCols = [
-      new nlobjSearchColumn(SCR_FIELD_ASSIGNEE),
-      new nlobjSearchColumn('internalid'),
-    ];
-    const employeeCols = [
-      new nlobjSearchColumn(SCR_FIELD_ASSIGNEE_EMPLOYEE),
-      new nlobjSearchColumn('internalid'),
-    ];
-    const joinedEmployeeCols = [
-      new nlobjSearchColumn(SCR_FIELD_ASSIGNEE),
-      new nlobjSearchColumn('custrecord_emproster_emp', SCR_FIELD_ASSIGNEE),
-      new nlobjSearchColumn('internalid'),
-    ];
-
-    if (employeeIds.length) {
-      runLoadSearch('670584', [
-        new nlobjSearchFilter(SCR_FIELD_ASSIGNEE_EMPLOYEE, null, 'anyof', employeeIds),
-      ], employeeCols);
-      runLoadSearch('670584', [
-        new nlobjSearchFilter(SCR_FIELD_ASSIGNEE_EMPLOYEE, null, 'anyof', employeeIds),
-      ], null);
-    }
-
-    runLoadSearch('670584', [
-      new nlobjSearchFilter(SCR_FIELD_ASSIGNEE, null, 'anyof', missing),
-    ], rosterCols);
-
-    if (!hasAnyLoadCount()) {
-      runLoadSearch('670584', null, null);
-      runLoadSearch('670584', null, rosterCols);
-      runLoadSearch('670584', null, employeeCols);
-      runLoadSearch('670584', null, joinedEmployeeCols);
-    }
-
-    [SCR_FIELD_DATE_SC_NEEDED, SCR_FIELD_DATE_NEEDED].forEach(dateField => {
-      runLoadSearch(null, [
-        new nlobjSearchFilter(SCR_FIELD_ASSIGNEE, null, 'anyof', missing),
-        new nlobjSearchFilter(dateField, null, 'within', neededFrom, neededTo),
-      ], rosterCols);
-      if (employeeIds.length) {
-        runLoadSearch(null, [
-          new nlobjSearchFilter(SCR_FIELD_ASSIGNEE_EMPLOYEE, null, 'anyof', employeeIds),
-          new nlobjSearchFilter(dateField, null, 'within', neededFrom, neededTo),
-        ], employeeCols);
-      }
-    });
-
-    SCR_FIELD_ASSIGNED_DATE_CANDIDATES.forEach(dateField => {
-      runLoadSearch(null, [
-        new nlobjSearchFilter(SCR_FIELD_ASSIGNEE, null, 'anyof', missing),
-        new nlobjSearchFilter(dateField, null, 'within', assignedFrom, assignedTo),
-      ], rosterCols);
-      if (employeeIds.length) {
-        runLoadSearch(null, [
-          new nlobjSearchFilter(SCR_FIELD_ASSIGNEE_EMPLOYEE, null, 'anyof', employeeIds),
-          new nlobjSearchFilter(dateField, null, 'within', assignedFrom, assignedTo),
-        ], employeeCols);
-      }
-    });
-
-    if (employeeIds.length) {
-      [SCR_FIELD_DATE_SC_NEEDED, SCR_FIELD_DATE_NEEDED].forEach(dateField => {
-        runLoadSearch(null, [
-          new nlobjSearchFilter('custrecord_emproster_emp', SCR_FIELD_ASSIGNEE, 'anyof', employeeIds),
-          new nlobjSearchFilter(dateField, null, 'within', neededFrom, neededTo),
-        ], joinedEmployeeCols);
-      });
-      SCR_FIELD_ASSIGNED_DATE_CANDIDATES.forEach(dateField => {
-        runLoadSearch(null, [
-          new nlobjSearchFilter('custrecord_emproster_emp', SCR_FIELD_ASSIGNEE, 'anyof', employeeIds),
-          new nlobjSearchFilter(dateField, null, 'within', assignedFrom, assignedTo),
-        ], joinedEmployeeCols);
+    const savedSearchResult = runLoadSearch(RECENT_LOAD_SEARCH_ID, null, null, { useSavedSearchMetric: true });
+    if (!savedSearchResult.ok) {
+      console.warn('[Staffing Helper] Recent SCR load saved search was unavailable. Counts defaulted to zero.', {
+        searchId: RECENT_LOAD_SEARCH_ID,
       });
     }
     if (!hasAnyLoadCount() && loadDebugSamples.length) {
       console.warn('[Staffing Helper] SCR load search returned rows but none matched the visible roster cards.', {
+        searchId: RECENT_LOAD_SEARCH_ID,
         visibleRosterIds: missing,
         visibleEmployeeIds: employeeIds,
         visibleNameKeys: Object.keys(rosterByName).slice(0, 20),
@@ -5733,8 +6962,8 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       const cols = [
         new nlobjSearchColumn('internalid'),
         new nlobjSearchColumn('custrecord_emproster_avail'),
-        new nlobjSearchColumn('custrecord_emproster_avail_notes'),
-        new nlobjSearchColumn('custrecord_emproster_avail_notes_res'),
+        ...availabilityNotesColumns(null),
+        ...managerAvailResColumns(null),
         new nlobjSearchColumn('custrecord_emproster_emp'),
         new nlobjSearchColumn('custrecord_emproster_salesteam'),
         new nlobjSearchColumn('email', 'custrecord_emproster_emp'),
@@ -5747,8 +6976,8 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         if (!id) return;
         map[id] = {
           availability: (r.getText('custrecord_emproster_avail')             || '').toLowerCase(),
-          availNotes:    r.getValue('custrecord_emproster_avail_notes')       || '',
-          availRes:      r.getValue('custrecord_emproster_avail_notes_res')   || '',
+          availNotes:    readAvailabilityNotes(r, null),
+          availRes:      readManagerAvailRes(r, null),
           employeeRecId: r.getValue('custrecord_emproster_emp')               || '',
           salesteam:     r.getText('custrecord_emproster_salesteam')          || '',
           email:         r.getValue('email', 'custrecord_emproster_emp')      || '',
@@ -6107,6 +7336,12 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   function savePanelWidth(w) {
     localStorage.setItem(PANEL_WIDTH_KEY, String(w));
   }
+  function getPanelOpenState() {
+    return localStorage.getItem(PANEL_OPEN_KEY) === 'true';
+  }
+  function savePanelOpenState(isOpen) {
+    localStorage.setItem(PANEL_OPEN_KEY, isOpen ? 'true' : 'false');
+  }
 
   function applyCalIntegrationUI() {
     const panel = document.getElementById('sc-skills-panel');
@@ -6135,41 +7370,63 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   function populateSettingsForm() {
     const calToggle = document.getElementById('sc-cal-integration-toggle');
     const gptToggle = document.getElementById('sc-gpt-assist-toggle');
+    const debugToggle = document.getElementById('sc-debug-mode-toggle');
+    const earlyAdopterToggle = document.getElementById('sc-early-adopter-toggle');
+    const testingUpdateUrl = document.getElementById('sc-testing-update-url-input');
     const extraTeam = document.getElementById('sc-extra-team-members-input');
     const extraManagers = document.getElementById('sc-extra-team-managers-input');
+    const extraAmoDeliverables = document.getElementById('sc-extra-amo-deliverables-input');
     const feedbackWebhook = document.getElementById('sc-feedback-webhook-input');
     if (calToggle) calToggle.checked = getCalIntegrationEnabled();
     if (gptToggle) gptToggle.checked = getGptAssistEnabled();
+    if (debugToggle) debugToggle.checked = getDebugModeEnabled();
+    if (earlyAdopterToggle) earlyAdopterToggle.checked = getEarlyAdopterUpdatesEnabled();
+    if (testingUpdateUrl) testingUpdateUrl.value = getTestingUpdateUrl();
     if (extraTeam) extraTeam.value = getExtraTeamMembersText();
     if (extraManagers) extraManagers.value = getExtraTeamManagersText();
+    if (extraAmoDeliverables) extraAmoDeliverables.value = getExtraAmoDeliverablesText();
     if (feedbackWebhook) feedbackWebhook.value = getFeedbackWebhookUrl();
   }
 
   function saveSettingsFromForm() {
     const calToggle = document.getElementById('sc-cal-integration-toggle');
     const gptToggle = document.getElementById('sc-gpt-assist-toggle');
+    const debugToggle = document.getElementById('sc-debug-mode-toggle');
+    const earlyAdopterToggle = document.getElementById('sc-early-adopter-toggle');
+    const testingUpdateUrl = document.getElementById('sc-testing-update-url-input');
     const extraTeam = document.getElementById('sc-extra-team-members-input');
     const extraManagers = document.getElementById('sc-extra-team-managers-input');
+    const extraAmoDeliverables = document.getElementById('sc-extra-amo-deliverables-input');
     const feedbackWebhook = document.getElementById('sc-feedback-webhook-input');
     saveLocalConfig({
       calendarIntegrationEnabled: calToggle ? calToggle.checked : getCalIntegrationEnabled(),
       gptAssistEnabled: gptToggle ? gptToggle.checked : getGptAssistEnabled(),
+      debugModeEnabled: debugToggle ? debugToggle.checked : getDebugModeEnabled(),
+      earlyAdopterUpdatesEnabled: earlyAdopterToggle ? earlyAdopterToggle.checked : getEarlyAdopterUpdatesEnabled(),
+      testingUpdateUrl: testingUpdateUrl ? testingUpdateUrl.value.trim() : getTestingUpdateUrl(),
       extraTeamMembers: extraTeam ? extraTeam.value : getExtraTeamMembersText(),
       extraTeamManagers: extraManagers ? extraManagers.value : getExtraTeamManagersText(),
+      extraAmoDeliverables: extraAmoDeliverables ? extraAmoDeliverables.value : getExtraAmoDeliverablesText(),
       feedbackWebhookUrl: feedbackWebhook ? feedbackWebhook.value.trim() : getFeedbackWebhookUrl(),
     });
     applyCalIntegrationUI();
     applyGptAssistUI();
+    refreshAmoDeliverableOptions();
+    try { localStorage.removeItem(SCOUT_UPDATE_CACHE_KEY); } catch (e) { /* ignore */ }
+    checkScoutUpdate(true);
   }
 
   /* ── SCM Notes Modal ────────────────────────────────────────────── */
   /**
    * Shows a modal dialog asking the user to enter SCM Staffing Notes.
-   * callback(notes, assignAsLead) is called with the entered text (may be empty string).
+   * callback({ staffingNotes, assignAsLead, requestDetailsNote }) is called with entered text.
    * If user cancels, callback is not called.
    */
   function showNotesDialog(actionLabel, callback, options) {
     const opts = options || {};
+    const requestDetailsHtml = opts.showRequestDetailsBox ? `
+        <label for="sc-request-details-textarea">Request Details Addendum <span style="font-weight:400">(optional)</span></label>
+        <textarea id="sc-request-details-textarea" placeholder="Add context for the Request Details staffing script..."></textarea>` : '';
     const leadToggleHtml = opts.showLeadToggle ? `
         <div class="sc-lead-toggle-row">
           <div class="sc-lead-toggle-text">
@@ -6187,7 +7444,8 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       <div class="sc-notes-dialog">
         <h3>${escHtml(actionLabel)}</h3>
         <label for="sc-notes-textarea">SCM Staffing Notes <span style="font-weight:400">(optional)</span></label>
-        <textarea id="sc-notes-textarea" placeholder="Enter any notes for this staffing action…"></textarea>
+        <textarea id="sc-notes-textarea" placeholder="Enter SCM staffing notes..."></textarea>
+        ${requestDetailsHtml}
         ${leadToggleHtml}
         <div class="sc-notes-btn-row">
           <button class="sc-notes-cancel-btn" id="sc-notes-cancel">Cancel</button>
@@ -6196,26 +7454,58 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       </div>`;
     document.body.appendChild(overlay);
     const ta = overlay.querySelector('#sc-notes-textarea');
+    const requestDetailsTa = overlay.querySelector('#sc-request-details-textarea');
     ta.focus();
     function assignAsLead() {
       const toggle = overlay.querySelector('#sc-assign-lead-toggle');
       return toggle ? toggle.checked : true;
     }
-    function cleanup() { overlay.remove(); }
-    overlay.querySelector('#sc-notes-cancel').addEventListener('click', cleanup);
-    overlay.querySelector('#sc-notes-ok').addEventListener('click', function () {
-      const notes = ta.value.trim();
+    function submitDialog() {
+      const staffingNotes = ta.value.trim();
+      const requestDetailsNote = requestDetailsTa ? requestDetailsTa.value.trim() : '';
       const lead = assignAsLead();
       cleanup();
-      callback(notes, lead);
-    });
-    ta.addEventListener('keydown', function (ev) {
+      callback({ staffingNotes, assignAsLead: lead, requestDetailsNote });
+    }
+    function cleanup() { overlay.remove(); }
+    overlay.querySelector('#sc-notes-cancel').addEventListener('click', cleanup);
+    overlay.querySelector('#sc-notes-ok').addEventListener('click', submitDialog);
+    function handleSubmitShortcut(ev) {
       if (ev.key === 'Enter' && ev.ctrlKey) {
-        const notes = ta.value.trim();
-        const lead = assignAsLead();
-        cleanup();
-        callback(notes, lead);
+        submitDialog();
       }
+    }
+    ta.addEventListener('keydown', handleSubmitShortcut);
+    if (requestDetailsTa) requestDetailsTa.addEventListener('keydown', handleSubmitShortcut);
+  }
+
+  function showAmoBlankDeliverableWarning(onContinue) {
+    const overlay = document.createElement('div');
+    overlay.className = 'sc-notes-overlay';
+    overlay.innerHTML = `
+      <div class="sc-notes-dialog sc-amo-deliverable-warning-dialog">
+        <h3>AMO deliverable is blank</h3>
+        <div class="sc-amo-deliverable-warning-message">
+          <span class="sc-amo-deliverable-warning-icon" aria-hidden="true">⚠️</span>
+          <span>You are staffing this request without a deliverable.</span>
+        </div>
+        <p class="sc-amo-deliverable-warning-detail">
+          Cancel to return to the AMO tab and select a deliverable before staffing.
+        </p>
+        <div class="sc-notes-btn-row">
+          <button class="sc-notes-cancel-btn" id="sc-amo-deliverable-warning-cancel">Cancel</button>
+          <button class="sc-notes-ok-btn sc-warning-continue-btn" id="sc-amo-deliverable-warning-continue">Continue Without Deliverable</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const cleanup = () => overlay.remove();
+    overlay.querySelector('#sc-amo-deliverable-warning-cancel').addEventListener('click', function () {
+      cleanup();
+      showToast('AMO staffing canceled. Select a deliverable and click Staff again.', 'info', 5000);
+    });
+    overlay.querySelector('#sc-amo-deliverable-warning-continue').addEventListener('click', function () {
+      cleanup();
+      onContinue();
     });
   }
 
@@ -6402,6 +7692,18 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   function setStaffingPopupNotes(notes) {
     appendScManagerNotes2(notes, notes);
     if (notes) setTimeout(() => appendScManagerNotes2(notes, notes), 250);
+  }
+
+  /** Append the standard post-staffing engagement notes template. */
+  function appendEngagementNotesTemplate(empName) {
+    const notes = buildEngagementNotesTemplate(empName);
+    try {
+      const current = readFormTextField(SCR_FIELD_ENGAGEMENT_NOTES);
+      if (alreadyContainsNote(current, notes)) return;
+      setFormTextField(SCR_FIELD_ENGAGEMENT_NOTES, appendNotesText(current, notes));
+    } catch (e) {
+      console.warn('[Staffing Helper] appendEngagementNotesTemplate error:', e.message || e);
+    }
   }
 
   /* ── Form-sync helpers (items 5 & 6) ───────────────────────────── */
@@ -6596,11 +7898,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       new nlobjSearchColumn('name'),
       new nlobjSearchColumn('internalid'),
       new nlobjSearchColumn('custrecord_emproster_avail'),
-      new nlobjSearchColumn('custrecord_emproster_avail_notes'),
-      new nlobjSearchColumn('custrecord_emproster_avail_notes_res'),
+      ...availabilityNotesColumns(null),
+      ...managerAvailResColumns(null),
       new nlobjSearchColumn('custrecord_emproster_olocation'),
-      new nlobjSearchColumn('custrecord_emproster_salessubregion'),
-      new nlobjSearchColumn('custrecord_emproster_vertical_amo'),
+      ...salesSubregionColumns(null),
+      ...verticalAmoColumns(null),
       new nlobjSearchColumn('custrecord_emproster_sales_tier'),
       new nlobjSearchColumn('custrecord_emproster_emp'),
     ];
@@ -6621,11 +7923,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       employee:      r.getValue('name'),
       manager:       sourceLabel || '',
       availability:  (r.getText('custrecord_emproster_avail') || '').toLowerCase(),
-      availNotes:    r.getValue('custrecord_emproster_avail_notes')    || '',
-      availRes:      r.getValue('custrecord_emproster_avail_notes_res') || '',
+      availNotes:    readAvailabilityNotes(r, null),
+      availRes:      readManagerAvailRes(r, null),
       location:      extractShortLocation(r.getText('custrecord_emproster_olocation')),
-      region:        r.getText('custrecord_emproster_salessubregion')  || '',
-      vertical:      r.getText('custrecord_emproster_vertical_amo')    || '',
+      region:        readSalesSubregion(r, null),
+      vertical:      readVerticalAmo(r, null),
       tier:          (r.getText('custrecord_emproster_sales_tier') || '').replace('Solution Consultant - ', ''),
       employeeRecId: r.getValue('custrecord_emproster_emp') || '',
       email:         '',   // filled in by getEmployeeEmails()
@@ -6752,6 +8054,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   }
 
   function getMyTeamRoster(empIds) {
+    if (!empIds || !empIds.me) return [];
     try {
       const filters = [
         new nlobjSearchFilter('custrecord_emproster_mgrroster',  null, 'is', empIds.me),
@@ -7441,12 +8744,12 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
             new nlobjSearchColumn('custrecord_ssm_skill_employee'),
             new nlobjSearchColumn('internalid',                           join),
             new nlobjSearchColumn('custrecord_emproster_avail',           join),
-            new nlobjSearchColumn('custrecord_emproster_avail_notes',     join),
-            new nlobjSearchColumn('custrecord_emproster_avail_notes_res', join),
+            ...availabilityNotesColumns(join),
+            ...managerAvailResColumns(join),
             new nlobjSearchColumn('custrecord_emproster_mgrroster',       join),
             new nlobjSearchColumn('custrecord_emproster_olocation',       join),
-            new nlobjSearchColumn('custrecord_emproster_salessubregion',  join),
-            new nlobjSearchColumn('custrecord_emproster_vertical_amo',    join),
+            ...salesSubregionColumns(join),
+            ...verticalAmoColumns(join),
             new nlobjSearchColumn('custrecord_emproster_sales_tier',      join),
             new nlobjSearchColumn('custrecord_emproster_salesteam',       join),
             new nlobjSearchColumn('custrecord_emproster_emp',             join),
@@ -7460,11 +8763,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               employee:     r.getText('custrecord_ssm_skill_employee'),
               manager:      r.getText('custrecord_emproster_mgrroster', join),
               availability: r.getText('custrecord_emproster_avail', join),
-              availNotes:   r.getValue('custrecord_emproster_avail_notes', join),
-              availRes:     r.getValue('custrecord_emproster_avail_notes_res', join),
+              availNotes:   readAvailabilityNotes(r, join),
+              availRes:     readManagerAvailRes(r, join),
               location:     r.getText('custrecord_emproster_olocation', join),
-              region:       r.getText('custrecord_emproster_salessubregion', join),
-              vertical:     r.getText('custrecord_emproster_vertical_amo', join),
+              region:       readSalesSubregion(r, join),
+              vertical:     readVerticalAmo(r, join),
               tier:         r.getText('custrecord_emproster_sales_tier', join),
               salesteam:    r.getText('custrecord_emproster_salesteam', join),
               employeeRecId: r.getValue('custrecord_emproster_emp', join) || '',
@@ -7491,7 +8794,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               new nlobjSearchColumn('internalid',          indJoin),
               new nlobjSearchColumn('custrecord_sr_ind_rating'),
               new nlobjSearchColumn('custrecord_emproster_salesteam', indJoin),
-              new nlobjSearchColumn('custrecord_emproster_vertical_amo', indJoin),
+              ...verticalAmoColumns(indJoin),
               new nlobjSearchColumn('custrecord_emproster_emp', indJoin),
             ];
             const rawInd = nlapiSearchRecord('customrecord_sr_industry_rating_entry', null, amoIndFilters, indCols) || [];
@@ -7501,7 +8804,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                 employee:       r.getText('custrecord_sr_ind_rating_employee'),
                 employeeRecId:  r.getValue('custrecord_emproster_emp', indJoin) || '',
                 salesteam:      r.getText('custrecord_emproster_salesteam', indJoin),
-                vertical:       r.getText('custrecord_emproster_vertical_amo', indJoin),
+                vertical:       readVerticalAmo(r, indJoin),
                 industryRating: parseRatingValue(r.getText('custrecord_sr_ind_rating') || r.getValue('custrecord_sr_ind_rating')),
               }))
               .filter(r => r.salesteam === 'AMO' && !isExcludedVertical(r.vertical) && parseInt(r.industryRating, 10) >= 1);
@@ -7552,36 +8855,108 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     { pattern: /\bWIP\b/i,                           productId: '49', label: 'WIP' },
     { pattern: /\bwork\s*in\s*progress\b/i,          productId: '49', label: 'WIP' },
     { pattern: /\bEPM\b/i,                           productId: '12', label: 'EPM' },
-    { pattern: /\bplanning\s*&?\s*budgeting\b/i,     productId: '12', label: 'EPM' },
-    { pattern: /\bCRM\b/i,                           productId: '3',  label: 'CRM' },
-    { pattern: /\bSRP\b/i,                           productId: '37', label: 'SRP' },
-    { pattern: /\bservices\s*resource\s*planning\b/i,productId: '37', label: 'SRP' },
-    { pattern: /\bcommerce\b/i,                      productId: '7',  label: 'Commerce' },
-    { pattern: /\bSuiteCommerce\b/i,                 productId: '7',  label: 'Commerce' },
+    { pattern: /\bplanning\s*&?\s*budgeting\b/i,     productId: '16', label: 'EPM NSPB' },
+    { pattern: /\bCRM\b/i,                           productId: 'crm', label: 'CRM', skillOnly: true },
+    { pattern: /\bSRP\b/i,                           productId: '45', label: 'SuiteProjects' },
+    { pattern: /\bservices\s*resource\s*planning\b/i,productId: '45', label: 'SuiteProjects' },
+    { pattern: /\bcommerce\b/i,                      productId: '41', label: 'SuiteCommerce' },
+    { pattern: /\bSuiteCommerce\b/i,                 productId: '41', label: 'SuiteCommerce' },
     { pattern: /\bManufacturing\b/i,                 productId: '51', label: 'Work Orders & Assemblies' },
     { pattern: /\bMRP\b/i,                           productId: '51', label: 'Work Orders & Assemblies' },
     { pattern: /\bAdvanced\s*Manufacturing\b/i,      productId: '51', label: 'Work Orders & Assemblies' },
-    { pattern: /\bInventory\b/i,                     productId: '21', label: 'Inventory' },
+    { pattern: /\bInventory\b/i,                     productId: '23', label: 'Inventory' },
     { pattern: /\bRevenue\s*Recognition\b/i,         productId: '35', label: 'Rev Rec' },
     { pattern: /\bRev\s*Rec\b/i,                     productId: '35', label: 'Rev Rec' },
     { pattern: /\bBanking\b/i,                       productId: '2',  label: 'Banking' },
-    { pattern: /\bNS\s*Finance\b/i,                  productId: '17', label: 'Finance' },
-    { pattern: /\bFinancial\s*Management\b/i,         productId: '17', label: 'Finance' },
+    { pattern: /\bNS\s*Finance\b/i,                  productId: '20', label: 'Finance' },
+    { pattern: /\bFinancial\s*Management\b/i,         productId: '20', label: 'Finance' },
     { pattern: /\bHCM\b/i,                           productId: '44', label: 'SuitePeople' },
     { pattern: /\bHuman\s*Capital\b/i,               productId: '44', label: 'SuitePeople' },
     { pattern: /\bPayroll\b/i,                       productId: '44', label: 'SuitePeople' },
     { pattern: /\bSuiteAnalytics\b/i,                productId: '38', label: 'Analytics' },
     { pattern: /\bSuiteBI\b/i,                       productId: '38', label: 'Analytics' },
-    { pattern: /\bOrder\s*Management\b/i,            productId: '28', label: 'Order Mgmt' },
-    { pattern: /\bOMS\b/i,                           productId: '28', label: 'OMS' },
-    { pattern: /\bSubscription\b/i,                  productId: '40', label: 'Subscription Billing' },
-    { pattern: /\bSuiteBilling\b/i,                  productId: '40', label: 'Subscription Billing' },
-    { pattern: /\bProcurement\b/i,                   productId: '31', label: 'Procurement' },
-    { pattern: /\bPurchase\s*Order\b/i,              productId: '31', label: 'Procurement' },
-    { pattern: /\bFixed\s*Assets\b/i,                productId: '18', label: 'Fixed Assets' },
-    { pattern: /\bProject\s*Management\b/i,          productId: '33', label: 'Project Mgmt' },
-    { pattern: /\bSuiteProjects\b/i,                 productId: '33', label: 'Project Mgmt' },
+    { pattern: /\bOrder\s*Management\b/i,            productId: '4',  label: 'Order Mgmt' },
+    { pattern: /\bOMS\b/i,                           productId: '4',  label: 'OMS' },
+    { pattern: /\bSubscription\b/i,                  productId: '39', label: 'Subscription Billing' },
+    { pattern: /\bSuiteBilling\b/i,                  productId: '39', label: 'SuiteBilling' },
+    { pattern: /\bBill\s*Capture\b/i,                productId: '6',  label: 'Bill Capture' },
+    { pattern: /\bProcurement\b/i,                   productId: '32', label: 'Procurement' },
+    { pattern: /\bPurchase\s*Order\b/i,              productId: '32', label: 'Procurement' },
+    { pattern: /\bFixed\s*Assets\b/i,                productId: '21', label: 'Fixed Assets' },
+    { pattern: /\bProject\s*Management\b/i,          productId: '45', label: 'Project Mgmt' },
+    { pattern: /\bSuiteProjects\b/i,                 productId: '45', label: 'SuiteProjects' },
   ];
+
+  let _opportunityDetectionTextCache = null;
+
+  function textHasScPlusLicenseSignal(text) {
+    const value = String(text || '');
+    if (!value) return false;
+    return /\bSC\s*(?:\+|plus)\s*(?:licenses?|licences?|lic\.?|seats?|users?)?\b/i.test(value) ||
+      /\bSuiteConsulting\s*(?:\+|plus)\s*(?:licenses?|licences?|seats?|users?)?\b/i.test(value);
+  }
+
+  function getOpportunityDetectionText() {
+    if (_opportunityDetectionTextCache != null) return _opportunityDetectionTextCache;
+    const chunks = [];
+    let oppId = '';
+    try {
+      oppId = (readFormFieldValue(SCR_FIELD_OPP) || '').trim();
+    } catch (e) { /* ignore */ }
+    if (!oppId || !/^\d+$/.test(oppId)) {
+      _opportunityDetectionTextCache = '';
+      return _opportunityDetectionTextCache;
+    }
+
+    try {
+      const opp = nlapiLoadRecord('opportunity', oppId);
+      if (opp) {
+        ['title', 'memo', 'tranid'].forEach(fieldId => {
+          try { chunks.push(opp.getFieldValue(fieldId) || ''); } catch (e) { /* field may not exist */ }
+          try { chunks.push(opp.getFieldText(fieldId) || ''); } catch (e) { /* field may not expose text */ }
+        });
+
+        try {
+          const lineCount = Math.min(Number(opp.getLineItemCount('item') || 0), 100);
+          for (let i = 1; i <= lineCount; i++) {
+            try { chunks.push(opp.getLineItemText('item', 'item', i) || ''); } catch (e) { /* ignore */ }
+            try { chunks.push(opp.getLineItemValue('item', 'description', i) || ''); } catch (e) { /* ignore */ }
+          }
+        } catch (e) { /* opportunity may not expose item lines */ }
+      }
+    } catch (e) {
+      console.warn('[SCOUT] Opportunity text scan failed:', e.message || e);
+    }
+
+    _opportunityDetectionTextCache = chunks.join('\n');
+    return _opportunityDetectionTextCache;
+  }
+
+  function visiblePageHasScPlusLicenseSignal() {
+    try {
+      return getAccessibleDocuments().some(doc => textHasScPlusLicenseSignal(doc.body && doc.body.innerText));
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function hasScPlusLicenseSignal() {
+    return textHasScPlusLicenseSignal(getRequestDetails()) ||
+      textHasScPlusLicenseSignal(readFormTextField('custrecord_screq_details')) ||
+      textHasScPlusLicenseSignal(getOpportunityDetectionText()) ||
+      visiblePageHasScPlusLicenseSignal();
+  }
+
+  function applyAmoDeliverableSuggestionFromRequest() {
+    const picker = document.getElementById('sc-amo-deliverable');
+    if (!picker || picker.value) return false;
+    if (!hasScPlusLicenseSignal()) return false;
+    const platform = matchPickerOption(picker, 'Platform');
+    if (!platform) return false;
+    picker.value = platform.value;
+    picker.dataset.scSuggested = 'sc-plus-platform';
+    return true;
+  }
 
   /**
    * Parse the SCR Request Details text and return unique matched products.
@@ -7604,7 +8979,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     for (const entry of PRODUCT_KEYWORD_MAP) {
       if (entry.pattern.test(text) && !seen.has(entry.productId)) {
         seen.add(entry.productId);
-        matches.push({ productId: entry.productId, label: entry.label });
+        matches.push({ productId: entry.productId, label: entry.label, skillOnly: Boolean(entry.skillOnly) });
         if (matches.length >= 4) break;  // cap at 4 suggestions
       }
     }
@@ -7643,12 +9018,12 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         chip.type = 'button';
         chip.className = 'sc-insight-chip';
         chip.textContent = m.label;
-        chip.title = 'Product ID: ' + m.productId;
+        chip.title = m.skillOnly ? 'Product skill: ' + m.label : 'Product ID: ' + m.productId;
 
         // Mark as already-selected if product is currently chosen
         const opt = findHelperProductOption(sel, m.productId, m.label);
         const skillOpt = findHelperProductOption(skillSel, m.productId, m.label);
-        if (opt && opt.selected) chip.classList.add('selected');
+        if ((opt && opt.selected) || (skillOpt && skillOpt.selected)) chip.classList.add('selected');
 
         chip.addEventListener('click', function () {
           // Count currently selected options
@@ -7679,6 +9054,17 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
             }
             // Trigger change event so the product filter badge updates
             sel.dispatchEvent(new Event('change', { bubbles: true }));
+          } else if (skillOpt) {
+            if (skillOpt.selected) {
+              skillOpt.selected = false;
+              chip.classList.remove('selected');
+            } else {
+              const selectedSkills = Array.from(skillSel.options).filter(o => o.selected);
+              if (selectedSkills.length >= 4) selectedSkills[0].selected = false;
+              skillOpt.selected = true;
+              chip.classList.add('selected');
+            }
+            skillSel.dispatchEvent(new Event('change', { bubbles: true }));
           }
         });
 
@@ -7722,9 +9108,15 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
   function trimScName(raw) {
     if (!raw) return '';
-    var words = raw.trim().split(/\s+/);
+    var head = String(raw || '')
+      .replace(/[“”]/g, '"')
+      .replace(/[‘’]/g, "'")
+      .split(/\s+[-–—]\s+|[-–—]{2,}|[.;,\n\r]|(?:\s+\()\s*/)[0]
+      .trim();
+    var words = head.split(/\s+/);
     var out = [];
     for (var i = 0; i < words.length; i++) {
+      if (/^[-–—:]+$/.test(words[i])) break;
       if (SC_NAME_STOP.test(words[i])) break;
       out.push(words[i]);
     }
@@ -7759,10 +9151,18 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       { re: new RegExp('previously\\s+worked\\s+with\\s+' + NAME, 'i'), allowLowercase: false },
       // "Working with Ron Traum for NSIP ecommerce integration"
       { re: new RegExp('\\bworking\\s+with\\s+' + NAME, 'i'), allowLowercase: false },
+      // "Hoping we can work with Mark Newkirk on this one"
+      { re: new RegExp('\\bhoping\\s+(?:we\\s+can\\s+)?work\\s+with\\s+' + NAME, 'i'), allowLowercase: false },
+      // "Andrew Kravet is available and coordinated with him on this, Please staff"
+      { re: new RegExp(NAME + '\\s+is\\s+available[^.\\n\\r]{0,160}\\bplease\\s+staff\\b', 'i'), allowLowercase: false },
+      // "Looking to get Corey Tenanes assigned here if possible"
+      { re: new RegExp('\\blooking\\s+to\\s+get\\s+' + NAME + '\\s+assigned\\b', 'i'), allowLowercase: false },
       // "Melanie Igel would be a good fit"
       { re: new RegExp(NAME + '\\s+(?:would\\s+be|is)\\s+a\\s+good\\s+fit', 'i'), allowLowercase: false },
-      // "Please use / assign / get / tag Austin Schaub"
-      { re: new RegExp('please\\s+(?:use|assign|request|get|tag)\\s+' + NAME, 'i'), allowLowercase: true },
+      // "Please use / assign / assign to / get / tag Austin Schaub"
+      { re: new RegExp('please\\s+(?:use|assign|request|get|tag)\\s+(?:to\\s+)?' + NAME, 'i'), allowLowercase: true },
+      // "Assign to Quinn Dagley"
+      { re: new RegExp('\\bassign\\s+to\\s+' + NAME, 'i'), allowLowercase: true },
       // "Tag Elaine Smith"
       { re: new RegExp('\\btag\\s+' + NAME, 'i'), allowLowercase: true },
       // "Preferred SC: Name" / "Prefer SC: Name" — require "sc" to avoid "prefer Standard SOW"
@@ -7805,9 +9205,45 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     return String(value || '').trim().toLowerCase();
   }
 
+  const REQUESTED_SC_NICKNAMES = {
+    pat: ['patrick', 'patricia'],
+    mike: ['michael'],
+    michael: ['mike'],
+    tom: ['thomas'],
+    thomas: ['tom'],
+    bob: ['robert'],
+    robert: ['bob'],
+    dave: ['david'],
+    david: ['dave'],
+    dan: ['daniel'],
+    daniel: ['dan'],
+    alex: ['alexander', 'alexandra'],
+  };
+
+  function normalizeRequestedNameTokens(value) {
+    return normalizeLoose(String(value || '').replace(/['’]/g, '')).split(/\s+/).filter(Boolean);
+  }
+
+  function firstNameMatchesRequested(memberFirst, requestedFirst) {
+    if (!memberFirst || !requestedFirst) return false;
+    if (memberFirst === requestedFirst) return true;
+    const requestedAliases = REQUESTED_SC_NICKNAMES[requestedFirst] || [];
+    const memberAliases = REQUESTED_SC_NICKNAMES[memberFirst] || [];
+    return requestedAliases.includes(memberFirst) || memberAliases.includes(requestedFirst);
+  }
+
+  function requestedRosterSearchTerms(fullName) {
+    const parts = String(fullName || '').trim().split(/\s+/).filter(Boolean);
+    const last = parts.length > 1 ? parts[parts.length - 1] : (parts[0] || '');
+    const terms = [last];
+    const compact = last.replace(/[^A-Za-z0-9]/g, '');
+    if (compact && compact !== last) terms.push(compact);
+    return [...new Set(terms.filter(Boolean))];
+  }
+
   function requestedRosterMemberMatches(member, requestedName) {
-    const memberTokens = normalizeLoose(member && member.employee).split(/\s+/).filter(Boolean);
-    const requestTokens = normalizeLoose(requestedName).split(/\s+/).filter(Boolean);
+    const memberTokens = normalizeRequestedNameTokens(member && member.employee);
+    const requestTokens = normalizeRequestedNameTokens(requestedName);
     if (memberTokens.length < 2 || requestTokens.length < 2) return false;
 
     const reqFirst = requestTokens[0];
@@ -7815,8 +9251,8 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     if (!reqFirst || !reqLast) return false;
 
     // Support both "First Last" and NetSuite-style "Last, First" roster names.
-    if (memberTokens[0] === reqFirst && memberTokens.indexOf(reqLast) > 0) return true;
-    if (memberTokens[0] === reqLast && memberTokens.slice(1).indexOf(reqFirst) !== -1) return true;
+    if (firstNameMatchesRequested(memberTokens[0], reqFirst) && memberTokens.indexOf(reqLast) > 0) return true;
+    if (memberTokens[0] === reqLast && memberTokens.slice(1).some(token => firstNameMatchesRequested(token, reqFirst))) return true;
 
     return memberTokens.join(' ') === requestTokens.join(' ');
   }
@@ -7827,11 +9263,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       employee:     r.getValue('name') || '',
       manager:      r.getText('custrecord_emproster_mgrroster') || '',
       availability: (r.getText('custrecord_emproster_avail') || '').toLowerCase(),
-      availNotes:   r.getValue('custrecord_emproster_avail_notes') || '',
-      availRes:     r.getValue('custrecord_emproster_avail_notes_res') || '',
+      availNotes:   readAvailabilityNotes(r, null),
+      availRes:     readManagerAvailRes(r, null),
       location:     extractShortLocation(r.getText('custrecord_emproster_olocation')),
-      region:       r.getText('custrecord_emproster_salessubregion') || '',
-      vertical:     r.getText('custrecord_emproster_vertical_amo') || '',
+      region:       readSalesSubregion(r, null),
+      vertical:     readVerticalAmo(r, null),
       tier:         (r.getText('custrecord_emproster_sales_tier') || '').replace('Solution Consultant - ', ''),
       salesteam:    r.getText('custrecord_emproster_salesteam') || '',
       employeeRecId: r.getValue('custrecord_emproster_emp') || '',
@@ -7858,11 +9294,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       new nlobjSearchColumn('internalid'),
       new nlobjSearchColumn('name'),
       new nlobjSearchColumn('custrecord_emproster_avail'),
-      new nlobjSearchColumn('custrecord_emproster_avail_notes'),
-      new nlobjSearchColumn('custrecord_emproster_avail_notes_res'),
+      ...availabilityNotesColumns(null),
+      ...managerAvailResColumns(null),
       new nlobjSearchColumn('custrecord_emproster_olocation'),
-      new nlobjSearchColumn('custrecord_emproster_salessubregion'),
-      new nlobjSearchColumn('custrecord_emproster_vertical_amo'),
+      ...salesSubregionColumns(null),
+      ...verticalAmoColumns(null),
       new nlobjSearchColumn('custrecord_emproster_sales_tier'),
       new nlobjSearchColumn('custrecord_emproster_salesteam'),
       new nlobjSearchColumn('custrecord_emproster_emp'),
@@ -7889,11 +9325,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       new nlobjSearchColumn('internalid'),
       new nlobjSearchColumn('name'),
       new nlobjSearchColumn('custrecord_emproster_avail'),
-      new nlobjSearchColumn('custrecord_emproster_avail_notes'),
-      new nlobjSearchColumn('custrecord_emproster_avail_notes_res'),
+      ...availabilityNotesColumns(null),
+      ...managerAvailResColumns(null),
       new nlobjSearchColumn('custrecord_emproster_olocation'),
-      new nlobjSearchColumn('custrecord_emproster_salessubregion'),
-      new nlobjSearchColumn('custrecord_emproster_vertical_amo'),
+      ...salesSubregionColumns(null),
+      ...verticalAmoColumns(null),
       new nlobjSearchColumn('custrecord_emproster_sales_tier'),
       new nlobjSearchColumn('custrecord_emproster_salesteam'),
       new nlobjSearchColumn('custrecord_emproster_emp'),
@@ -7916,11 +9352,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       new nlobjSearchColumn('custrecord_ssm_skill_employee'),
       new nlobjSearchColumn('internalid',                           join),
       new nlobjSearchColumn('custrecord_emproster_avail',           join),
-      new nlobjSearchColumn('custrecord_emproster_avail_notes',     join),
-      new nlobjSearchColumn('custrecord_emproster_avail_notes_res', join),
+      ...availabilityNotesColumns(join),
+      ...managerAvailResColumns(join),
       new nlobjSearchColumn('custrecord_emproster_olocation',       join),
-      new nlobjSearchColumn('custrecord_emproster_salessubregion',  join),
-      new nlobjSearchColumn('custrecord_emproster_vertical_amo',    join),
+      ...salesSubregionColumns(join),
+      ...verticalAmoColumns(join),
       new nlobjSearchColumn('custrecord_emproster_sales_tier',      join),
       new nlobjSearchColumn('custrecord_emproster_salesteam',       join),
       new nlobjSearchColumn('custrecord_emproster_emp',             join),
@@ -7941,11 +9377,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         employee:     r.getText('custrecord_ssm_skill_employee'),
         manager:      r.getText('custrecord_emproster_mgrroster',       join) || '',
         availability: (r.getText('custrecord_emproster_avail',          join) || '').toLowerCase(),
-        availNotes:   r.getValue('custrecord_emproster_avail_notes',    join) || '',
-        availRes:     r.getValue('custrecord_emproster_avail_notes_res', join) || '',
+        availNotes:   readAvailabilityNotes(r, join),
+        availRes:     readManagerAvailRes(r, join),
         location:     extractShortLocation(r.getText('custrecord_emproster_olocation', join)),
-        region:       r.getText('custrecord_emproster_salessubregion',  join) || '',
-        vertical:     r.getText('custrecord_emproster_vertical_amo',    join) || '',
+        region:       readSalesSubregion(r, join),
+        vertical:     readVerticalAmo(r, join),
         tier:         (r.getText('custrecord_emproster_sales_tier',     join) || '').replace('Solution Consultant - ', ''),
         salesteam:    r.getText('custrecord_emproster_salesteam',       join) || '',
         employeeRecId: r.getValue('custrecord_emproster_emp',           join) || '',
@@ -7966,20 +9402,23 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       const trimmed = (fullName || '').trim();
       if (!trimmed) return { members: [], searched: 0, lastName: '', enriched: true };
 
-      const parts    = trimmed.split(/\s+/);
-      const searchTerm = parts.length > 1 ? parts[parts.length - 1] : trimmed;
+      const searchTerms = requestedRosterSearchTerms(trimmed);
+      const searchTerm = searchTerms[0] || '';
       if (!searchTerm) return { members: [], searched: 0, lastName: '', enriched: true };
 
       const cacheKey = rosterLookupCacheKey((strictName ? 'strict:' : 'loose:') + searchTerm + (strictName ? ':' + trimmed : ''));
       const cached = _quickAssignRosterCache.get(cacheKey);
       if (cached) return cloneRosterLookupResult(cached);
 
-      let result;
-      try {
-        result = searchRosterByName(searchTerm);
-      } catch (rosterError) {
-        console.warn('[Staffing Helper] fast roster lookup failed; falling back to skill lookup:', rosterError);
-        result = searchSkillEntriesByRosterName(searchTerm);
+      let result = null;
+      for (const term of searchTerms) {
+        try {
+          result = searchRosterByName(term);
+        } catch (rosterError) {
+          console.warn('[Staffing Helper] fast roster lookup failed; falling back to skill lookup:', rosterError);
+          result = searchSkillEntriesByRosterName(term);
+        }
+        if (!strictName || (result.members || []).some(member => requestedRosterMemberMatches(member, trimmed))) break;
       }
 
       if (strictName) {
@@ -8278,6 +9717,361 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     }, 0);
   }
 
+  function isInactiveLicenseStatus(text) {
+    return /\b(?:inactive|expired|cancelled|canceled|terminated|void|closed)\b/i.test(String(text || ''));
+  }
+
+  function parseLicenseDate(value) {
+    const text = String(value || '').trim();
+    if (!text) return null;
+    let m = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (m) {
+      const year = Number(m[3].length === 2 ? `20${m[3]}` : m[3]);
+      return new Date(year, Number(m[1]) - 1, Number(m[2]));
+    }
+    m = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    const parsed = new Date(text);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  function isCurrentLicenseRow(row) {
+    if (!row) return false;
+    if (isInactiveLicenseStatus(row.status)) return false;
+    const expiration = parseLicenseDate(row.expiration);
+    if (!expiration) return true;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return expiration >= today;
+  }
+
+  function isCustomerLicenseHeaderRow(row) {
+    const headers = Array.from((row && row.cells) || []).map(function (cell) {
+      return normalizeSublistHeader(cell.textContent || '');
+    }).filter(Boolean);
+    const exactHeaders = new Set([
+      'customer', 'name', 'id', 'script id', 'production account', 'quantity',
+      'qty', 'type', 'license', 'licence', 'product', 'module', 'transaction', 'item', 'start date', 'end date', 'status',
+      'annual rev usd', 'currency cd', 'expiration', 'expiration date',
+    ]);
+    const score = headers.reduce(function (count, header) {
+      return count + (exactHeaders.has(header) ? 1 : 0);
+    }, 0);
+    const hasQuantity = headers.some(function (header) { return header === 'quantity' || header === 'qty'; });
+    const hasDescriptor = headers.some(function (header) {
+      return header === 'type' || header === 'item' || header === 'name' || header === 'license';
+    });
+    return score >= 3 && hasQuantity && hasDescriptor;
+  }
+
+  function mapCustomerLicenseHeaders(row, trustSourceActive) {
+    if (!isCustomerLicenseHeaderRow(row)) return null;
+    const map = {};
+    const cells = Array.from((row && row.cells) || []);
+    cells.forEach(function (cell, index) {
+      const header = normalizeSublistHeader(cell.textContent || '');
+      if (!header) return;
+      if (map.quantity == null && /\b(?:qty|quantity|seats?|users?|count)\b/.test(header)) map.quantity = index;
+      else if (map.expiration == null && /\b(?:expir|end date|renewal date|expires?|through)\b/.test(header)) map.expiration = index;
+      else if (map.status == null && (/\bstatus\b/.test(header) || /\bactive\b/.test(header))) map.status = index;
+      else if (map.item == null && /^item(?: name)?$/.test(header)) map.item = index;
+      else if (
+        map.type == null &&
+        (/^(?:type|type name|product|module)$/i.test(header) ||
+         /\b(?:licen[cs]e|product|module)\s+type\b/.test(header) ||
+         /\b(?:product|module)\s+name\b/.test(header))
+      ) map.type = index;
+      else if (map.license == null && /\b(?:license|licence|name|id)\b/.test(header)) map.license = index;
+    });
+    if (trustSourceActive && (map.type != null || map.license != null)) return map;
+    return (map.type != null || map.license != null) &&
+      (map.quantity != null || map.expiration != null || map.status != null) ? map : null;
+  }
+
+  function cleanCustomerLicenseValue(text) {
+    return cleanSublistCellText(text)
+      .replace(/^(?:New\s+)?(?:Edit\s*\|\s*View\s*)+/i, '')
+      .replace(/\bMore Options\b[\s\S]*$/i, '')
+      .trim();
+  }
+
+  function inferCustomerLicenseTypeFromRecordName(recordName) {
+    const text = cleanCustomerLicenseValue(recordName);
+    const match = text.match(/_(\d+)(?:_[a-z])?$/i);
+    if (!match) return '';
+    const product = PRODUCTS.find(function (item) {
+      return String(item.id) === String(match[1]);
+    });
+    return product ? product.name : '';
+  }
+
+  function formatCustomerLicenseType(type, item) {
+    const typeText = cleanCustomerLicenseValue(type).replace(/^basic license$/i, 'BASIC');
+    const itemText = cleanCustomerLicenseValue(item);
+    if (typeText && itemText && normalizeLoose(typeText) !== normalizeLoose(itemText)) {
+      return `${typeText} -- ${itemText}`;
+    }
+    return typeText || itemText;
+  }
+
+  function tableLooksLikeCustomerLicenseTable(table) {
+    const text = cleanSublistCellText(table && table.textContent || '');
+    if (!text || /SCOUT>|Previous SC History/i.test(text)) return false;
+    if (/\bCustomer Licen[cs]es?\b/i.test(text)) return true;
+    return /\bLicen[cs]e\b/i.test(text) && (/\bQuantity\b|\bQty\b/i.test(text)) && /\bExpir|\bEnd Date\b|\bStatus\b/i.test(text);
+  }
+
+  function parseCustomerLicensesFromDocument(doc, visibleOnly, trustSourceActive, debug) {
+    const rowsOut = [];
+    const seen = new Set();
+    if (!doc) return rowsOut;
+    Array.from(doc.querySelectorAll('table')).forEach(function (table) {
+      if (visibleOnly && !isLikelyVisibleElement(table)) return;
+      if (table.closest && table.closest('#sc-skills-panel')) return;
+      if (debug) debug.tables = (debug.tables || 0) + 1;
+      const likelyLicenseTable = tableLooksLikeCustomerLicenseTable(table);
+      if (visibleOnly && !likelyLicenseTable) return;
+      const rows = Array.from(table.rows || []);
+      let headerMap = null;
+      rows.forEach(function (row) {
+        const maybeHeader = mapCustomerLicenseHeaders(row, trustSourceActive);
+        if (maybeHeader) {
+          headerMap = maybeHeader;
+          if (debug) {
+            debug.candidateTables = (debug.candidateTables || 0) + 1;
+            if (debug.headers.length < 5) {
+              debug.headers.push(Array.from((row && row.cells) || []).map(function (cell) {
+                return cleanSublistCellText(cell.textContent || '');
+              }).filter(Boolean));
+            }
+          }
+          return;
+        }
+        if (!headerMap) return;
+        if (debug) debug.rowsSeen = (debug.rowsSeen || 0) + 1;
+        if (!likelyLicenseTable && headerMap.quantity == null && headerMap.expiration == null && headerMap.status == null) {
+          if (debug) debug.skippedShape = (debug.skippedShape || 0) + 1;
+          return;
+        }
+        const type = cleanCustomerLicenseValue(readSublistCell(row, headerMap.type));
+        const itemText = cleanCustomerLicenseValue(readSublistCell(row, headerMap.item));
+        const license = cleanCustomerLicenseValue(readSublistCell(row, headerMap.license));
+        const inferredType = inferCustomerLicenseTypeFromRecordName(license);
+        const displayType = formatCustomerLicenseType(type || inferredType, itemText) || license;
+        if (!displayType || /^type$/i.test(displayType) || /^license$/i.test(displayType) || /^name$/i.test(displayType) || /^total\b/i.test(displayType)) {
+          if (debug) debug.skippedNoType = (debug.skippedNoType || 0) + 1;
+          return;
+        }
+        const item = {
+          type: displayType,
+          item: itemText,
+          license,
+          quantity: cleanCustomerLicenseValue(readSublistCell(row, headerMap.quantity)) || '--',
+          expiration: cleanCustomerLicenseValue(readSublistCell(row, headerMap.expiration)) || '--',
+          status: cleanCustomerLicenseValue(readSublistCell(row, headerMap.status)),
+        };
+        if (!trustSourceActive && !isCurrentLicenseRow(item)) {
+          if (debug) debug.skippedInactive = (debug.skippedInactive || 0) + 1;
+          return;
+        }
+        const key = normalizeLoose(`${item.type}|${item.license}|${item.quantity}|${item.expiration}`);
+        if (seen.has(key)) {
+          if (debug) debug.duplicates = (debug.duplicates || 0) + 1;
+          return;
+        }
+        seen.add(key);
+        rowsOut.push(item);
+        if (debug) debug.rowsParsed = (debug.rowsParsed || 0) + 1;
+      });
+    });
+    return rowsOut;
+  }
+
+  function parseCustomerLicensesFromVisibleTables() {
+    const rowsOut = [];
+    const seen = new Set();
+    getAccessibleDocuments().forEach(function (doc) {
+      parseCustomerLicensesFromDocument(doc, true, false).forEach(function (item) {
+        const key = normalizeLoose(`${item.type || item.license}|${item.license}|${item.quantity}|${item.expiration}`);
+        if (seen.has(key)) return;
+        seen.add(key);
+        rowsOut.push(item);
+      });
+    });
+    return rowsOut;
+  }
+
+  function clickNativeCustomerLicensesTab() {
+    for (const doc of getAccessibleDocuments()) {
+      const candidates = Array.from(doc.querySelectorAll('a, button, span, div, td')).filter(function (el) {
+        if (!isLikelyVisibleElement(el)) return false;
+        if (el.closest && el.closest('#sc-skills-panel')) return false;
+        const text = cleanSublistCellText(el.textContent || '');
+        return /^Customer Licen[cs]es?\b/i.test(text);
+      }).sort(function (a, b) {
+        return cleanSublistCellText(a.textContent || '').length - cleanSublistCellText(b.textContent || '').length;
+      });
+      for (const el of candidates) {
+        try {
+          const target = (el.closest && el.closest('a, button')) ||
+            (el.querySelector && el.querySelector('a, button')) ||
+            el;
+          target.click();
+          return true;
+        } catch (e) { /* try next */ }
+      }
+    }
+    return false;
+  }
+
+  function renderCustomerLicenseRows(rows) {
+    if (!rows || !rows.length) {
+      return '<div class="sc-customer-license-empty">No active customer licenses found.</div>';
+    }
+    const sortedRows = rows.slice().sort(function (a, b) {
+      const aBasic = /^basic\b/i.test(String(a && a.type || ''));
+      const bBasic = /^basic\b/i.test(String(b && b.type || ''));
+      if (aBasic !== bBasic) return aBasic ? -1 : 1;
+      return 0;
+    });
+    let html = '<table class="sc-customer-license-table"><thead><tr>' +
+      '<th>Type</th><th style="width:18%">Qty</th><th style="width:28%">Expiration</th>' +
+      '</tr></thead><tbody>';
+    sortedRows.forEach(function (row) {
+      html += '<tr><td>' + escHtml(row.type || row.license || '') + '</td>' +
+              '<td>' + escHtml(row.quantity || '--') + '</td>' +
+              '<td>' + escHtml(row.expiration || '--') + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    return html;
+  }
+
+  function createCustomerLicenseDebug() {
+    return {
+      tables: 0,
+      candidateTables: 0,
+      rowsSeen: 0,
+      rowsParsed: 0,
+      skippedShape: 0,
+      skippedNoType: 0,
+      skippedInactive: 0,
+      duplicates: 0,
+      headers: [],
+      source: '',
+      htmlChars: 0,
+    };
+  }
+
+  function renderCustomerLicenseDebug(debug) {
+    if (!debug) return '';
+    const skipped = (debug.skippedShape || 0) + (debug.skippedNoType || 0) + (debug.skippedInactive || 0) + (debug.duplicates || 0);
+    const openAttr = skipped || ((debug.rowsSeen || 0) && (debug.rowsParsed || 0) < (debug.rowsSeen || 0)) ? ' open' : '';
+    return '<details class="sc-customer-license-debug"' + openAttr + '>' +
+      '<summary>License Debug</summary>' +
+      '<div>Source: ' + escHtml(debug.source || 'saved search') +
+      ' | HTML chars: ' + escHtml(String(debug.htmlChars || 0)) +
+      ' | tables: ' + escHtml(String(debug.tables || 0)) +
+      ' | candidate tables: ' + escHtml(String(debug.candidateTables || 0)) + '</div>' +
+      '<div>Rows seen: ' + escHtml(String(debug.rowsSeen || 0)) +
+      ' | parsed: ' + escHtml(String(debug.rowsParsed || 0)) +
+      ' | duplicates: ' + escHtml(String(debug.duplicates || 0)) +
+      ' | skipped shape: ' + escHtml(String(debug.skippedShape || 0)) +
+      ' | skipped no type: ' + escHtml(String(debug.skippedNoType || 0)) +
+      ' | skipped inactive: ' + escHtml(String(debug.skippedInactive || 0)) + '</div>' +
+      (debug.headers && debug.headers.length
+        ? '<div>Headers: ' + escHtml(JSON.stringify(debug.headers.slice(0, 3))) + '</div>'
+        : '') +
+      '</details>';
+  }
+
+  function renderCustomerLicenseTerminal() {
+    return '<div class="sc-customer-license-empty sc-customer-license-terminal">SCOUT&gt;&nbsp;' +
+           '<span class="sc-prev-history-sequence">' +
+           '<span>Dialing ...</span>' +
+           '<span>Connected at 14400 MBPS</span>' +
+           '<span>CONNECTED TO NETSUITE</span>' +
+           '<span>Communicating with server</span>' +
+           '<span>Waiting for response</span>' +
+           '<span>Formatting licenses</span>' +
+           '</span><span class="sc-prev-history-cursor"></span></div>';
+  }
+
+  function renderCustomerLicenseBody(companySearchText) {
+    const state = CUSTOMER_LICENSE_CACHE[String(companySearchText || '').trim()];
+    if (!state) {
+      return '<div class="sc-customer-license-empty">SCOUT&gt; click Customer License to query active licenses</div>';
+    }
+    if (state.status === 'loading') {
+      return renderCustomerLicenseTerminal();
+    }
+    if (state.status === 'still-loading') {
+      return renderCustomerLicenseTerminal();
+    }
+    if (state.status === 'error') {
+      return '<div class="sc-customer-license-empty">SCOUT&gt; could not read Customer Licenses: ' + escHtml(state.error || 'unknown error') + '</div>';
+    }
+    return renderCustomerLicenseRows(state.rows || []) +
+      (getDebugModeEnabled() ? renderCustomerLicenseDebug(state.debug) : '');
+  }
+
+  function renderCustomerLicenseStatus(companySearchText) {
+    const state = CUSTOMER_LICENSE_CACHE[String(companySearchText || '').trim()];
+    if (!state) return 'click to load';
+    if (state.status === 'loading') return 'loading';
+    if (state.status === 'still-loading') return 'still waiting';
+    if (state.status === 'error') return 'error';
+    const count = (state.rows || []).length;
+    return `${count} active license${count === 1 ? '' : 's'}`;
+  }
+
+  function updateCustomerLicensePanel(companySearchText) {
+    const body = document.getElementById('sc-customer-license-body');
+    const status = document.getElementById('sc-customer-license-status');
+    if (body) body.innerHTML = renderCustomerLicenseBody(companySearchText);
+    if (status) status.textContent = renderCustomerLicenseStatus(companySearchText);
+  }
+
+  function loadCustomerLicensesIntoPanel(companySearchText) {
+    const key = String(companySearchText || '').trim();
+    if (!key) return;
+    const existing = CUSTOMER_LICENSE_CACHE[key];
+    if (existing && existing.status !== 'error') {
+      updateCustomerLicensePanel(key);
+      return;
+    }
+    CUSTOMER_LICENSE_CACHE[key] = { status: 'loading', rows: [] };
+    updateCustomerLicensePanel(key);
+    loadCustomerLicensesFromSavedSearch(key, function () {
+      const current = CUSTOMER_LICENSE_CACHE[key];
+      if (current && current.status === 'loading') {
+        CUSTOMER_LICENSE_CACHE[key] = { status: 'still-loading', rows: [], source: 'saved-search' };
+        updateCustomerLicensePanel(key);
+      }
+    }).then(function (result) {
+      const rows = Array.isArray(result) ? result : (result && result.rows) || [];
+      CUSTOMER_LICENSE_CACHE[key] = { status: 'ready', rows, source: 'saved-search', debug: result && result.debug };
+      updateCustomerLicensePanel(key);
+    }).catch(function (e) {
+      try {
+        const fallbackRows = parseCustomerLicensesFromVisibleTables();
+        if (fallbackRows.length) {
+          CUSTOMER_LICENSE_CACHE[key] = {
+            status: 'ready',
+            rows: fallbackRows,
+            source: 'visible-fallback',
+            warning: e.message || String(e),
+            debug: { source: 'visible fallback after error', rowsParsed: fallbackRows.length, htmlChars: 0, headers: [] },
+          };
+        } else {
+          CUSTOMER_LICENSE_CACHE[key] = { status: 'error', rows: [], error: e.message || String(e) };
+        }
+      } catch (fallbackError) {
+        CUSTOMER_LICENSE_CACHE[key] = { status: 'error', rows: [], error: e.message || String(e) };
+      }
+      updateCustomerLicensePanel(key);
+    });
+  }
+
   function renderStaffingContext(body, ctx) {
     // Item 11: include country when non-US (Canada, etc.)
     const locationParts = [ctx.city, ctx.state, ctx.country].filter(Boolean);
@@ -8306,6 +10100,82 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     }
     html += '<div class="sc-ctx-item sc-ctx-full">' + onsiteBadge + '</div>';
 
+    function renderHistoryStatus(status) {
+      const text = String(status || '');
+      if (/loading|checking|background|still/i.test(text)) {
+        return '<span class="sc-prev-history-terminal">SCOUT&gt;&nbsp;' +
+               '<span class="sc-prev-history-sequence">' +
+               '<span>Dialing ...</span>' +
+               '<span>Connected at 14400 MBPS</span>' +
+               '<span>CONNECTED TO NETSUITE</span>' +
+               '<span>Communicating with server</span>' +
+               '<span>Waiting for response</span>' +
+               '<span>Formatting results</span>' +
+               '</span><span class="sc-prev-history-cursor"></span></span>';
+      }
+      return '<span class="sc-prev-history-terminal">SCOUT&gt;&nbsp;' + escHtml(text) + '</span>';
+    }
+
+    const historyRows = ctx.previousHistoryRows || [];
+    const historyGroups = groupPreviousHistoryRows(historyRows).slice(0, 8);
+    const historyStatus = ctx.previousHistoryStatus || 'Loading previous SC history...';
+    const historyIsLoading = /loading|checking|background|still/i.test(historyStatus);
+    html += '<div class="sc-prev-history-panel' + (_previousHistoryCollapsed ? ' collapsed' : '') + '">';
+    html += '<div class="sc-prev-history-head">' +
+            '<button type="button" class="sc-prev-history-toggle" aria-expanded="' + (_previousHistoryCollapsed ? 'false' : 'true') + '">' +
+            '<span class="sc-prev-history-chevron">' + (_previousHistoryCollapsed ? '▶' : '▼') + '</span>' +
+            '<span class="sc-prev-history-title">Previous SC History</span></button>' +
+            '<span class="sc-prev-history-status">' + renderHistoryStatus(historyStatus) + '</span></div>';
+    html += '<div class="sc-prev-history-body">';
+    if (historyGroups.length) {
+      html += '<table class="sc-prev-history-table"><thead><tr>' +
+              '<th style="width:10%">A/D</th><th style="width:27%">SC</th><th style="width:13%">SCRs</th><th style="width:25%">Products</th><th>Latest Opp</th>' +
+              '</tr></thead><tbody>';
+      historyGroups.forEach(function (group, index) {
+        const requestType = group.requestType;
+        const typeClass = requestType === 'AMO' ? 'amo' : (requestType === 'Direct' ? 'direct' : 'unknown');
+        const latestItem = group.items[0] || {};
+        const groupId = `sc-prev-history-${index}`;
+        const productSummary = getHistoryProductSummary(group.items);
+        html += '<tr><td><span class="sc-prev-history-type sc-prev-history-type-' + typeClass + '">' +
+                escHtml(requestType || '?') + '</span></td>' +
+                '<td>' + escHtml(group.assignee && group.assignee.name ? group.assignee.name : '') +
+                '<span class="sc-prev-history-meta">most recent SCR ' + escHtml(latestItem.scrId || '') + '</span></td>' +
+                '<td><button type="button" class="sc-prev-history-count-btn" data-history-detail="' + escAttr(groupId) + '" data-history-count="' + group.items.length + '">' +
+                escHtml(`${group.items.length}>`) + '</button></td>' +
+                '<td><span class="sc-prev-history-products-summary">' + escHtml(productSummary) + '</span></td>' +
+                '<td>' + escHtml(latestItem.oppId || '') + '</td></tr>';
+        html += '<tr class="sc-prev-history-detail-row" data-history-row="' + escAttr(groupId) + '"><td class="sc-prev-history-detail-cell" colspan="5">' +
+                '<div class="sc-prev-history-detail-list">';
+        group.items.forEach(function (item) {
+          html += '<div class="sc-prev-history-detail-item">' +
+                  '<span class="sc-prev-history-detail-scr">SCR ' + escHtml(item.scrId || '?') + '</span>' +
+                  '<span>' + escHtml(getHistoryItemProducts(item) || '--') + '</span>' +
+                  '<span>' + escHtml(item.oppId || '') + '</span>' +
+                  '</div>';
+        });
+        html += '</div></td></tr>';
+      });
+      html += '</tbody></table>';
+    } else if (!historyIsLoading) {
+      html += '<div class="sc-prev-history-empty">NO ROWS RETURNED</div>';
+    }
+    html += '</div>';
+    html += '</div>';
+
+    if (ctx.isAmoRequest) {
+      const customerLicenseSearchText = ctx.companySearchText || ctx.companyId || '';
+      html += '<div class="sc-customer-license-panel' + (_customerLicenseCollapsed ? ' collapsed' : '') + '">' +
+              '<div class="sc-customer-license-head">' +
+              '<button type="button" class="sc-customer-license-toggle" data-license-search="' + escAttr(customerLicenseSearchText) + '" aria-expanded="' + (_customerLicenseCollapsed ? 'false' : 'true') + '">' +
+              '<span class="sc-customer-license-chevron">' + (_customerLicenseCollapsed ? '▶' : '▼') + '</span>' +
+              '<span>Customer License</span></button>' +
+              '<span class="sc-customer-license-status" id="sc-customer-license-status">' + escHtml(renderCustomerLicenseStatus(customerLicenseSearchText)) + '</span>' +
+              '</div>' +
+              '<div class="sc-customer-license-body" id="sc-customer-license-body">' + renderCustomerLicenseBody(customerLicenseSearchText) + '</div>' +
+              '</div>';
+    }
+
     // Item 10: previously assigned SCs on this specific deal (opportunity)
     if (ctx.prevSCsOnDeal && ctx.prevSCsOnDeal.length) {
       html += '<div class="sc-ctx-item sc-ctx-full"><span class="sc-ctx-label">🎯 Prev SC on This Deal</span>';
@@ -8314,29 +10184,113 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               '</span></div>';
     }
 
-    // Previously assigned SCs at the company level
-    if (ctx.prevSCs && ctx.prevSCs.length) {
-      const top       = ctx.prevSCs[0];
-      const restItems = ctx.prevSCs.slice(1, 5);
-      html += '<div class="sc-ctx-item sc-ctx-full"><span class="sc-ctx-label">👤 Prev SC (Company)</span>';
-      html += '<span class="sc-ctx-val">' + escHtml(top.name) +
-              ' <span class="sc-ctx-count">(' + top.count + ' time' + (top.count > 1 ? 's' : '') + ')</span>';
-      if (restItems.length) {
-        html += ' <button class="sc-ctx-expand-btn" data-more-count="' + restItems.length + '" data-expanded="false">▼ ' + restItems.length + ' more</button>';
+    if (ctx.historyDebug && getDebugModeEnabled()) {
+      const dbg = ctx.historyDebug;
+      const openAttr = (!ctx.prevSCsOnDeal?.length && !ctx.prevSCs?.length) ? ' open' : '';
+      const sampleRows = (dbg.mergedSamples || []).slice(0, 6);
+      html += '<details class="sc-history-debug"' + openAttr + '>';
+      html += '<summary>History Debug</summary>';
+      html += '<div class="sc-history-debug-body">';
+      html += '<div>Company: <span class="sc-history-debug-code">' + escHtml(dbg.companyId || '') + '</span> | ';
+      html += 'Search text: <span class="sc-history-debug-code">' + escHtml(dbg.companySearchText || '') + '</span> | ';
+      html += 'Current SCR: <span class="sc-history-debug-code">' + escHtml(dbg.currentScrId || '') + '</span> | ';
+      html += 'Current Opp: <span class="sc-history-debug-code">' + escHtml(dbg.currentOppText || dbg.currentOppId || '') + '</span></div>';
+      html += '<div>SuiteScript rows: <span class="sc-history-debug-code">' + escHtml(String(dbg.suiteRows || 0)) + '</span> | ';
+      html += 'SuiteScript parsed: <span class="sc-history-debug-code">' + escHtml(String(dbg.suiteParsedRows || 0)) + '</span> | ';
+      html += 'Record loads: <span class="sc-history-debug-code">' + escHtml(String(dbg.recordsLoaded || 0)) + '</span> | ';
+      html += 'Saved search rows: <span class="sc-history-debug-code">' + escHtml(String(dbg.savedSearchRows || 0)) + '</span> | ';
+      html += 'Saved search parsed: <span class="sc-history-debug-code">' + escHtml(String(dbg.savedSearchParsedRows || 0)) + '</span> | ';
+      html += 'Visible rows: <span class="sc-history-debug-code">' + escHtml(String(dbg.visibleRows || 0)) + '</span> | ';
+      html += 'Merged rows: <span class="sc-history-debug-code">' + escHtml(String(dbg.mergedRows || 0)) + '</span> | ';
+      html += 'Same opp: <span class="sc-history-debug-code">' + escHtml(String(dbg.sameOppRows || 0)) + '</span> | ';
+      html += 'Other opp: <span class="sc-history-debug-code">' + escHtml(String(dbg.otherOppRows || 0)) + '</span></div>';
+      if (dbg.savedSearchStatus) {
+        html += '<div>Saved search status: <span class="sc-history-debug-code">' + escHtml(dbg.savedSearchStatus) + '</span> | ';
+        html += 'tables: <span class="sc-history-debug-code">' + escHtml(String(dbg.savedSearchTables || 0)) + '</span> | ';
+        html += 'candidate tables: <span class="sc-history-debug-code">' + escHtml(String(dbg.savedSearchCandidateTables || 0)) + '</span></div>';
       }
-      html += '</span>';
-      if (restItems.length) {
-        html += '<div class="sc-ctx-prev-list" style="display:none">';
-        restItems.forEach(function (sc) {
-          html += '<div class="sc-ctx-prev-item">' + escHtml(sc.name) +
-                  ' <span class="sc-ctx-count">(' + sc.count + ')</span></div>';
+      if (dbg.savedSearchTransport || dbg.savedSearchTransportFallback) {
+        html += '<div>Saved search transport: <span class="sc-history-debug-code">' + escHtml(dbg.savedSearchTransport || '') + '</span>';
+        if (dbg.savedSearchTransportFallback) {
+          html += ' | fallback: <span class="sc-history-debug-code">' + escHtml(dbg.savedSearchTransportFallback) + '</span>';
+        }
+        html += '</div>';
+      }
+      html += '<div>Opp tokens: <span class="sc-history-debug-code">' + escHtml((dbg.currentOppTokens || []).join(', ') || 'none') + '</span></div>';
+      html += '<div>Search attempts: <span class="sc-history-debug-code">' + escHtml(String((dbg.searchAttempts || []).length)) + '</span>';
+      if (dbg.searchAttempts && dbg.searchAttempts.length) {
+        const lastAttempt = dbg.searchAttempts[dbg.searchAttempts.length - 1];
+        html += ' | last: <span class="sc-history-debug-code">' + escHtml(`${lastAttempt.filterOp || '?'} / ${(lastAttempt.columns || []).join(', ')} / rows ${lastAttempt.rows != null ? lastAttempt.rows : 'err'}`) + '</span>';
+      }
+      html += '</div>';
+      if (dbg.visibleTables != null) {
+        html += '<div>Visible tables scanned: <span class="sc-history-debug-code">' + escHtml(String(dbg.visibleTables)) + '</span> | candidate tables: <span class="sc-history-debug-code">' + escHtml(String(dbg.visibleCandidateTables || 0)) + '</span></div>';
+      }
+      if (sampleRows.length) {
+        html += '<div class="sc-history-debug-row"><strong>Merged rows returned:</strong>';
+        sampleRows.forEach(function (item) {
+          html += '<div class="sc-history-debug-code">' + escHtml(`${item.source || 'search'} | ${getHistoryRequestType(item) || '?'} | SCR ${item.scrId || '?'} | Opp ${item.oppId || '?'} | ${item.assignee && item.assignee.name ? item.assignee.name : '?'} | Products ${item.productsDemoed || '--'}`) + '</div>';
+        });
+        html += '</div>';
+      } else {
+        html += '<div class="sc-history-debug-row">No SCR history rows were parsed by SCOUT.</div>';
+      }
+      if (dbg.suiteSamples && dbg.suiteSamples.length) {
+        html += '<div class="sc-history-debug-row"><strong>SuiteScript parsed sample:</strong>';
+        dbg.suiteSamples.slice(0, 4).forEach(function (item) {
+          html += '<div class="sc-history-debug-code">' + escHtml(`SCR ${item.scrId || '?'} | Opp ${item.oppId || '?'} | ${item.assignee && item.assignee.name ? item.assignee.name : '?'}`) + '</div>';
         });
         html += '</div>';
       }
-      html += '</div>';
+      if (dbg.visibleSamples && dbg.visibleSamples.length) {
+        html += '<div class="sc-history-debug-row"><strong>Visible sublist parsed sample:</strong>';
+        dbg.visibleSamples.slice(0, 4).forEach(function (item) {
+          html += '<div class="sc-history-debug-code">' + escHtml(`SCR ${item.scrId || '?'} | Opp ${item.oppId || '?'} | ${item.assignee && item.assignee.name ? item.assignee.name : '?'}`) + '</div>';
+        });
+        html += '</div>';
+      }
+      if (dbg.savedSearchSamples && dbg.savedSearchSamples.length) {
+        html += '<div class="sc-history-debug-row"><strong>Saved search parsed sample:</strong>';
+        dbg.savedSearchSamples.slice(0, 4).forEach(function (item) {
+          html += '<div class="sc-history-debug-code">' + escHtml(`${getHistoryRequestType(item) || '?'} | SCR ${item.scrId || '?'} | Opp ${item.oppId || '?'} | ${item.assignee && item.assignee.name ? item.assignee.name : '?'} | Products ${item.productsDemoed || '--'}`) + '</div>';
+        });
+        html += '</div>';
+      }
+      if (dbg.visibleHeaders && dbg.visibleHeaders.length) {
+        html += '<div class="sc-history-debug-row"><strong>Visible header maps:</strong> <span class="sc-history-debug-code">' + escHtml(JSON.stringify(dbg.visibleHeaders.slice(0, 3))) + '</span></div>';
+      }
+      if (dbg.savedSearchHeaders && dbg.savedSearchHeaders.length) {
+        html += '<div class="sc-history-debug-row"><strong>Saved search header maps:</strong> <span class="sc-history-debug-code">' + escHtml(JSON.stringify(dbg.savedSearchHeaders.slice(0, 3))) + '</span></div>';
+      }
+      if (dbg.visibleHeaderCandidates && dbg.visibleHeaderCandidates.length) {
+        html += '<div class="sc-history-debug-row"><strong>Visible header candidates:</strong> <span class="sc-history-debug-code">' + escHtml(JSON.stringify(dbg.visibleHeaderCandidates.slice(0, 3))) + '</span></div>';
+      }
+      if (dbg.visibleCandidateSamples && dbg.visibleCandidateSamples.length) {
+        html += '<div class="sc-history-debug-row"><strong>Candidate table samples:</strong> <span class="sc-history-debug-code">' + escHtml(JSON.stringify(dbg.visibleCandidateSamples.slice(0, 2))) + '</span></div>';
+      }
+      if (dbg.savedSearchCandidateSamples && dbg.savedSearchCandidateSamples.length) {
+        html += '<div class="sc-history-debug-row"><strong>Saved search table samples:</strong> <span class="sc-history-debug-code">' + escHtml(JSON.stringify(dbg.savedSearchCandidateSamples.slice(0, 2))) + '</span></div>';
+      }
+      if (dbg.savedSearchRawSamples && dbg.savedSearchRawSamples.length) {
+        html += '<div class="sc-history-debug-row"><strong>Saved search raw parsed sample:</strong> <span class="sc-history-debug-code">' + escHtml(JSON.stringify(dbg.savedSearchRawSamples.slice(0, 4))) + '</span></div>';
+      }
+      if (dbg.savedSearchHtmlSample) {
+        html += '<div class="sc-history-debug-row"><strong>Saved search page sample:</strong> <span class="sc-history-debug-code">' + escHtml(dbg.savedSearchHtmlSample) + '</span></div>';
+      }
+      if (dbg.savedSearchRawTextSample) {
+        html += '<div class="sc-history-debug-row"><strong>Saved search raw text sample:</strong> <span class="sc-history-debug-code">' + escHtml(dbg.savedSearchRawTextSample) + '</span></div>';
+      }
+      if (dbg.unparsedSuiteRows && dbg.unparsedSuiteRows.length) {
+        html += '<div class="sc-history-debug-row"><strong>SuiteScript unparsed sample:</strong> <span class="sc-history-debug-code">' + escHtml(JSON.stringify(dbg.unparsedSuiteRows.slice(0, 3))) + '</span></div>';
+      }
+      if (dbg.errors && dbg.errors.length) {
+        html += '<div class="sc-history-debug-row"><strong>Errors:</strong> ' + escHtml(dbg.errors.slice(0, 3).join(' | ')) + '</div>';
+      }
+      html += '</div></details>';
     }
 
-    const hasAnyContext = location || ctx.industryFamily || (ctx.prevSCs && ctx.prevSCs.length) ||
+    const hasAnyContext = location || ctx.industryFamily || (ctx.historyDebug && getDebugModeEnabled()) || (ctx.prevSCs && ctx.prevSCs.length) ||
+                          (ctx.prevAmoSCs && ctx.prevAmoSCs.length) || (ctx.prevDirectSCs && ctx.prevDirectSCs.length) ||
                           (ctx.prevSCsOnDeal && ctx.prevSCsOnDeal.length) || ctx.leadScName;
     if (!hasAnyContext) {
       html += '<div class="sc-ctx-item sc-ctx-full" style="color:var(--sc-text-muted);font-size:11px">No additional context available for this request.</div>';
@@ -8345,9 +10299,34 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     html += '</div>';
     body.innerHTML = html;
 
-    // Wire expand button
-    const expandBtn = body.querySelector('.sc-ctx-expand-btn');
-    if (expandBtn) {
+    const historyToggle = body.querySelector('.sc-prev-history-toggle');
+    if (historyToggle) {
+      historyToggle.addEventListener('click', function () {
+        _previousHistoryCollapsed = !_previousHistoryCollapsed;
+        const panel = this.closest('.sc-prev-history-panel');
+        const chevron = this.querySelector('.sc-prev-history-chevron');
+        if (panel) panel.classList.toggle('collapsed', _previousHistoryCollapsed);
+        if (chevron) chevron.textContent = _previousHistoryCollapsed ? '▶' : '▼';
+        this.setAttribute('aria-expanded', _previousHistoryCollapsed ? 'false' : 'true');
+      });
+    }
+
+    const licenseToggle = body.querySelector('.sc-customer-license-toggle');
+    if (licenseToggle) {
+      licenseToggle.addEventListener('click', function () {
+        _customerLicenseCollapsed = !_customerLicenseCollapsed;
+        const panel = this.closest('.sc-customer-license-panel');
+        const chevron = this.querySelector('.sc-customer-license-chevron');
+        if (panel) panel.classList.toggle('collapsed', _customerLicenseCollapsed);
+        if (chevron) chevron.textContent = _customerLicenseCollapsed ? '▶' : '▼';
+        this.setAttribute('aria-expanded', _customerLicenseCollapsed ? 'false' : 'true');
+        if (!_customerLicenseCollapsed) loadCustomerLicensesIntoPanel(this.dataset.licenseSearch || '');
+      });
+      if (!_customerLicenseCollapsed) loadCustomerLicensesIntoPanel(licenseToggle.dataset.licenseSearch || '');
+    }
+
+    // Wire expand buttons
+    body.querySelectorAll('.sc-ctx-expand-btn').forEach(function (expandBtn) {
       expandBtn.addEventListener('click', function () {
         const expanded = this.dataset.expanded === 'true';
         const list = this.closest('.sc-ctx-item').querySelector('.sc-ctx-prev-list');
@@ -8355,7 +10334,1082 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         this.dataset.expanded = String(!expanded);
         this.textContent = (expanded ? '▼ ' : '▲ ') + (this.dataset.moreCount || '0') + ' more';
       });
+    });
+    body.querySelectorAll('.sc-prev-history-count-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const detailId = this.dataset.historyDetail || '';
+        const count = this.dataset.historyCount || '0';
+        const rows = Array.from(body.querySelectorAll('.sc-prev-history-detail-row')).filter(function (row) {
+          return row.dataset.historyRow === detailId;
+        });
+        const expanded = this.dataset.expanded === 'true';
+        rows.forEach(function (row) {
+          row.style.display = expanded ? 'none' : 'table-row';
+        });
+        this.dataset.expanded = String(!expanded);
+        this.textContent = `${count}${expanded ? '>' : 'v'}`;
+      });
+    });
+  }
+
+  function readScrRowFieldValue(row, fieldId) {
+    try {
+      return String(row.getValue(fieldId) || '').trim();
+    } catch (e) {
+      return '';
     }
+  }
+
+  function readScrRowFieldText(row, fieldId) {
+    try {
+      return String(row.getText(fieldId) || '').trim();
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function readScrRecordFieldValue(rec, fieldId) {
+    try {
+      return String(rec.getFieldValue(fieldId) || '').trim();
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function readScrRecordFieldText(rec, fieldId) {
+    try {
+      return String(rec.getFieldText(fieldId) || '').trim();
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function lookupPreviousAssigneeName(rosterId, employeeId) {
+    try {
+      if (employeeId) {
+        const employeeName = nlapiLookupField('employee', employeeId, 'entityid', true) ||
+          nlapiLookupField('employee', employeeId, 'entityid') ||
+          nlapiLookupField('employee', employeeId, 'altname');
+        if (employeeName) return String(employeeName).trim();
+      }
+    } catch (e) { /* try roster */ }
+    try {
+      if (rosterId) {
+        const rosterName = nlapiLookupField('customrecord_emproster', rosterId, 'name', true) ||
+          nlapiLookupField('customrecord_emproster', rosterId, 'name');
+        if (rosterName) return String(rosterName).trim();
+      }
+    } catch (e) { /* no lookup fallback */ }
+    return '';
+  }
+
+  function getPreviousScrAssignee(row) {
+    const rosterId = readScrRowFieldValue(row, SCR_FIELD_ASSIGNEE);
+    const employeeId = readScrRowFieldValue(row, SCR_FIELD_ASSIGNEE_EMPLOYEE);
+    const rosterName = readScrRowFieldText(row, SCR_FIELD_ASSIGNEE);
+    const employeeName = readScrRowFieldText(row, SCR_FIELD_ASSIGNEE_EMPLOYEE);
+    const name = employeeName || rosterName || lookupPreviousAssigneeName(rosterId, employeeId);
+    const key = normalizeLoose(name) || (employeeId ? `employee:${employeeId}` : '') || (rosterId ? `roster:${rosterId}` : '');
+    return key && name ? { key, id: rosterId || employeeId || key, name } : null;
+  }
+
+  function getPreviousScrAssigneeFromRecord(rec) {
+    const rosterId = readScrRecordFieldValue(rec, SCR_FIELD_ASSIGNEE);
+    const employeeId = readScrRecordFieldValue(rec, SCR_FIELD_ASSIGNEE_EMPLOYEE);
+    const rosterName = readScrRecordFieldText(rec, SCR_FIELD_ASSIGNEE);
+    const employeeName = readScrRecordFieldText(rec, SCR_FIELD_ASSIGNEE_EMPLOYEE);
+    const name = employeeName || rosterName || lookupPreviousAssigneeName(rosterId, employeeId);
+    const key = normalizeLoose(name) || (employeeId ? `employee:${employeeId}` : '') || (rosterId ? `roster:${rosterId}` : '');
+    return key && name ? { key, id: rosterId || employeeId || key, name } : null;
+  }
+
+  function searchCustomerScrRows(companyId, debug) {
+    const filterSets = [
+      { op: 'is', filters: [new nlobjSearchFilter(SCR_FIELD_COMPANY, null, 'is', companyId)] },
+      { op: 'anyof', filters: [new nlobjSearchFilter(SCR_FIELD_COMPANY, null, 'anyof', companyId)] },
+    ];
+    const columnSets = [
+      ['internalid', SCR_FIELD_OPP, SCR_FIELD_ASSIGNEE, SCR_FIELD_ASSIGNEE_EMPLOYEE],
+      ['internalid', SCR_FIELD_OPP, SCR_FIELD_ASSIGNEE],
+      ['internalid', SCR_FIELD_OPP, SCR_FIELD_ASSIGNEE_EMPLOYEE],
+      ['internalid', SCR_FIELD_OPP],
+      ['internalid'],
+    ];
+    let emptyRows = null;
+
+    for (const filterSet of filterSets) {
+      for (const fieldIds of columnSets) {
+        try {
+          const rows = nlapiSearchRecord(SCR_RECORD_TYPE, null, filterSet.filters, fieldIds.map(fieldId => new nlobjSearchColumn(fieldId))) || [];
+          if (debug) {
+            debug.searchAttempts.push({
+              filterOp: filterSet.op,
+              columns: fieldIds.slice(),
+              rows: rows.length,
+            });
+          }
+          if (rows.length) return rows;
+          if (!emptyRows) emptyRows = rows;
+        } catch (e) {
+          const errorMessage = e.message || e;
+          const attempt = {
+            filterOp: filterSet.op,
+            columns: fieldIds,
+            error: errorMessage,
+          };
+          if (debug) {
+            debug.searchAttempts.push(attempt);
+            debug.errors.push(`Search ${filterSet.op}/${fieldIds.join('+')}: ${errorMessage}`);
+          }
+          console.warn('[SCOUT] SCR customer history query shape failed:', attempt);
+          if (/type argument .* is not a valid record/i.test(String(errorMessage))) {
+            return emptyRows || [];
+          }
+        }
+      }
+    }
+    return emptyRows || [];
+  }
+
+  function getScrHistoryRowId(row) {
+    return readScrRowFieldValue(row, 'internalid') ||
+      (row && typeof row.getId === 'function' ? String(row.getId() || '').trim() : '');
+  }
+
+  function getCustomerScrHistory(companyId, debug) {
+    const rows = searchCustomerScrRows(companyId, debug);
+    if (debug) debug.suiteRows = rows.length;
+    const history = [];
+    (rows || []).forEach(function (row) {
+      const scrId = getScrHistoryRowId(row);
+      let oppId = readScrRowFieldValue(row, SCR_FIELD_OPP);
+      let assignee = getPreviousScrAssignee(row);
+
+      if (scrId && (!oppId || !assignee)) {
+        try {
+          if (debug) debug.recordsLoaded += 1;
+          const rec = nlapiLoadRecord(SCR_RECORD_TYPE, scrId);
+          if (rec) {
+            if (!oppId) oppId = readScrRecordFieldValue(rec, SCR_FIELD_OPP);
+            if (!assignee) assignee = getPreviousScrAssigneeFromRecord(rec);
+          }
+        } catch (e) {
+          if (debug) debug.errors.push(`Load SCR ${scrId}: ${e.message || e}`);
+          console.warn('[SCOUT] Could not load SCR history row:', scrId, e.message || e);
+        }
+      }
+
+      if (scrId && assignee) {
+        const item = { scrId, oppId, assignee, source: 'suitescript' };
+        history.push(item);
+        if (debug && debug.suiteSamples.length < 8) debug.suiteSamples.push(item);
+      } else if (debug && debug.unparsedSuiteRows.length < 8) {
+        debug.unparsedSuiteRows.push({
+          scrId,
+          oppId,
+          rosterValue: readScrRowFieldValue(row, SCR_FIELD_ASSIGNEE),
+          rosterText: readScrRowFieldText(row, SCR_FIELD_ASSIGNEE),
+          employeeValue: readScrRowFieldValue(row, SCR_FIELD_ASSIGNEE_EMPLOYEE),
+          employeeText: readScrRowFieldText(row, SCR_FIELD_ASSIGNEE_EMPLOYEE),
+        });
+      }
+    });
+    if (debug) debug.suiteParsedRows = history.length;
+    return history;
+  }
+
+  function cleanSublistCellText(text) {
+    return String(text || '')
+      .replace(/\u00a0/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function escapeRegExp(text) {
+    return String(text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function canonicalHistoryRequestType(value) {
+    const text = cleanSublistCellText(value);
+    if (/\bAMO\b/i.test(text)) return 'AMO';
+    if (/\bDirect\b/i.test(text)) return 'Direct';
+    return '';
+  }
+
+  function getHistoryRequestType(item) {
+    if (!item) return '';
+    return canonicalHistoryRequestType(item.requestType || item.directAmo || item.adType || '');
+  }
+
+  function cleanHistoryProductsText(text) {
+    let value = cleanSublistCellText(text)
+      .replace(/\bparent\.[A-Za-z0-9_$]+\b[\s\S]*$/i, '')
+      .replace(/\bwindow\.[A-Za-z0-9_$]+\b[\s\S]*$/i, '')
+      .replace(/\bdocument\.[A-Za-z0-9_$]+\b[\s\S]*$/i, '')
+      .replace(/\bNS\.[A-Za-z0-9_$.]+\b[\s\S]*$/i, '')
+      .replace(/\bfunction\s*\([^)]*\)\s*\{[\s\S]*$/i, '')
+      .replace(/\bvar\s+[A-Za-z0-9_$]+\s*=[\s\S]*$/i, '')
+      .replace(/\bMore Options\b[\s\S]*$/i, '')
+      .replace(/\b(?:New|Edit|View)\b.*$/i, '')
+      .replace(/^(?:-|--|none|n\/a|na|null)$/i, '')
+      .trim();
+    if (value.length > 120) value = `${value.slice(0, 117).trim()}...`;
+    return value;
+  }
+
+  function takeKnownHistoryPrefix(text, choices) {
+    const clean = cleanSublistCellText(text);
+    const sorted = (choices || []).slice().sort(function (a, b) { return b.length - a.length; });
+    for (let i = 0; i < sorted.length; i += 1) {
+      const choice = sorted[i];
+      const re = new RegExp(`^${escapeRegExp(choice)}\\b`, 'i');
+      if (re.test(clean)) {
+        return {
+          value: choice,
+          rest: clean.replace(re, '').trim(),
+        };
+      }
+    }
+    return { value: '', rest: clean };
+  }
+
+  function extractRawHistoryMetadata(afterName, scName) {
+    const metadata = {
+      requestType: '',
+      salesVertical: '',
+      leadSc: '',
+      oppStatus: '',
+      productsDemoed: '',
+    };
+    const text = cleanSublistCellText(afterName);
+    if (!text) return metadata;
+
+    const escapedName = escapeRegExp(scName);
+    const matches = [];
+    const assignedTypeRe = new RegExp(`${escapedName}\\s+(Direct|AMO)\\b`, 'ig');
+    let match;
+    while ((match = assignedTypeRe.exec(text))) {
+      matches.push({ index: match.index, value: match[0], type: match[1] });
+    }
+    if (!matches.length) {
+      const looseTypeMatch = text.match(/\b(Direct|AMO)\b/i);
+      if (!looseTypeMatch) return metadata;
+      matches.push({ index: looseTypeMatch.index || 0, value: looseTypeMatch[0], type: looseTypeMatch[1] });
+    }
+
+    const picked = matches[matches.length - 1];
+    metadata.requestType = canonicalHistoryRequestType(picked.type);
+    let tail = text.slice(picked.index + picked.value.length).trim();
+
+    const vertical = takeKnownHistoryPrefix(tail, ['General Business', 'High Tech', 'Emerging', 'Products']);
+    metadata.salesVertical = vertical.value;
+    tail = vertical.rest;
+
+    const lead = takeKnownHistoryPrefix(tail, ['Yes', 'No']);
+    metadata.leadSc = lead.value;
+    tail = lead.rest;
+
+    const status = takeKnownHistoryPrefix(tail, [
+      'CLOSED WON', 'CLOSED LOST', 'ENGAGE', 'UPSIDE', 'COMMIT', 'PIPELINE',
+      'Not Started', 'In Progress', 'Completed', 'Cancelled', 'Canceled', 'Requested', 'Staffed',
+    ]);
+    metadata.oppStatus = status.value;
+    tail = status.rest;
+
+    metadata.productsDemoed = cleanHistoryProductsText(tail);
+    return metadata;
+  }
+
+  function normalizeSublistHeader(text) {
+    return cleanSublistCellText(text)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+  }
+
+  function mapScrSublistHeaders(row) {
+    const map = {};
+    const cells = Array.from((row && row.cells) || []);
+    cells.forEach(function (cell, index) {
+      const header = normalizeSublistHeader(cell.textContent || '');
+      if (!header) return;
+      if (map.id == null && /^id\b/.test(header)) map.id = index;
+      else if (map.name == null && /^name\b/.test(header)) map.name = index;
+      else if (map.opp == null && /\bopportunity\b/.test(header) && !/\bstatus\b/.test(header)) map.opp = index;
+      else if (map.directAmo == null && (/\bdirect\s*amo\b/.test(header) || /\bdirect\b.*\bamo\b/.test(header))) map.directAmo = index;
+      else if (map.salesVertical == null && /\bsales\s+vertical\b/.test(header)) map.salesVertical = index;
+      else if (
+        map.products == null &&
+        (/\bproducts?\s+(?:demoed|demonstrated|sold)\b/.test(header) ||
+         /\bproducts?\s+demoed\s+sold\b/.test(header) ||
+         /^products?\b/.test(header))
+      ) map.products = index;
+      else if (
+        map.assignee == null &&
+        (/\bassigned\s+to\b/.test(header) ||
+         /\bassigned\s+sc\b/.test(header) ||
+         /\bassigned\s+consultant\b/.test(header) ||
+         /\bassignee\b/.test(header))
+      ) map.assignee = index;
+      else if (map.lead == null && /\blead\s+sc\b/.test(header)) map.lead = index;
+      else if (map.status == null && (/\brequest\s+status\b/.test(header) || /\bopp\s+status\b/.test(header))) map.status = index;
+    });
+    return map.assignee != null && (map.id != null || map.name != null || map.opp != null) ? map : null;
+  }
+
+  function tableLooksLikeCustomerScrSublist(table) {
+    const text = cleanSublistCellText(table && table.textContent || '');
+    return /\bCustomer SC Request\b/i.test(text) ||
+      (/\bAssigned (?:To|SC|Consultant)\b/i.test(text) &&
+       (/\bRequest Status\b/i.test(text) || /\bLead SC\b/i.test(text) || /\bDirect\/AMO\b/i.test(text) || /\bOpp Status\b/i.test(text)));
+  }
+
+  function readSublistCell(row, index) {
+    if (index == null || index < 0) return '';
+    const cell = row && row.cells && row.cells[index];
+    return cleanSublistCellText(cell && cell.textContent || '');
+  }
+
+  function getSublistRowCells(row) {
+    return Array.from((row && row.cells) || []).map(function (cell) {
+      return cleanSublistCellText(cell && cell.textContent || '');
+    }).filter(Boolean);
+  }
+
+  function rowLooksLikeScrHeader(row) {
+    const joined = getSublistRowCells(row).map(normalizeSublistHeader).join(' | ');
+    return /\bname\b/.test(joined) &&
+      (/\bassigned\s+to\b/.test(joined) || /\bassigned\s+sc\b/.test(joined) || /\bassignee\b/.test(joined));
+  }
+
+  function compactDebugCells(cells) {
+    return (cells || []).slice(0, 12).map(function (cell) {
+      const text = cleanSublistCellText(cell);
+      return text.length > 140 ? `${text.slice(0, 140)}...` : text;
+    });
+  }
+
+  function cleanSublistAssigneeName(text) {
+    return cleanSublistCellText(text)
+      .replace(/^assigned\s+(?:to|sc|consultant)\s*/i, '')
+      .replace(/\b(?:yes|no|direct|amo|products|high tech|emerging|general business)\b\s*$/i, '')
+      .trim();
+  }
+
+  function recordScrHistoryDebugTable(debug, source, table, rows) {
+    if (!debug) return;
+    const saved = source.indexOf('saved-search') === 0;
+    if (saved) {
+      debug.savedSearchTables = (debug.savedSearchTables || 0) + 1;
+      debug.savedSearchCandidateTables = (debug.savedSearchCandidateTables || 0) + 1;
+      if (debug.savedSearchCandidateSamples.length < 4) {
+        debug.savedSearchCandidateSamples.push({
+          text: cleanSublistCellText(table.textContent || '').slice(0, 500),
+          firstRows: rows.slice(0, 5).map(function (row) { return compactDebugCells(getSublistRowCells(row)); }).filter(function (cells) { return cells.length; }),
+        });
+      }
+      return;
+    }
+    debug.visibleCandidateTables += 1;
+    if (debug.visibleCandidateSamples.length < 4) {
+      debug.visibleCandidateSamples.push({
+        text: cleanSublistCellText(table.textContent || '').slice(0, 500),
+        firstRows: rows.slice(0, 5).map(function (row) { return compactDebugCells(getSublistRowCells(row)); }).filter(function (cells) { return cells.length; }),
+      });
+    }
+  }
+
+  function recordScrHistoryHeaderDebug(debug, source, headerMap) {
+    if (!debug) return;
+    if (source.indexOf('saved-search') === 0) {
+      if (debug.savedSearchHeaders.length < 4) debug.savedSearchHeaders.push({ ...headerMap });
+    } else if (debug.visibleHeaders.length < 4) {
+      debug.visibleHeaders.push({ ...headerMap });
+    }
+  }
+
+  function recordScrHistoryHeaderCandidate(debug, source, row) {
+    if (!debug) return;
+    const cells = compactDebugCells(getSublistRowCells(row));
+    if (source.indexOf('saved-search') === 0) {
+      if (debug.savedSearchHeaderCandidates.length < 8) debug.savedSearchHeaderCandidates.push(cells);
+    } else if (debug.visibleHeaderCandidates.length < 8) {
+      debug.visibleHeaderCandidates.push(cells);
+    }
+  }
+
+  function recordScrHistorySample(debug, source, item) {
+    if (!debug) return;
+    if (source.indexOf('saved-search') === 0) {
+      if (debug.savedSearchSamples.length < 8) debug.savedSearchSamples.push(item);
+    } else if (debug.visibleSamples.length < 8) {
+      debug.visibleSamples.push(item);
+    }
+  }
+
+  function parseCustomerScrHistoryDocument(doc, debug, source, requireVisible) {
+    const history = [];
+    Array.from(doc.querySelectorAll('table')).forEach(function (table) {
+      if (source.indexOf('saved-search') !== 0 && debug) debug.visibleTables += 1;
+      if (table.closest && table.closest('#sc-skills-panel')) return;
+      if (requireVisible && !isLikelyVisibleElement(table)) return;
+      if (!tableLooksLikeCustomerScrSublist(table)) return;
+      const rows = Array.from(table.rows || []);
+      if (!rows.some(function (row) { return Boolean(mapScrSublistHeaders(row)); })) return;
+      recordScrHistoryDebugTable(debug, source, table, rows);
+      let headerMap = null;
+      rows.forEach(function (row) {
+        const maybeHeader = mapScrSublistHeaders(row);
+        if (!maybeHeader && debug && rowLooksLikeScrHeader(row)) {
+          recordScrHistoryHeaderCandidate(debug, source, row);
+        }
+        if (maybeHeader) {
+          headerMap = maybeHeader;
+          recordScrHistoryHeaderDebug(debug, source, maybeHeader);
+          return;
+        }
+        if (!headerMap) return;
+        const assigneeName = cleanSublistAssigneeName(readSublistCell(row, headerMap.assignee));
+        const scrId = readSublistCell(row, headerMap.id);
+        const nameText = readSublistCell(row, headerMap.name);
+        const oppText = readSublistCell(row, headerMap.opp) || nameText;
+        const requestType = canonicalHistoryRequestType(readSublistCell(row, headerMap.directAmo));
+        const productsDemoed = cleanHistoryProductsText(readSublistCell(row, headerMap.products));
+        if (!assigneeName || /^assigned\s+(?:to|sc|consultant)$/i.test(assigneeName)) return;
+        const key = normalizeLoose(assigneeName);
+        if (!key) return;
+        const item = {
+          scrId: scrId || `${key}:${oppText || history.length}`,
+          oppId: oppText,
+          assignee: { key, id: key, name: assigneeName },
+          requestType,
+          salesVertical: readSublistCell(row, headerMap.salesVertical),
+          productsDemoed,
+          source,
+        };
+        history.push(item);
+        recordScrHistorySample(debug, source, item);
+      });
+    });
+    return history;
+  }
+
+  function parseVisibleCustomerScrHistory(debug) {
+    const history = [];
+    getAccessibleDocuments().forEach(function (doc) {
+      try {
+        parseCustomerScrHistoryDocument(doc, debug, 'visible-customer-sublist', true).forEach(function (item) {
+          history.push(item);
+        });
+      } catch (e) {
+        if (debug) debug.errors.push(`Visible sublist parse: ${e.message || e}`);
+      }
+    });
+    if (debug) debug.visibleRows = history.length;
+    return history;
+  }
+
+  function decodeSavedSearchHtmlForText(html) {
+    let text = String(html || '')
+      .replace(/\\u003c/gi, '<')
+      .replace(/\\u003e/gi, '>')
+      .replace(/\\u0026/gi, '&')
+      .replace(/\\x3c/gi, '<')
+      .replace(/\\x3e/gi, '>')
+      .replace(/\\n/g, '\n')
+      .replace(/\\r/g, '\n')
+      .replace(/\\t/g, '\t');
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.innerHTML = text;
+      text = textarea.value;
+      textarea.innerHTML = text;
+      text = textarea.value;
+    } catch (e) { /* keep raw text */ }
+    return text
+      .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function parsePreviousScHistoryRawText(html, debug) {
+    const text = decodeSavedSearchHtmlForText(html);
+    if (debug) debug.savedSearchRawTextSample = text.slice(0, 700);
+    const history = [];
+    const seen = new Set();
+    const seenScrIds = new Set();
+    const rowSegments = text.split(/\bEdit\s*\|\s*View\b/i);
+    const nameOpportunityRe = /([A-Z][A-Za-z'’ .-]{1,80},\s*[A-Z][A-Za-z'’ .-]{1,80})\s*\|\s*Opportunity\s*#(\d{4,})/;
+
+    function cleanRawHistoryName(name) {
+      return cleanSublistCellText(name)
+        .replace(/^(?:new|edit|view|open)\s+/i, '')
+        .replace(/\s+(?:edit|view|open)$/i, '')
+        .trim();
+    }
+
+    function addRawRow(segment) {
+      const match = segment.match(nameOpportunityRe);
+      if (!match) return;
+      const scName = cleanRawHistoryName(match[1]);
+      const oppNumber = match[2];
+      const afterName = segment.slice((match.index || 0) + match[0].length);
+      const idMatch = afterName.match(/\b(\d{5,})\b/);
+      const scrId = idMatch ? idMatch[1] : `${normalizeLoose(scName)}:${oppNumber}`;
+      const metadataSource = idMatch ? afterName.slice((idMatch.index || 0) + idMatch[0].length) : afterName;
+      const metadata = extractRawHistoryMetadata(metadataSource, scName);
+      if (/^\d+$/.test(scrId) && seenScrIds.has(scrId)) return;
+      const key = `${scrId}:${normalizeLoose(scName)}`;
+      if (!scName || seen.has(key)) return;
+      if (!/^[A-Za-z'’ .-]+,\s*[A-Za-z'’ .-]+$/.test(scName)) return;
+      seen.add(key);
+      if (/^\d+$/.test(scrId)) seenScrIds.add(scrId);
+      const item = {
+        scrId,
+        oppId: `Opportunity #${oppNumber}`,
+        assignee: { key: normalizeLoose(scName), id: normalizeLoose(scName), name: scName },
+        requestType: metadata.requestType,
+        salesVertical: metadata.salesVertical,
+        leadSc: metadata.leadSc,
+        oppStatus: metadata.oppStatus,
+        productsDemoed: metadata.productsDemoed,
+        source: 'saved-search-raw',
+      };
+      history.push(item);
+      recordScrHistorySample(debug, 'saved-search-raw', item);
+      if (debug && debug.savedSearchRawSamples.length < 8) {
+        debug.savedSearchRawSamples.push({
+          scrId,
+          oppId: item.oppId,
+          assignee: scName,
+          requestType: item.requestType,
+          productsDemoed: item.productsDemoed,
+          segment: cleanSublistCellText(segment).slice(0, 240),
+        });
+      }
+    }
+
+    rowSegments.forEach(addRawRow);
+    if (!history.length) {
+      let match;
+      const globalRe = new RegExp(nameOpportunityRe.source, 'g');
+      while ((match = globalRe.exec(text)) && history.length < 50) {
+        addRawRow(text.slice(match.index, Math.min(text.length, match.index + 2200)));
+      }
+    }
+    return history;
+  }
+
+  function getNetSuiteCsrfToken() {
+    try {
+      const params = new URLSearchParams(window.location.search || '');
+      if (params.get('_csrf')) return params.get('_csrf');
+    } catch (e) { /* try DOM */ }
+    try {
+      const el = document.querySelector('input[name="_csrf"], input#_csrf');
+      return el && el.value ? String(el.value).trim() : '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function buildPreviousScHistorySearchUrl(companySearchText) {
+    const params = new URLSearchParams();
+    params.set('rectype', '2840');
+    params.set('searchtype', 'Custom');
+    params.set('Custom_FORMULATEXT', companySearchText || '');
+    params.set('style', 'NORMAL');
+    params.set('Custom_FORMULATEXTtype', 'STARTSWITH');
+    params.set('report', '');
+    params.set('grid', '');
+    params.set('searchid', PREVIOUS_SC_HISTORY_SEARCH_ID);
+    params.set('dle', 'T');
+    params.set('sortcol', 'Custom_NAME_raw');
+    params.set('sortdir', 'ASC');
+    params.set('csv', 'HTML');
+    params.set('OfficeXML', 'F');
+    params.set('pdf', '');
+    params.set('size', '50');
+    const csrf = getNetSuiteCsrfToken();
+    if (csrf) params.set('_csrf', csrf);
+    params.set('twbx', 'F');
+    return `${window.location.origin}/app/common/search/savedsearchresults.nl?${params.toString()}`;
+  }
+
+  function buildCustomerLicenseSearchUrl(companySearchText) {
+    const params = new URLSearchParams();
+    params.set('rectype', '326');
+    params.set('searchtype', 'Custom');
+    params.set('Custom_FORMULATEXT', companySearchText || '');
+    params.set('style', 'NORMAL');
+    params.set('Custom_FORMULATEXTtype', 'STARTSWITH');
+    params.set('report', '');
+    params.set('grid', '');
+    params.set('searchid', CUSTOMER_LICENSE_SEARCH_ID);
+    params.set('dle', 'T');
+    params.set('sortcol', 'Custom_NAME_raw');
+    params.set('sortdir', 'ASC');
+    params.set('csv', 'HTML');
+    params.set('OfficeXML', 'F');
+    params.set('pdf', '');
+    params.set('size', '1000');
+    const csrf = getNetSuiteCsrfToken();
+    if (csrf) params.set('_csrf', csrf);
+    params.set('twbx', 'F');
+    return `${window.location.origin}/app/common/search/savedsearchresults.nl?${params.toString()}`;
+  }
+
+  function requestCustomerLicenseSearchViaIframe(url, onSlow) {
+    return new Promise(function (resolve, reject) {
+      const frameId = 'scout-customer-license-search-frame';
+      const requestUrl = `${url}${url.includes('?') ? '&' : '?'}_scout_license_iframe=${Date.now()}`;
+      const oldFrame = document.getElementById(frameId);
+      if (oldFrame) oldFrame.remove();
+
+      const frame = document.createElement('iframe');
+      frame.id = frameId;
+      frame.title = 'SCOUT customer license loader';
+      frame.style.position = 'absolute';
+      frame.style.left = '-10000px';
+      frame.style.top = '-10000px';
+      frame.style.width = '1px';
+      frame.style.height = '1px';
+      frame.style.opacity = '0';
+      frame.style.pointerEvents = 'none';
+
+      let settled = false;
+      function cleanup() {
+        setTimeout(function () {
+          try { frame.remove(); } catch (e) { /* keep going */ }
+        }, 1000);
+      }
+
+      function finishRows(result) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(slowTimer);
+        cleanup();
+        resolve(result || { rows: [], debug: null });
+      }
+
+      function finishError(error) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(slowTimer);
+        cleanup();
+        reject(error);
+      }
+
+      const slowTimer = setTimeout(function () {
+        if (settled) return;
+        if (typeof onSlow === 'function') onSlow();
+      }, 18000);
+
+      frame.onload = function () {
+        try {
+          const doc = frame.contentDocument || (frame.contentWindow && frame.contentWindow.document);
+          if (!doc) throw new Error('iframe document unavailable');
+          const html = doc.documentElement ? doc.documentElement.outerHTML : '';
+          finishRows(parseCustomerLicenseSearchHtml(html));
+        } catch (e) {
+          finishError(e);
+        }
+      };
+      frame.onerror = function () {
+        finishError(new Error(`saved search ${CUSTOMER_LICENSE_SEARCH_ID} iframe failed`));
+      };
+
+      frame.src = requestUrl;
+      document.body.appendChild(frame);
+    });
+  }
+
+  function parseCustomerLicenseSearchHtml(html) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html || '', 'text/html');
+    const debug = createCustomerLicenseDebug();
+    debug.source = `saved search ${CUSTOMER_LICENSE_SEARCH_ID}`;
+    debug.htmlChars = String(html || '').length;
+    const rows = parseCustomerLicensesFromDocument(doc, false, true, debug);
+    return { rows, debug };
+  }
+
+  function loadCustomerLicensesFromSavedSearch(companySearchText, onSlow) {
+    const searchText = String(companySearchText || '').trim();
+    if (!searchText) return Promise.resolve([]);
+    const url = buildCustomerLicenseSearchUrl(searchText);
+    return requestCustomerLicenseSearchViaIframe(url, onSlow);
+  }
+
+  function requestNetSuiteText(url, debug) {
+    const requestUrl = `${url}${url.includes('?') ? '&' : '?'}_scout=${Date.now()}`;
+
+    function requestViaGm() {
+      return new Promise(function (resolve, reject) {
+        if (typeof GM_xmlhttpRequest === 'undefined') {
+          reject(new Error('GM_xmlhttpRequest unavailable'));
+          return;
+        }
+        if (debug) debug.savedSearchTransport = 'GM_xmlhttpRequest';
+        let settled = false;
+        const timer = setTimeout(function () {
+          if (settled) return;
+          settled = true;
+          reject(new Error('GM_xmlhttpRequest timed out'));
+        }, 12000);
+        try {
+          GM_xmlhttpRequest({
+            method: 'GET',
+            url: requestUrl,
+            headers: { 'Cache-Control': 'no-cache' },
+            anonymous: false,
+            withCredentials: true,
+            timeout: 12000,
+            onload: function (res) {
+              if (settled) return;
+              settled = true;
+              clearTimeout(timer);
+              if (res.status >= 200 && res.status < 300) {
+                resolve(res.responseText || '');
+              } else {
+                reject(new Error(`GM_xmlhttpRequest returned ${res.status}`));
+              }
+            },
+            onerror: function () {
+              if (settled) return;
+              settled = true;
+              clearTimeout(timer);
+              reject(new Error('GM_xmlhttpRequest failed'));
+            },
+            ontimeout: function () {
+              if (settled) return;
+              settled = true;
+              clearTimeout(timer);
+              reject(new Error('GM_xmlhttpRequest timed out'));
+            },
+          });
+        } catch (e) {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          reject(e);
+        }
+      });
+    }
+
+    function requestViaFetch() {
+      if (debug) debug.savedSearchTransport = 'fetch';
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = controller ? setTimeout(function () { controller.abort(); }, 12000) : null;
+      return fetch(requestUrl, {
+        credentials: 'include',
+        cache: 'no-store',
+        signal: controller ? controller.signal : undefined,
+      }).then(function (res) {
+        if (timer) clearTimeout(timer);
+        if (!res.ok) throw new Error(`fetch returned ${res.status}`);
+        return res.text();
+      }).catch(function (e) {
+        if (timer) clearTimeout(timer);
+        if (e && e.name === 'AbortError') throw new Error('fetch timed out');
+        throw e;
+      });
+    }
+
+    return requestViaGm().catch(function (gmError) {
+      if (debug) {
+        debug.savedSearchTransportFallback = `GM failed: ${gmError.message || gmError}`;
+      }
+      return requestViaFetch();
+    });
+  }
+
+  function requestNetSuiteTextViaIframe(url, debug, onProgress) {
+    return new Promise(function (resolve) {
+      const frameId = 'scout-prev-history-search-frame';
+      const requestUrl = `${url}${url.includes('?') ? '&' : '?'}_scout_iframe=${Date.now()}`;
+      let settled = false;
+      const oldFrame = document.getElementById(frameId);
+      if (oldFrame) oldFrame.remove();
+
+      const frame = document.createElement('iframe');
+      frame.id = frameId;
+      frame.title = 'SCOUT previous SC history loader';
+      frame.style.position = 'absolute';
+      frame.style.left = '-10000px';
+      frame.style.top = '-10000px';
+      frame.style.width = '1px';
+      frame.style.height = '1px';
+      frame.style.opacity = '0';
+      frame.style.pointerEvents = 'none';
+
+      function finish(rows) {
+        if (settled) return;
+        settled = true;
+        setTimeout(function () {
+          try { frame.remove(); } catch (e) { /* keep going */ }
+        }, 1000);
+        resolve(rows || []);
+      }
+
+      const slowTimer = setTimeout(function () {
+        if (settled) return;
+        if (debug) debug.savedSearchStatus = 'still loading in background';
+        if (typeof onProgress === 'function') onProgress();
+      }, 15000);
+
+      frame.onload = function () {
+        if (settled) return;
+        clearTimeout(slowTimer);
+        try {
+          const doc = frame.contentDocument || (frame.contentWindow && frame.contentWindow.document);
+          if (!doc) throw new Error('iframe document unavailable');
+          const html = doc.documentElement ? doc.documentElement.outerHTML : '';
+          if (debug) {
+            debug.savedSearchTransport = 'iframe';
+            debug.savedSearchStatus = `iframe loaded ${String(html || '').length} chars`;
+          }
+          const rows = parsePreviousScHistorySearchHtml(html, debug);
+          finish(rows);
+        } catch (e) {
+          if (debug) {
+            debug.savedSearchStatus = `iframe error: ${e.message || e}`;
+            debug.errors.push(`Saved search iframe ${PREVIOUS_SC_HISTORY_SEARCH_ID}: ${e.message || e}`);
+          }
+          finish([]);
+        }
+      };
+      frame.onerror = function () {
+        clearTimeout(slowTimer);
+        if (debug) {
+          debug.savedSearchStatus = 'iframe error';
+          debug.errors.push(`Saved search iframe ${PREVIOUS_SC_HISTORY_SEARCH_ID}: iframe failed`);
+        }
+        finish([]);
+      };
+
+      if (debug) {
+        debug.savedSearchTransport = 'iframe';
+        debug.savedSearchStatus = 'loading in background';
+      }
+      frame.src = requestUrl;
+      document.body.appendChild(frame);
+    });
+  }
+
+  function parsePreviousScHistorySearchHtml(html, debug) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html || '', 'text/html');
+    let rows = parseCustomerScrHistoryDocument(doc, debug, 'saved-search', false);
+    if (!rows.length) {
+      rows = parsePreviousScHistoryRawText(html, debug);
+    }
+    if (debug) {
+      debug.savedSearchRows = rows.length;
+      debug.savedSearchParsedRows = rows.length;
+      if (!rows.length) {
+        debug.savedSearchHtmlSample = cleanSublistCellText((doc.body && doc.body.textContent) || '').slice(0, 500);
+        if (!debug.savedSearchHtmlSample) debug.savedSearchHtmlSample = String(html || '').slice(0, 500);
+      }
+    }
+    return rows;
+  }
+
+  function loadPreviousScHistoryFromSavedSearch(companySearchText, debug, onProgress) {
+    const searchText = String(companySearchText || '').trim();
+    if (!searchText) {
+      if (debug) debug.savedSearchStatus = 'skipped: no company search text';
+      return Promise.resolve([]);
+    }
+    const url = buildPreviousScHistorySearchUrl(searchText);
+    if (debug) {
+      debug.savedSearchStatus = 'loading';
+      debug.savedSearchId = PREVIOUS_SC_HISTORY_SEARCH_ID;
+      debug.savedSearchFilter = searchText;
+      debug.savedSearchUrl = url;
+    }
+    return requestNetSuiteTextViaIframe(url, debug, onProgress);
+  }
+
+  function runAfterNetSuitePageSettles(fn, delayMs) {
+    let started = false;
+    const delay = Number.isFinite(delayMs) ? delayMs : 750;
+    function start() {
+      if (started) return;
+      started = true;
+      const run = function () {
+        try {
+          fn();
+        } catch (e) {
+          console.warn('[SCOUT] Background task failed:', e.message || e);
+        }
+      };
+      if (typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(run, { timeout: Math.max(delay, 1500) });
+      } else {
+        setTimeout(run, delay);
+      }
+    }
+    if (document.readyState === 'complete') {
+      setTimeout(start, 0);
+    } else {
+      window.addEventListener('load', start, { once: true });
+      setTimeout(start, 8000);
+    }
+  }
+
+  function mergeCustomerScrHistory(primary, fallback) {
+    const out = [];
+    const seen = new Set();
+    const byKey = {};
+    function add(item) {
+      if (!item || !item.assignee) return;
+      const key = `${item.scrId || ''}:${item.assignee.key || item.assignee.name || ''}`;
+      if (seen.has(key)) {
+        const existing = byKey[key];
+        if (existing) {
+          ['requestType', 'salesVertical', 'leadSc', 'oppStatus', 'productsDemoed', 'products'].forEach(function (field) {
+            if (!existing[field] && item[field]) existing[field] = item[field];
+          });
+        }
+        return;
+      }
+      seen.add(key);
+      byKey[key] = item;
+      out.push(item);
+    }
+    (primary || []).forEach(add);
+    (fallback || []).forEach(add);
+    return out;
+  }
+
+  function getOpportunityMatchTokens(currentOppId, currentOppText) {
+    const tokens = [];
+    [currentOppId, currentOppText].forEach(function (value) {
+      const text = String(value || '').trim();
+      if (!text) return;
+      tokens.push(normalizeLoose(text));
+      const numberMatches = text.match(/\d{4,}/g) || [];
+      numberMatches.forEach(function (token) { tokens.push(token); });
+    });
+    return Array.from(new Set(tokens.filter(Boolean)));
+  }
+
+  function historyItemMatchesOpportunity(item, tokens) {
+    if (!item || !item.oppId || !tokens || !tokens.length) return false;
+    const oppText = String(item.oppId || '');
+    const normalizedOpp = normalizeLoose(oppText);
+    const oppNumbers = oppText.match(/\d{4,}/g) || [];
+    return tokens.some(function (token) {
+      if (!token) return false;
+      if (/^\d+$/.test(token) && oppNumbers.includes(token)) return true;
+      return normalizedOpp === token || normalizedOpp.includes(token) || token.includes(normalizedOpp);
+    });
+  }
+
+  function countHistoryByAssignee(history, requestType) {
+    const counts = {};
+    (history || []).forEach(function (item) {
+      if (!item || !item.assignee) return;
+      if (requestType && getHistoryRequestType(item) !== requestType) return;
+      const key = item.assignee.key || normalizeLoose(item.assignee.name);
+      if (!key) return;
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    return counts;
+  }
+
+  function sortPreviousHistoryRows(history) {
+    const amoCounts = countHistoryByAssignee(history, 'AMO');
+    const directCounts = countHistoryByAssignee(history, 'Direct');
+    const typeRank = { AMO: 0, Direct: 1 };
+    return (history || []).slice().sort(function (a, b) {
+      const aType = getHistoryRequestType(a);
+      const bType = getHistoryRequestType(b);
+      const aRank = Object.prototype.hasOwnProperty.call(typeRank, aType) ? typeRank[aType] : 2;
+      const bRank = Object.prototype.hasOwnProperty.call(typeRank, bType) ? typeRank[bType] : 2;
+      if (aRank !== bRank) return aRank - bRank;
+
+      const aKey = a && a.assignee ? (a.assignee.key || normalizeLoose(a.assignee.name)) : '';
+      const bKey = b && b.assignee ? (b.assignee.key || normalizeLoose(b.assignee.name)) : '';
+      const counts = aType === 'AMO' ? amoCounts : (aType === 'Direct' ? directCounts : {});
+      const aCount = counts[aKey] || 0;
+      const bCount = counts[bKey] || 0;
+      if (aCount !== bCount) return bCount - aCount;
+
+      const aName = a && a.assignee ? String(a.assignee.name || '') : '';
+      const bName = b && b.assignee ? String(b.assignee.name || '') : '';
+      const nameCompare = aName.localeCompare(bName);
+      if (nameCompare) return nameCompare;
+      return String(b.scrId || '').localeCompare(String(a.scrId || ''));
+    });
+  }
+
+  function getHistoryItemProducts(item) {
+    return cleanHistoryProductsText((item && (item.productsDemoed || item.products)) || '');
+  }
+
+  function getHistoryProductSummary(items) {
+    const products = [];
+    const seen = new Set();
+    (items || []).forEach(function (item) {
+      const product = getHistoryItemProducts(item);
+      if (!product || product === '--') return;
+      const key = normalizeLoose(product);
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      products.push(product);
+    });
+    if (!products.length) return '--';
+    if (products.length <= 3) return products.join(', ');
+    return `${products.slice(0, 3).join(', ')} +${products.length - 3} more`;
+  }
+
+  function groupPreviousHistoryRows(history) {
+    const groups = [];
+    const byKey = {};
+    const typeRank = { AMO: 0, Direct: 1 };
+    sortPreviousHistoryRows(history).forEach(function (item) {
+      if (!item || !item.assignee) return;
+      const requestType = getHistoryRequestType(item) || 'Unknown';
+      const assigneeKey = item.assignee.key || normalizeLoose(item.assignee.name);
+      const key = `${requestType}:${assigneeKey}`;
+      if (!byKey[key]) {
+        byKey[key] = {
+          key,
+          requestType,
+          assignee: item.assignee,
+          items: [],
+        };
+        groups.push(byKey[key]);
+      }
+      byKey[key].items.push(item);
+    });
+    return groups.sort(function (a, b) {
+      if (b.items.length !== a.items.length) return b.items.length - a.items.length;
+      const aRank = Object.prototype.hasOwnProperty.call(typeRank, a.requestType) ? typeRank[a.requestType] : 2;
+      const bRank = Object.prototype.hasOwnProperty.call(typeRank, b.requestType) ? typeRank[b.requestType] : 2;
+      if (aRank !== bRank) return aRank - bRank;
+      return String(a.assignee && a.assignee.name || '').localeCompare(String(b.assignee && b.assignee.name || ''));
+    });
+  }
+
+  function summarizePreviousScs(history) {
+    const counts = {};
+    const names = {};
+    (history || []).forEach(function (item) {
+      if (!item || !item.assignee) return;
+      counts[item.assignee.key] = (counts[item.assignee.key] || 0) + 1;
+      names[item.assignee.key] = item.assignee.name;
+    });
+    return Object.keys(counts)
+      .sort(function (a, b) {
+        if (counts[b] !== counts[a]) return counts[b] - counts[a];
+        return String(names[a] || '').localeCompare(String(names[b] || ''));
+      })
+      .map(function (id) { return { id: id, name: names[id], count: counts[id] }; });
   }
 
   function loadStaffingContext(empName) {
@@ -8370,18 +11424,57 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     try {
       // Fields on the current SCR
       const companyId   = (nlapiGetFieldValue(SCR_FIELD_COMPANY) || '').trim();
+      let companySearchText = readFormField(SCR_FIELD_COMPANY) || '';
       const details     = (nlapiGetFieldValue('custrecord_screq_details') || '').trim();
       const onsiteRaw   = (nlapiGetFieldValue('custrecord_screq_onsite') || '').toString().toUpperCase();
       const onsite      = onsiteRaw === 'T' || onsiteRaw === 'TRUE' || /onsite\s*=\s*y/i.test(details);
+      const requestTypeText = `${readFormField(SCR_FIELD_TYPE)} ${readFormField('custrecord_screq_request_type')} ${readFormTextField(SCR_FIELD_TYPE)}`;
+      const isAmoRequest = /\bAMO\b/i.test(requestTypeText);
       const parsedRequestedSC = parseRequestedSC(details);
       const requestedSC = isValidRequestedSCName(parsedRequestedSC) ? parsedRequestedSC : '';
+      const currentScrId = getCurrentScrId();
+      const currentOppId = (nlapiGetFieldValue(SCR_FIELD_OPP) || '').trim();
+      const currentOppText = readFormField(SCR_FIELD_OPP);
+      const currentOppTokens = getOpportunityMatchTokens(currentOppId, currentOppText);
+      const historyDebug = {
+        companyId,
+        companySearchText,
+        currentScrId,
+        currentOppId,
+        currentOppText,
+        currentOppTokens,
+        searchAttempts: [],
+        suiteRows: 0,
+        suiteParsedRows: 0,
+        visibleRows: 0,
+        visibleTables: 0,
+        visibleCandidateTables: 0,
+        mergedRows: 0,
+        sameOppRows: 0,
+        otherOppRows: 0,
+        recordsLoaded: 0,
+        suiteSamples: [],
+        visibleSamples: [],
+        savedSearchSamples: [],
+        savedSearchRawSamples: [],
+        mergedSamples: [],
+        visibleHeaders: [],
+        savedSearchHeaders: [],
+        visibleHeaderCandidates: [],
+        savedSearchHeaderCandidates: [],
+        visibleCandidateSamples: [],
+        savedSearchCandidateSamples: [],
+        unparsedSuiteRows: [],
+        errors: [],
+      };
 
       // Item 1: check if another SCR on this opp already has Lead SC = T
       const leadScName = checkLeadOnOpp();
       _hasLeadOnOpp = Boolean(leadScName);
 
       if (!companyId) {
-        renderStaffingContext(body, { onsite, requestedSC, prevSCs: [], prevSCsOnDeal: [], leadScName });
+        historyDebug.errors.push('No company ID found on current SCR.');
+        renderStaffingContext(body, { companyId, companySearchText, isAmoRequest, onsite, requestedSC, prevSCs: [], prevSCsOnDeal: [], leadScName, historyDebug });
         if (requestedSC) loadRequestedSCCard(requestedSC, empName || '');
         return;
       }
@@ -8390,92 +11483,146 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       // Item 11: fetch country to handle Canadian addresses
       let city = '', state = '', country = '', industryFamily = '';
       try {
+        const billingLocation = getCompanyDefaultBillingLocation(companyId);
+        if (hasLocationParts(billingLocation)) {
+          city = billingLocation.city;
+          state = billingLocation.state;
+          country = billingLocation.country;
+        }
+
         const companyRows = nlapiSearchRecord('entity', null, [
           new nlobjSearchFilter('internalid', null, 'is', companyId),
         ], [
           new nlobjSearchColumn('city'),
           new nlobjSearchColumn('state'),
           new nlobjSearchColumn('country'),
+          new nlobjSearchColumn('entityid'),
+          new nlobjSearchColumn('altname'),
           new nlobjSearchColumn('custentity_zoominfo_subindustry'),
           new nlobjSearchColumn('custentity_zoominfo_industry'),
         ]);
         if (companyRows && companyRows.length) {
           const r = companyRows[0];
-          city           = r.getValue('city')    || '';
-          country        = r.getText('country')  || r.getValue('country') || '';
-          // Item 11: for Canadian addresses, province may be blank in 'state' text
-          // getText returns province name (e.g. "Ontario"); getValue returns code ("ON")
-          const stateTxt = r.getText('state')    || '';
-          const stateVal = r.getValue('state')   || '';
-          // Normalise country: NetSuite may return "CA" or "Canada"
-          const isCanada = /^ca$/i.test(country.trim()) || /^canada$/i.test(country.trim());
-          if (isCanada) {
-            // Prefer province name text; fall back to code
-            state   = stateTxt || stateVal || '';
-            country = 'Canada';
-          } else {
-            state   = stateTxt || stateVal || '';
-            country = '';  // suppress — already obvious for US
+          if (!hasLocationParts({ city, state, country })) {
+            const fallbackLocation = readLocationFromSearchRow(r, null);
+            city = fallbackLocation.city;
+            state = fallbackLocation.state;
+            country = fallbackLocation.country;
           }
           const subIndId  = r.getValue('custentity_zoominfo_subindustry') || '';
           const indId     = r.getValue('custentity_zoominfo_industry')    || '';
           industryFamily  = resolveIndustryFamily(subIndId, indId);
+          const entityId = String(r.getValue('entityid') || '').trim();
+          const altName = String(r.getValue('altname') || '').trim();
+          const derivedSearchText = entityId && altName && !normalizeLoose(entityId).includes(normalizeLoose(altName))
+            ? `${entityId} ${altName}`
+            : (entityId || altName);
+          if ((!companySearchText || companySearchText === companyId || /^\d+$/.test(companySearchText)) && derivedSearchText) {
+            companySearchText = derivedSearchText;
+          }
+          historyDebug.companySearchText = companySearchText;
         }
       } catch (e) { /* company lookup failed — non-fatal */ }
 
-      // Historical SCR lookup: previous SCs assigned to this company (all-time)
-      let prevSCs = [];
-      try {
-        const scrRows = nlapiSearchRecord(SCR_RECORD_TYPE, null, [
-          new nlobjSearchFilter(SCR_FIELD_COMPANY,           null, 'is',     companyId),
-          new nlobjSearchFilter('custrecord_screq_assignee', null, 'noneof', '@NONE@'),
-        ], [
-          new nlobjSearchColumn('custrecord_screq_assignee'),
-        ]);
-        if (scrRows) {
-          const counts = {}, names = {};
-          scrRows.forEach(function (r) {
-            const id   = r.getValue('custrecord_screq_assignee');
-            const name = r.getText('custrecord_screq_assignee') || '';
-            if (id && name) {
-              counts[id] = (counts[id] || 0) + 1;
-              names[id]  = name;
-            }
-          });
-          prevSCs = Object.keys(counts)
-            .sort(function (a, b) { return counts[b] - counts[a]; })
-            .map(function (id) { return { id: id, name: names[id], count: counts[id] }; });
-        }
-      } catch (e) { /* SCR history lookup failed — non-fatal */ }
+      let customerScrHistory = [];
+      const filterCurrentScr = function (item) {
+        return !currentScrId || String(item.scrId) !== String(currentScrId);
+      };
+      historyDebug.savedSearchStatus = companySearchText ? 'loading in background' : 'skipped: no company search text';
 
-      // Item 10: Deal-level SCR lookup — previous SCs on the same opportunity
-      let prevSCsOnDeal = [];
-      try {
-        const oppId = (nlapiGetFieldValue(SCR_FIELD_OPP) || '').trim();
-        if (oppId) {
-          const dealRows = nlapiSearchRecord(SCR_RECORD_TYPE, null, [
-            new nlobjSearchFilter(SCR_FIELD_OPP,               null, 'is',     oppId),
-            new nlobjSearchFilter('custrecord_screq_assignee',  null, 'noneof', '@NONE@'),
-          ], [
-            new nlobjSearchColumn('custrecord_screq_assignee'),
-            new nlobjSearchColumn('custrecord_screq_products'),
-          ]);
-          if (dealRows) {
-            const seen = {}, dealSCMap = {};
-            dealRows.forEach(function (r) {
-              const id   = r.getValue('custrecord_screq_assignee');
-              const name = r.getText('custrecord_screq_assignee') || '';
-              if (id && name && !seen[id]) {
-                seen[id] = true;
-                dealSCMap[id] = { name: name };
-              }
-            });
-            prevSCsOnDeal = Object.values(dealSCMap);
+      function renderHistoryContext() {
+        const sortedCustomerScrHistory = sortPreviousHistoryRows(customerScrHistory);
+        historyDebug.mergedRows = sortedCustomerScrHistory.length;
+        historyDebug.mergedSamples = sortedCustomerScrHistory.slice(0, 8);
+        let previousHistoryStatus = historyDebug.savedSearchStatus || 'Loading previous SC history...';
+        if (sortedCustomerScrHistory.length) {
+          previousHistoryStatus = `${sortedCustomerScrHistory.length} previous SCR${sortedCustomerScrHistory.length === 1 ? '' : 's'} found`;
+          if (/loading/i.test(historyDebug.savedSearchStatus || '')) {
+            previousHistoryStatus += ' · still checking NetSuite';
           }
+        } else if (/^iframe loaded|^loaded/i.test(historyDebug.savedSearchStatus || '')) {
+          previousHistoryStatus = 'No previous SC history found';
         }
-      } catch (e) { /* deal-level lookup non-fatal */ }
 
-      renderStaffingContext(body, { city, state, country, industryFamily, onsite, requestedSC, prevSCs, prevSCsOnDeal, leadScName });
+        // Historical SCR lookup: previous SCs assigned to other opportunities for this customer.
+        const otherOppHistory = sortedCustomerScrHistory.filter(function (item) {
+          return !historyItemMatchesOpportunity(item, currentOppTokens);
+        });
+        historyDebug.otherOppRows = otherOppHistory.length;
+        const prevSCs = summarizePreviousScs(otherOppHistory);
+        const prevAmoSCs = summarizePreviousScs(otherOppHistory.filter(function (item) {
+          return getHistoryRequestType(item) === 'AMO';
+        }));
+        const prevDirectSCs = summarizePreviousScs(otherOppHistory.filter(function (item) {
+          return getHistoryRequestType(item) === 'Direct';
+        }));
+
+        // Item 10: Deal-level SCR lookup — previous SCs on the same opportunity
+        const sameOppHistory = currentOppTokens.length
+          ? sortedCustomerScrHistory.filter(function (item) {
+            return historyItemMatchesOpportunity(item, currentOppTokens);
+          })
+          : [];
+        historyDebug.sameOppRows = sameOppHistory.length;
+        const prevSCsOnDeal = summarizePreviousScs(sameOppHistory);
+
+        if (getDebugModeEnabled()) {
+          try {
+            console.info('[SCOUT] SCR history debug', historyDebug);
+          } catch (debugLogError) { /* console unavailable */ }
+        }
+
+        renderStaffingContext(body, {
+          companyId,
+          companySearchText,
+          isAmoRequest,
+          city,
+          state,
+          country,
+          industryFamily,
+          onsite,
+          requestedSC,
+          prevSCs,
+          prevAmoSCs,
+          prevDirectSCs,
+          prevSCsOnDeal,
+          leadScName,
+          historyDebug,
+          previousHistoryRows: sortedCustomerScrHistory,
+          previousHistoryStatus,
+        });
+      }
+
+      renderHistoryContext();
+      runAfterNetSuitePageSettles(function () {
+        try {
+          customerScrHistory = getCustomerScrHistory(companyId, historyDebug)
+            .filter(filterCurrentScr);
+        } catch (e) {
+          historyDebug.errors.push(`SCR history lookup: ${e.message || e}`);
+        }
+        try {
+          customerScrHistory = mergeCustomerScrHistory(
+            customerScrHistory,
+            parseVisibleCustomerScrHistory(historyDebug).filter(filterCurrentScr));
+        } catch (e) {
+          historyDebug.errors.push(`Visible history lookup: ${e.message || e}`);
+        }
+        renderHistoryContext();
+
+        const savedSearchPromise = loadPreviousScHistoryFromSavedSearch(companySearchText, historyDebug, renderHistoryContext);
+        renderHistoryContext();
+        savedSearchPromise.then(function (savedSearchHistory) {
+          if (savedSearchHistory && savedSearchHistory.length) {
+            customerScrHistory = mergeCustomerScrHistory(customerScrHistory, savedSearchHistory.filter(filterCurrentScr));
+          }
+          renderHistoryContext();
+        }).catch(function (e) {
+          historyDebug.savedSearchStatus = `saved search error: ${e.message || e}`;
+          historyDebug.errors.push(`Saved search ${PREVIOUS_SC_HISTORY_SEARCH_ID}: ${e.message || e}`);
+          renderHistoryContext();
+        });
+      });
       if (requestedSC) loadRequestedSCCard(requestedSC, empName || '');
 
     } catch (e) {
@@ -8640,6 +11787,8 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   const SCR_FIELD_SCM_NOTES    = 'custrecord_screq_scm_notes';      // SCM Staffing Notes field
   const SCR_FIELD_SC_MANAGER_NOTES = 'custrecord_screq_scmanager_notes'; // SC Manager Notes field
   const SCR_FIELD_SC_MANAGER_NOTES_2 = 'custrecord_screq_scmanager_notes_2'; // Staffing popup notes field
+  const SCR_FIELD_ENGAGEMENT_NOTES = 'custrecord_screq_engmnt_notes'; // Engagement notes field
+  const SCR_REQUEST_DETAILS_MAX_CHARS = 4000;
   const SCR_FIELD_MEETING_DATE = 'custrecord_screq_meeting_date';   // Anticipated Customer Meeting date
   const SCR_FIELD_MEETING_DATE_CANDIDATES = [
     SCR_FIELD_MEETING_DATE,
@@ -8649,7 +11798,10 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     'custrecord_screq_customer_meeting_date',
     'custrecord_screq_anticipated_customer_meeting_date',
   ];
+  const SCR_FIELD_GTM_INDUSTRY = 'custrecord_screq_gtm_industry';
+  const SCR_FIELD_GTM_INDUSTRY_SUBGROUP = 'custrecord_screq_gtm_industry_subgroup';
   const SCR_FIELD_INDUSTRY_FAMILY_CANDIDATES = [
+    SCR_FIELD_GTM_INDUSTRY,
     'custrecord_screq_industry',
     'custrecord_screq_industry_family',
     'custrecord_screq_industry_group',
@@ -8658,6 +11810,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     'custrecord_screq_opp_industry',
   ];
   const SCR_FIELD_INDUSTRY_SUBGROUP_CANDIDATES = [
+    SCR_FIELD_GTM_INDUSTRY_SUBGROUP,
     'custrecord_screq_industry_subgroup',
     'custrecord_screq_industry_sub_group',
     'custrecord_screq_subindustry',
@@ -8669,6 +11822,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   // ── LocalStorage keys ─────────────────────────────────────────────
   const CAL_INTEGRATION_KEY    = 'sc_cal_integration_enabled';      // boolean toggle for calendar
   const PANEL_WIDTH_KEY        = 'sc_panel_width';                  // persisted panel width (px)
+  const PANEL_OPEN_KEY         = 'sc_panel_open';                   // persisted panel open/closed state
   const PANEL_WIDTH_MIN        = 360;
   const PANEL_WIDTH_MAX        = 900;
   const PANEL_WIDTH_DEFAULT    = 540;
@@ -8815,10 +11969,17 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
   /** Read raw internal ID (numeric string) for a form field. */
   function readFormFieldValue(fieldId) {
-    try {
-      const v = unsafeWindow.nlapiGetFieldValue(fieldId);
-      if (v != null) return String(v).trim();
-    } catch (e) { /* ignore */ }
+    const valueReaders = [
+      () => normalizeFieldReadResult(unsafeWindow.nlapiGetFieldValue(fieldId)),
+      () => readCurrentRecordField(fieldId, false),
+      () => lookupCurrentScrField(fieldId, false),
+    ];
+    for (const reader of valueReaders) {
+      try {
+        const value = reader();
+        if (value) return value;
+      } catch (e) { /* try next reader */ }
+    }
     return '';
   }
 
@@ -8856,11 +12017,125 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     disambig.style.display = picker.dataset.upsellPending === 'true' ? 'block' : 'none';
   }
 
+  function addAmoDeliverableName(names, value) {
+    const normalized = normalizeAmoDeliverableName(value);
+    if (!isValidAmoDeliverableName(normalized)) return;
+    names.push(normalized);
+  }
+
+  function readAmoDeliverableOptionsFromDocument(doc) {
+    const names = [];
+    if (!doc) return names;
+
+    try {
+      Array.from(doc.querySelectorAll('select')).forEach(select => {
+        const id = select.id || '';
+        const name = select.name || '';
+        if (id.indexOf(SCR_FIELD_DELIVERABLE) === -1 && name.indexOf(SCR_FIELD_DELIVERABLE) === -1) return;
+        Array.from(select.options || []).forEach(option => addAmoDeliverableName(names, option.text || option.label || option.value));
+      });
+    } catch (e) { /* keep trying other sources */ }
+
+    try {
+      const selector = [
+        `[data-name="${SCR_FIELD_DELIVERABLE}"]`,
+        `[data-fieldid="${SCR_FIELD_DELIVERABLE}"]`,
+        `[id*="${SCR_FIELD_DELIVERABLE}"]`,
+        `[name*="${SCR_FIELD_DELIVERABLE}"]`,
+      ].join(',');
+      doc.querySelectorAll(selector).forEach(el => {
+        const raw = el.getAttribute('data-options') || el.dataset?.options || '';
+        if (!raw) return;
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            parsed.forEach(option => addAmoDeliverableName(names, option.text || option.label || option.name || option.value));
+          }
+        } catch (e) { /* not JSON options */ }
+      });
+    } catch (e) { /* selector parsing is best effort */ }
+
+    return names;
+  }
+
+  function readAmoDeliverableOptionsFromForm() {
+    const names = [];
+    try {
+      const nsField = unsafeWindow.nlapiGetField && unsafeWindow.nlapiGetField(SCR_FIELD_DELIVERABLE);
+      let nsOptions = [];
+      if (nsField && typeof nsField.getSelectOptions === 'function') {
+        nsOptions = nsField.getSelectOptions('', 'contains') || nsField.getSelectOptions(null, 'contains') || [];
+      }
+      nsOptions.forEach(option => {
+        const text = typeof option.getText === 'function' ? option.getText() : (option.text || option.name || option.value);
+        addAmoDeliverableName(names, text);
+      });
+    } catch (e) { /* NetSuite field metadata may not be available in view mode */ }
+
+    readAmoDeliverableOptionsFromDocument(document).forEach(name => addAmoDeliverableName(names, name));
+    getAccessibleDocuments().forEach(doc => {
+      if (doc !== document) readAmoDeliverableOptionsFromDocument(doc).forEach(name => addAmoDeliverableName(names, name));
+    });
+    return names;
+  }
+
+  function refreshAmoDeliverableOptionsAsync() {
+    if (_amoDeliverableFetchStarted || typeof fetch !== 'function') return;
+    _amoDeliverableFetchStarted = true;
+
+    let editUrl = '';
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('e', 'T');
+      editUrl = url.href;
+    } catch (e) {
+      return;
+    }
+
+    fetch(editUrl, { credentials: 'include' })
+      .then(resp => resp.ok ? resp.text() : Promise.reject(new Error(`HTTP ${resp.status}`)))
+      .then(html => {
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const options = readAmoDeliverableOptionsFromDocument(doc);
+        if (!options.length) return;
+        _amoDeliverableRemoteOptions = options;
+        refreshAmoDeliverableOptions();
+        console.log('[SCOUT] Loaded AMO deliverables from edit page:', options.length);
+      })
+      .catch(e => console.warn('[SCOUT] AMO deliverable edit-page scan failed:', e.message || e));
+  }
+
+  function refreshAmoDeliverableOptions() {
+    const picker = document.getElementById('sc-amo-deliverable');
+    if (!picker) return;
+
+    const current = getSelectedAmoDeliverableFromPicker() || getCurrentAmoDeliverableFromForm();
+    const seen = new Set();
+    const options = [
+      ...getBaseAmoDeliverableOptions(),
+      ...readAmoDeliverableOptionsFromForm(),
+      current,
+    ].map(normalizeAmoDeliverableName)
+      .filter(name => {
+        const key = name.toLowerCase();
+        if (!isValidAmoDeliverableName(name) || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+    picker.innerHTML = `<option value="">— Select deliverable (optional) —</option>${buildAmoDeliverableOptionMarkup(options)}`;
+
+    if (current) {
+      const match = matchPickerOption(picker, current);
+      if (match) picker.value = match.value;
+    }
+  }
+
   function autoPopulateFromForm() {
     try {
       // Use confirmed field API names (discovered via b26.1.7 diagnostic)
       const reqType   = readFormField(SCR_FIELD_TYPE);        // e.g. "Solution Consultant - AMO"
-      const delivText = readFormField(SCR_FIELD_DELIVERABLE); // e.g. "Upsell"
+      const delivText = getCurrentAmoDeliverableFromForm(); // e.g. "Upsell"
       const isAmo     = /amo/i.test(reqType);
 
       if (isAmo) {
@@ -8871,11 +12146,13 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         setTimeout(function () {
           const picker = document.getElementById('sc-amo-deliverable');
           if (!picker) return;
+          refreshAmoDeliverableOptions();
 
           if (delivText) {
-            const match = matchPickerOption(picker, delivText);
+            const match = matchPickerOption(picker, normalizeAmoDeliverableName(delivText));
             if (match) picker.value = match.value;
           }
+          applyAmoDeliverableSuggestionFromRequest();
           syncUpsellDisambig();
         }, 50);
       }
@@ -8947,7 +12224,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     panel.id = 'sc-skills-panel';
     panel.innerHTML = buildPanelHTML();
     document.body.appendChild(panel);
+    wireScoutUpdateBanner();
+    setTimeout(() => checkScoutUpdate(false), 1200);
     refreshProductOptionsFromScrForm();
+    refreshAmoDeliverableOptions();
+    refreshAmoDeliverableOptionsAsync();
     setTimeout(refreshIndustryOptionsFromBOW, 100);
     setTimeout(resumePendingStaffAction, 700);
 
@@ -8963,32 +12244,40 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     function closePanel() {
       document.documentElement.classList.remove('sc-panel-open');
     }
-
-    toggleBtn.addEventListener('click', () => {
-      const opening = !panel.classList.contains('open');
-      panel.classList.toggle('open');
-      toggleBtn.classList.toggle('panel-open');
-
-      if (opening) {
-        openPanel();
-        // Panel just opened — read form state now (NetSuite is fully ready at this point)
-        loadStaffingContext(empName);
-        refreshProductOptionsFromScrForm();
-        refreshProductSkillOptionsFromMatrix();
-        refreshIndustryOptionsFromBOW();
-        autoPopulateFromForm();
-        detectTravelRequired();
-        updateRequestInsights('direct');
-        updateRequestInsights('amo');
-      } else {
-        closePanel();
-      }
-    });
-    document.getElementById('sc-skills-close').addEventListener('click', () => {
+    function refreshPanelContext() {
+      loadStaffingContext(empName);
+      refreshProductOptionsFromScrForm();
+      refreshAmoDeliverableOptions();
+      refreshAmoDeliverableOptionsAsync();
+      refreshProductSkillOptionsFromMatrix();
+      refreshIndustryOptionsFromBOW();
+      autoPopulateFromForm();
+      detectTravelRequired();
+      updateRequestInsights('direct');
+      updateRequestInsights('amo');
+    }
+    function openScoutPanel() {
+      panel.classList.add('open');
+      toggleBtn.classList.add('panel-open');
+      openPanel();
+      savePanelOpenState(true);
+      refreshPanelContext();
+    }
+    function closeScoutPanel() {
       panel.classList.remove('open');
       toggleBtn.classList.remove('panel-open');
       closePanel();
+      savePanelOpenState(false);
+    }
+
+    toggleBtn.addEventListener('click', () => {
+      if (panel.classList.contains('open')) {
+        closeScoutPanel();
+      } else {
+        openScoutPanel();
+      }
     });
+    document.getElementById('sc-skills-close').addEventListener('click', closeScoutPanel);
     document.getElementById('sc-feedback-btn').addEventListener('click', openScoutFeedbackWorkflow);
     document.getElementById('sc-gpt-assist-btn').addEventListener('click', showGptAssistDialog);
 
@@ -9066,6 +12355,25 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         applyGptAssistUI();
       });
     }
+    const debugToggle = document.getElementById('sc-debug-mode-toggle');
+    if (debugToggle) {
+      debugToggle.addEventListener('change', function () {
+        saveLocalConfig({ debugModeEnabled: this.checked });
+        loadStaffingContext(empName);
+      });
+    }
+    const earlyAdopterToggle = document.getElementById('sc-early-adopter-toggle');
+    if (earlyAdopterToggle) {
+      earlyAdopterToggle.addEventListener('change', function () {
+        const testingUpdateUrl = document.getElementById('sc-testing-update-url-input');
+        saveLocalConfig({
+          earlyAdopterUpdatesEnabled: this.checked,
+          testingUpdateUrl: testingUpdateUrl ? testingUpdateUrl.value.trim() : getTestingUpdateUrl(),
+        });
+        try { localStorage.removeItem(SCOUT_UPDATE_CACHE_KEY); } catch (e) { /* ignore */ }
+        checkScoutUpdate(true);
+      });
+    }
 
     // Item 5: Sync AMO deliverable picker → SCR form field on change
     document.getElementById('sc-amo-deliverable').addEventListener('change', function () {
@@ -9119,13 +12427,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     wireCollapsibleCard('sc-direct-product-skills-card', 'sc-direct-product-skills-toggle');
     wireCollapsibleCard('sc-direct-industry-card', 'sc-direct-industry-toggle');
     wireCollapsibleCard('sc-direct-filters-card', 'sc-direct-filters-toggle');
-    wireCollapsibleCard('sc-direct-xvert-card', 'sc-direct-xvert-toggle');
     wireCollapsibleCard('sc-direct-status-card', 'sc-direct-status-toggle');
     wireCollapsibleCard('sc-amo-additional-skills-card', 'sc-amo-additional-skills-toggle');
     wireCollapsibleCard('sc-amo-products-card', 'sc-amo-products-toggle');
     wireCollapsibleCard('sc-amo-product-skills-card', 'sc-amo-product-skills-toggle');
     wireCollapsibleCard('sc-amo-industry-card', 'sc-amo-industry-toggle');
-    wireCollapsibleCard('sc-amo-xvert-card', 'sc-amo-xvert-toggle');
     wireCollapsibleCard('sc-amo-status-card', 'sc-amo-status-toggle');
     wireCollapsibleCard('sc-amo-filters-card', 'sc-amo-filters-toggle');
 
@@ -9194,33 +12500,12 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       runSearch(empRec, empIds, empName);
     });
 
-    // Cross-vertical routing
-    const xvertMap = {
-      'sc-xvert-prod-west': { id: empIds.mikec,   label: 'Products West (Mike C)' },
-      'sc-xvert-prod-east': { id: empIds.lauren,  label: 'Products East (Lauren)' },
-      'sc-xvert-gb-west':   { id: empIds.rebecca, label: 'General Business West (Rebecca)' },
-      'sc-xvert-gb-east':   { id: empIds.karl,    label: 'General Business East (Karl)' },
-      'sc-xvert-ht':        { id: empIds.jeff,    label: 'High Tech (Jeff)' },
-      'sc-xvert-epm':       { id: empIds.jason,   label: 'EPM (Jason)' },
-    };
-    Object.entries(xvertMap).forEach(([btnId, cfg]) => {
-      const el = document.getElementById(btnId);
-      if (!el) return;
-      if (!cfg.id) {
-        el.disabled = true;
-        el.title = cfg.label + ' route target is not configured yet';
-        return;
-      }
-      el.addEventListener('click', () => routeXvert(cfg.id, cfg.label));
+    ['sc-btn-onhold', 'sc-amo-btn-onhold'].forEach(btnId => {
+      const btn = document.getElementById(btnId);
+      if (!btn || empIds.me) return;
+      btn.disabled = true;
+      btn.title = 'Current roster record unavailable for this role.';
     });
-
-    // AMO cross-vertical routing — targets are resolved by roster name at click time
-    document.querySelectorAll('.sc-amo-xvert-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        routeXvertByName(btn.dataset.assignee || '', btn.dataset.label || 'AMO route');
-      });
-    });
-
     document.getElementById('sc-btn-onhold').addEventListener('click', () => setOnHold(empIds.me));
     document.getElementById('sc-btn-cancel').addEventListener('click', () => cancelRequest(empName));
 
@@ -9232,6 +12517,12 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         tabBtn.classList.add('active');
         document.getElementById('sc-direct-pane').classList.toggle('active', target === 'direct');
         document.getElementById('sc-amo-pane').classList.toggle('active', target === 'amo');
+        if (target === 'amo') {
+          refreshAmoDeliverableOptions();
+          refreshAmoDeliverableOptionsAsync();
+          applyAmoDeliverableSuggestionFromRequest();
+          updateRequestInsights('amo');
+        }
       });
     });
 
@@ -9277,6 +12568,9 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       detectTravelRequired();
     }, 250);
     setTimeout(autoPopulateFromForm, 1200);
+    if (getPanelOpenState()) {
+      setTimeout(openScoutPanel, 350);
+    }
 
   }
 
@@ -9296,35 +12590,175 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     }
   }
 
-  function getCurrentEmp() {
+  function getLookupValue(payload, fieldId) {
+    if (!payload || typeof payload !== 'object') return '';
+    const value = payload[fieldId];
+    if (value && typeof value === 'object') return value.text || value.name || value.value || '';
+    return value || '';
+  }
+
+  function lookupCurrentUserName(curUser) {
+    if (!curUser) return '';
     try {
-      const curUser = nlapiGetUser();
+      const employeeFields = nlapiLookupField('employee', curUser, ['entityid', 'altname', 'firstname', 'lastname', 'email']) || {};
+      const first = getLookupValue(employeeFields, 'firstname');
+      const last = getLookupValue(employeeFields, 'lastname');
+      return getLookupValue(employeeFields, 'altname') ||
+        getLookupValue(employeeFields, 'entityid') ||
+        [first, last].filter(Boolean).join(' ') ||
+        getLookupValue(employeeFields, 'email') ||
+        '';
+    } catch (e) {
+      console.warn('[Staffing Helper] Could not resolve current employee name:', e.message || e);
+      return '';
+    }
+  }
+
+  function makeLimitedCurrentEmp(curUser, reason) {
+    const userName = lookupCurrentUserName(curUser) || 'SCOUT User';
+    return {
+      _scoutLimitedMode: true,
+      _scoutUserId: curUser || '',
+      _scoutLimitedReason: reason || '',
+      getId() { return ''; },
+      getValue(fieldId) {
+        return fieldId === 'name' ? userName : '';
+      },
+      getText() { return ''; },
+    };
+  }
+
+  function readNetSuiteRoleId() {
+    try {
+      if (unsafeWindow.nlapiGetRole) return String(unsafeWindow.nlapiGetRole() || '');
+    } catch (e) { /* ignore */ }
+    try {
+      const ctx = unsafeWindow.nlapiGetContext && unsafeWindow.nlapiGetContext();
+      if (ctx && typeof ctx.getRole === 'function') return String(ctx.getRole() || '');
+    } catch (e) { /* ignore */ }
+    return '';
+  }
+
+  function readNetSuiteRoleCenter() {
+    try {
+      const ctx = unsafeWindow.nlapiGetContext && unsafeWindow.nlapiGetContext();
+      if (ctx && typeof ctx.getRoleCenter === 'function') return String(ctx.getRoleCenter() || '');
+    } catch (e) { /* ignore */ }
+    return '';
+  }
+
+  function collectRoleTextFromPage() {
+    const out = [];
+    function add(text) {
+      const cleaned = String(text || '').replace(/\s+/g, ' ').trim();
+      if (!cleaned || cleaned.length > 120) return;
+      if (/\bSC\s*-\s*(IC|Mgr|Manager)\b/i.test(cleaned) ||
+          /\bNetSuite Inc\.\s*-\s*Solution Consultant\b/i.test(cleaned) ||
+          /\bSolution Consultant Manager\b/i.test(cleaned)) {
+        out.push(cleaned);
+      }
+    }
+    function scanDoc(doc) {
+      if (!doc) return;
+      ['#div__header', '#ns-header', '.ns-header', '.uir-header', 'header', 'nav', '[role="navigation"]']
+        .forEach(selector => {
+          try {
+            Array.from(doc.querySelectorAll(selector)).slice(0, 8).forEach(el => add(el.textContent));
+          } catch (e) { /* ignore */ }
+        });
+      try {
+        Array.from(doc.querySelectorAll('a, span, div, td')).slice(0, 1500).forEach(el => add(el.textContent));
+      } catch (e) { /* ignore */ }
+    }
+    try { scanDoc((unsafeWindow.top || unsafeWindow).document); } catch (e) { /* ignore */ }
+    try { scanDoc(unsafeWindow.document); } catch (e) { /* ignore */ }
+    return [...new Set(out)].join(' | ');
+  }
+
+  function getScoutRoleContext() {
+    const roleId = readNetSuiteRoleId();
+    const roleCenter = readNetSuiteRoleCenter();
+    const roleText = collectRoleTextFromPage();
+    const haystack = `${roleId} ${roleCenter} ${roleText}`.toLowerCase();
+    const isScManager = /\bsc\s*-\s*(mgr|manager)\b/.test(haystack) || /solution consultant manager/.test(haystack);
+    const isScIc = !isScManager && (
+      /\bsc\s*-\s*ic\b/.test(haystack) ||
+      /netsuite inc\.\s*-\s*solution consultant\b/.test(haystack)
+    );
+    return { roleId, roleCenter, roleText, isScIc, isScManager };
+  }
+
+  function detectRosterColumnAccess(rosterId, fieldId, label) {
+    if (!rosterId) return false;
+    try {
+      nlapiSearchRecord('customrecord_emproster', null, [
+        new nlobjSearchFilter('internalid', null, 'is', rosterId),
+      ], [
+        new nlobjSearchColumn('internalid'),
+        new nlobjSearchColumn(fieldId),
+      ]);
+      return true;
+    } catch (e) {
+      console.warn(`[Staffing Helper] ${label} unavailable for this role:`, e.message || e);
+      return false;
+    }
+  }
+
+  function detectManagerAvailabilityResolutionAccess(rosterId) {
+    return detectRosterColumnAccess(rosterId, 'custrecord_emproster_avail_notes_res', 'Manager-only availability resolution notes');
+  }
+
+  function detectAvailabilityNotesAccess(rosterId) {
+    return detectRosterColumnAccess(rosterId, 'custrecord_emproster_avail_notes', 'Availability manager notes');
+  }
+
+  function detectVerticalAmoAccess(rosterId) {
+    return detectRosterColumnAccess(rosterId, 'custrecord_emproster_vertical_amo', 'Sales vertical');
+  }
+
+  function detectSalesSubregionAccess(rosterId) {
+    return detectRosterColumnAccess(rosterId, 'custrecord_emproster_salessubregion', 'Sales subregion');
+  }
+
+  function getCurrentEmp() {
+    let curUser = '';
+    try {
+      curUser = nlapiGetUser();
       const filters = [new nlobjSearchFilter('custrecord_emproster_emp', null, 'is', curUser)];
       const cols = [
         new nlobjSearchColumn('name'),
-        new nlobjSearchColumn('custrecord_emproster_vertical_amo'),
         new nlobjSearchColumn('custrecord_emproster_salesteam'),
         new nlobjSearchColumn('custrecord_emproster_salesregion'),
         new nlobjSearchColumn('custrecord_emproster_sales_tier'),
       ];
       const res = nlapiSearchRecord('customrecord_emproster', null, filters, cols);
-      return (res && res.length > 0) ? res[0] : null;
+      if (res && res.length > 0) return res[0];
+      console.warn('[Staffing Helper] Employee roster record not found; loading SCOUT in limited role mode.');
+      return makeLimitedCurrentEmp(curUser, 'Roster record not found');
     } catch (e) {
-      console.error('[Staffing Helper] Could not load employee record:', e);
-      return null;
+      console.error('[Staffing Helper] Could not load employee roster record; loading SCOUT in limited role mode:', e);
+      return makeLimitedCurrentEmp(curUser, e.message || String(e));
     }
   }
 
   waitForNlapi(() => {
     const empRec = getCurrentEmp();
     if (!empRec) {
-      console.warn('[Staffing Helper] Employee roster record not found — panel will not inject.');
+      console.warn('[Staffing Helper] Current employee context unavailable; panel will not inject.');
       return;
     }
 
-    const empName = empRec.getValue('name') || 'SC Manager';
+    const limitedMode = Boolean(empRec._scoutLimitedMode);
+    const empName = empRec.getValue('name') || 'SCOUT User';
+    SCOUT_ROLE_CONTEXT = getScoutRoleContext();
+    const restrictedIcRole = Boolean(SCOUT_ROLE_CONTEXT.isScIc && !SCOUT_ROLE_CONTEXT.isScManager);
+    const rosterIdForProbe = limitedMode || restrictedIcRole ? '' : empRec.getId();
+    SCOUT_CAN_READ_AVAIL_NOTES = detectAvailabilityNotesAccess(rosterIdForProbe);
+    SCOUT_CAN_READ_MANAGER_AVAIL_RES = detectManagerAvailabilityResolutionAccess(rosterIdForProbe);
+    SCOUT_CAN_READ_VERTICAL_AMO = detectVerticalAmoAccess(rosterIdForProbe);
+    SCOUT_CAN_READ_SALES_SUBREGION = detectSalesSubregionAccess(rosterIdForProbe);
     const empIds  = {
-      me:      empRec.getId(),
+      me:      limitedMode ? '' : empRec.getId(),
       rob:     71312,
       jeff:    727821,
       karl:    106513,
@@ -9334,6 +12768,12 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       mikec:   239718,
       jason:   null,   // EPM route stays disabled until Jason's internal ID is configured
     };
+    if (limitedMode) {
+      console.warn('[Staffing Helper] Limited role mode active. Manager-specific team features may be unavailable.', empRec._scoutLimitedReason || '');
+    }
+    if (restrictedIcRole) {
+      console.warn('[Staffing Helper] SC individual contributor role detected. Manager-only roster columns will be hidden.', SCOUT_ROLE_CONTEXT);
+    }
 
     injectPanel(empRec, empIds, empName);
   });
