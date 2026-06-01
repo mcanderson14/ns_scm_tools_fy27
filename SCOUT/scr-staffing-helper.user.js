@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.0.1
+// @version      27.0.2
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.0.1
+   SCOUT — SC Operations Utility Tool  27.0.2
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.0.1';
+  const SCRIPT_VERSION = '27.0.2';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -97,6 +97,7 @@
       debugModeEnabled: false,
       earlyAdopterUpdatesEnabled: false,
       testingUpdateUrl: '',
+      commentInitials: '',
       extraTeamMembers: '',
       extraTeamManagers: '',
       extraAmoDeliverables: '',
@@ -121,6 +122,7 @@
     merged.debugModeEnabled = Boolean(merged.debugModeEnabled);
     merged.earlyAdopterUpdatesEnabled = Boolean(merged.earlyAdopterUpdatesEnabled);
     merged.testingUpdateUrl = String(merged.testingUpdateUrl || '').trim();
+    merged.commentInitials = normalizeCommentInitials(merged.commentInitials);
     merged.extraTeamMembers = String(merged.extraTeamMembers || '');
     merged.extraTeamManagers = String(merged.extraTeamManagers || '');
     merged.extraAmoDeliverables = String(merged.extraAmoDeliverables || '');
@@ -139,6 +141,7 @@
     cfg.debugModeEnabled = Boolean(cfg.debugModeEnabled);
     cfg.earlyAdopterUpdatesEnabled = Boolean(cfg.earlyAdopterUpdatesEnabled);
     cfg.testingUpdateUrl = String(cfg.testingUpdateUrl || '').trim();
+    cfg.commentInitials = normalizeCommentInitials(cfg.commentInitials);
     localStorage.setItem(LOCAL_CONFIG_KEY, JSON.stringify(cfg));
     localStorage.setItem('sc_cal_integration_enabled', cfg.calendarIntegrationEnabled ? 'true' : 'false');
     return cfg;
@@ -171,6 +174,12 @@
   }
   function getFeedbackWebhookUrl() {
     return getLocalConfig().feedbackWebhookUrl || '';
+  }
+  function normalizeCommentInitials(value) {
+    return String(value || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 8);
+  }
+  function getCommentInitialsOverride() {
+    return getLocalConfig().commentInitials || '';
   }
   function getExtraAmoDeliverablesText() {
     return getLocalConfig().extraAmoDeliverables || '';
@@ -4235,6 +4244,16 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
             </div>
           </div>
           <div class="sc-field" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
+            <label class="sc-label">Comment Initials</label>
+            <input type="text" id="sc-comment-initials-input"
+              autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" maxlength="8"
+              value="${escAttr(getCommentInitialsOverride())}"
+              placeholder="MCA">
+            <div class="sc-field-hint">
+              Optional. When set, SCOUT uses these initials in staffing comments instead of deriving them from your NetSuite name.
+            </div>
+          </div>
+          <div class="sc-field" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
             <label class="sc-label">Additional My Team Members</label>
             <textarea id="sc-extra-team-members-input" class="sc-settings-textarea"
               placeholder="One per line: roster internal ID or employee name">${escHtml(getExtraTeamMembersText())}</textarea>
@@ -4877,8 +4896,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       .map(part => part.charAt(0).toUpperCase())
       .join('');
   }
+  function getCommentInitials(name) {
+    return getCommentInitialsOverride() || getInitials(name);
+  }
   function buildDirectManagerNotesTemplate(empName) {
-    const initials = getInitials(empName);
+    const initials = getCommentInitials(empName);
     const staffedBy = initials ? `${empName}/${initials}` : empName;
     return [
       'Industry: ',
@@ -4894,7 +4916,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     ].join('\n');
   }
   function buildEngagementNotesTemplate(empName) {
-    const initials = getInitials(empName);
+    const initials = getCommentInitials(empName);
     return [
       todayFullString(),
       'Last Steps:',
@@ -7366,6 +7388,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const debugToggle = document.getElementById('sc-debug-mode-toggle');
     const earlyAdopterToggle = document.getElementById('sc-early-adopter-toggle');
     const testingUpdateUrl = document.getElementById('sc-testing-update-url-input');
+    const commentInitials = document.getElementById('sc-comment-initials-input');
     const extraTeam = document.getElementById('sc-extra-team-members-input');
     const extraManagers = document.getElementById('sc-extra-team-managers-input');
     const extraAmoDeliverables = document.getElementById('sc-extra-amo-deliverables-input');
@@ -7375,6 +7398,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     if (debugToggle) debugToggle.checked = getDebugModeEnabled();
     if (earlyAdopterToggle) earlyAdopterToggle.checked = getEarlyAdopterUpdatesEnabled();
     if (testingUpdateUrl) testingUpdateUrl.value = getTestingUpdateUrl();
+    if (commentInitials) commentInitials.value = getCommentInitialsOverride();
     if (extraTeam) extraTeam.value = getExtraTeamMembersText();
     if (extraManagers) extraManagers.value = getExtraTeamManagersText();
     if (extraAmoDeliverables) extraAmoDeliverables.value = getExtraAmoDeliverablesText();
@@ -7387,6 +7411,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const debugToggle = document.getElementById('sc-debug-mode-toggle');
     const earlyAdopterToggle = document.getElementById('sc-early-adopter-toggle');
     const testingUpdateUrl = document.getElementById('sc-testing-update-url-input');
+    const commentInitials = document.getElementById('sc-comment-initials-input');
     const extraTeam = document.getElementById('sc-extra-team-members-input');
     const extraManagers = document.getElementById('sc-extra-team-managers-input');
     const extraAmoDeliverables = document.getElementById('sc-extra-amo-deliverables-input');
@@ -7397,6 +7422,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       debugModeEnabled: debugToggle ? debugToggle.checked : getDebugModeEnabled(),
       earlyAdopterUpdatesEnabled: earlyAdopterToggle ? earlyAdopterToggle.checked : getEarlyAdopterUpdatesEnabled(),
       testingUpdateUrl: testingUpdateUrl ? testingUpdateUrl.value.trim() : getTestingUpdateUrl(),
+      commentInitials: commentInitials ? commentInitials.value : getCommentInitialsOverride(),
       extraTeamMembers: extraTeam ? extraTeam.value : getExtraTeamMembersText(),
       extraTeamManagers: extraManagers ? extraManagers.value : getExtraTeamManagersText(),
       extraAmoDeliverables: extraAmoDeliverables ? extraAmoDeliverables.value : getExtraAmoDeliverablesText(),
