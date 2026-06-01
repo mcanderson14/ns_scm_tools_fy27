@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.0.2
+// @version      27.0.3
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.0.2
+   SCOUT — SC Operations Utility Tool  27.0.3
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.0.2';
+  const SCRIPT_VERSION = '27.0.3';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -945,11 +945,6 @@ html.sc-resizing #sc-skills-toggle { transition: none !important; }
 .sc-save-confirm.show { opacity: 1; }
 
 /* ── Status Action Buttons ───────────────────────────────────────── */
-.sc-action-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
 .sc-action-btn {
   padding: 8px;
   border: none;
@@ -968,6 +963,25 @@ html.sc-resizing #sc-skills-toggle { transition: none !important; }
 .sc-action-btn:active { transform: scale(0.97); }
 .sc-action-btn.yellow { background: var(--sc-yellow); }
 .sc-action-btn.red    { background: var(--sc-red); }
+.sc-status-icon-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sc-status-icon-btn {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  padding: 0;
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1;
+}
+.sc-status-icon-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  filter: grayscale(0.25);
+}
 
 /* ── Form Controls ───────────────────────────────────────────────── */
 .sc-field { margin-bottom: 10px; }
@@ -1934,6 +1948,12 @@ html.sc-resizing #sc-skills-toggle { transition: none !important; }
 
 /* ── Staffing Context Card ───────────────────────────────────────── */
 .sc-context-card .sc-card-title { color: var(--sc-blue-dark); }
+.sc-context-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
 .sc-ctx-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -4285,7 +4305,13 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
         <!-- Staffing Context Card — populated on panel open, stays pinned -->
         <div class="sc-card sc-context-card" id="sc-context-card">
-          <div class="sc-card-title">📋 Request Context</div>
+          <div class="sc-card-title sc-context-title-row">
+            <span>📋 Request Context</span>
+            <div class="sc-status-icon-actions" aria-label="Status actions">
+              <button class="sc-action-btn sc-status-icon-btn yellow" id="sc-context-btn-onhold" type="button" title="Place request On Hold" aria-label="Place request On Hold">⏸</button>
+              <button class="sc-action-btn sc-status-icon-btn red" id="sc-context-btn-cancel" type="button" title="Cancel request" aria-label="Cancel request">✕</button>
+            </div>
+          </div>
           <div id="sc-context-body">
             <div class="sc-status loading">Loading context…</div>
           </div>
@@ -4355,20 +4381,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
              DIRECT STAFFING PANE
         ═══════════════════════════════════════════════════════ -->
         <div id="sc-direct-pane" class="sc-tab-pane active">
-
-          <!-- Status Actions -->
-          <div class="sc-card sc-collapsible-card collapsed" id="sc-direct-status-card">
-            <div class="sc-card-title" id="sc-direct-status-toggle" role="button" tabindex="0" aria-expanded="false">
-              <span>Status Actions</span>
-              <span class="sc-collapsible-chevron">▼</span>
-            </div>
-            <div class="sc-collapsible-body">
-              <div class="sc-action-row">
-                <button class="sc-action-btn yellow" id="sc-btn-onhold">⏸ On Hold</button>
-                <button class="sc-action-btn red"    id="sc-btn-cancel">✕ Cancel Request</button>
-              </div>
-            </div>
-          </div>
 
           <!-- Module Insights Card (Direct) -->
           <div class="sc-card sc-insights-card" id="sc-insights-card" style="display:none">
@@ -4535,20 +4547,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
              AMO STAFFING PANE
         ═══════════════════════════════════════════════════════ -->
         <div id="sc-amo-pane" class="sc-tab-pane">
-
-          <!-- Status Actions (duplicated on AMO tab) -->
-          <div class="sc-card sc-collapsible-card collapsed" id="sc-amo-status-card">
-            <div class="sc-card-title" id="sc-amo-status-toggle" role="button" tabindex="0" aria-expanded="false">
-              <span>Status Actions</span>
-              <span class="sc-collapsible-chevron">▼</span>
-            </div>
-            <div class="sc-collapsible-body">
-              <div class="sc-action-row">
-                <button class="sc-action-btn yellow" id="sc-amo-btn-onhold">⏸ On Hold</button>
-                <button class="sc-action-btn red"    id="sc-amo-btn-cancel">✕ Cancel Request</button>
-              </div>
-            </div>
-          </div>
 
           <!-- AMO Deliverable Selector -->
           <div class="sc-card sc-card-amo">
@@ -12446,12 +12444,10 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     wireCollapsibleCard('sc-direct-product-skills-card', 'sc-direct-product-skills-toggle');
     wireCollapsibleCard('sc-direct-industry-card', 'sc-direct-industry-toggle');
     wireCollapsibleCard('sc-direct-filters-card', 'sc-direct-filters-toggle');
-    wireCollapsibleCard('sc-direct-status-card', 'sc-direct-status-toggle');
     wireCollapsibleCard('sc-amo-additional-skills-card', 'sc-amo-additional-skills-toggle');
     wireCollapsibleCard('sc-amo-products-card', 'sc-amo-products-toggle');
     wireCollapsibleCard('sc-amo-product-skills-card', 'sc-amo-product-skills-toggle');
     wireCollapsibleCard('sc-amo-industry-card', 'sc-amo-industry-toggle');
-    wireCollapsibleCard('sc-amo-status-card', 'sc-amo-status-toggle');
     wireCollapsibleCard('sc-amo-filters-card', 'sc-amo-filters-toggle');
 
     // Kick off initial My Team load
@@ -12519,14 +12515,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       runSearch(empRec, empIds, empName);
     });
 
-    ['sc-btn-onhold', 'sc-amo-btn-onhold'].forEach(btnId => {
+    ['sc-context-btn-onhold'].forEach(btnId => {
       const btn = document.getElementById(btnId);
       if (!btn || empIds.me) return;
       btn.disabled = true;
       btn.title = 'Current roster record unavailable for this role.';
     });
-    document.getElementById('sc-btn-onhold').addEventListener('click', () => setOnHold(empIds.me));
-    document.getElementById('sc-btn-cancel').addEventListener('click', () => cancelRequest(empName));
+    document.getElementById('sc-context-btn-onhold').addEventListener('click', () => setOnHold(empIds.me));
+    document.getElementById('sc-context-btn-cancel').addEventListener('click', () => cancelRequest(empName));
 
     // ── Tab switching ────────────────────────────────────────────
     document.querySelectorAll('.sc-tab-btn').forEach(tabBtn => {
@@ -12544,10 +12540,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         }
       });
     });
-
-    // ── AMO Status Actions ───────────────────────────────────────
-    document.getElementById('sc-amo-btn-onhold').addEventListener('click', () => setOnHold(empIds.me));
-    document.getElementById('sc-amo-btn-cancel').addEventListener('click', () => cancelRequest(empName));
 
     // ── AMO Product text filter ──────────────────────────────────
     document.getElementById('sc-amo-product-filter').addEventListener('input', function () {
