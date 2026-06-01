@@ -1,21 +1,22 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.86B
+// @version      27.0.0.88B
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
 // @match        https://nlcorp-sb2.app.netsuite.com/app/common/search/searchresults.nl*
 // @match        https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl*
 // @match        https://nlcorp-sb2.app.netsuite.com/app/common/search/savedsearchresults.nl*
+// @match        https://mcanderson14.github.io/ns_scm_tools_fy27/calendar-refresh.html*
+// @grant        GM_getValue
+// @grant        GM_setValue
 // @grant        GM_openInTab
 // @grant        GM_xmlhttpRequest
 // @grant        GM.xmlHttpRequest
 // @grant        unsafeWindow
 // @connect      github.com
 // @connect      raw.githubusercontent.com
-// @connect      localhost
-// @connect      127.0.0.1
 // @run-at       document-idle
 // @downloadURL  https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js
 // @updateURL    https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js
@@ -39,12 +40,14 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.86B";
+  const HELPER_VERSION = "27.0.0.88B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
   const GRAPH_TOKEN_REFRESH_URL = "https://mcanderson14.github.io/ns_scm_tools_fy27/calendar-refresh.html";
-  const GRAPH_SERVICE_HEALTH_URL = "http://localhost:8787/health";
+  const GRAPH_TOKEN_STATUS_KEY = "iqueue-graph-token-status-v1";
+  const GRAPH_TOKEN_STATUS_STALE_MS = 26 * 60 * 60 * 1000;
+  const GRAPH_TOKEN_EXPIRING_SOON_MS = 2 * 60 * 60 * 1000;
   const HELPER_STATE_STORAGE_KEY = "fy27-unified-sc-staffing-queue-assistant-state-v1";
   const EXTERNAL_MAPPING_FILE_NAME = "SC_Industry_State_Region_Mapping.json";
   const EXTERNAL_MAPPING_FILE_ID = "482253421";
@@ -3689,8 +3692,10 @@ Health & Hospitality	DIRECT	NL	West	West
   function urlFromValue(value) {
     const text = normalizeSpaces(value);
     if (!text || /^-?n\/?a-?$/i.test(text)) return "";
-    if (/^https?:\/\//i.test(text)) return text;
-    if (/^[\w.-]+\.[a-z]{2,}(\/.*)?$/i.test(text)) return `https://${text}`;
+    const absolute = text.match(/https?:\/\/[^\s<>"']+/i);
+    if (absolute) return absolute[0].replace(/[),.;]+$/g, "");
+    const domain = text.match(/\b(?:www\.)?[\w.-]+\.[a-z]{2,}(?:\/[^\s<>"']*)?/i);
+    if (domain) return `https://${domain[0].replace(/[),.;]+$/g, "")}`;
     return "";
   }
 
@@ -3699,7 +3704,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const value = normalizeSpaces(field && field.value);
     const href = link ? link.href : urlFromValue(value);
     if (!href) return value ? escapeHtml(value) : "";
-    return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(fallbackLabel || link && link.text || value || href)}</a>`;
+    return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(fallbackLabel || value || link && link.text || href)}</a>`;
   }
 
   function normalizeYesNo(value, defaultValue = "") {
@@ -3739,6 +3744,7 @@ Health & Hospitality	DIRECT	NL	West	West
     companySize: [/Company\s*Size/i, /Employees/i, /Number\s*of\s*Employees/i],
     annualRevenue: [/Annual\s*Revenue/i, /Company\s*Revenue/i],
     website: [/Website/i, /Web\s*Address/i, /Company\s*Website/i],
+    linkedin: [/LinkedIn/i, /Linked\s*In/i],
     billingAddress: [/Billing\s*Address/i, /Bill\s*Address/i],
     billingCity: [/Billing\s*City/i, /Bill\s*City/i],
     billingState: [/Billing\s*State/i, /Bill\s*State/i, /Billing\s*Province/i, /Bill\s*Province/i],
@@ -4812,7 +4818,7 @@ Health & Hospitality	DIRECT	NL	West	West
       ]),
       renderSummaryColumn("Company", [
         renderSummaryItem("Company Name", "", { html: companyHtml || escapeHtml(summary.companyField && summary.companyField.value || "") }),
-        renderSummaryItem("Website", "", { html: externalLinkHtml(summary.websiteField, "Website") }),
+        renderSummaryItem("Website", "", { html: externalLinkHtml(summary.websiteField) }),
         renderSummaryItem("LinkedIn", "", { html: externalLinkHtml(summary.linkedinField, "LinkedIn") }),
         renderSummaryItem("Company Size", summary.companySize),
         renderSummaryItem("Annual Revenue", summary.annualRevenue || "Unknown"),
@@ -5052,6 +5058,23 @@ Health & Hospitality	DIRECT	NL	West	West
     }
   }
 
+  function gmGetValue(key, fallback = null) {
+    try {
+      return typeof GM_getValue === "function" ? GM_getValue(key, fallback) : fallback;
+    } catch (error) {
+      console.warn("IQUEUE could not read Tampermonkey storage", error);
+      return fallback;
+    }
+  }
+
+  function gmSetValue(key, value) {
+    try {
+      if (typeof GM_setValue === "function") GM_setValue(key, value);
+    } catch (error) {
+      console.warn("IQUEUE could not write Tampermonkey storage", error);
+    }
+  }
+
   function scriptUpdateCheckUrl() {
     const separator = SCRIPT_UPDATE_URL.includes("?") ? "&" : "?";
     return `${SCRIPT_UPDATE_URL}${separator}t=${Date.now()}`;
@@ -5102,54 +5125,6 @@ Health & Hospitality	DIRECT	NL	West	West
     }).then(response => {
       if (!response.ok) throw new Error(`Update check failed: ${response.status}`);
       return response.text();
-    });
-  }
-
-  function requestJsonWithGm(url, options = {}) {
-    const request = {
-      method: options.method || "GET",
-      url,
-      headers: options.headers || {},
-      timeout: options.timeout || 5000
-    };
-
-    if (typeof GM_xmlhttpRequest === "function") {
-      return new Promise((resolve, reject) => {
-        GM_xmlhttpRequest({
-          ...request,
-          onload(response) {
-            let payload = {};
-            try {
-              payload = JSON.parse(response.responseText || "{}");
-            } catch (error) {
-              reject(new Error("Service returned unreadable JSON."));
-              return;
-            }
-
-            if (response.status >= 200 && response.status < 300) {
-              resolve(payload);
-              return;
-            }
-            reject(new Error(payload.message || payload.authError || `Service returned ${response.status || "unknown status"}`));
-          },
-          onerror() {
-            reject(new Error("Service unavailable"));
-          },
-          ontimeout() {
-            reject(new Error("Service timed out"));
-          }
-        });
-      });
-    }
-
-    return fetch(url, {
-      method: request.method,
-      headers: request.headers,
-      cache: "no-cache"
-    }).then(async response => {
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.message || payload.authError || `Service returned ${response.status}`);
-      return payload;
     });
   }
 
@@ -5234,35 +5209,195 @@ Health & Hospitality	DIRECT	NL	West	West
     });
   }
 
+  function isGraphTokenRefreshPage() {
+    return window.location.hostname === "mcanderson14.github.io"
+      && /\/ns_scm_tools_fy27\/calendar-refresh\.html$/i.test(window.location.pathname);
+  }
+
+  function decodeJwtPayload(token) {
+    const parts = String(token || "").split(".");
+    if (parts.length < 2) return null;
+    try {
+      const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+      const padded = payload.padEnd(Math.ceil(payload.length / 4) * 4, "=");
+      return JSON.parse(atob(padded));
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function expiryFromUnknownValue(value, depth = 0) {
+    if (depth > 4 || value == null) return 0;
+    if (typeof value === "number") {
+      if (value > 1000000000000) return value;
+      if (value > 1000000000) return value * 1000;
+      return 0;
+    }
+    if (typeof value === "string") {
+      const text = value.trim();
+      const jwtMatch = text.match(/\beyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\b/);
+      if (jwtMatch) {
+        const payload = decodeJwtPayload(jwtMatch[0]);
+        if (payload && payload.exp) return Number(payload.exp) * 1000;
+      }
+      if (/^\d{10,13}$/.test(text)) return expiryFromUnknownValue(Number(text), depth + 1);
+      const parsedDate = Date.parse(text);
+      return Number.isFinite(parsedDate) ? parsedDate : 0;
+    }
+    if (Array.isArray(value)) {
+      return value.map(item => expiryFromUnknownValue(item, depth + 1)).filter(Boolean).sort((a, b) => b - a)[0] || 0;
+    }
+    if (typeof value === "object") {
+      const preferredKeys = Object.keys(value).filter(key => /(?:expires?|expiry|expiration|expiresAt|expiresOn|exp|validUntil)/i.test(key));
+      for (const key of preferredKeys) {
+        const expiry = expiryFromUnknownValue(value[key], depth + 1);
+        if (expiry) return expiry;
+      }
+      return Object.values(value).map(item => expiryFromUnknownValue(item, depth + 1)).filter(Boolean).sort((a, b) => b - a)[0] || 0;
+    }
+    return 0;
+  }
+
+  function graphTokenStatusFromStorage() {
+    const expiries = [];
+    try {
+      for (let index = 0; index < window.localStorage.length; index += 1) {
+        const key = window.localStorage.key(index);
+        const raw = window.localStorage.getItem(key);
+        if (!raw) continue;
+        let value = raw;
+        try {
+          value = JSON.parse(raw);
+        } catch (error) {
+          value = raw;
+        }
+        const expiry = expiryFromUnknownValue(value);
+        if (expiry) expiries.push(expiry);
+      }
+    } catch (error) {
+      console.warn("IQUEUE could not inspect refresh-page local storage", error);
+    }
+    return expiries.sort((a, b) => b - a)[0] || 0;
+  }
+
+  function graphTokenStatusFromPageText() {
+    const text = normalizeSpaces(document.body && document.body.innerText || "");
+    if (!text) return { valid: false, expiresAt: 0, message: "Token status not found." };
+
+    const expired = /\b(?:expired|not\s+ready|missing|invalid)\b/i.test(text) && !/saved\s+token\s+ready/i.test(text);
+    const expiryMatch = text.match(/Expires\s+(.+?)(?:\s*\(([^)]*)\)|$)/i);
+    let expiresAt = expiryMatch ? Date.parse(normalizeSpaces(expiryMatch[1])) : 0;
+    if (!expiresAt && expiryMatch && expiryMatch[2]) {
+      const relative = expiryMatch[2].match(/(\d+(?:\.\d+)?)\s*(hr|hour|hours|min|minute|minutes)/i);
+      if (relative) {
+        const amount = Number(relative[1]);
+        const unit = relative[2].toLowerCase();
+        expiresAt = Date.now() + amount * (/^h/.test(unit) ? 60 * 60 * 1000 : 60 * 1000);
+      }
+    }
+
+    const ready = /saved\s+token\s+ready/i.test(text) || /token\s+saved/i.test(text);
+    return {
+      valid: Boolean(!expired && (ready || expiresAt > Date.now())),
+      expiresAt,
+      message: ready ? "Saved token ready." : expired ? "Token expired or missing." : "Token status not found."
+    };
+  }
+
+  function publishGraphTokenStatusFromRefreshPage() {
+    const pageStatus = graphTokenStatusFromPageText();
+    const storageExpiry = graphTokenStatusFromStorage();
+    const expiresAt = pageStatus.expiresAt || storageExpiry || 0;
+    const valid = Boolean(pageStatus.valid || expiresAt > Date.now());
+    gmSetValue(GRAPH_TOKEN_STATUS_KEY, {
+      checkedAt: Date.now(),
+      source: "calendar-refresh",
+      valid,
+      expiresAt,
+      message: valid ? "Saved token ready." : pageStatus.message || "Token status not found."
+    });
+  }
+
+  function installGraphTokenRefreshPageBridge() {
+    publishGraphTokenStatusFromRefreshPage();
+    window.setTimeout(publishGraphTokenStatusFromRefreshPage, 750);
+    window.setTimeout(publishGraphTokenStatusFromRefreshPage, 2500);
+    try {
+      const observer = new MutationObserver(() => publishGraphTokenStatusFromRefreshPage());
+      observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    } catch (error) {
+      // MutationObserver can fail on unusual partial page loads; timed checks above still cover normal use.
+    }
+    window.addEventListener("storage", publishGraphTokenStatusFromRefreshPage);
+  }
+
+  function formatGraphTokenExpiry(expiresAt) {
+    if (!expiresAt) return "";
+    try {
+      return new Date(expiresAt).toLocaleString();
+    } catch (error) {
+      return "";
+    }
+  }
+
+  function readGraphTokenStatusBridge() {
+    const value = gmGetValue(GRAPH_TOKEN_STATUS_KEY, null);
+    return value && typeof value === "object" ? value : null;
+  }
+
   async function checkGraphTokenStatus(options = {}) {
     const force = Boolean(options.force);
     if (force) setGraphTokenStatus("Checking Microsoft Graph token...", "checking");
 
-    try {
-      const health = await requestJsonWithGm(GRAPH_SERVICE_HEALTH_URL, { timeout: 3500 });
-      const profile = health.profile && (health.profile.displayName || health.profile.userPrincipalName || health.profile.mail) || "";
-      if (health.authenticated) {
-        setGraphTokenStatus(
-          force ? `Graph connected${profile ? ` as ${profile}` : ""}.` : "",
-          force ? "good" : ""
-        );
-        return health;
-      }
+    const bridge = readGraphTokenStatusBridge();
+    if (!bridge || !bridge.checkedAt) {
+      setGraphTokenStatus(
+        force ? "Open the refresh page to verify Microsoft Graph token status." : "",
+        force ? "warn" : "",
+        "IQUEUE has not yet seen token status from calendar-refresh.html."
+      );
+      return bridge;
+    }
 
+    const age = Date.now() - Number(bridge.checkedAt || 0);
+    const expiresAt = Number(bridge.expiresAt || 0);
+    const expiryText = formatGraphTokenExpiry(expiresAt);
+    if (age > GRAPH_TOKEN_STATUS_STALE_MS) {
+      setGraphTokenStatus(
+        "Microsoft Graph token status is stale.",
+        "warn",
+        "Open the refresh page so IQUEUE can read the latest token status."
+      );
+      return bridge;
+    }
+
+    if (!bridge.valid || expiresAt && expiresAt <= Date.now()) {
       setGraphTokenStatus(
         "Microsoft Graph token needs refresh.",
         "warn",
-        health.authError || "Graph service reported that it is not authenticated."
+        bridge.message || "The refresh page reported an expired or missing token."
       );
-      return health;
-    } catch (error) {
-      setGraphTokenStatus(
-        "Microsoft Graph service unavailable or token needs refresh.",
-        "warn",
-        error.message || "Graph status check failed."
-      );
-      return null;
+      return bridge;
     }
+
+    if (expiresAt && expiresAt - Date.now() <= GRAPH_TOKEN_EXPIRING_SOON_MS) {
+      setGraphTokenStatus(
+        `Microsoft Graph token expires soon${expiryText ? ` (${expiryText})` : ""}.`,
+        "warn"
+      );
+      return bridge;
+    }
+
+    setGraphTokenStatus(
+      force ? `Graph token valid${expiryText ? ` until ${expiryText}` : ""}.` : "",
+      force ? "good" : ""
+    );
+    return bridge;
+  }
+
+  if (isGraphTokenRefreshPage()) {
+    installGraphTokenRefreshPageBridge();
+    return;
   }
 
   function optionValueFor(control, value) {
