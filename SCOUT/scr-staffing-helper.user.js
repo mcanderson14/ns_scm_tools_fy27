@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.0.3
+// @version      27.0.4
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.0.3
+   SCOUT — SC Operations Utility Tool  27.0.4
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.0.3';
+  const SCRIPT_VERSION = '27.0.4';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -2179,6 +2179,14 @@ html.sc-resizing #sc-skills-toggle { transition: none !important; }
 }
 .sc-prev-history-count-btn:hover {
   background: rgba(114,245,138,0.18);
+}
+.sc-prev-history-count-value {
+  display: inline-block;
+  min-width: 34px;
+  color: #72f58a;
+  font-size: 10px;
+  font-weight: 800;
+  text-align: center;
 }
 .sc-prev-history-products-summary {
   color: #d6ffe0;
@@ -10135,6 +10143,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
     const historyRows = ctx.previousHistoryRows || [];
     const historyGroups = groupPreviousHistoryRows(historyRows).slice(0, 8);
+    const historyTotalCount = getHistoryTotalCount(historyRows);
     const historyStatus = ctx.previousHistoryStatus || 'Loading previous SC history...';
     const historyIsLoading = /loading|checking|background|still/i.test(historyStatus);
     html += '<div class="sc-prev-history-panel' + (_previousHistoryCollapsed ? ' collapsed' : '') + '">';
@@ -10142,7 +10151,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
             '<button type="button" class="sc-prev-history-toggle" aria-expanded="' + (_previousHistoryCollapsed ? 'false' : 'true') + '">' +
             '<span class="sc-prev-history-chevron">' + (_previousHistoryCollapsed ? '▶' : '▼') + '</span>' +
             '<span class="sc-prev-history-title">Previous SC History</span></button>' +
-            '<span class="sc-prev-history-status">' + renderHistoryStatus(historyStatus) + '</span></div>';
+            '<span class="sc-prev-history-status">' + renderHistoryStatus(historyTotalCount ? `${historyTotalCount} previous SCR${historyTotalCount === 1 ? '' : 's'} found` : historyStatus) + '</span></div>';
     html += '<div class="sc-prev-history-body">';
     if (historyGroups.length) {
       html += '<table class="sc-prev-history-table"><thead><tr>' +
@@ -10154,24 +10163,31 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         const latestItem = group.items[0] || {};
         const groupId = `sc-prev-history-${index}`;
         const productSummary = getHistoryProductSummary(group.items);
+        const groupCount = getHistoryGroupCount(group);
+        const hasDetailRows = group.items.some(function (item) { return !item.summaryOnly; });
+        const latestMeta = latestItem.summaryOnly ? '' : '<span class="sc-prev-history-meta">most recent SCR ' + escHtml(latestItem.scrId || '') + '</span>';
+        const countHtml = hasDetailRows
+          ? '<button type="button" class="sc-prev-history-count-btn" data-history-detail="' + escAttr(groupId) + '" data-history-count="' + groupCount + '">' + escHtml(`${groupCount}>`) + '</button>'
+          : '<span class="sc-prev-history-count-value">' + escHtml(String(groupCount)) + '</span>';
         html += '<tr><td><span class="sc-prev-history-type sc-prev-history-type-' + typeClass + '">' +
                 escHtml(requestType || '?') + '</span></td>' +
                 '<td>' + escHtml(group.assignee && group.assignee.name ? group.assignee.name : '') +
-                '<span class="sc-prev-history-meta">most recent SCR ' + escHtml(latestItem.scrId || '') + '</span></td>' +
-                '<td><button type="button" class="sc-prev-history-count-btn" data-history-detail="' + escAttr(groupId) + '" data-history-count="' + group.items.length + '">' +
-                escHtml(`${group.items.length}>`) + '</button></td>' +
+                latestMeta + '</td>' +
+                '<td>' + countHtml + '</td>' +
                 '<td><span class="sc-prev-history-products-summary">' + escHtml(productSummary) + '</span></td>' +
                 '<td>' + escHtml(latestItem.oppId || '') + '</td></tr>';
-        html += '<tr class="sc-prev-history-detail-row" data-history-row="' + escAttr(groupId) + '"><td class="sc-prev-history-detail-cell" colspan="5">' +
-                '<div class="sc-prev-history-detail-list">';
-        group.items.forEach(function (item) {
-          html += '<div class="sc-prev-history-detail-item">' +
-                  '<span class="sc-prev-history-detail-scr">SCR ' + escHtml(item.scrId || '?') + '</span>' +
-                  '<span>' + escHtml(getHistoryItemProducts(item) || '--') + '</span>' +
-                  '<span>' + escHtml(item.oppId || '') + '</span>' +
-                  '</div>';
-        });
-        html += '</div></td></tr>';
+        if (hasDetailRows) {
+          html += '<tr class="sc-prev-history-detail-row" data-history-row="' + escAttr(groupId) + '"><td class="sc-prev-history-detail-cell" colspan="5">' +
+                  '<div class="sc-prev-history-detail-list">';
+          group.items.filter(function (item) { return !item.summaryOnly; }).forEach(function (item) {
+            html += '<div class="sc-prev-history-detail-item">' +
+                    '<span class="sc-prev-history-detail-scr">SCR ' + escHtml(item.scrId || '?') + '</span>' +
+                    '<span>' + escHtml(getHistoryItemProducts(item) || '--') + '</span>' +
+                    '<span>' + escHtml(item.oppId || '') + '</span>' +
+                    '</div>';
+          });
+          html += '</div></td></tr>';
+        }
       });
       html += '</tbody></table>';
     } else if (!historyIsLoading) {
@@ -10674,6 +10690,29 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     return map.assignee != null && (map.id != null || map.name != null || map.opp != null) ? map : null;
   }
 
+  function mapPreviousHistorySummaryHeaders(row) {
+    const map = {};
+    const cells = Array.from((row && row.cells) || []);
+    cells.forEach(function (cell, index) {
+      const header = normalizeSublistHeader(cell.textContent || '');
+      if (!header) return;
+      if (map.count == null && (/\bcount\b/.test(header) || /\bscrs?\b/.test(header))) map.count = index;
+      else if (
+        map.assignee == null &&
+        (/\bassigned\s+sc\b/.test(header) ||
+         /\bassigned\s+to\b/.test(header) ||
+         /\bassignee\b/.test(header) ||
+         /^sc\b/.test(header))
+      ) map.assignee = index;
+    });
+    return map.count != null && map.assignee != null ? map : null;
+  }
+
+  function parseHistoryCountText(text) {
+    const match = String(text || '').replace(/,/g, '').match(/\d+/);
+    return match ? parseInt(match[0], 10) : 0;
+  }
+
   function tableLooksLikeCustomerScrSublist(table) {
     const text = cleanSublistCellText(table && table.textContent || '');
     return /\bCustomer SC Request\b/i.test(text) ||
@@ -10711,6 +10750,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       .replace(/^assigned\s+(?:to|sc|consultant)\s*/i, '')
       .replace(/\b(?:yes|no|direct|amo|products|high tech|emerging|general business)\b\s*$/i, '')
       .trim();
+  }
+
+  function looksLikeHistoryOpportunityText(text) {
+    const clean = cleanSublistCellText(text);
+    if (!clean || clean.length > 180) return false;
+    return /\bOpportunity\s*#?\d{4,}\b/i.test(clean) ||
+      /\bCustomer\s*#?\d{4,}\b/i.test(clean) ||
+      /^#?\d{4,}\b/.test(clean);
   }
 
   function recordScrHistoryDebugTable(debug, source, table, rows) {
@@ -10793,6 +10840,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         const requestType = canonicalHistoryRequestType(readSublistCell(row, headerMap.directAmo));
         const productsDemoed = cleanHistoryProductsText(readSublistCell(row, headerMap.products));
         if (!assigneeName || /^assigned\s+(?:to|sc|consultant)$/i.test(assigneeName)) return;
+        if (!looksLikeHistoryOpportunityText(oppText)) return;
         const key = normalizeLoose(assigneeName);
         if (!key) return;
         const item = {
@@ -10808,6 +10856,45 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         recordScrHistorySample(debug, source, item);
       });
     });
+    return history;
+  }
+
+  function parsePreviousScHistorySummaryDocument(doc, debug) {
+    const history = [];
+    Array.from(doc.querySelectorAll('table')).forEach(function (table) {
+      if (table.closest && table.closest('#sc-skills-panel')) return;
+      const rows = Array.from(table.rows || []);
+      if (!rows.length) return;
+      let headerMap = null;
+      rows.forEach(function (row) {
+        const maybeHeader = mapPreviousHistorySummaryHeaders(row);
+        if (maybeHeader) {
+          headerMap = maybeHeader;
+          if (debug && debug.savedSearchHeaders.length < 4) debug.savedSearchHeaders.push({ summary: true, ...maybeHeader });
+          return;
+        }
+        if (!headerMap) return;
+        const assigneeName = cleanSublistAssigneeName(readSublistCell(row, headerMap.assignee));
+        const count = parseHistoryCountText(readSublistCell(row, headerMap.count));
+        if (!assigneeName || /^total$/i.test(assigneeName) || count <= 0) return;
+        const key = normalizeLoose(assigneeName);
+        if (!key) return;
+        const item = {
+          scrId: `summary:${key}`,
+          oppId: '',
+          assignee: { key, id: key, name: assigneeName },
+          requestType: '',
+          salesVertical: '',
+          productsDemoed: '',
+          summaryCount: count,
+          summaryOnly: true,
+          source: 'saved-search-summary',
+        };
+        history.push(item);
+        recordScrHistorySample(debug, 'saved-search-summary', item);
+      });
+    });
+    if (debug && history.length) debug.savedSearchSummaryRows = history.length;
     return history;
   }
 
@@ -10867,6 +10954,21 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         .trim();
     }
 
+    function extractAssignedScFromRawMetadata(metadataText) {
+      const clean = cleanSublistCellText(metadataText);
+      const matches = [];
+      const re = /([A-Z][A-Za-z'’ .-]{1,80},\s*[A-Z][A-Za-z'’ .-]{1,80})\s+(Direct|AMO)\b/ig;
+      let match;
+      while ((match = re.exec(clean))) {
+        matches.push({
+          name: cleanRawHistoryName(match[1]),
+          type: match[2],
+          index: match.index,
+        });
+      }
+      return matches.length ? matches[matches.length - 1] : null;
+    }
+
     function addRawRow(segment) {
       const match = segment.match(nameOpportunityRe);
       if (!match) return;
@@ -10876,17 +10978,22 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       const idMatch = afterName.match(/\b(\d{5,})\b/);
       const scrId = idMatch ? idMatch[1] : `${normalizeLoose(scName)}:${oppNumber}`;
       const metadataSource = idMatch ? afterName.slice((idMatch.index || 0) + idMatch[0].length) : afterName;
-      const metadata = extractRawHistoryMetadata(metadataSource, scName);
+      const assignedSc = extractAssignedScFromRawMetadata(metadataSource);
+      const assignedName = assignedSc && assignedSc.name ? assignedSc.name : scName;
+      const metadata = extractRawHistoryMetadata(metadataSource, assignedName);
+      if (!metadata.requestType && assignedSc && assignedSc.type) {
+        metadata.requestType = canonicalHistoryRequestType(assignedSc.type);
+      }
       if (/^\d+$/.test(scrId) && seenScrIds.has(scrId)) return;
-      const key = `${scrId}:${normalizeLoose(scName)}`;
-      if (!scName || seen.has(key)) return;
-      if (!/^[A-Za-z'’ .-]+,\s*[A-Za-z'’ .-]+$/.test(scName)) return;
+      const key = `${scrId}:${normalizeLoose(assignedName)}`;
+      if (!assignedName || seen.has(key)) return;
+      if (!/^[A-Za-z'’ .-]+,\s*[A-Za-z'’ .-]+$/.test(assignedName)) return;
       seen.add(key);
       if (/^\d+$/.test(scrId)) seenScrIds.add(scrId);
       const item = {
         scrId,
         oppId: `Opportunity #${oppNumber}`,
-        assignee: { key: normalizeLoose(scName), id: normalizeLoose(scName), name: scName },
+        assignee: { key: normalizeLoose(assignedName), id: normalizeLoose(assignedName), name: assignedName },
         requestType: metadata.requestType,
         salesVertical: metadata.salesVertical,
         leadSc: metadata.leadSc,
@@ -10900,7 +11007,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         debug.savedSearchRawSamples.push({
           scrId,
           oppId: item.oppId,
-          assignee: scName,
+          assignee: assignedName,
           requestType: item.requestType,
           productsDemoed: item.productsDemoed,
           segment: cleanSublistCellText(segment).slice(0, 240),
@@ -11219,7 +11326,10 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   function parsePreviousScHistorySearchHtml(html, debug) {
     const parser = new DOMParser();
     const doc = parser.parseFromString(html || '', 'text/html');
-    let rows = parseCustomerScrHistoryDocument(doc, debug, 'saved-search', false);
+    let rows = parsePreviousScHistorySummaryDocument(doc, debug);
+    if (!rows.length) {
+      rows = parseCustomerScrHistoryDocument(doc, debug, 'saved-search', false);
+    }
     if (!rows.length) {
       rows = parsePreviousScHistoryRawText(html, debug);
     }
@@ -11333,9 +11443,26 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       if (requestType && getHistoryRequestType(item) !== requestType) return;
       const key = item.assignee.key || normalizeLoose(item.assignee.name);
       if (!key) return;
-      counts[key] = (counts[key] || 0) + 1;
+      counts[key] = (counts[key] || 0) + getHistoryItemCount(item);
     });
     return counts;
+  }
+
+  function getHistoryItemCount(item) {
+    const count = parseInt(item && item.summaryCount, 10);
+    return Number.isFinite(count) && count > 0 ? count : 1;
+  }
+
+  function getHistoryGroupCount(group) {
+    return (group && group.items || []).reduce(function (sum, item) {
+      return sum + getHistoryItemCount(item);
+    }, 0);
+  }
+
+  function getHistoryTotalCount(history) {
+    return (history || []).reduce(function (sum, item) {
+      return sum + getHistoryItemCount(item);
+    }, 0);
   }
 
   function sortPreviousHistoryRows(history) {
@@ -11392,7 +11519,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       if (!item || !item.assignee) return;
       const requestType = getHistoryRequestType(item) || 'Unknown';
       const assigneeKey = item.assignee.key || normalizeLoose(item.assignee.name);
-      const key = `${requestType}:${assigneeKey}`;
+      const key = assigneeKey;
       if (!byKey[key]) {
         byKey[key] = {
           key,
@@ -11403,9 +11530,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         groups.push(byKey[key]);
       }
       byKey[key].items.push(item);
+      const existingRank = Object.prototype.hasOwnProperty.call(typeRank, byKey[key].requestType) ? typeRank[byKey[key].requestType] : 2;
+      const nextRank = Object.prototype.hasOwnProperty.call(typeRank, requestType) ? typeRank[requestType] : 2;
+      if (nextRank < existingRank) byKey[key].requestType = requestType;
     });
     return groups.sort(function (a, b) {
-      if (b.items.length !== a.items.length) return b.items.length - a.items.length;
+      const aCount = getHistoryGroupCount(a);
+      const bCount = getHistoryGroupCount(b);
+      if (bCount !== aCount) return bCount - aCount;
       const aRank = Object.prototype.hasOwnProperty.call(typeRank, a.requestType) ? typeRank[a.requestType] : 2;
       const bRank = Object.prototype.hasOwnProperty.call(typeRank, b.requestType) ? typeRank[b.requestType] : 2;
       if (aRank !== bRank) return aRank - bRank;
@@ -11418,7 +11550,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const names = {};
     (history || []).forEach(function (item) {
       if (!item || !item.assignee) return;
-      counts[item.assignee.key] = (counts[item.assignee.key] || 0) + 1;
+      counts[item.assignee.key] = (counts[item.assignee.key] || 0) + getHistoryItemCount(item);
       names[item.assignee.key] = item.assignee.name;
     });
     return Object.keys(counts)
@@ -11548,12 +11680,20 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       historyDebug.savedSearchStatus = companySearchText ? 'loading in background' : 'skipped: no company search text';
 
       function renderHistoryContext() {
-        const sortedCustomerScrHistory = sortPreviousHistoryRows(customerScrHistory);
+        const summaryHistory = customerScrHistory.filter(function (item) { return item && item.summaryOnly; });
+        const detailHistory = customerScrHistory.filter(function (item) { return item && !item.summaryOnly; });
+        const displayHistory = summaryHistory.length ? summaryHistory : customerScrHistory;
+        const sortedCustomerScrHistory = sortPreviousHistoryRows(displayHistory);
+        const sortedDetailHistory = sortPreviousHistoryRows(detailHistory);
+        const historyTotalCount = getHistoryTotalCount(sortedCustomerScrHistory);
         historyDebug.mergedRows = sortedCustomerScrHistory.length;
+        historyDebug.mergedCount = historyTotalCount;
+        historyDebug.summaryRows = summaryHistory.length;
+        historyDebug.detailRows = detailHistory.length;
         historyDebug.mergedSamples = sortedCustomerScrHistory.slice(0, 8);
         let previousHistoryStatus = historyDebug.savedSearchStatus || 'Loading previous SC history...';
         if (sortedCustomerScrHistory.length) {
-          previousHistoryStatus = `${sortedCustomerScrHistory.length} previous SCR${sortedCustomerScrHistory.length === 1 ? '' : 's'} found`;
+          previousHistoryStatus = `${historyTotalCount} previous SCR${historyTotalCount === 1 ? '' : 's'} found`;
           if (/loading/i.test(historyDebug.savedSearchStatus || '')) {
             previousHistoryStatus += ' · still checking NetSuite';
           }
@@ -11576,7 +11716,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
         // Item 10: Deal-level SCR lookup — previous SCs on the same opportunity
         const sameOppHistory = currentOppTokens.length
-          ? sortedCustomerScrHistory.filter(function (item) {
+          ? sortedDetailHistory.filter(function (item) {
             return historyItemMatchesOpportunity(item, currentOppTokens);
           })
           : [];
@@ -11631,7 +11771,10 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         renderHistoryContext();
         savedSearchPromise.then(function (savedSearchHistory) {
           if (savedSearchHistory && savedSearchHistory.length) {
-            customerScrHistory = mergeCustomerScrHistory(customerScrHistory, savedSearchHistory.filter(filterCurrentScr));
+            const filteredSavedHistory = savedSearchHistory.filter(filterCurrentScr);
+            // Once NetSuite's saved search returns, treat it as authoritative.
+            // Visible-page parsing is only a quick interim/fallback and can pick up unrelated form tables.
+            customerScrHistory = filteredSavedHistory;
           }
           renderHistoryContext();
         }).catch(function (e) {
