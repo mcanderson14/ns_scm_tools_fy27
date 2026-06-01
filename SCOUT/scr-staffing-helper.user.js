@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.0.4
+// @version      27.0.5
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.0.4
+   SCOUT — SC Operations Utility Tool  27.0.5
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.0.4';
+  const SCRIPT_VERSION = '27.0.5';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -11438,14 +11438,50 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
   function countHistoryByAssignee(history, requestType) {
     const counts = {};
+    const seen = new Set();
     (history || []).forEach(function (item) {
       if (!item || !item.assignee) return;
       if (requestType && getHistoryRequestType(item) !== requestType) return;
       const key = item.assignee.key || normalizeLoose(item.assignee.name);
       if (!key) return;
+      const rollupKey = `${key}:${getHistoryRollupKey(item)}`;
+      if (!item.summaryOnly) {
+        if (seen.has(rollupKey)) return;
+        seen.add(rollupKey);
+      }
       counts[key] = (counts[key] || 0) + getHistoryItemCount(item);
     });
     return counts;
+  }
+
+  function getHistoryRollupKey(item) {
+    if (!item) return '';
+    if (item.summaryOnly) {
+      return `summary:${item.assignee && (item.assignee.key || normalizeLoose(item.assignee.name)) || ''}`;
+    }
+    const scrId = String(item.scrId || '').trim();
+    if (scrId && !/^summary:/i.test(scrId)) return `scr:${scrId}`;
+    return [
+      'row',
+      normalizeLoose(item.oppId || ''),
+      normalizeLoose(getHistoryItemProducts(item) || ''),
+      getHistoryRequestType(item) || '',
+    ].join(':');
+  }
+
+  function dedupePreviousHistoryRows(history) {
+    const out = [];
+    const seen = new Set();
+    (history || []).forEach(function (item) {
+      if (!item || !item.assignee) return;
+      const assigneeKey = item.assignee.key || normalizeLoose(item.assignee.name);
+      if (!assigneeKey) return;
+      const key = `${assigneeKey}:${getHistoryRollupKey(item)}`;
+      if (!item.summaryOnly && seen.has(key)) return;
+      seen.add(key);
+      out.push(item);
+    });
+    return out;
   }
 
   function getHistoryItemCount(item) {
@@ -11454,13 +11490,13 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   }
 
   function getHistoryGroupCount(group) {
-    return (group && group.items || []).reduce(function (sum, item) {
+    return dedupePreviousHistoryRows(group && group.items || []).reduce(function (sum, item) {
       return sum + getHistoryItemCount(item);
     }, 0);
   }
 
   function getHistoryTotalCount(history) {
-    return (history || []).reduce(function (sum, item) {
+    return dedupePreviousHistoryRows(history || []).reduce(function (sum, item) {
       return sum + getHistoryItemCount(item);
     }, 0);
   }
@@ -11469,7 +11505,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const amoCounts = countHistoryByAssignee(history, 'AMO');
     const directCounts = countHistoryByAssignee(history, 'Direct');
     const typeRank = { AMO: 0, Direct: 1 };
-    return (history || []).slice().sort(function (a, b) {
+    return dedupePreviousHistoryRows(history || []).slice().sort(function (a, b) {
       const aType = getHistoryRequestType(a);
       const bType = getHistoryRequestType(b);
       const aRank = Object.prototype.hasOwnProperty.call(typeRank, aType) ? typeRank[aType] : 2;
@@ -11548,7 +11584,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   function summarizePreviousScs(history) {
     const counts = {};
     const names = {};
-    (history || []).forEach(function (item) {
+    dedupePreviousHistoryRows(history || []).forEach(function (item) {
       if (!item || !item.assignee) return;
       counts[item.assignee.key] = (counts[item.assignee.key] || 0) + getHistoryItemCount(item);
       names[item.assignee.key] = item.assignee.name;
@@ -11683,11 +11719,13 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         const summaryHistory = customerScrHistory.filter(function (item) { return item && item.summaryOnly; });
         const detailHistory = customerScrHistory.filter(function (item) { return item && !item.summaryOnly; });
         const displayHistory = summaryHistory.length ? summaryHistory : customerScrHistory;
-        const sortedCustomerScrHistory = sortPreviousHistoryRows(displayHistory);
+        const rolledUpHistory = dedupePreviousHistoryRows(displayHistory);
+        const sortedCustomerScrHistory = sortPreviousHistoryRows(rolledUpHistory);
         const sortedDetailHistory = sortPreviousHistoryRows(detailHistory);
         const historyTotalCount = getHistoryTotalCount(sortedCustomerScrHistory);
         historyDebug.mergedRows = sortedCustomerScrHistory.length;
         historyDebug.mergedCount = historyTotalCount;
+        historyDebug.rollupRows = rolledUpHistory.length;
         historyDebug.summaryRows = summaryHistory.length;
         historyDebug.detailRows = detailHistory.length;
         historyDebug.mergedSamples = sortedCustomerScrHistory.slice(0, 8);
