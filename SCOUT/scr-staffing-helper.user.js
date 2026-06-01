@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      b26.5.66
+// @version      27.0.1
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  b26.5.66
+   SCOUT — SC Operations Utility Tool  27.0.1
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = 'b26.5.66';
+  const SCRIPT_VERSION = '27.0.1';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -4445,7 +4445,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               <div class="sc-filters-grid">
 
                 <div class="sc-field">
-                  <label class="sc-label">SC Vertical</label>
+                  <label class="sc-label">SC Industry</label>
                   <select id="sc-filter-vertical" multiple size="6">
                     <option value="73">Health &amp; Hospitality</option>
                     <option value="58">Products</option>
