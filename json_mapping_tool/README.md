@@ -2,7 +2,7 @@
 
 Static browser tool for converting FY27 queue mapping Excel workbooks into JSON mapping files.
 
-Current tool version: `27.0.1`.
+Current tool version: `27.0.2`.
 
 The tool currently supports two outputs:
 
@@ -26,11 +26,13 @@ Use the `SCM Relationships` mode for a workbook with these columns:
 - `AMO/Direct`
 - `RD` or `Regional Director` or `Regional Sales Manager`
 - `SCM`
+- Optional `SCM Director`, `SC Director`, `Queue Director`, or `Authorized Director`
 
 The generated JSON uses schema `ns-scm-tools.scm-relationships.v3` and includes:
 
 - `generator`: tool name and version used to create the file.
 - `authorizedScms`: SCM names allowed to use SCM owner controls.
+- `authorizedDirectors`: director names allowed to view SCM owner controls without being SCM owners.
 - `relationships`: one row per RD/RSM to SCM relationship.
 - `lookup`: exact lookup keyed as `requestTypeKey|regionalDirectorKey|salesRegionKey`.
 - `directorLookup`: fallback lookup keyed as `requestTypeKey|regionalDirectorKey`.

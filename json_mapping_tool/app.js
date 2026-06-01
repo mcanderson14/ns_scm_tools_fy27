@@ -3,7 +3,7 @@
 
   const SCHEMA = "ns-scm-tools.region-map.v3";
   const PRODUCTS_SCM_SCHEMA = "ns-scm-tools.scm-relationships.v3";
-  const TOOL_VERSION = "27.0.1";
+  const TOOL_VERSION = "27.0.2";
   const TOOL_NAME = "FY27 Queue Mapping JSON Maker";
   const CONFIG_STORAGE_KEY = "ns-scm-tools-region-map-industry-config-v1";
   const REGION_MAPPING_TYPE = "region";
@@ -12,13 +12,14 @@
   const PRODUCTS_SCM_OUTPUT_FILE_NAME = "Products_SCM_Relationship_Mapping.json";
   const SOURCE_DESCRIPTIONS = {
     [REGION_MAPPING_TYPE]: "Use an Excel workbook where row 1 contains SC industry groups, row 2 contains Direct/AMO, and column A contains state/province codes.",
-    [PRODUCTS_SCM_MAPPING_TYPE]: "Use an Excel workbook with columns for Sales Region, AMO/Direct, Regional Director or RSM, and SCM owner. SCM ownership applies across SC Industry Groups."
+    [PRODUCTS_SCM_MAPPING_TYPE]: "Use an Excel workbook with columns for Sales Region, AMO/Direct, Regional Director or RSM, SCM owner, and optional SCM Director. SCM ownership applies across SC Industry Groups."
   };
   const PRODUCTS_SCM_HEADER_ALIASES = {
     salesRegion: ["salesregion", "region", "salesarea"],
     requestType: ["amodirect", "directamo", "requesttype", "type"],
     regionalDirector: ["rd", "regionaldirector", "regionalsalesmanager", "rsm", "salesdirector", "salesdir", "regionaldirectorregionalsalesmanager"],
-    scm: ["scm", "scmanager", "solutionconsultingmanager", "productsscm", "productsscmmanager", "scmowner", "queueowner", "productsscmqueueowner"]
+    scm: ["scm", "scmanager", "solutionconsultingmanager", "productsscm", "productsscmmanager", "scmowner", "queueowner", "productsscmqueueowner"],
+    scmDirector: ["scmdirector", "scmdirectors", "scdirector", "scdirectors", "queuedirector", "queuedirectors", "managerdirector", "managerdirectors", "authorizeddirector", "authorizeddirectors", "director", "directors"]
   };
   const DEFAULT_INDUSTRY_GROUPS = [
     "Business Services",
@@ -431,6 +432,7 @@
     const requestTypes = new Set();
     const regionalDirectors = new Set();
     const scms = new Set();
+    const authorizedDirectors = new Set();
     const exactLookup = {};
     const directorLookup = {};
     const scmLookup = {};
@@ -443,6 +445,9 @@
       const requestType = normalizeAmoDirect(row[header.indexes.requestType]);
       const regionalDirector = cleanPersonName(row[header.indexes.regionalDirector]);
       const scm = cleanPersonName(row[header.indexes.scm]);
+      const directors = header.indexes.scmDirector >= 0
+        ? cleanPersonList(row[header.indexes.scmDirector])
+        : [];
       const missing = [];
       if (!requestType) missing.push("AMO/Direct");
       if (!regionalDirector) missing.push("Regional Director/RSM");
@@ -466,7 +471,9 @@
         regionalDirector,
         regionalDirectorKey: normalizePersonKey(regionalDirector),
         scm,
-        scmKey: normalizePersonKey(scm)
+        scmKey: normalizePersonKey(scm),
+        directors,
+        directorKeys: directors.map(normalizePersonKey)
       };
 
       relationships.push(record);
@@ -474,6 +481,7 @@
       requestTypes.add(requestType);
       regionalDirectors.add(regionalDirector);
       scms.add(scm);
+      directors.forEach(director => authorizedDirectors.add(director));
       addProductsLookupRecord(exactLookup, productsExactLookupKey(record), record);
       addProductsLookupRecord(directorLookup, productsDirectorLookupKey(record), record);
       addProductsLookupRecord(scmLookup, record.scmKey, record);
@@ -500,6 +508,7 @@
       counts: {
         relationships: relationships.length,
         scms: scms.size,
+        authorizedDirectors: authorizedDirectors.size,
         regionalDirectors: regionalDirectors.size,
         salesRegions: salesRegions.size,
         requestTypes: requestTypes.size,
@@ -509,6 +518,7 @@
       },
       scms: scmSummaries,
       authorizedScms: scmSummaries.map(item => item.scm),
+      authorizedDirectors: [...authorizedDirectors].sort(alphaSort),
       regionalDirectors: [...regionalDirectors].sort(alphaSort),
       salesRegions: [...salesRegions].sort(alphaSort),
       requestTypes: [...requestTypes].sort(alphaSort),
@@ -575,6 +585,10 @@
         regionalDirector: findProductsHeaderIndex(normalizedHeaders, PRODUCTS_SCM_HEADER_ALIASES.regionalDirector),
         scm: findProductsHeaderIndex(normalizedHeaders, PRODUCTS_SCM_HEADER_ALIASES.scm)
       };
+      indexes.scmDirector = findProductsHeaderIndex(normalizedHeaders, PRODUCTS_SCM_HEADER_ALIASES.scmDirector, {
+        exactOnly: true,
+        exclude: [indexes.regionalDirector, indexes.scm]
+      });
       const requiredCount = ["requestType", "regionalDirector", "scm"].filter(key => indexes[key] >= 0).length;
       const score = requiredCount * 5 + (indexes.salesRegion >= 0 ? 2 : 0);
       if (requiredCount === 3) candidates.push({ rowIndex, row, indexes, score });
@@ -591,15 +605,18 @@
         salesRegion: productsHeaderCellInfo(winner.row, winner.indexes.salesRegion),
         requestType: productsHeaderCellInfo(winner.row, winner.indexes.requestType),
         regionalDirector: productsHeaderCellInfo(winner.row, winner.indexes.regionalDirector),
-        scm: productsHeaderCellInfo(winner.row, winner.indexes.scm)
+        scm: productsHeaderCellInfo(winner.row, winner.indexes.scm),
+        scmDirector: productsHeaderCellInfo(winner.row, winner.indexes.scmDirector)
       }
     };
   }
 
-  function findProductsHeaderIndex(normalizedHeaders, aliases) {
-    const exact = normalizedHeaders.findIndex(header => aliases.includes(header));
+  function findProductsHeaderIndex(normalizedHeaders, aliases, options = {}) {
+    const excluded = new Set((options.exclude || []).filter(index => index >= 0));
+    const exact = normalizedHeaders.findIndex((header, index) => !excluded.has(index) && aliases.includes(header));
     if (exact >= 0) return exact;
-    return normalizedHeaders.findIndex(header => header && aliases.some(alias => {
+    if (options.exactOnly) return -1;
+    return normalizedHeaders.findIndex((header, index) => !excluded.has(index) && header && aliases.some(alias => {
       if (alias.length <= 4) return header === alias;
       return header.includes(alias) || alias.includes(header);
     }));
@@ -623,6 +640,8 @@
       regionalDirectorKey: record.regionalDirectorKey,
       scm: record.scm,
       scmKey: record.scmKey,
+      directors: record.directors || [],
+      directorKeys: record.directorKeys || [],
       sourceRow: record.sourceRow
     });
   }
@@ -654,7 +673,8 @@
         relationshipCount: rows.length,
         requestTypes: uniqueSorted(rows.map(row => row.requestType)),
         salesRegions: uniqueSorted(rows.map(row => row.salesRegion || "Any/blank")),
-        regionalDirectors: uniqueSorted(rows.map(row => row.regionalDirector))
+        regionalDirectors: uniqueSorted(rows.map(row => row.regionalDirector)),
+        directors: uniqueSorted(rows.flatMap(row => row.directors || []))
       }))
       .sort((left, right) => alphaSort(left.scm, right.scm));
   }
@@ -735,26 +755,29 @@
     renderStats([
       ["Relationships", output.counts.relationships],
       ["SCM Owners", output.counts.scms],
+      ["Authorized Directors", output.counts.authorizedDirectors],
       ["RD/RSMs", output.counts.regionalDirectors],
       ["Sales Regions", output.counts.salesRegions || "Any/blank"],
       ["Review Items", output.counts.incompleteRows + output.counts.duplicateExactKeys]
     ]);
 
     elements["columns-preview"].innerHTML = renderTable(
-      ["Type", "Sales Region", "Regional Director/RSM", "SCM Owner", "Source Row"],
+      ["Type", "Sales Region", "Regional Director/RSM", "SCM Owner", "SCM Director(s)", "Source Row"],
       output.relationships.map(row => [
         row.requestType,
         row.salesRegion || "Any/blank",
         row.regionalDirector,
         row.scm,
+        (row.directors || []).join(", ") || "None listed",
         row.sourceRow
       ])
     );
 
     elements["spot-checks"].innerHTML = renderTable(
-      ["SCM Owner", "Relationships", "Request Types", "Sales Regions", "RD/RSMs"],
+      ["SCM Owner", "Director(s)", "Relationships", "Request Types", "Sales Regions", "RD/RSMs"],
       output.scms.map(row => [
         row.scm,
+        (row.directors || []).join(", ") || "None listed",
         row.relationshipCount,
         row.requestTypes.join(", "),
         row.salesRegions.join(", "),
@@ -997,6 +1020,17 @@
 
   function cleanPersonName(value) {
     return cleanCell(value).replace(/\s+,/g, ",").replace(/,\s+/g, ", ");
+  }
+
+  function cleanPersonList(value) {
+    const text = String(value == null ? "" : value).replace(/\u00a0/g, " ").trim();
+    if (!text) return [];
+    return uniqueSorted(
+      text
+        .split(/\s*(?:;|\||\n|\r|\t)\s*/g)
+        .map(cleanPersonName)
+        .filter(Boolean)
+    );
   }
 
   function normalizeAmoDirect(value) {
