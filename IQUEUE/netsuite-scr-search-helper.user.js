@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.101B
+// @version      27.0.0.102B
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -41,7 +41,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.101B";
+  const HELPER_VERSION = "27.0.0.102B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -4945,12 +4945,22 @@ Health & Hospitality	DIRECT	NL	West	West
     const disabled = row.internalId ? "" : "disabled";
     const disabledHelp = row.internalId ? "" : `<div class="scr-helper-notes-help">Open the SCR to edit notes; no internal id was returned on this row.</div>`;
     const notice = row.routingNotice && row.routingNotice.message ? row.routingNotice : null;
+    const noticeLinks = notice && Array.isArray(notice.links) && notice.links.length
+      ? `<div class="scr-helper-notice-links">${notice.links.map(link => `
+          <a
+            class="scr-helper-notice-link"
+            href="${escapeHtml(link.href)}"
+            ${/^mailto:/i.test(link.href) ? "" : `target="_blank" rel="noopener noreferrer"`}
+          >${escapeHtml(link.label)}</a>
+        `).join("")}</div>`
+      : "";
     return `
       <div class="scr-helper-notes-editor">
         <textarea class="scr-helper-notes-input" data-row-id="${escapeHtml(row.id)}" placeholder="No staffing notes yet.">${escapeHtml(notes || "")}</textarea>
         <div class="scr-helper-notes-actions">
           <button type="button" class="scr-helper-notes-save" data-row-id="${escapeHtml(row.id)}" ${disabled}>Save notes</button>
           <span class="scr-helper-notes-status${notice && notice.state ? ` is-${escapeHtml(notice.state)}` : ""}" aria-live="polite">${notice ? escapeHtml(notice.message) : ""}</span>
+          ${noticeLinks}
         </div>
         ${disabledHelp}
       </div>
@@ -6428,18 +6438,18 @@ Health & Hospitality	DIRECT	NL	West	West
     const compactBody = fullBody.length > 1200
       ? `${fullBody.slice(0, 1150)}\r\n\r\n[Details trimmed for draft length. Open the SCR for full context.]`
       : fullBody;
-    const url = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(compactBody)}`;
-    const link = document.createElement("a");
-    link.href = url;
-    link.style.display = "none";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+    const outlookUrl = `https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(email)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(compactBody)}`;
+    const mailtoUrl = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(compactBody)}`;
+    openEditUrlWithGm(outlookUrl);
     return {
       email,
       mode: "draft",
       reason: reason || "Microsoft Graph email send is unavailable.",
-      subject
+      subject,
+      links: [
+        { label: "Open Outlook draft", href: outlookUrl },
+        { label: "Mailto fallback", href: mailtoUrl }
+      ]
     };
   }
 
@@ -8061,8 +8071,9 @@ Health & Hospitality	DIRECT	NL	West	West
           setStaffingNotesStatus(card, "Route saved. Opening owner notification draft...");
           const notice = await sendOwnerRouteEmail(row, assignment.ownerName, target);
           row.routingNotice = {
-            message: `Route saved; Outlook draft opened for ${notice.email}. Review and send it.`,
-            state: "success"
+            message: `Route saved; Outlook compose opened for ${notice.email}. Review and send it. If it did not appear, use the links below.`,
+            state: "success",
+            links: notice.links || []
           };
         } catch (emailError) {
           console.warn("IQUEUE could not send owner route email", emailError);
@@ -9753,6 +9764,25 @@ Health & Hospitality	DIRECT	NL	West	West
       #${HELPER_ID} .scr-helper-notes-status.is-error {
         color: var(--rw-oracle-red);
         font-weight: 700;
+      }
+
+      #${HELPER_ID} .scr-helper-notice-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        width: 100%;
+        margin-top: 4px;
+      }
+
+      #${HELPER_ID} .scr-helper-notice-link {
+        border: 1px solid var(--ns-ui-primary-mid);
+        border-radius: 4px;
+        padding: 4px 7px;
+        background: var(--ns-ui-primary-soft);
+        color: var(--ns-ui-primary);
+        font-size: 11px;
+        font-weight: 800;
+        text-decoration: none;
       }
 
       #${HELPER_ID} .scr-helper-muted {
