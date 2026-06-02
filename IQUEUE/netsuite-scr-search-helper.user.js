@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.88B
+// @version      27.0.0.89B
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -40,7 +40,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.88B";
+  const HELPER_VERSION = "27.0.0.89B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -60,6 +60,10 @@
   const PRODUCTS_SCM_MAPPING_CACHE_KEY = "iqueue-products-scm-relationship-mapping-v1";
   const PRODUCTS_SCM_MAPPING_REFRESH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
   const PRODUCTS_SCM_OWNER_TAG_PREFIX = "#pscm-owner-";
+  const AUTHORIZED_MANAGERS_FILE_NAME = "Authorized_Managers.json";
+  const AUTHORIZED_MANAGERS_FILE_ID = "";
+  const AUTHORIZED_MANAGERS_CACHE_KEY = "iqueue-authorized-managers-v1";
+  const AUTHORIZED_MANAGERS_REFRESH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
   const LOGO_LARGE_URL = "https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/IQ_large_logo.png";
   const LOGO_SMALL_URL = "https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/IQ_small_logo.png";
   const UNMAPPED_FILTER_LABEL = "Other/Unmapped";
@@ -1177,6 +1181,21 @@ Health & Hospitality	DIRECT	NL	West	West
     stale: false,
     error: ""
   };
+  let authorizedManagerRecords = [];
+  let authorizedManagerCanOwnNames = [];
+  let authorizedManagerCanViewNames = [];
+  let authorizedManagerGroupLookup = new Map();
+  let authorizedManagersMetadata = {
+    source: "not-loaded",
+    label: "Not loaded",
+    rowCount: 0,
+    loadedAt: 0,
+    schema: "",
+    canOwnCount: 0,
+    canViewCount: 0,
+    stale: false,
+    error: ""
+  };
   const gtmIndustryMappingRows = parseGtmIndustryMappingRows(GTM_INDUSTRY_MAPPING_DATA);
   const gtmIndustryGroupByIndustrySubgroup = new Map(
     gtmIndustryMappingRows.map(row => [`${row.gtmIndustryKey}|${row.gtmIndustrySubgroupKey}`, row.industryFamily])
@@ -1510,8 +1529,12 @@ Health & Hospitality	DIRECT	NL	West	West
     return personListHasName(productsScmAuthorizedViewers, name);
   }
 
+  function authorizedManagerUserCanView(name = getCurrentUserName()) {
+    return personListHasName(authorizedManagerCanOwnNames, name) || personListHasName(authorizedManagerCanViewNames, name);
+  }
+
   function productsScmUserCanView(name = getCurrentUserName()) {
-    return productsScmUserIsOwner(name) || productsScmUserIsDirector(name) || productsScmUserIsViewer(name);
+    return productsScmUserIsOwner(name) || productsScmUserIsDirector(name) || productsScmUserIsViewer(name) || authorizedManagerUserCanView(name);
   }
 
   function productsScmUserIsAuthorized(name = getCurrentUserName()) {
@@ -1521,7 +1544,7 @@ Health & Hospitality	DIRECT	NL	West	West
   function currentProductsScmUserName() {
     const userKeys = personNameKeys(getCurrentUserName());
     if (!userKeys.length) return "";
-    return productsScmAuthorizedScms.find(scm => personNameKeys(scm).some(key => userKeys.includes(key))) || "";
+    return allScmOwnerOptions().find(scm => personNameKeys(scm).some(key => userKeys.includes(key))) || "";
   }
 
   function currentProductsScmDirectorName() {
@@ -1587,7 +1610,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const ownerTag = text.match(/#(?:scm-owner|pscm-owner)-([a-z0-9]+)/i);
     const ownerKey = ownerTag ? normalizeKey(ownerTag[1]) : "";
     const taggedOwner = ownerKey
-      ? productsScmAuthorizedScms.find(scm => normalizeKey(scm) === ownerKey)
+      ? allScmOwnerOptions().find(scm => normalizeKey(scm) === ownerKey)
       : "";
     return taggedOwner
       ? {
@@ -1744,9 +1767,25 @@ Health & Hospitality	DIRECT	NL	West	West
       .join(", ");
   }
 
-  function valueWithCrossIndustryTag(value, tag, markerTag = "") {
-    const cleaned = stripCrossIndustryTags(value);
+  function stripScmOwnerTags(value) {
+    return normalizeMultiline(value)
+      .split(/[\n,;]+/)
+      .map(normalizeSpaces)
+      .filter(part => part && !/#(?:scm-owner|pscm-owner)-[a-z0-9]+/i.test(part))
+      .join(", ");
+  }
+
+  function scmOwnerTag(ownerName) {
+    const key = normalizeKey(ownerName);
+    return key ? `${PRODUCTS_SCM_OWNER_TAG_PREFIX}${key}` : "";
+  }
+
+  function valueWithCrossIndustryTag(value, tag, markerTag = "", ownerName = null) {
+    const cleaned = ownerName === null
+      ? stripCrossIndustryTags(value)
+      : stripScmOwnerTags(stripCrossIndustryTags(value));
     const tags = ["#xvr", tag, markerTag].map(normalizeSpaces).filter(Boolean);
+    if (ownerName) tags.push(scmOwnerTag(ownerName));
     return [cleaned].concat(tags).filter(Boolean).join(", ");
   }
 
@@ -2343,6 +2382,16 @@ Health & Hospitality	DIRECT	NL	West	West
     ]);
   }
 
+  function authorizedManagersUrlCandidates() {
+    if (!AUTHORIZED_MANAGERS_FILE_ID) return [];
+    const origin = window.location.origin || "https://nlcorp.app.netsuite.com";
+    return orderedUnique([
+      `${origin}/core/media/media.nl?id=${encodeURIComponent(AUTHORIZED_MANAGERS_FILE_ID)}&c=NLCORP&_xt=.json`,
+      `${origin}/core/media/media.nl?id=${encodeURIComponent(AUTHORIZED_MANAGERS_FILE_ID)}&_xt=.json`,
+      `${origin}/app/common/media/mediaitem.nl?id=${encodeURIComponent(AUTHORIZED_MANAGERS_FILE_ID)}`
+    ]);
+  }
+
   function extractMappingDownloadUrls(html, baseUrl, fileName = EXTERNAL_MAPPING_FILE_NAME, fileId = EXTERNAL_MAPPING_FILE_ID) {
     const urls = [];
     const text = String(html || "");
@@ -2537,7 +2586,12 @@ Health & Hospitality	DIRECT	NL	West	West
     if (productsScmMetadata.authorizedViewerCount) productsParts.push(`${productsScmMetadata.authorizedViewerCount.toLocaleString()} extra viewers`);
     if (productsScmMetadata.stale) productsParts.push("cached");
     if (productsScmMetadata.error) productsParts.push(`not loaded: ${shortMappingError(productsScmMetadata.error)}`);
-    return `${parts.join(" · ")}. ${productsParts.join(" · ")}`;
+    const managerParts = [`Authorized Managers: ${authorizedManagersMetadata.label}`];
+    if (authorizedManagersMetadata.rowCount) managerParts.push(`${authorizedManagersMetadata.rowCount.toLocaleString()} managers`);
+    if (authorizedManagersMetadata.canOwnCount) managerParts.push(`${authorizedManagersMetadata.canOwnCount.toLocaleString()} can own`);
+    if (authorizedManagersMetadata.stale) managerParts.push("cached");
+    if (authorizedManagersMetadata.error) managerParts.push(`not loaded: ${shortMappingError(authorizedManagersMetadata.error)}`);
+    return `${parts.join(" · ")}. ${productsParts.join(" · ")}. ${managerParts.join(" · ")}`;
   }
 
   async function loadExternalMapping(options = {}) {
@@ -2785,6 +2839,211 @@ Health & Hospitality	DIRECT	NL	West	West
       productsScmMetadata = {
         ...productsScmMetadata,
         error: error.message || "SCM relationship load failed"
+      };
+      updateProductsScmControls();
+      renderResults();
+    }
+  }
+
+  function parseAuthorizedManagerRows(data) {
+    const rows = Array.isArray(data && data.authorizedManagers) ? data.authorizedManagers : [];
+    return rows.map(record => {
+      const name = cleanPersonName(record.name || record.manager || record.displayName || "");
+      const groups = cleanPersonList(record.groups || record.scIndustryGroups || record.industryGroups || "");
+      const groupKeys = Array.isArray(record.groupKeys)
+        ? record.groupKeys.map(normalizeKey).filter(Boolean)
+        : groups.map(normalizeKey);
+      return {
+        sourceRows: Array.isArray(record.sourceRows) ? record.sourceRows : [],
+        name,
+        nameKey: normalizeKey(record.nameKey || name),
+        email: normalizeSpaces(record.email || ""),
+        role: normalizeSpaces(record.role || ""),
+        groups,
+        groupKeys: uniqueSorted(groupKeys),
+        canOwn: record.canOwn !== false,
+        canView: record.canView !== false,
+        active: record.active !== false
+      };
+    }).filter(record => record.name && record.active);
+  }
+
+  function applyAuthorizedManagersData(data, options = {}) {
+    const rows = parseAuthorizedManagerRows(data);
+    if (!rows.length) throw new Error("Authorized managers JSON did not produce any usable rows.");
+
+    const canOwnRows = rows.filter(row => row.canOwn && row.groupKeys.length);
+    const canViewRows = rows.filter(row => row.canView);
+    const groupLookup = new Map();
+    canOwnRows.forEach(row => {
+      const keys = row.groupKeys.includes("all") || row.groups.includes("*")
+        ? industryOptions.map(normalizeKey).filter(Boolean)
+        : row.groupKeys;
+      keys.forEach(key => {
+        if (!key) return;
+        const owners = groupLookup.get(key) || [];
+        owners.push(row.name);
+        groupLookup.set(key, owners);
+      });
+    });
+
+    authorizedManagerRecords = rows;
+    authorizedManagerCanOwnNames = uniqueSorted(canOwnRows.map(row => row.name));
+    authorizedManagerCanViewNames = uniqueSorted(canViewRows.map(row => row.name));
+    authorizedManagerGroupLookup = new Map(
+      Array.from(groupLookup.entries()).map(([key, names]) => [key, uniqueSorted(names)])
+    );
+    authorizedManagersMetadata = {
+      source: options.fromCache ? "cache" : "file-cabinet",
+      label: options.label || (options.fromCache ? `Cached ${AUTHORIZED_MANAGERS_FILE_NAME}` : `File Cabinet ${AUTHORIZED_MANAGERS_FILE_NAME}`),
+      rowCount: rows.length,
+      loadedAt: options.loadedAt || Date.now(),
+      schema: data.schema || "",
+      generatedAt: data.generatedAt || "",
+      canOwnCount: authorizedManagerCanOwnNames.length,
+      canViewCount: authorizedManagerCanViewNames.length,
+      stale: Boolean(options.stale),
+      error: ""
+    };
+  }
+
+  function readCachedAuthorizedManagers() {
+    try {
+      const cached = JSON.parse(localStorage.getItem(AUTHORIZED_MANAGERS_CACHE_KEY) || "null");
+      if (!cached || !cached.data || !cached.loadedAt) return null;
+      return cached;
+    } catch (error) {
+      console.warn("IQUEUE could not read cached authorized managers JSON", error);
+      return null;
+    }
+  }
+
+  function writeCachedAuthorizedManagers(data) {
+    try {
+      localStorage.setItem(AUTHORIZED_MANAGERS_CACHE_KEY, JSON.stringify({
+        loadedAt: Date.now(),
+        data
+      }));
+    } catch (error) {
+      console.warn("IQUEUE could not cache authorized managers JSON", error);
+    }
+  }
+
+  function applyCachedAuthorizedManagers() {
+    const cached = readCachedAuthorizedManagers();
+    if (!cached) return false;
+    const stale = Date.now() - cached.loadedAt > AUTHORIZED_MANAGERS_REFRESH_INTERVAL_MS;
+    try {
+      applyAuthorizedManagersData(cached.data, {
+        fromCache: true,
+        loadedAt: cached.loadedAt,
+        stale
+      });
+      return true;
+    } catch (error) {
+      console.warn("IQUEUE ignored invalid cached authorized managers JSON", error);
+      return false;
+    }
+  }
+
+  function shouldFetchAuthorizedManagers() {
+    const cached = readCachedAuthorizedManagers();
+    if (!cached) return true;
+    return Date.now() - cached.loadedAt > AUTHORIZED_MANAGERS_REFRESH_INTERVAL_MS;
+  }
+
+  function loadAuthorizedManagersWithSuiteScript() {
+    const pageWindow = getPageWindow();
+    if (!pageWindow || typeof pageWindow.require !== "function") {
+      return Promise.reject(new Error("NetSuite require was not available."));
+    }
+
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      let timer;
+      const finish = callback => value => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        callback(value);
+      };
+      timer = setTimeout(finish(reject), 12000, new Error("Timed out loading authorized managers JSON."));
+
+      try {
+        pageWindow.require(["N/file", "N/search"], (file, search) => {
+          try {
+            let fileId = AUTHORIZED_MANAGERS_FILE_ID;
+            if (!fileId) {
+              const results = search.create({
+                type: "file",
+                filters: [["name", "is", AUTHORIZED_MANAGERS_FILE_NAME]],
+                columns: ["internalid", "name"]
+              }).run().getRange({ start: 0, end: 1 }) || [];
+              const result = results[0];
+              fileId = result && (result.getValue({ name: "internalid" }) || result.id);
+            }
+            if (!fileId) throw new Error(`${AUTHORIZED_MANAGERS_FILE_NAME} was not found in the NetSuite File Cabinet.`);
+            const mappingFile = file.load({ id: fileId });
+            finish(resolve)(parseMappingJsonText(mappingFile.getContents()));
+          } catch (error) {
+            finish(reject)(error);
+          }
+        }, finish(reject));
+      } catch (error) {
+        finish(reject)(error);
+      }
+    });
+  }
+
+  async function fetchAuthorizedManagersData() {
+    const errors = [];
+
+    try {
+      const data = await loadAuthorizedManagersWithSuiteScript();
+      return {
+        data,
+        label: `N/file ${AUTHORIZED_MANAGERS_FILE_NAME}`
+      };
+    } catch (error) {
+      errors.push(`N/file: ${error.message || error}`);
+    }
+
+    for (const url of authorizedManagersUrlCandidates()) {
+      try {
+        const data = await fetchMappingJsonFromUrl(url, new Set(), AUTHORIZED_MANAGERS_FILE_NAME, AUTHORIZED_MANAGERS_FILE_ID);
+        return {
+          data,
+          label: `File Cabinet ${AUTHORIZED_MANAGERS_FILE_NAME}`
+        };
+      } catch (error) {
+        errors.push(error.message || String(error));
+      }
+    }
+
+    throw new Error(errors.join(" | "));
+  }
+
+  async function loadAuthorizedManagers(options = {}) {
+    const force = Boolean(options.force);
+    if (!force && !shouldFetchAuthorizedManagers()) return;
+
+    try {
+      const result = await fetchAuthorizedManagersData();
+      const data = result.data || result;
+      writeCachedAuthorizedManagers(data);
+      applyAuthorizedManagersData(data, {
+        fromCache: false,
+        loadedAt: Date.now(),
+        label: result.label
+      });
+      updateProductsScmControls();
+      updateFilterSummary();
+      renderResults();
+    } catch (error) {
+      console.warn("IQUEUE could not load authorized managers JSON", error);
+      authorizedManagersMetadata = {
+        ...authorizedManagersMetadata,
+        error: error.message || "Authorized managers load failed"
       };
       updateProductsScmControls();
       renderResults();
@@ -5522,8 +5781,12 @@ Health & Hospitality	DIRECT	NL	West	West
     return selected.some(filter => filter.values.includes(normalizeKey(rowPeopleFilterValue(row, filter.key))));
   }
 
+  function allScmOwnerOptions() {
+    return uniqueSorted(productsScmAuthorizedScms.concat(authorizedManagerCanOwnNames));
+  }
+
   function productsScmOwnerOptions() {
-    return productsScmAuthorizedScms.slice().sort((a, b) => a.localeCompare(b));
+    return allScmOwnerOptions().slice().sort((a, b) => a.localeCompare(b));
   }
 
   function listValuesFromString(value) {
@@ -6657,6 +6920,93 @@ Health & Hospitality	DIRECT	NL	West	West
     return match;
   }
 
+  function crossIndustryOwnerOptions(row, target) {
+    const family = target && target.family || "";
+    const canonical = findCanonicalIndustry(family) || family;
+    const keys = uniqueSorted([family, canonical].map(normalizeKey).filter(Boolean));
+    const authorizedOwners = uniqueSorted(keys.flatMap(key => authorizedManagerGroupLookup.get(key) || []));
+    if (authorizedOwners.length) return authorizedOwners;
+
+    const epmOwner = normalizeKey(family) === normalizeKey(EPM_INDUSTRY_GROUP)
+      ? epmOwnerConfigForRow(row)
+      : null;
+    if (epmOwner) return uniqueSorted([epmOwner.displayName].concat(epmOwner.aliases || []));
+
+    return productsScmOwnerOptions();
+  }
+
+  function defaultCrossIndustryOwner(row, target) {
+    if (!target || normalizeKey(target.family) !== normalizeKey(EPM_INDUSTRY_GROUP)) return "";
+    const ownerConfig = epmOwnerConfigForRow(row);
+    return ownerConfig ? ownerConfig.displayName : "";
+  }
+
+  function matchOwnerOption(value, options) {
+    const text = normalizeSpaces(value);
+    if (!text) return "";
+    const numeric = text.match(/^\d+$/);
+    if (numeric) {
+      const index = Number(text) - 1;
+      if (index >= 0 && index < options.length) return options[index];
+    }
+
+    const key = normalizeKey(text);
+    return options.find(option => normalizeKey(option) === key)
+      || options.find(option => normalizeKey(option).startsWith(key))
+      || options.find(option => normalizeKey(option).includes(key))
+      || "";
+  }
+
+  function promptForCrossIndustryAssignment(row, target) {
+    const family = target && target.family || "selected queue";
+    const defaultOwner = defaultCrossIndustryOwner(row, target);
+    const options = uniqueSorted([defaultOwner].concat(crossIndustryOwnerOptions(row, target)).filter(Boolean));
+    const preview = options.slice(0, 25).map((name, index) => `${index + 1}. ${name}`);
+    const overflow = options.length > preview.length
+      ? `\n...and ${options.length - preview.length} more. Type the manager name to use one not shown.`
+      : "";
+    const noOptionsText = options.length
+      ? ""
+      : "\nNo authorized-manager list is loaded yet. You can still route this without an owner.";
+    const promptText = [
+      `Cross-staff this SCR to ${family}.`,
+      "",
+      defaultOwner
+        ? `Default owner: ${defaultOwner}. Press OK to use it, type another owner, or Cancel to stop.`
+        : "Type an SCM owner name/number, or leave blank for no owner yet.",
+      noOptionsText,
+      preview.length ? `\nAvailable owners:\n${preview.join("\n")}${overflow}` : ""
+    ].filter(Boolean).join("\n");
+
+    const value = window.prompt(promptText, defaultOwner || "");
+    if (value === null) return null;
+
+    const requestedOwner = normalizeSpaces(value);
+    if (!requestedOwner) return { ownerName: defaultOwner || "" };
+    const ownerName = matchOwnerOption(requestedOwner, options);
+    if (!ownerName) {
+      window.alert(`Could not match "${requestedOwner}" to an authorized SCM owner. Route was not saved.`);
+      return null;
+    }
+    return { ownerName };
+  }
+
+  async function assignRowToScmOwner(row, ownerName, card) {
+    const cleanOwnerName = cleanPersonName(ownerName);
+    if (!cleanOwnerName) return null;
+
+    setStaffingNotesStatus(card, `Resolving SCM owner ${cleanOwnerName}...`);
+    const match = await lookupRosterAssignee([cleanOwnerName]);
+    if (!match || !match.id) {
+      throw new Error(`Could not find SCM owner ${cleanOwnerName} in the SC roster.`);
+    }
+
+    setStaffingNotesStatus(card, `Assigning SCM owner ${match.name || cleanOwnerName}...`);
+    await submitAssignee(row, match.id);
+    updateRowAssignedTo(row, match.name || cleanOwnerName);
+    return match;
+  }
+
   function setOwnershipStatus(button, message, state = "") {
     const line = button && button.closest(".scr-helper-assigned-line");
     const status = line && line.querySelector(".scr-helper-ownership-status");
@@ -6769,16 +7119,20 @@ Health & Hospitality	DIRECT	NL	West	West
     const tag = button.dataset.xvrTag;
     if (!row || !tag) return;
 
+    const target = CROSS_INDUSTRY_TARGETS.find(item => item.tag === tag);
+    const assignment = promptForCrossIndustryAssignment(row, target);
+    if (!assignment) return;
+
     const buttons = card ? Array.from(card.querySelectorAll(".scr-helper-xvr-button")) : [];
     buttons.forEach(item => { item.disabled = true; });
-    const target = CROSS_INDUSTRY_TARGETS.find(item => item.tag === tag);
     const isEpmRoute = target && normalizeKey(target.family) === normalizeKey(EPM_INDUSTRY_GROUP);
-    setStaffingNotesStatus(card, isEpmRoute ? "Saving EPM route..." : "Saving cross-industry hashtag...");
+    setStaffingNotesStatus(card, isEpmRoute ? "Saving EPM route..." : "Saving cross-industry route...");
 
     try {
-      if (isEpmRoute) await routeRowToEpmAssignee(row, card);
+      if (assignment.ownerName) await assignRowToScmOwner(row, assignment.ownerName, card);
+      else if (isEpmRoute) await routeRowToEpmAssignee(row, card);
       const currentHashtags = row.hashtags || await lookupSingleField(row, HASHTAGS_FIELD_ID);
-      const nextValue = valueWithCrossIndustryTag(currentHashtags, tag, target && target.markerTag);
+      const nextValue = valueWithCrossIndustryTag(currentHashtags, tag, target && target.markerTag, assignment.ownerName || "");
       await submitHashtags(row, nextValue);
       try {
         await submitCrossVertical(row, "T");
@@ -7127,6 +7481,7 @@ Health & Hospitality	DIRECT	NL	West	West
     document.getElementById("scr-helper-refresh-mapping").addEventListener("click", () => {
       loadExternalMapping({ force: true });
       loadProductsScmMapping({ force: true });
+      loadAuthorizedManagers({ force: true });
     });
     document.getElementById("scr-helper-check-update").addEventListener("click", async event => {
       const button = event.currentTarget;
@@ -8369,10 +8724,12 @@ Health & Hospitality	DIRECT	NL	West	West
 
   applyCachedExternalMapping();
   applyCachedProductsScmMapping();
+  applyCachedAuthorizedManagers();
   removeExistingHelperArtifacts();
   addStyles();
   insertPortlet();
   refreshRows();
   loadExternalMapping();
   loadProductsScmMapping();
+  loadAuthorizedManagers();
 })();
