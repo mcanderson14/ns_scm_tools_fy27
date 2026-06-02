@@ -383,7 +383,7 @@
   <header>
     <div class="brand-row">
       <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
-      <span class="version-pill">v27.0.12</span>
+      <span class="version-pill">v27.0.13</span>
     </div>
     <div class="header-copy">
       <h1>SC Calendar Refresh</h1>
@@ -399,7 +399,7 @@
 
     <div class="panel">
       <h2>Step 1. Get Graph Explorer Token</h2>
-      <p class="note">Open Microsoft Graph Explorer, log in with your Oracle Microsoft Office 365 account, click API Explorer, then click the Access Token tab. Copy the access token and paste it below. IQUEUE owner-route email requires the token to include Mail.Send.</p>
+      <p class="note">Open Microsoft Graph Explorer, log in with your Oracle Microsoft Office 365 account, click API Explorer, then click the Access Token tab. Copy the access token and paste it below.</p>
       <div class="actions">
         <a class="button-link oracle-red" href="https://developer.microsoft.com/en-us/graph/graph-explorer" target="_blank" rel="noopener noreferrer">Open Graph Explorer</a>
       </div>
@@ -2470,14 +2470,7 @@
     }
 
     function graphExplorerMailSendStatusItems(token) {
-      const normalizedToken = String(token || "").trim().replace(/^Bearer\s+/i, "");
-      if (!normalizedToken) return [];
-      return graphExplorerTokenHasScope(normalizedToken, "Mail.Send")
-        ? [{ text: "Mail.Send ready for IQUEUE email", tone: "good" }]
-        : [
-          { text: "Missing Mail.Send for IQUEUE email", tone: "bad" },
-          { text: "Add/consent Mail.Send in Graph Explorer, then copy a fresh token", tone: "bad" }
-        ];
+      return [];
     }
 
     function bytesToBase64(bytes) {
