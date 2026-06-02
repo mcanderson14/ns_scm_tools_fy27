@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.95B
+// @version      27.0.0.96B
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -41,7 +41,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.95B";
+  const HELPER_VERSION = "27.0.0.96B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -5887,6 +5887,24 @@ Health & Hospitality	DIRECT	NL	West	West
     return best ? graphTokenInfoFromToken(best.token, best.source) : null;
   }
 
+  async function graphAccessTokenFromRefreshPageVault() {
+    const pageWindow = typeof unsafeWindow !== "undefined" ? unsafeWindow : window;
+    const readerNames = ["getStoredGraphExplorerToken", "getGraphExplorerToken"];
+    for (const readerName of readerNames) {
+      const reader = pageWindow && pageWindow[readerName];
+      if (typeof reader !== "function") continue;
+      try {
+        const value = await reader.call(pageWindow);
+        const token = typeof value === "string" ? value : value && value.token;
+        const info = token ? storeGraphAccessTokenFromToken(token, `calendar-refresh:${readerName}`) : null;
+        if (info) return info;
+      } catch (error) {
+        console.warn(`IQUEUE could not read Graph token through ${readerName}`, error);
+      }
+    }
+    return null;
+  }
+
   function installGraphTokenRequestCapture() {
     if (window.__iqueueGraphTokenCaptureInstalled) return;
     window.__iqueueGraphTokenCaptureInstalled = true;
@@ -6004,10 +6022,10 @@ Health & Hospitality	DIRECT	NL	West	West
     };
   }
 
-  function publishGraphTokenStatusFromRefreshPage() {
+  async function publishGraphTokenStatusFromRefreshPage() {
     const pageStatus = graphTokenStatusFromPageText();
     const storageExpiry = graphTokenStatusFromStorage();
-    const tokenInfo = graphAccessTokenFromRefreshPage();
+    const tokenInfo = graphAccessTokenFromRefreshPage() || await graphAccessTokenFromRefreshPageVault();
     const expiresAt = tokenInfo && tokenInfo.expiresAt || pageStatus.expiresAt || storageExpiry || 0;
     const valid = Boolean(pageStatus.valid || expiresAt > Date.now());
     if (tokenInfo && tokenInfo.token && tokenInfo.expiresAt > Date.now()) {
@@ -6026,17 +6044,24 @@ Health & Hospitality	DIRECT	NL	West	West
   }
 
   function installGraphTokenRefreshPageBridge() {
+    const scheduleGraphTokenPublish = (delay = 0) => {
+      window.setTimeout(() => {
+        Promise.resolve(publishGraphTokenStatusFromRefreshPage()).catch(error => {
+          console.warn("IQUEUE could not publish Graph token status from refresh page", error);
+        });
+      }, delay);
+    };
     installGraphTokenRequestCapture();
-    publishGraphTokenStatusFromRefreshPage();
-    window.setTimeout(publishGraphTokenStatusFromRefreshPage, 750);
-    window.setTimeout(publishGraphTokenStatusFromRefreshPage, 2500);
+    scheduleGraphTokenPublish();
+    scheduleGraphTokenPublish(750);
+    scheduleGraphTokenPublish(2500);
     try {
-      const observer = new MutationObserver(() => publishGraphTokenStatusFromRefreshPage());
+      const observer = new MutationObserver(() => scheduleGraphTokenPublish());
       observer.observe(document.body, { childList: true, subtree: true, characterData: true });
     } catch (error) {
       // MutationObserver can fail on unusual partial page loads; timed checks above still cover normal use.
     }
-    window.addEventListener("storage", publishGraphTokenStatusFromRefreshPage);
+    window.addEventListener("storage", () => scheduleGraphTokenPublish());
   }
 
   function formatGraphTokenExpiry(expiresAt) {
