@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.90B
+// @version      27.0.0.91B
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -40,7 +40,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.90B";
+  const HELPER_VERSION = "27.0.0.91B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -59,8 +59,9 @@
   const PRODUCTS_SCM_MAPPING_FILE_URL = "https://nlcorp.app.netsuite.com/app/common/media/482833928?folder=482833928&ifrmcntnr=T";
   const PRODUCTS_SCM_MAPPING_CACHE_KEY = "iqueue-products-scm-relationship-mapping-v1";
   const PRODUCTS_SCM_MAPPING_REFRESH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
-  const PRODUCTS_SCM_OWNER_TAG_PREFIX = "#pscm-owner-";
+  const PRODUCTS_SCM_OWNER_TAG_PREFIX = "#scm-owner-";
   const AUTHORIZED_MANAGERS_FILE_NAME = "Authorized_Managers.json";
+  const AUTHORIZED_MANAGERS_FILE_NAMES = [AUTHORIZED_MANAGERS_FILE_NAME, "Authorized Managers.json"];
   const AUTHORIZED_MANAGERS_FILE_ID = "";
   const AUTHORIZED_MANAGERS_SEARCH_ID = "1319617";
   const AUTHORIZED_MANAGERS_SEARCH_URL = "https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl?searchid=1319617";
@@ -3137,15 +3138,18 @@ Health & Hospitality	DIRECT	NL	West	West
           try {
             let fileId = AUTHORIZED_MANAGERS_FILE_ID;
             if (!fileId) {
-              const results = search.create({
-                type: "file",
-                filters: [["name", "is", AUTHORIZED_MANAGERS_FILE_NAME]],
-                columns: ["internalid", "name"]
-              }).run().getRange({ start: 0, end: 1 }) || [];
-              const result = results[0];
-              fileId = result && (result.getValue({ name: "internalid" }) || result.id);
+              for (const fileName of AUTHORIZED_MANAGERS_FILE_NAMES) {
+                const results = search.create({
+                  type: "file",
+                  filters: [["name", "is", fileName]],
+                  columns: ["internalid", "name"]
+                }).run().getRange({ start: 0, end: 1 }) || [];
+                const result = results[0];
+                fileId = result && (result.getValue({ name: "internalid" }) || result.id);
+                if (fileId) break;
+              }
             }
-            if (!fileId) throw new Error(`${AUTHORIZED_MANAGERS_FILE_NAME} was not found in the NetSuite File Cabinet.`);
+            if (!fileId) throw new Error(`${AUTHORIZED_MANAGERS_FILE_NAMES.join(" or ")} was not found in the NetSuite File Cabinet.`);
             const mappingFile = file.load({ id: fileId });
             finish(resolve)(parseMappingJsonText(mappingFile.getContents()));
           } catch (error) {
@@ -3160,6 +3164,16 @@ Health & Hospitality	DIRECT	NL	West	West
 
   async function fetchAuthorizedManagersData() {
     const errors = [];
+
+    try {
+      const data = await fetchAuthorizedManagersFromSavedSearch();
+      return {
+        data,
+        label: `Saved Search ${AUTHORIZED_MANAGERS_SEARCH_ID}`
+      };
+    } catch (error) {
+      errors.push(`Saved Search ${AUTHORIZED_MANAGERS_SEARCH_ID}: ${error.message || error}`);
+    }
 
     try {
       const data = await loadAuthorizedManagersWithSuiteScript();
@@ -3181,16 +3195,6 @@ Health & Hospitality	DIRECT	NL	West	West
       } catch (error) {
         errors.push(error.message || String(error));
       }
-    }
-
-    try {
-      const data = await fetchAuthorizedManagersFromSavedSearch();
-      return {
-        data,
-        label: `Saved Search ${AUTHORIZED_MANAGERS_SEARCH_ID}`
-      };
-    } catch (error) {
-      errors.push(`Saved Search ${AUTHORIZED_MANAGERS_SEARCH_ID}: ${error.message || error}`);
     }
 
     throw new Error(errors.join(" | "));
@@ -7166,10 +7170,16 @@ Health & Hospitality	DIRECT	NL	West	West
       const list = backdrop.querySelector(".scr-helper-owner-modal-list");
       const message = backdrop.querySelector(".scr-helper-owner-modal-message");
       const save = backdrop.querySelector(".scr-helper-owner-save");
+      let selectedOwnerName = defaultOwner || "";
 
       function close(value) {
         backdrop.remove();
         resolve(value);
+      }
+
+      function updateSaveLabel() {
+        const ownerName = selectedOwnerName || matchOwnerOption(input.value, options);
+        save.textContent = ownerName ? "Save route & owner" : "Save route";
       }
 
       function filteredOptions() {
@@ -7182,7 +7192,13 @@ Health & Hospitality	DIRECT	NL	West	West
       function renderOptions() {
         const visible = filteredOptions();
         list.innerHTML = visible.map(option => `
-          <button type="button" class="scr-helper-owner-option" data-owner-name="${escapeHtml(option)}" role="option">
+          <button
+            type="button"
+            class="scr-helper-owner-option${normalizeKey(option) === normalizeKey(selectedOwnerName) ? " is-selected" : ""}"
+            data-owner-name="${escapeHtml(option)}"
+            role="option"
+            aria-selected="${normalizeKey(option) === normalizeKey(selectedOwnerName) ? "true" : "false"}"
+          >
             ${escapeHtml(option)}
           </button>
         `).join("");
@@ -7190,11 +7206,13 @@ Health & Hospitality	DIRECT	NL	West	West
         message.textContent = options.length || normalizeSpaces(input.value)
           ? ""
           : "Upload or load Authorized_Managers.json to show filtered SCM owners.";
+        updateSaveLabel();
       }
 
       function selectedOwner() {
         const value = normalizeSpaces(input.value);
         if (!value) return "";
+        if (selectedOwnerName && normalizeKey(value) === normalizeKey(selectedOwnerName)) return selectedOwnerName;
         return matchOwnerOption(value, options);
       }
 
@@ -7213,7 +7231,11 @@ Health & Hospitality	DIRECT	NL	West	West
         close({ ownerName });
       }
 
-      input.addEventListener("input", renderOptions);
+      input.addEventListener("input", () => {
+        const matched = matchOwnerOption(input.value, options);
+        selectedOwnerName = matched && normalizeKey(matched) === normalizeKey(input.value) ? matched : "";
+        renderOptions();
+      });
       input.addEventListener("keydown", event => {
         if (event.key === "Escape") {
           event.preventDefault();
@@ -7230,8 +7252,10 @@ Health & Hospitality	DIRECT	NL	West	West
       list.addEventListener("click", event => {
         const option = closestElement(event.target, ".scr-helper-owner-option");
         if (!option) return;
-        input.value = option.dataset.ownerName || "";
+        selectedOwnerName = option.dataset.ownerName || "";
+        input.value = selectedOwnerName;
         renderOptions();
+        message.textContent = selectedOwnerName ? `Selected ${selectedOwnerName}.` : "";
         save.focus();
       });
       backdrop.querySelector(".scr-helper-owner-route-only").addEventListener("click", () => close({ ownerName: "" }));
@@ -9024,6 +9048,13 @@ Health & Hospitality	DIRECT	NL	West	West
         border-color: var(--ns-ui-primary);
         background: var(--ns-ui-primary-soft);
         color: var(--ns-ui-primary);
+      }
+
+      .scr-helper-owner-option.is-selected {
+        border-color: var(--ns-ui-primary);
+        background: var(--ns-ui-primary-soft);
+        color: var(--ns-ui-primary);
+        box-shadow: inset 3px 0 0 var(--ns-ui-primary);
       }
 
       .scr-helper-owner-modal-actions {
