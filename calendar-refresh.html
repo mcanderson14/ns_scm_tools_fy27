@@ -383,7 +383,7 @@
   <header>
     <div class="brand-row">
       <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
-      <span class="version-pill">v27.0.11</span>
+      <span class="version-pill">v27.0.12</span>
     </div>
     <div class="header-copy">
       <h1>SC Calendar Refresh</h1>
@@ -399,7 +399,7 @@
 
     <div class="panel">
       <h2>Step 1. Get Graph Explorer Token</h2>
-      <p class="note">Open Microsoft Graph Explorer, log in with your Oracle Microsoft Office 365 account, click API Explorer, then click the Access Token tab. Copy the access token and paste it below.</p>
+      <p class="note">Open Microsoft Graph Explorer, log in with your Oracle Microsoft Office 365 account, click API Explorer, then click the Access Token tab. Copy the access token and paste it below. IQUEUE owner-route email requires the token to include Mail.Send.</p>
       <div class="actions">
         <a class="button-link oracle-red" href="https://developer.microsoft.com/en-us/graph/graph-explorer" target="_blank" rel="noopener noreferrer">Open Graph Explorer</a>
       </div>
@@ -2445,6 +2445,41 @@
       }
     }
 
+    function getGraphExplorerTokenPayload(token) {
+      try {
+        const parts = String(token || "").trim().replace(/^Bearer\s+/i, "").split(".");
+        if (parts.length < 2) return null;
+        return JSON.parse(decodeBase64Url(parts[1]));
+      } catch {
+        return null;
+      }
+    }
+
+    function getGraphExplorerTokenScopes(token) {
+      const payload = getGraphExplorerTokenPayload(token);
+      if (!payload) return [];
+      const scopes = [];
+      if (typeof payload.scp === "string") scopes.push(...payload.scp.split(/\s+/));
+      if (Array.isArray(payload.roles)) scopes.push(...payload.roles);
+      return [...new Set(scopes.map(scope => String(scope || "").trim()).filter(Boolean))];
+    }
+
+    function graphExplorerTokenHasScope(token, scope) {
+      const wanted = String(scope || "").trim().toLowerCase();
+      return getGraphExplorerTokenScopes(token).some(item => item.toLowerCase() === wanted);
+    }
+
+    function graphExplorerMailSendStatusItems(token) {
+      const normalizedToken = String(token || "").trim().replace(/^Bearer\s+/i, "");
+      if (!normalizedToken) return [];
+      return graphExplorerTokenHasScope(normalizedToken, "Mail.Send")
+        ? [{ text: "Mail.Send ready for IQUEUE email", tone: "good" }]
+        : [
+          { text: "Missing Mail.Send for IQUEUE email", tone: "bad" },
+          { text: "Add/consent Mail.Send in Graph Explorer, then copy a fresh token", tone: "bad" }
+        ];
+    }
+
     function bytesToBase64(bytes) {
       let binary = "";
       for (let index = 0; index < bytes.length; index += 0x8000) {
@@ -2666,7 +2701,8 @@
       if (!silent) {
         setGraphExplorerStatus([
           { text: "Token saved", tone: "good" },
-          record.expiresAt ? { text: formatTokenExpiry(record.expiresAt), tone: "good" } : null
+          record.expiresAt ? { text: formatTokenExpiry(record.expiresAt), tone: "good" } : null,
+          ...graphExplorerMailSendStatusItems(normalizedToken)
         ]);
       }
       postIqueueGraphTokenRelay(normalizedToken, "calendar-refresh:save");
@@ -2702,7 +2738,8 @@
       }
       setGraphExplorerStatus([
         { text: "Saved token ready", tone: "good" },
-        stored.expiresAt ? { text: formatTokenExpiry(stored.expiresAt), tone: "good" } : null
+        stored.expiresAt ? { text: formatTokenExpiry(stored.expiresAt), tone: "good" } : null,
+        ...graphExplorerMailSendStatusItems(stored.token)
       ]);
       postIqueueGraphTokenRelay(stored.token, "calendar-refresh:load");
       updateFormReadiness();
@@ -3285,8 +3322,12 @@
       });
       qs("graphExplorerToken").addEventListener("input", () => {
         updateFormReadiness();
-        if (String(qs("graphExplorerToken").value || "").trim()) {
-          setGraphExplorerStatus([{ text: "Token pasted; click Save token or Refresh", tone: "good" }]);
+        const pastedToken = String(qs("graphExplorerToken").value || "").trim();
+        if (pastedToken) {
+          setGraphExplorerStatus([
+            { text: "Token pasted; click Save token or Refresh", tone: "good" },
+            ...graphExplorerMailSendStatusItems(pastedToken)
+          ]);
         } else {
           loadGraphExplorerToken().catch(error => setGraphExplorerStatus([{ text: error.message, tone: "bad" }]));
         }
