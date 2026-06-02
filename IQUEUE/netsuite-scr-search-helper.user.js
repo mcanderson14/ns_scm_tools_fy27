@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.94B
+// @version      27.0.0.95B
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -41,7 +41,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.94B";
+  const HELPER_VERSION = "27.0.0.95B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -3073,17 +3073,58 @@ Health & Hospitality	DIRECT	NL	West	West
     };
   }
 
+  function emailLocalPartKeys(email) {
+    const local = normalizeSpaces(email).split("@")[0] || "";
+    if (!local) return [];
+    const spaced = local.replace(/[._-]+/g, " ");
+    const keys = new Set([normalizeKey(local), normalizeKey(spaced)]);
+    const parts = spaced.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      const first = parts[0];
+      const last = parts[parts.length - 1];
+      keys.add(normalizeKey(`${first}${last}`));
+      keys.add(normalizeKey(`${last}${first}`));
+      keys.add(normalizeKey(`${first} ${last}`));
+      keys.add(normalizeKey(`${last} ${first}`));
+    }
+    return [...keys].filter(Boolean);
+  }
+
+  function inferOracleEmailFromName(name) {
+    const text = cleanPersonName(name);
+    if (!text) return "";
+    const commaName = text.match(/^([^,]+),\s*(.+)$/);
+    let first = "";
+    let last = "";
+    if (commaName) {
+      last = normalizeSpaces(commaName[1]).split(/\s+/)[0] || "";
+      first = normalizeSpaces(commaName[2]).split(/\s+/)[0] || "";
+    } else {
+      const parts = text.split(/\s+/).filter(Boolean);
+      first = parts[0] || "";
+      last = parts.length > 1 ? parts[parts.length - 1] : "";
+    }
+    const cleanFirst = first.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const cleanLast = last.toLowerCase().replace(/[^a-z0-9]/g, "");
+    return cleanFirst && cleanLast ? `${cleanFirst}.${cleanLast}@oracle.com` : "";
+  }
+
   function authorizedManagerForName(name) {
     const targetKeys = personNameKeys(name);
     if (!targetKeys.length) return null;
+    const targetKeySet = new Set(targetKeys);
     return authorizedManagerRecords.find(record => (
-      personNameKeys(record.name).some(key => targetKeys.includes(key))
+      personNameKeys(record.name)
+        .concat(record.nameKey)
+        .concat(emailLocalPartKeys(record.email))
+        .filter(Boolean)
+        .some(key => targetKeySet.has(key))
     )) || null;
   }
 
   function authorizedManagerEmailForName(name) {
     const manager = authorizedManagerForName(name);
-    return normalizeSpaces(manager && manager.email || "");
+    return normalizeSpaces(manager && manager.email || inferOracleEmailFromName(name));
   }
 
   function readCachedAuthorizedManagers() {
