@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.98B
+// @version      27.0.0.99B
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -41,7 +41,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.98B";
+  const HELPER_VERSION = "27.0.0.99B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -6272,7 +6272,7 @@ Health & Hospitality	DIRECT	NL	West	West
 
     if (!graphTokenHasScope(tokenInfo, "Mail.Send")) {
       setGraphTokenStatus(
-        "Microsoft Graph token may be missing Mail.Send.",
+        "Microsoft Graph token is missing Mail.Send.",
         "warn",
         "Graph email notification requires a token with Mail.Send permission."
       );
