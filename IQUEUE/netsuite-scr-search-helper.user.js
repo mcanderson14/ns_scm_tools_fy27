@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.97B
+// @version      27.0.0.98B
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -41,13 +41,15 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.97B";
+  const HELPER_VERSION = "27.0.0.98B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
   const GRAPH_TOKEN_REFRESH_URL = "https://mcanderson14.github.io/ns_scm_tools_fy27/calendar-refresh.html";
+  const GRAPH_TOKEN_REFRESH_RELAY_URL = `${GRAPH_TOKEN_REFRESH_URL}?iqueueRelay=1`;
   const GRAPH_TOKEN_STATUS_KEY = "iqueue-graph-token-status-v1";
   const GRAPH_ACCESS_TOKEN_KEY = "iqueue-graph-access-token-v1";
+  const GRAPH_TOKEN_RELAY_KIND = "iqueue-graph-token-relay-v1";
   const CALENDAR_GRAPH_TOKEN_VAULT_KEY = "sc-staffing-dashboard-graph-explorer-token-vault-v2";
   const CALENDAR_GRAPH_TOKEN_LOCAL_KEY = "sc-staffing-dashboard-graph-explorer-local-key-v1";
   const GRAPH_TOKEN_STATUS_STALE_MS = 26 * 60 * 60 * 1000;
@@ -5731,7 +5733,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const text = normalizeSpaces(message);
     const shouldShowRefreshLink = Boolean(text && tone !== "good" && tone !== "checking");
     const html = text
-      ? `${escapeHtml(text)}${shouldShowRefreshLink ? ` <a href="${escapeHtml(GRAPH_TOKEN_REFRESH_URL)}" target="_blank" rel="noopener noreferrer">Refresh token</a>` : ""}`
+      ? `${escapeHtml(text)}${shouldShowRefreshLink ? ` <a href="${escapeHtml(GRAPH_TOKEN_REFRESH_RELAY_URL)}" target="_blank">Refresh token</a>` : ""}`
       : "";
     [status, optionsStatus].filter(Boolean).forEach(element => {
       element.hidden = !text;
@@ -5823,6 +5825,71 @@ Health & Hospitality	DIRECT	NL	West	West
     if (!info || !info.token || !info.expiresAt || info.expiresAt <= Date.now()) return null;
     gmSetValue(GRAPH_ACCESS_TOKEN_KEY, info);
     return info;
+  }
+
+  function writeGraphTokenStatusBridge(tokenInfo, status = {}) {
+    const expiresAt = Number(tokenInfo && tokenInfo.expiresAt || status.expiresAt || 0);
+    const valid = Boolean(tokenInfo && tokenInfo.token && expiresAt > Date.now() || status.valid);
+    gmSetValue(GRAPH_TOKEN_STATUS_KEY, {
+      checkedAt: Date.now(),
+      source: status.source || tokenInfo && tokenInfo.source || "calendar-refresh",
+      valid,
+      expiresAt,
+      tokenAvailable: Boolean(tokenInfo && tokenInfo.token),
+      mailSendAvailable: graphTokenHasScope(tokenInfo, "Mail.Send"),
+      scopes: tokenInfo && tokenInfo.scopes || status.scopes || [],
+      message: status.message || (valid ? "Saved token ready." : "Token status not found.")
+    });
+  }
+
+  function graphTokenRelayTargets() {
+    return [
+      "https://nlcorp.app.netsuite.com",
+      "https://nlcorp-sb2.app.netsuite.com"
+    ];
+  }
+
+  function postGraphTokenRelay(tokenInfo) {
+    if (!tokenInfo || !tokenInfo.token || !isGraphTokenRefreshPage()) return;
+    const payload = {
+      kind: GRAPH_TOKEN_RELAY_KIND,
+      token: tokenInfo.token,
+      expiresAt: tokenInfo.expiresAt || 0,
+      source: tokenInfo.source || "calendar-refresh"
+    };
+    const targets = [window.opener, window.parent].filter(target => target && target !== window);
+    targets.forEach(target => {
+      graphTokenRelayTargets().forEach(origin => {
+        try {
+          target.postMessage(payload, origin);
+        } catch (error) {
+          console.warn("IQUEUE could not post Graph token relay", error);
+        }
+      });
+    });
+  }
+
+  function installGraphTokenRelayListener() {
+    if (window.__iqueueGraphTokenRelayListenerInstalled) return;
+    window.__iqueueGraphTokenRelayListenerInstalled = true;
+    window.addEventListener("message", event => {
+      if (event.origin !== "https://mcanderson14.github.io") return;
+      const data = event.data || {};
+      if (!data || data.kind !== GRAPH_TOKEN_RELAY_KIND || !data.token) return;
+      const tokenInfo = storeGraphAccessTokenFromToken(data.token, data.source || "calendar-refresh:postMessage");
+      if (!tokenInfo) {
+        setGraphTokenStatus("Microsoft Graph token relay did not contain a usable access token.", "warn");
+        return;
+      }
+      writeGraphTokenStatusBridge(tokenInfo, {
+        source: "calendar-refresh:postMessage",
+        message: "Saved token ready."
+      });
+      setGraphTokenStatus(
+        `Graph token synced${tokenInfo.expiresAt ? ` until ${formatGraphTokenExpiry(tokenInfo.expiresAt)}` : ""}.`,
+        "good"
+      );
+    });
   }
 
   function captureBearerTokenFromText(value, source = "") {
@@ -6105,15 +6172,12 @@ Health & Hospitality	DIRECT	NL	West	West
     const valid = Boolean(pageStatus.valid || expiresAt > Date.now());
     if (tokenInfo && tokenInfo.token && tokenInfo.expiresAt > Date.now()) {
       storeGraphAccessTokenFromToken(tokenInfo.token, tokenInfo.source || "calendar-refresh");
+      postGraphTokenRelay(tokenInfo);
     }
-    gmSetValue(GRAPH_TOKEN_STATUS_KEY, {
-      checkedAt: Date.now(),
+    writeGraphTokenStatusBridge(tokenInfo, {
       source: "calendar-refresh",
       valid,
       expiresAt,
-      tokenAvailable: Boolean(tokenInfo && tokenInfo.token),
-      mailSendAvailable: graphTokenHasScope(tokenInfo, "Mail.Send"),
-      scopes: tokenInfo && tokenInfo.scopes || [],
       message: valid ? "Saved token ready." : pageStatus.message || "Token status not found."
     });
   }
@@ -6201,7 +6265,7 @@ Health & Hospitality	DIRECT	NL	West	West
       setGraphTokenStatus(
         "Microsoft Graph token is valid, but IQUEUE cannot read the access token yet.",
         "warn",
-        "Open the refresh page once after installing this IQUEUE update."
+        "Open the refresh page from IQUEUE's Refresh token link so it can sync the token back to this queue."
       );
       return bridge;
     }
@@ -6349,7 +6413,7 @@ Health & Hospitality	DIRECT	NL	West	West
 
     const tokenInfo = readGraphAccessTokenBridge();
     if (!tokenInfo || !tokenInfo.token) {
-      throw new Error("Microsoft Graph token is unavailable. Refresh the token page once after installing this IQUEUE update.");
+      throw new Error("Microsoft Graph token is unavailable. Use IQUEUE's Refresh token link once so the token page can sync the saved token back to this queue.");
     }
     if (!graphTokenHasScope(tokenInfo, "Mail.Send")) {
       throw new Error("Microsoft Graph token is missing Mail.Send permission.");
@@ -8151,7 +8215,7 @@ Health & Hospitality	DIRECT	NL	West	West
           <button type="button" id="scr-helper-refresh-mapping" class="scr-helper-options-button">Refresh Mapping JSONs</button>
           <button type="button" id="scr-helper-check-update" class="scr-helper-options-button">Check for IQUEUE Update</button>
           <button type="button" id="scr-helper-check-graph-token" class="scr-helper-options-button">Check Graph Token</button>
-          <a id="scr-helper-refresh-graph-token" class="scr-helper-options-link" href="${escapeHtml(GRAPH_TOKEN_REFRESH_URL)}" target="_blank" rel="noopener noreferrer">Refresh Microsoft Graph token</a>
+          <a id="scr-helper-refresh-graph-token" class="scr-helper-options-link" href="${escapeHtml(GRAPH_TOKEN_REFRESH_RELAY_URL)}" target="_blank">Refresh Microsoft Graph token</a>
           <div id="scr-helper-graph-token-options-status" class="scr-helper-options-status" hidden></div>
         </div>
       </div>
@@ -9755,6 +9819,7 @@ Health & Hospitality	DIRECT	NL	West	West
   applyCachedExternalMapping();
   applyCachedProductsScmMapping();
   applyCachedAuthorizedManagers();
+  installGraphTokenRelayListener();
   removeExistingHelperArtifacts();
   addStyles();
   insertPortlet();
