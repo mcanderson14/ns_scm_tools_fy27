@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.112B
+// @version      27.0.0.113B
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -41,7 +41,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.112B";
+  const HELPER_VERSION = "27.0.0.113B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -5499,15 +5499,33 @@ Health & Hospitality	DIRECT	NL	West	West
       if (item.connectorBefore) return item.connectorBefore;
       return item.groupKey && item.groupKey === items[index - 1].groupKey ? "OR" : "AND";
     };
+    const groupRanges = new Map();
+    items.forEach((item, index) => {
+      if (!item.groupKey) return;
+      const range = groupRanges.get(item.groupKey) || { first: index, last: index, count: 0 };
+      range.last = index;
+      range.count += 1;
+      groupRanges.set(item.groupKey, range);
+    });
+    const opensGroup = (item, index) => {
+      const range = item.groupKey && groupRanges.get(item.groupKey);
+      return Boolean(range && range.count > 1 && range.first === index);
+    };
+    const closesGroup = (item, index) => {
+      const range = item.groupKey && groupRanges.get(item.groupKey);
+      return Boolean(range && range.count > 1 && range.last === index);
+    };
     summary.classList.toggle("is-empty", !items.length);
     summary.innerHTML = items.length
       ? items.map((item, index) => `
           ${connectorFor(item, index) ? `<span class="scr-helper-filter-operator is-${escapeHtml(connectorFor(item, index).toLowerCase())}" title="${escapeHtml(connectorFor(item, index) === "OR" ? "Either filter value can match" : "Both filter groups must match")}">${escapeHtml(connectorFor(item, index))}</span>` : ""}
+          ${opensGroup(item, index) ? `<span class="scr-helper-filter-paren" aria-hidden="true">(</span>` : ""}
           <span class="scr-helper-filter-chip${item.removable ? " is-removable" : ""}">
             <span>${escapeHtml(item.label)}</span>
             <strong>${escapeHtml(item.value)}</strong>
             ${item.removable ? `<button type="button" class="scr-helper-filter-chip-remove" data-filter-remove="${escapeHtml(item.removeType)}" data-filter-key="${escapeHtml(item.removeKey || "")}" data-filter-value="${escapeHtml(item.value)}" aria-label="Remove ${escapeHtml(item.value)}">×</button>` : ""}
           </span>
+          ${closesGroup(item, index) ? `<span class="scr-helper-filter-paren" aria-hidden="true">)</span>` : ""}
         `).join("")
       : `<span class="scr-helper-filter-empty">No filters applied</span>`;
   }
@@ -9453,6 +9471,15 @@ Health & Hospitality	DIRECT	NL	West	West
 
       #${HELPER_ID} .scr-helper-filter-operator.is-or {
         background: var(--rw-pine-100);
+      }
+
+      #${HELPER_ID} .scr-helper-filter-paren {
+        display: inline-flex;
+        align-items: center;
+        color: var(--rw-slate-150);
+        font-size: 20px;
+        font-weight: 900;
+        line-height: 1;
       }
 
       #${HELPER_ID} .scr-helper-filter-chip {
