@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.114B
+// @version      27.0.0.116B
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -41,7 +41,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.114B";
+  const HELPER_VERSION = "27.0.0.116B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -1853,6 +1853,12 @@ Health & Hospitality	DIRECT	NL	West	West
     const tags = ["#xvr", tag, markerTag].map(normalizeSpaces).filter(Boolean);
     if (ownerName) tags.push(scmOwnerTag(ownerName));
     return [cleaned].concat(tags).filter(Boolean).join(", ");
+  }
+
+  function valueWithScmOwnerTag(value, ownerName) {
+    const cleaned = stripScmOwnerTags(value);
+    const tag = scmOwnerTag(ownerName);
+    return [cleaned, tag].filter(Boolean).join(", ");
   }
 
   function cleanPersonName(value) {
@@ -4937,13 +4943,17 @@ Health & Hospitality	DIRECT	NL	West	West
 
   function renderAssignedToWithOwnership(row, assignedTo) {
     const assignedName = normalizeSpaces(assignedTo);
-    const isMine = rowAssignedToMatchesCurrentUser(row);
+    const isAssignedMine = rowAssignedToMatchesCurrentUser(row);
+    const isExplicitOwnerMine = rowExplicitScmOwnerMatchesCurrentUser(row);
+    const isMine = isAssignedMine || isExplicitOwnerMine;
     const disabled = !row.internalId || isMine ? "disabled" : "";
     const title = !row.internalId
       ? "No SCR internal id was returned on this row."
-      : isMine
+      : isExplicitOwnerMine
+        ? "This SCR is already explicitly owned by you."
+        : isAssignedMine
         ? "This SCR is already assigned to you."
-        : "Assign this SCR to the current user.";
+        : "Set the current user as explicit SCM owner.";
 
     return `
       <div class="scr-helper-assigned-line">
@@ -5261,6 +5271,16 @@ Health & Hospitality	DIRECT	NL	West	West
 
   function rowAssignedToCurrentUser(row) {
     return rowAssignedToMatchesCurrentUser(row) || currentUserOwnsEpmRow(row);
+  }
+
+  function currentExplicitScmOwnerName() {
+    return currentProductsScmUserName() || getCurrentUserName();
+  }
+
+  function rowExplicitScmOwnerMatchesCurrentUser(row) {
+    const owner = productsScmExplicitOwner(row);
+    const currentOwner = currentExplicitScmOwnerName();
+    return Boolean(owner && owner.scm && currentOwner && personMatchesNames(owner.scm, [currentOwner, getCurrentUserName()]));
   }
 
   function rowMatchesFilters(row, controls) {
@@ -8210,7 +8230,7 @@ Health & Hospitality	DIRECT	NL	West	West
       function updateSaveLabel() {
         const ownerName = selectedOwner();
         routeOnly.textContent = "Route to Industry";
-        save.textContent = "Route to SCM Owner";
+        save.textContent = ownerName ? `Route to ${ownerName}` : "Route to SCM Owner";
         save.disabled = !ownerName;
         save.classList.toggle("is-ready", Boolean(ownerName));
         if (notifyInput) {
@@ -8336,15 +8356,10 @@ Health & Hospitality	DIRECT	NL	West	West
   }
 
   function updateOwnershipDisplay(button, ownerName) {
-    const line = button && button.closest(".scr-helper-assigned-line");
-    const nameNode = line && line.querySelector(".scr-helper-assigned-name");
-    if (nameNode) {
-      nameNode.textContent = ownerName || "Current user";
-    }
     if (button) {
       button.textContent = "Owned by Me";
       button.disabled = true;
-      button.title = "This SCR is already assigned to you.";
+      button.title = "This SCR is explicitly owned by you.";
     }
   }
 
@@ -8365,17 +8380,18 @@ Health & Hospitality	DIRECT	NL	West	West
     setStaffingNotesStatus(card, "");
 
     try {
-      const owner = await lookupCurrentUserRoster();
-      if (!owner || !owner.id) {
-        throw new Error("Could not find the current user in the SC roster.");
+      const ownerName = cleanPersonName(currentExplicitScmOwnerName());
+      if (!ownerName) {
+        throw new Error("Could not determine the current user.");
       }
 
-      const ownerName = cleanPersonName(owner.name) || getCurrentUserName() || "Current user";
       const ownershipNote = normalizeMultiline(row.staffingNotes) ? "" : promptForOwnershipNote(ownerName);
-      setOwnershipStatus(button, `Opening SCR and assigning to ${ownerName}...`);
-      setStaffingNotesStatus(card, `⏳ Assigning to ${ownerName}...`, "working");
-      await submitAssignee(row, owner.id);
-      updateRowAssignedTo(row, ownerName);
+      setOwnershipStatus(button, `Saving explicit SCM owner ${ownerName}...`);
+      setStaffingNotesStatus(card, `⏳ Saving explicit SCM owner ${ownerName}...`, "working");
+      const currentHashtags = row.hashtags || await lookupSingleField(row, HASHTAGS_FIELD_ID);
+      const nextHashtags = valueWithScmOwnerTag(currentHashtags, ownerName);
+      await submitHashtags(row, nextHashtags);
+      updateRowHashtags(row, nextHashtags);
       updateOwnershipDisplay(button, ownerName);
 
       if (ownershipNote) {
@@ -8386,20 +8402,21 @@ Health & Hospitality	DIRECT	NL	West	West
           const textarea = card && card.querySelector(".scr-helper-notes-input");
           if (textarea) textarea.value = ownershipNote;
         } catch (noteError) {
-          console.warn("SCR helper assigned ownership but could not save ownership note", noteError);
-          setOwnershipStatus(button, "Assigned, but note did not save.", "error");
-          setStaffingNotesStatus(card, "Assigned, but ownership note did not save.", "error");
+          console.warn("SCR helper saved explicit ownership but could not save ownership note", noteError);
+          setOwnershipStatus(button, "Owner saved, but note did not save.", "error");
+          setStaffingNotesStatus(card, "Owner saved, but ownership note did not save.", "error");
           return;
         }
       }
 
       setOwnershipStatus(button, "Ownership saved", "success");
       setStaffingNotesStatus(card, "Ownership saved", "success");
+      renderResults();
     } catch (error) {
       console.warn("SCR helper failed to take ownership", error);
-      button.disabled = rowAssignedToMatchesCurrentUser(row) || !row.internalId;
-      setOwnershipStatus(button, "Could not assign through background edit.", "error");
-      setStaffingNotesStatus(card, "Could not assign through background edit. Staff SCR is still available.", "error");
+      button.disabled = rowAssignedToMatchesCurrentUser(row) || rowExplicitScmOwnerMatchesCurrentUser(row) || !row.internalId;
+      setOwnershipStatus(button, "Could not save explicit owner.", "error");
+      setStaffingNotesStatus(card, "Could not save explicit SCM owner from this page. Staff SCR is still available.", "error");
     }
   }
 
@@ -10152,6 +10169,13 @@ Health & Hospitality	DIRECT	NL	West	West
       }
 
       .scr-helper-owner-modal-backdrop {
+        --ns-ui-primary: #36677D;
+        --ns-ui-primary-soft: #E7F2F5;
+        --ns-ui-primary-mid: #94BFCE;
+        --rw-neutral-30: #F1EFED;
+        --rw-slate-50: #C2D4D4;
+        --rw-slate-100: #697778;
+        --rw-slate-150: #3C4545;
         position: fixed;
         inset: 0;
         z-index: 2147483646;
@@ -10308,16 +10332,16 @@ Health & Hospitality	DIRECT	NL	West	West
       }
 
       .scr-helper-owner-modal-actions .scr-helper-owner-save {
-        border-color: var(--ns-ui-primary);
-        background: var(--ns-ui-primary);
+        border-color: var(--ns-ui-primary, #36677D);
+        background: var(--ns-ui-primary, #36677D);
         color: #ffffff;
         box-shadow: 0 2px 6px rgba(54, 103, 125, 0.22);
       }
 
       .scr-helper-owner-modal-actions .scr-helper-owner-route-only {
-        border-color: var(--ns-ui-primary-mid);
-        background: var(--ns-ui-primary-soft);
-        color: var(--ns-ui-primary);
+        border-color: var(--ns-ui-primary-mid, #94BFCE);
+        background: var(--ns-ui-primary-soft, #E7F2F5);
+        color: var(--ns-ui-primary, #36677D);
       }
 
       .scr-helper-owner-modal-actions button:disabled,
