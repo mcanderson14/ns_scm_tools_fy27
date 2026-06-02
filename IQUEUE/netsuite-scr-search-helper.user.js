@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.106B
+// @version      27.0.0.107B
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -18,7 +18,7 @@
 // @connect      github.com
 // @connect      raw.githubusercontent.com
 // @connect      graph.microsoft.com
-// @run-at       document-idle
+// @run-at       document-end
 // @downloadURL  https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js
 // @updateURL    https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js
 // ==/UserScript==
@@ -41,7 +41,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.106B";
+  const HELPER_VERSION = "27.0.0.107B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -7522,10 +7522,19 @@ Health & Hospitality	DIRECT	NL	West	West
     return rows;
   }
 
-  async function refreshRows() {
+  async function refreshRows(options = {}) {
     const sequence = ++refreshSequence;
     const status = document.getElementById("scr-helper-status");
     if (status) status.textContent = `Loading ${CURRENT_QUEUE.loadingLabel} (${SAVED_SEARCH_ID}).`;
+
+    const retryCount = options.retryCount || 0;
+    if (!findResultTable(document) && retryCount < 12) {
+      renderStartupSplash(`Waiting for NetSuite search results (${SAVED_SEARCH_ID}).`);
+      window.setTimeout(() => {
+        if (sequence === refreshSequence) refreshRows({ retryCount: retryCount + 1 });
+      }, 250);
+      return;
+    }
 
     const currentRows = parseSearchResults(document, "scr-row");
     searchResultTotal = Math.max(findSearchResultTotal(document), currentRows.length);
@@ -8467,6 +8476,38 @@ Health & Hospitality	DIRECT	NL	West	West
   function reloadPageWithHelperState() {
     saveHelperState();
     window.location.reload();
+  }
+
+  function afterNextPaint(callback) {
+    if (typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(() => window.requestAnimationFrame(callback));
+      return;
+    }
+    window.setTimeout(callback, 0);
+  }
+
+  function scheduleBackgroundTask(callback, delay = 750) {
+    if (typeof window.requestIdleCallback === "function") {
+      window.requestIdleCallback(callback, { timeout: delay + 1000 });
+      return;
+    }
+    window.setTimeout(callback, delay);
+  }
+
+  function renderStartupSplash(message = "Loading IQUEUE...") {
+    const list = document.getElementById("scr-helper-results");
+    const status = document.getElementById("scr-helper-status");
+    if (status) status.textContent = message;
+    if (!list || searchRows.length) return;
+    list.innerHTML = `
+      <div class="scr-helper-loading-splash" role="status" aria-live="polite">
+        <div class="scr-helper-loading-mark">⏳</div>
+        <div>
+          <div class="scr-helper-loading-title">Loading IQUEUE</div>
+          <div class="scr-helper-loading-text">${escapeHtml(message)}</div>
+        </div>
+      </div>
+    `;
   }
 
   function setupPortletResize(portlet) {
@@ -9572,6 +9613,44 @@ Health & Hospitality	DIRECT	NL	West	West
         padding: 12px 16px 16px;
       }
 
+      #${HELPER_ID} .scr-helper-loading-splash {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 148px;
+        border: 1px solid var(--rw-slate-50);
+        border-radius: 8px;
+        padding: 18px;
+        background: linear-gradient(90deg, var(--rw-ocean-30), #ffffff 72%);
+        color: var(--rw-slate-150);
+        box-shadow: inset 4px 0 0 var(--ns-ui-primary);
+      }
+
+      #${HELPER_ID} .scr-helper-loading-mark {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 38px;
+        height: 38px;
+        border-radius: 999px;
+        background: #fff4d8;
+        color: #7a4a00;
+        font-size: 18px;
+      }
+
+      #${HELPER_ID} .scr-helper-loading-title {
+        color: var(--ns-ui-primary);
+        font-size: 15px;
+        font-weight: 800;
+      }
+
+      #${HELPER_ID} .scr-helper-loading-text {
+        margin-top: 3px;
+        color: var(--rw-slate-100);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
       #${HELPER_ID}.scr-helper-fullscreen .scr-helper-summary-grid {
         grid-template-columns: repeat(5, minmax(0, 1fr));
       }
@@ -10263,15 +10342,35 @@ Health & Hospitality	DIRECT	NL	West	West
     document.head.appendChild(style);
   }
 
-  applyCachedExternalMapping();
-  applyCachedProductsScmMapping();
-  applyCachedAuthorizedManagers();
-  installGraphTokenRelayListener();
-  removeExistingHelperArtifacts();
-  addStyles();
-  insertPortlet();
-  refreshRows();
-  loadExternalMapping();
-  loadProductsScmMapping();
-  loadAuthorizedManagers();
+  function applyStartupCachedData() {
+    applyCachedExternalMapping();
+    applyCachedProductsScmMapping();
+    applyCachedAuthorizedManagers();
+    updateMappingFilterOptions();
+    updateProductsScmControls();
+    updateFilterSummary();
+  }
+
+  function loadStartupBackgroundData() {
+    loadExternalMapping();
+    loadProductsScmMapping();
+    loadAuthorizedManagers();
+  }
+
+  function startHelper() {
+    installGraphTokenRelayListener();
+    removeExistingHelperArtifacts();
+    addStyles();
+    insertPortlet();
+    renderStartupSplash(`Preparing ${CURRENT_QUEUE.loadingLabel}.`);
+
+    afterNextPaint(() => {
+      renderStartupSplash(`Loading ${CURRENT_QUEUE.loadingLabel} (${SAVED_SEARCH_ID}).`);
+      applyStartupCachedData();
+      refreshRows();
+      scheduleBackgroundTask(loadStartupBackgroundData, 900);
+    });
+  }
+
+  startHelper();
 })();
