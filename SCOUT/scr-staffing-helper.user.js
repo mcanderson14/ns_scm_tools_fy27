@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.0.5
+// @version      27.0.7
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.0.5
+   SCOUT — SC Operations Utility Tool  27.0.7
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.0.5';
+  const SCRIPT_VERSION = '27.0.7';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -4498,10 +4498,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
                 <div class="sc-field">
                   <label class="sc-label">SC Region</label>
-                  <select id="sc-filter-region" multiple size="3">
+                  <select id="sc-filter-region" multiple size="4">
                     <option value="48">East</option>
                     <option value="49">Central</option>
                     <option value="50">West</option>
+                    <option value="South">South</option>
                   </select>
                   <div class="sc-field-hint">Ctrl+click for multiple.</div>
                 </div>
@@ -4676,10 +4677,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
                 <div class="sc-field">
                   <label class="sc-label">SC Region</label>
-                  <select id="sc-amo-filter-region" multiple size="3">
+                  <select id="sc-amo-filter-region" multiple size="4">
                     <option value="48">East</option>
                     <option value="49">Central</option>
                     <option value="50">West</option>
+                    <option value="South">South</option>
                   </select>
                   <div class="sc-field-hint">Ctrl+click for multiple.</div>
                 </div>
@@ -4950,8 +4952,10 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const footer = `----- end of SC assignment ----\n\n`;
     const baseNote = String(requestDetailsScript || '');
     const additionalDetails = buildAdditionalRequestDetailsBlock(requestDetailsNote);
-    const separator = additionalDetails && baseNote && !/\n$/.test(baseNote) ? '\n' : '';
-    return header + baseNote + separator + additionalDetails + footer;
+    const bodyParts = [];
+    if (additionalDetails) bodyParts.push(additionalDetails.trimEnd());
+    if (baseNote) bodyParts.push(baseNote.trimEnd());
+    return header + (bodyParts.length ? `${bodyParts.join('\n\n')}\n` : '') + footer;
   }
 
   function getCurrentScrId() {
@@ -6578,9 +6582,16 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       f.push(new nlobjSearchFilter('custrecord_emproster_vertical_amo', joinField, 'anyof', opts.vertical));
     if (opts.tier && opts.tier.length > 0)
       f.push(new nlobjSearchFilter('custrecord_emproster_sales_tier', joinField, 'anyof', opts.tier));
-    if (SCOUT_CAN_READ_SALES_SUBREGION && opts.region && opts.region.length > 0)
-      f.push(new nlobjSearchFilter('custrecord_emproster_salessubregion', joinField, 'anyof', opts.region));
+    const serverRegions = getServerRegionFilterValues(opts);
+    if (SCOUT_CAN_READ_SALES_SUBREGION && serverRegions.length > 0)
+      f.push(new nlobjSearchFilter('custrecord_emproster_salessubregion', joinField, 'anyof', serverRegions));
     return f;
+  }
+
+  function getServerRegionFilterValues(opts) {
+    const values = (opts && opts.region || []).map(value => String(value || '').trim()).filter(Boolean);
+    if (!values.length) return [];
+    return values.every(value => /^\d+$/.test(value)) ? values : [];
   }
 
   function getSkillData(skillIds, empRec, empIds, filterOpts) {
@@ -6666,6 +6677,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       new nlobjSearchColumn('custrecord_sr_ind_rating'),
       new nlobjSearchColumn('custrecord_emproster_emp', join),
       new nlobjSearchColumn('custrecord_emproster_salesteam', join),
+      ...salesSubregionColumns(join),
       ...verticalAmoColumns(join),
     ];
     const results = nlapiSearchRecord('customrecord_sr_industry_rating_entry', null, filters, cols);
@@ -6675,6 +6687,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       employee:       r.getText('custrecord_sr_ind_rating_employee'),
       employeeRecId:  r.getValue('custrecord_emproster_emp', join) || '',
       salesteam:      r.getText('custrecord_emproster_salesteam', join) || '',
+      region:         readSalesSubregion(r, join),
       vertical:       readVerticalAmo(r, join),
       industryRating: parseRatingValue(r.getText('custrecord_sr_ind_rating') || r.getValue('custrecord_sr_ind_rating')),
     })).filter(r => parseInt(r.industryRating, 10) >= 1);
@@ -6987,6 +7000,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         ...managerAvailResColumns(null),
         new nlobjSearchColumn('custrecord_emproster_emp'),
         new nlobjSearchColumn('custrecord_emproster_salesteam'),
+        ...salesSubregionColumns(null),
         new nlobjSearchColumn('email', 'custrecord_emproster_emp'),
       ];
       const results = nlapiSearchRecord('customrecord_emproster', null, filters, cols);
@@ -7001,6 +7015,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           availRes:      readManagerAvailRes(r, null),
           employeeRecId: r.getValue('custrecord_emproster_emp')               || '',
           salesteam:     r.getText('custrecord_emproster_salesteam')          || '',
+          region:        readSalesSubregion(r, null),
           email:         r.getValue('email', 'custrecord_emproster_emp')      || '',
         };
       });
@@ -7012,6 +7027,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         m.availRes     = d.availRes;
         m.employeeRecId = d.employeeRecId;
         m.salesteam    = d.salesteam;
+        if (d.region) m.region = d.region;
         m.email        = d.email;
       });
     } catch (e) {
@@ -8617,6 +8633,22 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     });
   }
 
+  function normalizeRegionFilter(value) {
+    return normalizeLoose(value);
+  }
+
+  function applyRegionFilter(members, filterOpts) {
+    const selected = (filterOpts && filterOpts.regionText || filterOpts && filterOpts.region || [])
+      .map(normalizeRegionFilter)
+      .filter(Boolean);
+    if (!selected.length || !SCOUT_CAN_READ_SALES_SUBREGION) return members || [];
+    return (members || []).filter(member => {
+      const region = normalizeRegionFilter(member && member.region);
+      if (!region) return false;
+      return selected.some(target => region === target || region.includes(target) || target.includes(region));
+    });
+  }
+
   function getMyTeamRosterIdSet(empIds) {
     if (MY_TEAM_ROSTER_IDS && MY_TEAM_ROSTER_IDS.size) return MY_TEAM_ROSTER_IDS;
     const ids = new Set();
@@ -8677,6 +8709,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       verticalText: getMultiSelectTexts('sc-filter-vertical'),
       tier:     [],
       region:   getMultiSelectValues('sc-filter-region'),
+      regionText: getMultiSelectTexts('sc-filter-region'),
     };
     const sortKey = document.getElementById('sc-filter-sort').value || 'isa';
     const matchOperator = document.getElementById('sc-filter-operator').value || 'any';
@@ -8697,6 +8730,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         consolidated          = applyAdditionalSkillFilters(consolidated, additionalSkillOpts);
         enrichMembersWithRosterData(consolidated);
         consolidated = consolidated.filter(e => !isExcludedVertical(e.vertical));
+        consolidated = applyRegionFilter(consolidated, filterOpts);
         consolidated = applyMyTeamLimit(consolidated, filterOpts, empIds);
 
         // Fetch emails for View Cal buttons
@@ -8747,6 +8781,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       verticalText: getMultiSelectTexts('sc-amo-filter-vertical'),
       tier:     [],
       region:   getMultiSelectValues('sc-amo-filter-region'),
+      regionText: getMultiSelectTexts('sc-amo-filter-region'),
     };
     const sortKey = document.getElementById('sc-amo-filter-sort').value || 'isa';
     const matchOperator = document.getElementById('sc-amo-filter-operator').value || 'any';
@@ -8819,6 +8854,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               new nlobjSearchColumn('internalid',          indJoin),
               new nlobjSearchColumn('custrecord_sr_ind_rating'),
               new nlobjSearchColumn('custrecord_emproster_salesteam', indJoin),
+              ...salesSubregionColumns(indJoin),
               ...verticalAmoColumns(indJoin),
               new nlobjSearchColumn('custrecord_emproster_emp', indJoin),
             ];
@@ -8829,6 +8865,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                 employee:       r.getText('custrecord_sr_ind_rating_employee'),
                 employeeRecId:  r.getValue('custrecord_emproster_emp', indJoin) || '',
                 salesteam:      r.getText('custrecord_emproster_salesteam', indJoin),
+                region:         readSalesSubregion(r, indJoin),
                 vertical:       readVerticalAmo(r, indJoin),
                 industryRating: parseRatingValue(r.getText('custrecord_sr_ind_rating') || r.getValue('custrecord_sr_ind_rating')),
               }))
@@ -8845,6 +8882,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         enrichMembersWithRosterData(consolidated);
         consolidated = consolidated.filter(e => !isExcludedVertical(e.vertical));
         consolidated = applySalesVerticalFilter(consolidated, filterOpts);
+        consolidated = applyRegionFilter(consolidated, filterOpts);
         consolidated = applyMyTeamLimit(consolidated, filterOpts, empIds);
 
         const rosterIds = [...new Set(consolidated.map(e => e.employeeId))];
