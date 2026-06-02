@@ -383,7 +383,7 @@
   <header>
     <div class="brand-row">
       <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
-      <span class="version-pill">v27.0.10</span>
+      <span class="version-pill">v27.0.11</span>
     </div>
     <div class="header-copy">
       <h1>SC Calendar Refresh</h1>
@@ -627,6 +627,11 @@
     const GRAPH_EXPLORER_TOKEN_VAULT_KEY = "sc-staffing-dashboard-graph-explorer-token-vault-v2";
     const GRAPH_EXPLORER_LOCAL_KEY_KEY = "sc-staffing-dashboard-graph-explorer-local-key-v1";
     const GRAPH_GET_SCHEDULE_URL = "https://graph.microsoft.com/v1.0/me/calendar/getSchedule";
+    const IQUEUE_GRAPH_TOKEN_RELAY_KIND = "iqueue-graph-token-relay-v1";
+    const IQUEUE_GRAPH_TOKEN_RELAY_TARGETS = [
+      "https://nlcorp.app.netsuite.com",
+      "https://nlcorp-sb2.app.netsuite.com"
+    ];
     const GRAPH_TIME_ZONE_MAP = {
       "UTC": "UTC",
       "Etc/UTC": "UTC",
@@ -2594,6 +2599,37 @@
       return `Expires ${date.toLocaleString()} (${relative})`;
     }
 
+    function iqueueRelayRequested() {
+      try {
+        return new URLSearchParams(window.location.search).has("iqueueRelay");
+      } catch {
+        return false;
+      }
+    }
+
+    function postIqueueGraphTokenRelay(token, source = "calendar-refresh") {
+      const normalizedToken = String(token || "").trim().replace(/^Bearer\s+/i, "");
+      if (!normalizedToken || !iqueueRelayRequested() || !window.opener) return;
+      const payload = {
+        kind: IQUEUE_GRAPH_TOKEN_RELAY_KIND,
+        token: normalizedToken,
+        expiresAt: getGraphExplorerTokenExpiry(normalizedToken) || 0,
+        source
+      };
+      IQUEUE_GRAPH_TOKEN_RELAY_TARGETS.forEach(origin => {
+        try {
+          window.opener.postMessage(payload, origin);
+        } catch {
+          // Ignore relay failures; the saved token remains available on this page.
+        }
+      });
+      setGraphExplorerStatus([
+        { text: "Saved token ready", tone: "good" },
+        payload.expiresAt ? { text: formatTokenExpiry(payload.expiresAt), tone: "good" } : null,
+        { text: "IQUEUE token sync sent", tone: "good" }
+      ]);
+    }
+
     async function getStoredGraphExplorerToken() {
       const record = readGraphExplorerTokenVault();
       if (!record) return null;
@@ -2633,6 +2669,7 @@
           record.expiresAt ? { text: formatTokenExpiry(record.expiresAt), tone: "good" } : null
         ]);
       }
+      postIqueueGraphTokenRelay(normalizedToken, "calendar-refresh:save");
       return record;
     }
 
@@ -2667,6 +2704,7 @@
         { text: "Saved token ready", tone: "good" },
         stored.expiresAt ? { text: formatTokenExpiry(stored.expiresAt), tone: "good" } : null
       ]);
+      postIqueueGraphTokenRelay(stored.token, "calendar-refresh:load");
       updateFormReadiness();
     }
 
