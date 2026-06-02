@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.102B
+// @version      27.0.0.104B
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -41,7 +41,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.102B";
+  const HELPER_VERSION = "27.0.0.104B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -1233,6 +1233,7 @@ Health & Hospitality	DIRECT	NL	West	West
   let currentUserNameCache;
   let currentUserRosterCache;
   const rosterAssigneeLookupCache = new Map();
+  const salesRepEmailLookupCache = new Map();
   let refreshSequence = 0;
   let helperState = readHelperState();
   if (!Object.prototype.hasOwnProperty.call(helperState, "maximized")) helperState.maximized = true;
@@ -3136,17 +3137,23 @@ Health & Hospitality	DIRECT	NL	West	West
     if (!text) return "";
     const commaName = text.match(/^([^,]+),\s*(.+)$/);
     let first = "";
+    let middle = "";
     let last = "";
     if (commaName) {
       last = normalizeSpaces(commaName[1]).split(/\s+/)[0] || "";
-      first = normalizeSpaces(commaName[2]).split(/\s+/)[0] || "";
+      const givenParts = normalizeSpaces(commaName[2]).split(/\s+/).filter(Boolean);
+      first = givenParts[0] || "";
+      middle = givenParts.length === 2 && /^[A-Za-z]\.?$/.test(givenParts[1]) ? givenParts[1] : "";
     } else {
       const parts = text.split(/\s+/).filter(Boolean);
       first = parts[0] || "";
       last = parts.length > 1 ? parts[parts.length - 1] : "";
+      middle = parts.length === 3 && /^[A-Za-z]\.?$/.test(parts[1]) ? parts[1] : "";
     }
     const cleanFirst = first.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const cleanMiddle = middle.toLowerCase().replace(/[^a-z0-9]/g, "");
     const cleanLast = last.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (cleanFirst && cleanMiddle && cleanLast) return `${cleanFirst}.${cleanMiddle}.${cleanLast}@oracle.com`;
     return cleanFirst && cleanLast ? `${cleanFirst}.${cleanLast}@oracle.com` : "";
   }
 
@@ -3165,7 +3172,7 @@ Health & Hospitality	DIRECT	NL	West	West
 
   function authorizedManagerEmailForName(name) {
     const manager = authorizedManagerForName(name);
-    return normalizeSpaces(manager && manager.email || inferOracleEmailFromName(name));
+    return normalizeSpaces(manager && manager.email || inferOracleEmailFromName(name) || cleanPersonName(name));
   }
 
   function readCachedAuthorizedManagers() {
@@ -4958,7 +4965,10 @@ Health & Hospitality	DIRECT	NL	West	West
       <div class="scr-helper-notes-editor">
         <textarea class="scr-helper-notes-input" data-row-id="${escapeHtml(row.id)}" placeholder="No staffing notes yet.">${escapeHtml(notes || "")}</textarea>
         <div class="scr-helper-notes-actions">
-          <button type="button" class="scr-helper-notes-save" data-row-id="${escapeHtml(row.id)}" ${disabled}>Save notes</button>
+          <div class="scr-helper-notes-button-stack">
+            <button type="button" class="scr-helper-notes-save" data-row-id="${escapeHtml(row.id)}" ${disabled}>Save notes</button>
+            <button type="button" class="scr-helper-request-info" data-row-id="${escapeHtml(row.id)}" ${disabled}>Request info</button>
+          </div>
           <span class="scr-helper-notes-status${notice && notice.state ? ` is-${escapeHtml(notice.state)}` : ""}" aria-live="polite">${notice ? escapeHtml(notice.message) : ""}</span>
           ${noticeLinks}
         </div>
@@ -6457,6 +6467,315 @@ Health & Hospitality	DIRECT	NL	West	West
     const email = authorizedManagerEmailForName(ownerName);
     if (!email) throw new Error(`No email address found for ${ownerName} in Authorized Managers.`);
     return openOwnerRouteEmailDraft(row, ownerName, target, email, "Owner notifications use Outlook drafts.");
+  }
+
+  function findSalesRepField(fields) {
+    const direct = findField(fields, [
+      /sales\s*rep$/, /salesrep$/, /opp.*sales.*rep/, /sales.*representative/
+    ], [/manager/, /mgr/, /yrs.*live/, /regional/, /director/, /vp/, /leader/]);
+    if (direct) return direct;
+
+    return (fields || []).find(field => {
+      const text = `${field.label || ""} ${field.value || ""} ${field.rawValue || ""}`;
+      return /sales\s*rep\s*:/i.test(text)
+        && !/sales\s*rep\s*(?:manager|mgr|yrs)/i.test(text)
+        && !/(regional\s*(?:director|dir|vp)|industry\s*leader|sales\s*director|sales\s*dir)/i.test(text);
+    }) || null;
+  }
+
+  function salesRepEmployeeIdFromField(field, salesRepName) {
+    if (!field || !Array.isArray(field.links) || !field.links.length) return "";
+    const employeeLinks = field.links.filter(link => (
+      /employee|\/entity\/employee|empcenter/i.test(link.href || "")
+    ));
+    if (!employeeLinks.length) return "";
+
+    const targetKeys = personNameKeys(salesRepName);
+    const namedLink = employeeLinks.find(link => personKeyListsOverlap(personNameKeys(link.text), targetKeys));
+    const link = namedLink || (employeeLinks.length === 1 ? employeeLinks[0] : null);
+    return recordIdFromUrl(link && link.href);
+  }
+
+  function pickEmployeeEmailMatch(rows, names) {
+    const candidates = (rows || []).filter(row => row && row.email);
+    if (!candidates.length) return null;
+
+    const variants = [...new Set(names.flatMap(rosterNameVariants))];
+    const targetKeys = names.flatMap(personNameKeys);
+    const exact = candidates.find(row => {
+      const rowName = normalizeRosterName(row.name);
+      return rowName && variants.some(variant => rowName === variant || rowName.includes(variant) || variant.includes(rowName));
+    });
+    if (exact) return exact;
+
+    const keyed = candidates.find(row => personKeyListsOverlap(personNameKeys(row.name), targetKeys));
+    return keyed || (candidates.length === 1 ? candidates[0] : null);
+  }
+
+  function employeeLookupRow(id, name, email, source) {
+    const cleanEmail = normalizeSpaces(email);
+    if (!cleanEmail) return null;
+    return {
+      id: normalizeSpaces(id),
+      name: cleanPersonName(name),
+      email: cleanEmail,
+      source: source || "employee"
+    };
+  }
+
+  function lookupEmployeeEmailWithNlapi(pageWindow, names, employeeId) {
+    if (employeeId && typeof pageWindow.nlapiLookupField === "function") {
+      const email = normalizeLookupFieldValue(pageWindow.nlapiLookupField("employee", employeeId, "email"));
+      const name = normalizeLookupFieldValue(pageWindow.nlapiLookupField("employee", employeeId, "entityid"));
+      const row = employeeLookupRow(employeeId, name || names[0], email, "employee record");
+      if (row) return row;
+    }
+
+    if (typeof pageWindow.nlapiSearchRecord !== "function" || typeof pageWindow.nlobjSearchFilter !== "function") {
+      return null;
+    }
+
+    for (const term of rosterSearchTerms(names)) {
+      const filters = [
+        new pageWindow.nlobjSearchFilter("entityid", null, "contains", term),
+        new pageWindow.nlobjSearchFilter("isinactive", null, "is", "F")
+      ];
+      const columns = [
+        new pageWindow.nlobjSearchColumn("internalid"),
+        new pageWindow.nlobjSearchColumn("entityid"),
+        new pageWindow.nlobjSearchColumn("email")
+      ];
+      const results = pageWindow.nlapiSearchRecord("employee", null, filters, columns) || [];
+      const rows = results.map(result => employeeLookupRow(
+        result.getValue("internalid") || result.getId && result.getId(),
+        result.getValue("entityid") || result.getText("entityid"),
+        result.getValue("email"),
+        "employee search"
+      )).filter(Boolean);
+      const match = pickEmployeeEmailMatch(rows, names);
+      if (match) return match;
+    }
+
+    return null;
+  }
+
+  function lookupEmployeeEmailWithRequire(pageWindow, names, employeeId) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      let timer;
+      const finish = callback => result => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        callback(result);
+      };
+      timer = setTimeout(finish(reject), 8000, new Error("Timed out resolving Sales Rep email."));
+
+      try {
+        pageWindow.require(["N/search"], search => {
+          try {
+            const employeeType = search.Type && search.Type.EMPLOYEE || "employee";
+            if (employeeId) {
+              const result = search.lookupFields({
+                type: employeeType,
+                id: employeeId,
+                columns: ["entityid", "email"]
+              });
+              finish(resolve)(employeeLookupRow(
+                employeeId,
+                normalizeLookupFieldValue(result && result.entityid) || names[0],
+                normalizeLookupFieldValue(result && result.email),
+                "employee record"
+              ));
+              return;
+            }
+
+            for (const term of rosterSearchTerms(names)) {
+              const results = search.create({
+                type: employeeType,
+                filters: [["entityid", "contains", term], "AND", ["isinactive", "is", "F"]],
+                columns: ["internalid", "entityid", "email"]
+              }).run().getRange({ start: 0, end: 25 }) || [];
+              const rows = results.map(result => employeeLookupRow(
+                result.getValue({ name: "internalid" }),
+                result.getValue({ name: "entityid" }),
+                result.getValue({ name: "email" }),
+                "employee search"
+              )).filter(Boolean);
+              const match = pickEmployeeEmailMatch(rows, names);
+              if (match) {
+                finish(resolve)(match);
+                return;
+              }
+            }
+            finish(resolve)(null);
+          } catch (error) {
+            finish(reject)(error);
+          }
+        }, finish(reject));
+      } catch (error) {
+        finish(reject)(error);
+      }
+    });
+  }
+
+  async function resolveSalesRepEmail(row) {
+    const summary = buildRowSummary(row);
+    const salesRepName = cleanPersonName(summary.salesRep);
+    if (!salesRepName) throw new Error("No Sales Rep was returned on this SCR row.");
+
+    const fields = row && (row.allFields || row.fields) || [];
+    const salesRepField = findSalesRepField(fields);
+    const employeeId = salesRepEmployeeIdFromField(salesRepField, salesRepName);
+    const cacheKey = employeeId
+      ? `id:${employeeId}`
+      : `name:${personNameKeys(salesRepName).sort().join("|") || normalizeKey(salesRepName)}`;
+    if (salesRepEmailLookupCache.has(cacheKey)) return salesRepEmailLookupCache.get(cacheKey);
+
+    const names = [salesRepName];
+    const pageWindow = getPageWindow();
+    let match = null;
+    if (pageWindow && (typeof pageWindow.nlapiLookupField === "function" || typeof pageWindow.nlapiSearchRecord === "function")) {
+      try {
+        match = lookupEmployeeEmailWithNlapi(pageWindow, names, employeeId);
+      } catch (error) {
+        console.warn("IQUEUE nlapi employee email lookup failed", error);
+      }
+    }
+    if (!match && pageWindow && typeof pageWindow.require === "function") {
+      try {
+        match = await lookupEmployeeEmailWithRequire(pageWindow, names, employeeId);
+      } catch (error) {
+        console.warn("IQUEUE N/search employee email lookup failed", error);
+      }
+    }
+    if (!match) {
+      const inferred = inferOracleEmailFromName(salesRepName);
+      match = inferred
+        ? employeeLookupRow("", salesRepName, inferred, "oracle email fallback")
+        : {
+          id: "",
+          name: salesRepName,
+          email: salesRepName,
+          source: "Outlook name resolution"
+        };
+    }
+    if (!match || !match.email) throw new Error(`No Sales Rep recipient was available for ${salesRepName}.`);
+
+    const resolved = {
+      name: match.name || salesRepName,
+      email: match.email,
+      source: match.source || "employee"
+    };
+    salesRepEmailLookupCache.set(cacheKey, resolved);
+    return resolved;
+  }
+
+  function requestInfoQueueLabel(row) {
+    const info = getCrossIndustryInfoForRow(row);
+    if (info.targets.length) return info.targets.map(target => target.family).join(", ");
+    if (info.includeAll) return "All industry queues";
+    return primaryDisplayedIndustryFamily(row) || row && row.industryFamily || "Unknown";
+  }
+
+  function requestInfoOwnerName(row) {
+    const mappedOwner = productsScmOwnerForRow(row);
+    return currentProductsScmUserName()
+      || getCurrentUserName()
+      || mappedOwner && mappedOwner.scm
+      || "IQUEUE user";
+  }
+
+  function requesterInfoMailSubject(row) {
+    const summary = buildRowSummary(row);
+    const scrLabel = formatScrTitlePrefix(row.scrDisplayId) || row.title || "SC Request";
+    return normalizeSpaces(`Questions regarding ${scrLabel}${summary.opportunityDisplay ? ` | ${summary.opportunityDisplay}` : ""}`).slice(0, 240);
+  }
+
+  function requesterInfoMailText(row) {
+    const summary = buildRowSummary(row);
+    const ownerName = requestInfoOwnerName(row);
+    const scrLabel = formatScrTitlePrefix(row.scrDisplayId) || row.title || "SC Request";
+    const editUrl = editUrlForRow(row);
+    const ownerTag = scmOwnerTag(ownerName);
+    const lines = [
+      `${ownerName} has questions regarding a submitted SC Request:`,
+      "",
+      [scrLabel, summary.opportunityDisplay || "Missing Opportunity", summary.companyDisplay].filter(Boolean).join(" | "),
+      "",
+      `SCM Owner: ${ownerName}`,
+      `Cross Industry Queue: ${requestInfoQueueLabel(row)}`,
+      `Request Type: ${requestTypeLabel(row.amoDirect) || "Unknown"}`,
+      `Date Needed: ${summary.dateNeeded || "Unknown"}`,
+      `Company: ${summary.companyDisplay || "Unknown"}`,
+      `Opportunity: ${summary.opportunityDisplay || "Missing Opportunity"}`,
+      `Sales Rep: ${summary.salesRep || "Unknown"}`,
+      `Regional Director: ${summary.salesDirector || "Unknown"}`,
+      `SCM Hashtag: ${ownerTag || "Unknown"}`,
+      editUrl ? `Open SCR: ${editUrl}` : ""
+    ];
+    return lines.filter(line => line !== "").join("\r\n");
+  }
+
+  function buildEmailComposeDraft(email, subject, body, labels = {}) {
+    const compactBody = body.length > 1400
+      ? `${body.slice(0, 1350)}\r\n\r\n[Details trimmed for draft length. Open the SCR for full context.]`
+      : body;
+    const outlookUrl = `https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(email)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(compactBody)}`;
+    const mailtoUrl = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(compactBody)}`;
+    return {
+      email,
+      subject,
+      body: compactBody,
+      mailtoUrl,
+      outlookUrl,
+      links: [
+        { label: labels.mailto || "Open email compose", href: mailtoUrl },
+        { label: labels.outlook || "Outlook web fallback", href: outlookUrl }
+      ]
+    };
+  }
+
+  function looksLikeEmailAddress(value) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeSpaces(value));
+  }
+
+  function openMailtoCompose(mailtoUrl) {
+    try {
+      const link = document.createElement("a");
+      link.href = mailtoUrl;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      console.warn("IQUEUE mailto compose click failed", error);
+      try {
+        window.location.href = mailtoUrl;
+      } catch (locationError) {
+        console.warn("IQUEUE mailto compose navigation failed", locationError);
+      }
+    }
+  }
+
+  function openRequesterInfoDraft(row, recipient) {
+    const draft = buildEmailComposeDraft(
+      recipient.email,
+      requesterInfoMailSubject(row),
+      requesterInfoMailText(row),
+      {
+        mailto: "Open email compose",
+        outlook: "Open Outlook web compose"
+      }
+    );
+    if (looksLikeEmailAddress(draft.email)) {
+      openMailtoCompose(draft.mailtoUrl);
+    } else {
+      openEditUrlWithGm(draft.outlookUrl);
+    }
+    return draft;
   }
 
   if (isGraphTokenRefreshPage()) {
@@ -7998,6 +8317,33 @@ Health & Hospitality	DIRECT	NL	West	West
     }
   }
 
+  async function handleRequesterInfoEmail(button) {
+    const card = button.closest(".scr-helper-card");
+    const row = searchRows.find(item => item.id === button.dataset.rowId);
+    if (!row) return;
+
+    button.disabled = true;
+    setStaffingNotesStatus(card, "Resolving Sales Rep email...");
+
+    try {
+      const recipient = await resolveSalesRepEmail(row);
+      const draft = openRequesterInfoDraft(row, recipient);
+      row.routingNotice = {
+        message: `Info request email opened for ${draft.email}. Review and send it. If it did not appear, use the links below.`,
+        state: "success",
+        links: draft.links || []
+      };
+      renderResults();
+    } catch (error) {
+      console.warn("IQUEUE could not compose requester info email", error);
+      row.routingNotice = {
+        message: `Could not compose requester email: ${error.message || error}`,
+        state: "error"
+      };
+      renderResults();
+    }
+  }
+
   async function handleStaffingNotesSave(button) {
     const card = button.closest(".scr-helper-card");
     const textarea = card && card.querySelector(".scr-helper-notes-input");
@@ -8484,6 +8830,12 @@ Health & Hospitality	DIRECT	NL	West	West
       const saveButton = closestElement(event.target, ".scr-helper-notes-save");
       if (saveButton) {
         handleStaffingNotesSave(saveButton);
+        return;
+      }
+
+      const requestInfoButton = closestElement(event.target, ".scr-helper-request-info");
+      if (requestInfoButton) {
+        handleRequesterInfoEmail(requestInfoButton);
         return;
       }
 
@@ -9520,8 +9872,15 @@ Health & Hospitality	DIRECT	NL	West	West
 
       #${HELPER_ID} .scr-helper-notes-actions {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         gap: 8px;
+      }
+
+      #${HELPER_ID} .scr-helper-notes-button-stack {
+        display: flex;
+        flex: 0 0 auto;
+        flex-direction: column;
+        gap: 6px;
       }
 
       #${HELPER_ID} .scr-helper-xvr-controls {
@@ -9746,6 +10105,30 @@ Health & Hospitality	DIRECT	NL	West	West
 
       #${HELPER_ID} .scr-helper-notes-save:disabled {
         background: var(--rw-slate-50);
+        cursor: not-allowed;
+      }
+
+      #${HELPER_ID} .scr-helper-request-info {
+        flex: 0 0 auto;
+        border: 1px solid var(--ns-ui-primary-mid);
+        border-radius: 4px;
+        padding: 6px 9px;
+        background: var(--ns-ui-primary-soft);
+        color: var(--ns-ui-primary);
+        font-size: 12px;
+        font-weight: 800;
+        cursor: pointer;
+      }
+
+      #${HELPER_ID} .scr-helper-request-info:hover {
+        border-color: var(--ns-ui-primary);
+        color: var(--ns-ui-primary);
+      }
+
+      #${HELPER_ID} .scr-helper-request-info:disabled {
+        border-color: var(--rw-slate-50);
+        background: var(--rw-neutral-30);
+        color: var(--rw-slate-100);
         cursor: not-allowed;
       }
 
