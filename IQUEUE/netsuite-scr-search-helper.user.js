@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.96B
+// @version      27.0.0.97B
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -41,13 +41,15 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.96B";
+  const HELPER_VERSION = "27.0.0.97B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
   const GRAPH_TOKEN_REFRESH_URL = "https://mcanderson14.github.io/ns_scm_tools_fy27/calendar-refresh.html";
   const GRAPH_TOKEN_STATUS_KEY = "iqueue-graph-token-status-v1";
   const GRAPH_ACCESS_TOKEN_KEY = "iqueue-graph-access-token-v1";
+  const CALENDAR_GRAPH_TOKEN_VAULT_KEY = "sc-staffing-dashboard-graph-explorer-token-vault-v2";
+  const CALENDAR_GRAPH_TOKEN_LOCAL_KEY = "sc-staffing-dashboard-graph-explorer-local-key-v1";
   const GRAPH_TOKEN_STATUS_STALE_MS = 26 * 60 * 60 * 1000;
   const GRAPH_TOKEN_EXPIRING_SOON_MS = 2 * 60 * 60 * 1000;
   const HELPER_STATE_STORAGE_KEY = "fy27-unified-sc-staffing-queue-assistant-state-v1";
@@ -217,10 +219,12 @@
   ];
 
   const params = new URLSearchParams(window.location.search);
+  const IS_GRAPH_TOKEN_REFRESH_PAGE = window.location.hostname === "mcanderson14.github.io"
+    && /\/ns_scm_tools_fy27\/calendar-refresh\.html$/i.test(window.location.pathname);
   const CURRENT_SEARCH_ID = params.get("searchid") || "";
   const CURRENT_QUEUE = QUEUE_CONFIGS[CURRENT_SEARCH_ID];
-  if (!CURRENT_QUEUE) return;
-  const SAVED_SEARCH_ID = CURRENT_QUEUE.searchId;
+  if (!CURRENT_QUEUE && !IS_GRAPH_TOKEN_REFRESH_PAGE) return;
+  const SAVED_SEARCH_ID = CURRENT_QUEUE ? CURRENT_QUEUE.searchId : "";
 
   const MAPPING_TSV = `
 Industry Family	Direct/AMO	State	Sales Region	SC_Staffing_Region
@@ -1564,6 +1568,29 @@ Health & Hospitality	DIRECT	NL	West	West
     return productsScmAuthorizedViewers.find(viewer => personNameKeys(viewer).some(key => userKeys.includes(key))) || "";
   }
 
+  function scmOwnerNameFromTagKey(ownerKey) {
+    const key = normalizeKey(ownerKey);
+    if (!key) return "";
+
+    const option = allScmOwnerOptions().find(scm => (
+      normalizeKey(scm) === key || personNameKeys(scm).some(nameKey => personKeyMatches(nameKey, key))
+    ));
+    if (option) return option;
+
+    const manager = authorizedManagerRecords.find(record => (
+      normalizeKey(record.name) === key
+        || normalizeKey(record.nameKey) === key
+        || personNameKeys(record.name).some(nameKey => personKeyMatches(nameKey, key))
+        || emailLocalPartKeys(record.email).some(nameKey => personKeyMatches(nameKey, key))
+    ));
+    if (manager && manager.name) return manager.name;
+
+    const currentName = getCurrentUserName();
+    return personNameKeys(currentName).some(nameKey => personKeyMatches(nameKey, key)) || normalizeKey(currentName) === key
+      ? currentName
+      : "";
+  }
+
   function productsScmOwnerFromGroup(rows, source) {
     const group = (rows || []).filter(row => row && row.scm);
     if (!group.length) return null;
@@ -1614,13 +1641,11 @@ Health & Hospitality	DIRECT	NL	West	West
 
     const ownerTag = text.match(/#(?:scm-owner|pscm-owner)-([a-z0-9]+)/i);
     const ownerKey = ownerTag ? normalizeKey(ownerTag[1]) : "";
-    const taggedOwner = ownerKey
-      ? allScmOwnerOptions().find(scm => normalizeKey(scm) === ownerKey)
-      : "";
-    return taggedOwner
+    const taggedOwner = ownerKey ? scmOwnerNameFromTagKey(ownerKey) : "";
+    return ownerKey
       ? {
-        scm: taggedOwner,
-        scmKey: normalizeKey(taggedOwner),
+        scm: taggedOwner || ownerKey,
+        scmKey: ownerKey,
         source: "explicit",
         sourceLabel: "Explicit SCM owner"
       }
@@ -1686,7 +1711,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const owner = productsScmOwnerForRow(row);
     if (!owner || !owner.scm) return false;
     const targetKeys = personNameKeys(ownerName);
-    return Boolean(targetKeys.length && personNameKeys(owner.scm).some(key => targetKeys.includes(key)));
+    return personKeyListsOverlap(personNameKeys(owner.scm), targetKeys);
   }
 
   function rowMatchesProductsScmOwnerFilter(row, ownerNames, includeUnmappedOwnerRows) {
@@ -1696,7 +1721,7 @@ Health & Hospitality	DIRECT	NL	West	West
       const rowOwnerKeys = personNameKeys(owner.scm);
       return ownerNames.some(name => {
         const targetKeys = personNameKeys(name);
-        return Boolean(targetKeys.length && rowOwnerKeys.some(key => targetKeys.includes(key)));
+        return personKeyListsOverlap(rowOwnerKeys, targetKeys);
       });
     }
     return Boolean(includeUnmappedOwnerRows && owner.source === "unmapped");
@@ -1838,6 +1863,20 @@ Health & Hospitality	DIRECT	NL	West	West
     }
 
     return [...keys].filter(Boolean);
+  }
+
+  function personKeyMatches(left, right) {
+    const leftKey = normalizeKey(left);
+    const rightKey = normalizeKey(right);
+    if (!leftKey || !rightKey) return false;
+    if (leftKey === rightKey) return true;
+    return Math.min(leftKey.length, rightKey.length) >= 8
+      && (leftKey.startsWith(rightKey) || rightKey.startsWith(leftKey));
+  }
+
+  function personKeyListsOverlap(leftKeys, rightKeys) {
+    return Boolean((leftKeys || []).length && (rightKeys || []).length
+      && leftKeys.some(left => rightKeys.some(right => personKeyMatches(left, right))));
   }
 
   function normalizeRosterName(value) {
@@ -5703,8 +5742,7 @@ Health & Hospitality	DIRECT	NL	West	West
   }
 
   function isGraphTokenRefreshPage() {
-    return window.location.hostname === "mcanderson14.github.io"
-      && /\/ns_scm_tools_fy27\/calendar-refresh\.html$/i.test(window.location.pathname);
+    return IS_GRAPH_TOKEN_REFRESH_PAGE;
   }
 
   function decodeJwtPayload(token) {
@@ -5717,6 +5755,11 @@ Health & Hospitality	DIRECT	NL	West	West
     } catch (error) {
       return null;
     }
+  }
+
+  function graphTokenBase64ToBytes(value) {
+    const binary = atob(String(value || ""));
+    return Uint8Array.from(binary, char => char.charCodeAt(0));
   }
 
   function graphTokenScopesFromPayload(payload) {
@@ -5887,6 +5930,38 @@ Health & Hospitality	DIRECT	NL	West	West
     return best ? graphTokenInfoFromToken(best.token, best.source) : null;
   }
 
+  async function graphAccessTokenFromRefreshPageEncryptedVault() {
+    try {
+      if (!window.crypto || !window.crypto.subtle) return null;
+      const rawRecord = window.localStorage.getItem(CALENDAR_GRAPH_TOKEN_VAULT_KEY);
+      const rawKey = window.localStorage.getItem(CALENDAR_GRAPH_TOKEN_LOCAL_KEY);
+      if (!rawRecord || !rawKey) return null;
+
+      const record = JSON.parse(rawRecord);
+      if (!record || record.kind !== "sc-calendar-graph-explorer-token-vault" || record.keyMode !== "browser-local") return null;
+      if (!record.ciphertext || !record.iv) return null;
+
+      const key = await window.crypto.subtle.importKey(
+        "raw",
+        graphTokenBase64ToBytes(rawKey),
+        { name: "AES-GCM" },
+        false,
+        ["decrypt"]
+      );
+      const plaintext = await window.crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: graphTokenBase64ToBytes(record.iv) },
+        key,
+        graphTokenBase64ToBytes(record.ciphertext)
+      );
+      const payload = JSON.parse(new TextDecoder().decode(plaintext));
+      const token = normalizeSpaces(payload && payload.token || "");
+      return token ? storeGraphAccessTokenFromToken(token, "calendar-refresh:encrypted-vault") : null;
+    } catch (error) {
+      console.warn("IQUEUE could not read encrypted Graph token vault", error);
+      return null;
+    }
+  }
+
   async function graphAccessTokenFromRefreshPageVault() {
     const pageWindow = typeof unsafeWindow !== "undefined" ? unsafeWindow : window;
     const readerNames = ["getStoredGraphExplorerToken", "getGraphExplorerToken"];
@@ -5902,7 +5977,7 @@ Health & Hospitality	DIRECT	NL	West	West
         console.warn(`IQUEUE could not read Graph token through ${readerName}`, error);
       }
     }
-    return null;
+    return graphAccessTokenFromRefreshPageEncryptedVault();
   }
 
   function installGraphTokenRequestCapture() {
@@ -7251,7 +7326,11 @@ Health & Hospitality	DIRECT	NL	West	West
 
   function rowNeedsRoutingHashtagHydration(row) {
     if (!row || !row.internalId || row.hashtagsHydrated) return false;
-    if (getCrossIndustryInfoForRow(row).targets.length) return false;
+    const routingText = crossIndustryTextForRow(row);
+    const hasCrossIndustryRoute = getCrossIndustryInfo(routingText).targets.length;
+    const hasExplicitOwnerTag = /#(?:scm-owner|pscm-owner)-[a-z0-9]+/i.test(routingText);
+    if (hasCrossIndustryRoute && !hasExplicitOwnerTag) return true;
+    if (hasCrossIndustryRoute) return false;
     return !rowHasReturnedHashtagsField(row) || rowHasCrossVerticalFlag(row);
   }
 
