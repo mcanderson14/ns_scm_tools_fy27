@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.119B
+// @version      27.0.0.120B
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -41,7 +41,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.119B";
+  const HELPER_VERSION = "27.0.0.120B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -6882,8 +6882,8 @@ Health & Hospitality	DIRECT	NL	West	West
     return lines.filter(line => line !== "").join("\n");
   }
 
-  function slackSearchUrl(query) {
-    return `https://app.slack.com/client/search?query=${encodeURIComponent(normalizeSpaces(query))}`;
+  function slackClientUrl() {
+    return "https://app.slack.com/client";
   }
 
   async function copyTextToClipboard(text) {
@@ -8545,13 +8545,13 @@ Health & Hospitality	DIRECT	NL	West	West
       const message = requesterSlackText(row);
       await copyTextToClipboard(message);
       const query = recipient.email || recipient.name || buildRowSummary(row).salesRep || "";
-      const slackUrl = slackSearchUrl(query);
+      const slackUrl = slackClientUrl();
       openEditUrlWithGm(slackUrl);
       row.routingNotice = {
-        message: `Slack message copied; Slack search opened for ${query || "the Sales Rep"}. Paste and send it.`,
+        message: `Slack message copied; Slack opened. Search for ${query || "the Sales Rep"}, paste, and send it.`,
         state: "success",
         links: [
-          { label: "Open Slack search", href: slackUrl }
+          { label: "Open Slack", href: slackUrl }
         ]
       };
       renderResults();
