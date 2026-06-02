@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.116B
+// @version      27.0.0.117B
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -41,7 +41,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.116B";
+  const HELPER_VERSION = "27.0.0.117B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -5498,7 +5498,7 @@ Health & Hospitality	DIRECT	NL	West	West
       const normalized = normalizeSpaces(value);
       if (normalized) {
         const groupKey = extra.groupKey || `${extra.removeType || "filter"}:${extra.removeKey || normalizeKey(label)}`;
-        items.push({ label, value: normalizeSpaces(displayValue) || normalized, removable: true, groupKey, ...extra });
+        items.push({ label, value: normalizeSpaces(displayValue) || normalized, removable: true, section: "queue", groupKey, ...extra });
       }
     };
 
@@ -5507,19 +5507,6 @@ Health & Hospitality	DIRECT	NL	West	West
     add("FY27 GTM Industry Subgroup", controls.industrySubgroup.value, gtmSubgroupOptionLabel(controls.industrySubgroup.value), { removeType: "select", removeKey: "industrySubgroup" });
     add("Sales Region", controls.salesRegion.value, controls.salesRegion.value, { removeType: "select", removeKey: "salesRegion" });
     add("Sales Vertical", controls.salesVertical.value, controls.salesVertical.value, { removeType: "select", removeKey: "salesVertical" });
-    PEOPLE_FILTERS.forEach(filter => {
-      selectedPeopleFilterValues(filter.key).forEach(person => {
-        add(filter.label, person, person, { removeType: "people", removeKey: filter.key, groupKey: "people" });
-      });
-    });
-    if (controls.productsScmOwnerMe && controls.productsScmOwnerMe.checked) {
-      add("SCM Owner", currentProductsScmUserName() ? `Me (${currentProductsScmUserName()})` : "Me", undefined, { removeType: "checkbox", removeKey: "productsScmOwnerMe", groupKey: "scmOwner" });
-    }
-    if (controls.productsScmOwner) {
-      productsScmOwnerValuesFromString(controls.productsScmOwner.value).forEach(owner => {
-        add("SCM Owner", owner, owner, { removeType: "productsScmOwner", groupKey: "scmOwner" });
-      });
-    }
     if (controls.staffingRegions) {
       staffingRegionValuesFromString(controls.staffingRegions.value).forEach(region => {
         add("SC Region", region, region, { removeType: "staffingRegion", groupKey: "staffingRegion" });
@@ -5528,13 +5515,26 @@ Health & Hospitality	DIRECT	NL	West	West
       add("SC Region", controls.staffingRegion.value, controls.staffingRegion.value, { removeType: "select", removeKey: "staffingRegion" });
     }
     add("Type", controls.amoDirect.value, controls.amoDirect.value, { removeType: "select", removeKey: "amoDirect" });
-    if (controls.assignedToMe && controls.assignedToMe.checked) {
-      add("Assigned", getCurrentUserName() ? `Me (${getCurrentUserName()})` : "Me", undefined, { removeType: "checkbox", removeKey: "assignedToMe", connectorBefore: items.length ? "OR" : "" });
+    if (controls.productsScmOwnerMe && controls.productsScmOwnerMe.checked) {
+      add("SCM Owner", currentProductsScmUserName() ? `Me (${currentProductsScmUserName()})` : "Me", undefined, { removeType: "checkbox", removeKey: "productsScmOwnerMe", groupKey: "scmOwner", section: "owner" });
     }
-    if (controls.unmappedOnly && controls.unmappedOnly.checked) add("Review", "Unmapped", undefined, { removeType: "checkbox", removeKey: "unmappedOnly" });
-    if (controls.hideTigerEnterprise && controls.hideTigerEnterprise.checked) add("Hidden", "Enterprise / Tiger", undefined, { removeType: "checkbox", removeKey: "hideTigerEnterprise" });
-    if (controls.slaHotlist && controls.slaHotlist.checked) add("SLA", "Past 24h", undefined, { removeType: "checkbox", removeKey: "slaHotlist" });
-    add("Search", controls.text.value, controls.text.value, { removeType: "text", removeKey: "text" });
+    if (controls.productsScmOwner) {
+      productsScmOwnerValuesFromString(controls.productsScmOwner.value).forEach(owner => {
+        add("SCM Owner", owner, owner, { removeType: "productsScmOwner", groupKey: "scmOwner", section: "owner" });
+      });
+    }
+    PEOPLE_FILTERS.forEach(filter => {
+      selectedPeopleFilterValues(filter.key).forEach(person => {
+        add(filter.label, person, person, { removeType: "people", removeKey: filter.key, groupKey: "people", section: "people" });
+      });
+    });
+    if (controls.assignedToMe && controls.assignedToMe.checked) {
+      add("Assigned", getCurrentUserName() ? `Me (${getCurrentUserName()})` : "Me", undefined, { removeType: "checkbox", removeKey: "assignedToMe", section: "assigned", sectionConnector: items.length ? "OR" : "" });
+    }
+    if (controls.unmappedOnly && controls.unmappedOnly.checked) add("Review", "Unmapped", undefined, { removeType: "checkbox", removeKey: "unmappedOnly", section: "flags" });
+    if (controls.hideTigerEnterprise && controls.hideTigerEnterprise.checked) add("Hidden", "Enterprise / Tiger", undefined, { removeType: "checkbox", removeKey: "hideTigerEnterprise", section: "flags" });
+    if (controls.slaHotlist && controls.slaHotlist.checked) add("SLA", "Past 24h", undefined, { removeType: "checkbox", removeKey: "slaHotlist", section: "flags" });
+    add("Search", controls.text.value, controls.text.value, { removeType: "text", removeKey: "text", section: "search" });
 
     return items;
   }
@@ -5544,38 +5544,65 @@ Health & Hospitality	DIRECT	NL	West	West
     if (!summary) return;
 
     const items = filterSummaryItems(getControls());
-    const connectorFor = (item, index) => {
+    const connectorFor = (lineItems, item, index) => {
       if (!index) return "";
       if (item.connectorBefore) return item.connectorBefore;
-      return item.groupKey && item.groupKey === items[index - 1].groupKey ? "OR" : "AND";
+      return item.groupKey && item.groupKey === lineItems[index - 1].groupKey ? "OR" : "AND";
     };
-    const groupRanges = new Map();
-    items.forEach((item, index) => {
-      if (!item.groupKey) return;
-      const range = groupRanges.get(item.groupKey) || { first: index, last: index, count: 0 };
-      range.last = index;
-      range.count += 1;
-      groupRanges.set(item.groupKey, range);
+    const renderConnector = connector => connector
+      ? `<span class="scr-helper-filter-operator is-${escapeHtml(connector.toLowerCase())}" title="${escapeHtml(connector === "OR" ? "Either filter group can match" : "Both filter groups must match")}">${escapeHtml(connector)}</span>`
+      : "";
+    const renderExpression = lineItems => {
+      const groupRanges = new Map();
+      lineItems.forEach((item, index) => {
+        if (!item.groupKey) return;
+        const range = groupRanges.get(item.groupKey) || { first: index, last: index, count: 0 };
+        range.last = index;
+        range.count += 1;
+        groupRanges.set(item.groupKey, range);
+      });
+      const opensGroup = (item, index) => {
+        const range = item.groupKey && groupRanges.get(item.groupKey);
+        return Boolean(range && range.count > 1 && range.first === index);
+      };
+      const closesGroup = (item, index) => {
+        const range = item.groupKey && groupRanges.get(item.groupKey);
+        return Boolean(range && range.count > 1 && range.last === index);
+      };
+      return lineItems.map((item, index) => `
+        ${renderConnector(connectorFor(lineItems, item, index))}
+        ${opensGroup(item, index) ? `<span class="scr-helper-filter-paren" aria-hidden="true">(</span>` : ""}
+        <span class="scr-helper-filter-chip${item.removable ? " is-removable" : ""}">
+          <span>${escapeHtml(item.label)}</span>
+          <strong>${escapeHtml(item.value)}</strong>
+          ${item.removable ? `<button type="button" class="scr-helper-filter-chip-remove" data-filter-remove="${escapeHtml(item.removeType)}" data-filter-key="${escapeHtml(item.removeKey || "")}" data-filter-value="${escapeHtml(item.value)}" aria-label="Remove ${escapeHtml(item.value)}">×</button>` : ""}
+        </span>
+        ${closesGroup(item, index) ? `<span class="scr-helper-filter-paren" aria-hidden="true">)</span>` : ""}
+      `).join("");
+    };
+    const sections = [];
+    items.forEach(item => {
+      const key = item.section || "queue";
+      let section = sections.find(entry => entry.key === key);
+      if (!section) {
+        section = {
+          key,
+          connector: sections.length ? item.sectionConnector || "AND" : "",
+          items: []
+        };
+        sections.push(section);
+      } else if (item.sectionConnector) {
+        section.connector = item.sectionConnector;
+      }
+      section.items.push(item);
     });
-    const opensGroup = (item, index) => {
-      const range = item.groupKey && groupRanges.get(item.groupKey);
-      return Boolean(range && range.count > 1 && range.first === index);
-    };
-    const closesGroup = (item, index) => {
-      const range = item.groupKey && groupRanges.get(item.groupKey);
-      return Boolean(range && range.count > 1 && range.last === index);
-    };
     summary.classList.toggle("is-empty", !items.length);
     summary.innerHTML = items.length
-      ? items.map((item, index) => `
-          ${connectorFor(item, index) ? `<span class="scr-helper-filter-operator is-${escapeHtml(connectorFor(item, index).toLowerCase())}" title="${escapeHtml(connectorFor(item, index) === "OR" ? "Either filter value can match" : "Both filter groups must match")}">${escapeHtml(connectorFor(item, index))}</span>` : ""}
-          ${opensGroup(item, index) ? `<span class="scr-helper-filter-paren" aria-hidden="true">(</span>` : ""}
-          <span class="scr-helper-filter-chip${item.removable ? " is-removable" : ""}">
-            <span>${escapeHtml(item.label)}</span>
-            <strong>${escapeHtml(item.value)}</strong>
-            ${item.removable ? `<button type="button" class="scr-helper-filter-chip-remove" data-filter-remove="${escapeHtml(item.removeType)}" data-filter-key="${escapeHtml(item.removeKey || "")}" data-filter-value="${escapeHtml(item.value)}" aria-label="Remove ${escapeHtml(item.value)}">×</button>` : ""}
-          </span>
-          ${closesGroup(item, index) ? `<span class="scr-helper-filter-paren" aria-hidden="true">)</span>` : ""}
+      ? sections.map(section => `
+          <div class="scr-helper-filter-expression-line">
+            ${renderConnector(section.connector)}
+            <span class="scr-helper-filter-expression">${renderExpression(section.items)}</span>
+          </div>
         `).join("")
       : `<span class="scr-helper-filter-empty">No filters applied</span>`;
   }
@@ -9492,10 +9519,24 @@ Health & Hospitality	DIRECT	NL	West	West
 
       #${HELPER_ID} .scr-helper-filter-summary {
         display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+        padding: 0 12px 9px;
+      }
+
+      #${HELPER_ID} .scr-helper-filter-expression-line {
+        display: flex;
         flex-wrap: wrap;
         align-items: center;
         gap: 6px;
-        padding: 0 12px 9px;
+      }
+
+      #${HELPER_ID} .scr-helper-filter-expression {
+        display: inline-flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
       }
 
       #${HELPER_ID} .scr-helper-filter-operator {
