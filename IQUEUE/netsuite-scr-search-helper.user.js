@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.104B
+// @version      27.0.0.105B
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -41,7 +41,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.104B";
+  const HELPER_VERSION = "27.0.0.105B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -6371,18 +6371,16 @@ Health & Hospitality	DIRECT	NL	West	West
     const editUrl = editUrlForRow(row);
     const routedBy = getCurrentUserName() || "IQUEUE user";
     const targetFamily = target && target.family || primaryDisplayedIndustryFamily(row) || "selected queue";
-    const ownerTag = scmOwnerTag(ownerName);
     const rows = [
       ["SCM Owner", ownerName],
       ["Routed By", routedBy],
-      ["Cross Industry Queue", targetFamily],
+      ["SC Staffing Industry", targetFamily],
       ["Request Type", requestTypeLabel(row.amoDirect)],
       ["Date Needed", summary.dateNeeded],
       ["Company", company],
       ["Opportunity", opportunity],
       ["Sales Rep", summary.salesRep],
-      ["Regional Director", summary.salesDirector],
-      ["SCM Hashtag", ownerTag]
+      ["Regional Director", summary.salesDirector]
     ].filter(([, value]) => normalizeSpaces(value));
 
     return `
@@ -6429,14 +6427,13 @@ Health & Hospitality	DIRECT	NL	West	West
       `${scrLabel}${summary.opportunityDisplay ? ` | ${summary.opportunityDisplay}` : ""}${summary.companyDisplay ? ` | ${summary.companyDisplay}` : ""}`,
       "",
       `SCM Owner: ${ownerName}`,
-      `Cross Industry Queue: ${targetFamily}`,
+      `SC Staffing Industry: ${targetFamily}`,
       `Request Type: ${requestTypeLabel(row.amoDirect) || "Unknown"}`,
       `Date Needed: ${summary.dateNeeded || "Unknown"}`,
       `Company: ${summary.companyDisplay || "Unknown"}`,
       `Opportunity: ${summary.opportunityDisplay || "Missing Opportunity"}`,
       `Sales Rep: ${summary.salesRep || "Unknown"}`,
       `Regional Director: ${summary.salesDirector || "Unknown"}`,
-      `SCM Hashtag: ${scmOwnerTag(ownerName)}`,
       editUrl ? `Open SCR: ${editUrl}` : ""
     ];
     return lines.filter(line => line !== "").join("\r\n");
@@ -6697,21 +6694,19 @@ Health & Hospitality	DIRECT	NL	West	West
     const ownerName = requestInfoOwnerName(row);
     const scrLabel = formatScrTitlePrefix(row.scrDisplayId) || row.title || "SC Request";
     const editUrl = editUrlForRow(row);
-    const ownerTag = scmOwnerTag(ownerName);
     const lines = [
       `${ownerName} has questions regarding a submitted SC Request:`,
       "",
       [scrLabel, summary.opportunityDisplay || "Missing Opportunity", summary.companyDisplay].filter(Boolean).join(" | "),
       "",
       `SCM Owner: ${ownerName}`,
-      `Cross Industry Queue: ${requestInfoQueueLabel(row)}`,
+      `SC Staffing Industry: ${requestInfoQueueLabel(row)}`,
       `Request Type: ${requestTypeLabel(row.amoDirect) || "Unknown"}`,
       `Date Needed: ${summary.dateNeeded || "Unknown"}`,
       `Company: ${summary.companyDisplay || "Unknown"}`,
       `Opportunity: ${summary.opportunityDisplay || "Missing Opportunity"}`,
       `Sales Rep: ${summary.salesRep || "Unknown"}`,
       `Regional Director: ${summary.salesDirector || "Unknown"}`,
-      `SCM Hashtag: ${ownerTag || "Unknown"}`,
       editUrl ? `Open SCR: ${editUrl}` : ""
     ];
     return lines.filter(line => line !== "").join("\r\n");
@@ -6730,34 +6725,10 @@ Health & Hospitality	DIRECT	NL	West	West
       mailtoUrl,
       outlookUrl,
       links: [
-        { label: labels.mailto || "Open email compose", href: mailtoUrl },
-        { label: labels.outlook || "Outlook web fallback", href: outlookUrl }
+        { label: labels.outlook || "Open Outlook web compose", href: outlookUrl },
+        { label: labels.mailto || "Mailto fallback", href: mailtoUrl }
       ]
     };
-  }
-
-  function looksLikeEmailAddress(value) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeSpaces(value));
-  }
-
-  function openMailtoCompose(mailtoUrl) {
-    try {
-      const link = document.createElement("a");
-      link.href = mailtoUrl;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      link.style.display = "none";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    } catch (error) {
-      console.warn("IQUEUE mailto compose click failed", error);
-      try {
-        window.location.href = mailtoUrl;
-      } catch (locationError) {
-        console.warn("IQUEUE mailto compose navigation failed", locationError);
-      }
-    }
   }
 
   function openRequesterInfoDraft(row, recipient) {
@@ -6770,11 +6741,7 @@ Health & Hospitality	DIRECT	NL	West	West
         outlook: "Open Outlook web compose"
       }
     );
-    if (looksLikeEmailAddress(draft.email)) {
-      openMailtoCompose(draft.mailtoUrl);
-    } else {
-      openEditUrlWithGm(draft.outlookUrl);
-    }
+    openEditUrlWithGm(draft.outlookUrl);
     return draft;
   }
 
@@ -8107,6 +8074,10 @@ Health & Hospitality	DIRECT	NL	West	West
             <input class="scr-helper-owner-modal-input" type="search" placeholder="Start typing a manager name" autocomplete="off" value="${escapeHtml(defaultOwner)}">
           </label>
           <div class="scr-helper-owner-modal-list" role="listbox"></div>
+          <label class="scr-helper-owner-notify">
+            <input class="scr-helper-owner-notify-input" type="checkbox" checked>
+            <span>Open email notification draft for SCM owner</span>
+          </label>
           <div class="scr-helper-owner-modal-message" aria-live="polite"></div>
           <div class="scr-helper-owner-modal-actions">
             <button type="button" class="scr-helper-owner-route-only">Route without owner</button>
@@ -8122,6 +8093,7 @@ Health & Hospitality	DIRECT	NL	West	West
       const message = backdrop.querySelector(".scr-helper-owner-modal-message");
       const save = backdrop.querySelector(".scr-helper-owner-save");
       const routeOnly = backdrop.querySelector(".scr-helper-owner-route-only");
+      const notifyInput = backdrop.querySelector(".scr-helper-owner-notify-input");
       let selectedOwnerName = defaultOwner || "";
 
       function close(value) {
@@ -8170,6 +8142,10 @@ Health & Hospitality	DIRECT	NL	West	West
         return matchOwnerOption(value, options);
       }
 
+      function notifyOwner() {
+        return Boolean(notifyInput && notifyInput.checked);
+      }
+
       function saveSelection() {
         const value = normalizeSpaces(input.value);
         if (!value) {
@@ -8183,13 +8159,13 @@ Health & Hospitality	DIRECT	NL	West	West
           input.focus();
           return;
         }
-        close({ ownerName });
+        close({ ownerName, notifyOwner: notifyOwner() });
       }
 
       function routeSelectionWithoutAssignment() {
         const value = normalizeSpaces(input.value);
         if (!value) {
-          close({ ownerName: "" });
+          close({ ownerName: "", notifyOwner: false });
           return;
         }
         const ownerName = selectedOwner();
@@ -8198,7 +8174,7 @@ Health & Hospitality	DIRECT	NL	West	West
           input.focus();
           return;
         }
-        close({ ownerName });
+        close({ ownerName, notifyOwner: notifyOwner() });
       }
 
       input.addEventListener("input", () => {
@@ -8412,7 +8388,13 @@ Health & Hospitality	DIRECT	NL	West	West
       if (assignmentError) {
         window.alert("The cross-industry route was saved, but IQUEUE could not update the Assigned To field from this page. Staff SCR is still available if you need to assign it manually.");
       }
-      if (assignment.ownerName) {
+      if (assignment.ownerName && assignment.notifyOwner === false) {
+        row.routingNotice = {
+          message: "Route saved; SCM email notification skipped.",
+          state: "success",
+          links: []
+        };
+      } else if (assignment.ownerName) {
         try {
           setStaffingNotesStatus(card, "Route saved. Opening owner notification draft...");
           const notice = await sendOwnerRouteEmail(row, assignment.ownerName, target);
@@ -10011,6 +9993,20 @@ Health & Hospitality	DIRECT	NL	West	West
       .scr-helper-owner-modal-input:focus {
         border-color: var(--ns-ui-primary);
         outline: 2px solid var(--ns-ui-primary-soft);
+      }
+
+      .scr-helper-owner-notify {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        color: var(--rw-slate-150);
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.3;
+      }
+
+      .scr-helper-owner-notify input {
+        margin: 0;
       }
 
       .scr-helper-owner-modal-list {
