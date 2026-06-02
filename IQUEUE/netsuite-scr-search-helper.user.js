@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.113B
+// @version      27.0.0.114B
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -41,7 +41,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.113B";
+  const HELPER_VERSION = "27.0.0.114B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -209,9 +209,24 @@
     ["mediaandpublishing", "Business Services"],
     ["advertisingmediaandpublishing", "Business Services"]
   ]);
+  const SC_INDUSTRY_GROUP_ALIASES = new Map(Object.entries({
+    "Business Service": "Business Services",
+    "Business Services": "Business Services",
+    "Construction": "Construction & Energy",
+    "Construction and Energy": "Construction & Energy",
+    "Construction & Energy": "Construction & Energy",
+    "Consumer Service": "Consumer Services",
+    "Consumer Services": "Consumer Services",
+    "Enterprise Performance Management": "EPM",
+    "EPM": "EPM",
+    "Health and Hospitality": "Health & Hospitality",
+    "Health & Hospitality": "Health & Hospitality",
+    "Products": "Products",
+    "Software": "Software"
+  }).map(([alias, canonical]) => [normalizeKey(alias), canonical]));
   const CROSS_INDUSTRY_TARGETS = [
     { family: "Business Services", tag: "#xvr-bizsvcs" },
-    { family: "Construction", tag: "#xvr-conenergy" },
+    { family: "Construction & Energy", label: "Construction", tag: "#xvr-conenergy" },
     { family: "Consumer Services", tag: "#xvr-consumersvcs" },
     { family: "EPM", tag: "#xvr-epm", markerTag: EPM_REQUESTED_TAG, title: "Mark this SCR as EPM Requested SC" },
     { family: "Products", tag: "#xvr-products" },
@@ -1246,6 +1261,19 @@ Health & Hospitality	DIRECT	NL	West	West
 
   function normalizeKey(value) {
     return String(value || "").toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]/g, "");
+  }
+
+  function canonicalScIndustryGroupAlias(value) {
+    return SC_INDUSTRY_GROUP_ALIASES.get(normalizeKey(value)) || "";
+  }
+
+  function scIndustryGroupKeyVariants(value) {
+    const raw = normalizeSpaces(value);
+    const rawKey = normalizeKey(raw);
+    const alias = canonicalScIndustryGroupAlias(raw);
+    const aliasKey = normalizeKey(alias);
+    const canonical = findCanonicalIndustry(raw || alias);
+    return uniqueSorted([rawKey, aliasKey, normalizeKey(canonical)].filter(Boolean));
   }
 
   function normalizeMappingState(value) {
@@ -2973,9 +3001,6 @@ Health & Hospitality	DIRECT	NL	West	West
   }
 
   function defaultCanOwnForManagerRole(role) {
-    const text = normalizeSpaces(role);
-    if (!text) return true;
-    if (/\b(?:director|avp|vp|vice\s*president|leader|executive)\b/i.test(text)) return false;
     return true;
   }
 
@@ -3093,6 +3118,9 @@ Health & Hospitality	DIRECT	NL	West	West
       const groupKeys = Array.isArray(record.groupKeys)
         ? record.groupKeys.map(normalizeKey).filter(Boolean)
         : groups.map(normalizeKey);
+      const expandedGroupKeys = uniqueSorted(
+        groupKeys.concat(groups.flatMap(scIndustryGroupKeyVariants))
+      );
       return {
         sourceRows: Array.isArray(record.sourceRows) ? record.sourceRows : [],
         name,
@@ -3100,7 +3128,7 @@ Health & Hospitality	DIRECT	NL	West	West
         email: normalizeSpaces(record.email || ""),
         role: normalizeSpaces(record.role || ""),
         groups,
-        groupKeys: uniqueSorted(groupKeys),
+        groupKeys: expandedGroupKeys,
         canOwn: record.canOwn !== false,
         canView: record.canView !== false,
         active: record.active !== false
@@ -3832,6 +3860,8 @@ Health & Hospitality	DIRECT	NL	West	West
   function findCanonicalIndustry(value) {
     const key = normalizeKey(value);
     if (!key) return "";
+    const alias = canonicalScIndustryGroupAlias(value);
+    if (alias) return alias;
     if (industryByKey.has(key)) return industryByKey.get(key);
 
     const match = industryOptions.find(option => {
@@ -4970,7 +5000,7 @@ Health & Hospitality	DIRECT	NL	West	West
           title="${escapeHtml(target.title || `Mark this SCR for ${target.family} queue visibility`)}"
           ${style}
           ${disabled}
-        >${escapeHtml(industryOptionLabel(target.family))}</button>
+        >${escapeHtml(target.label || industryOptionLabel(target.family))}</button>
       `;
     }).join("");
 
@@ -8092,8 +8122,7 @@ Health & Hospitality	DIRECT	NL	West	West
 
   function crossIndustryOwnerOptions(row, target) {
     const family = target && target.family || "";
-    const canonical = findCanonicalIndustry(family) || family;
-    const keys = uniqueSorted([family, canonical].map(normalizeKey).filter(Boolean));
+    const keys = scIndustryGroupKeyVariants(family);
     const authorizedOwners = uniqueSorted(keys.flatMap(key => authorizedManagerGroupLookup.get(key) || []));
     if (authorizedOwners.length) return authorizedOwners;
 
@@ -8179,10 +8208,11 @@ Health & Hospitality	DIRECT	NL	West	West
       }
 
       function updateSaveLabel() {
-        const ownerName = selectedOwnerName || matchOwnerOption(input.value, options);
+        const ownerName = selectedOwner();
         routeOnly.textContent = "Route to Industry";
         save.textContent = "Route to SCM Owner";
         save.disabled = !ownerName;
+        save.classList.toggle("is-ready", Boolean(ownerName));
         if (notifyInput) {
           notifyInput.disabled = !ownerName;
           if (!ownerName) {
@@ -8198,7 +8228,7 @@ Health & Hospitality	DIRECT	NL	West	West
         const key = normalizeKey(input.value);
         return options
           .filter(option => !key || normalizeKey(option).includes(key))
-          .slice(0, 24);
+          .slice(0, 80);
       }
 
       function renderOptions() {
