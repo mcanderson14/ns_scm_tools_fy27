@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.105B
+// @version      27.0.0.106B
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -41,7 +41,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.105B";
+  const HELPER_VERSION = "27.0.0.106B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -67,7 +67,7 @@
   const PRODUCTS_SCM_MAPPING_REFRESH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
   const PRODUCTS_SCM_OWNER_TAG_PREFIX = "#scm-owner-";
   const AUTHORIZED_MANAGERS_FILE_NAME = "Authorized_Managers.json";
-  const AUTHORIZED_MANAGERS_FILE_NAMES = [AUTHORIZED_MANAGERS_FILE_NAME, "Authorized Managers.json"];
+  const AUTHORIZED_MANAGERS_FILE_NAMES = [AUTHORIZED_MANAGERS_FILE_NAME, "Authorized Managers.json", "Authorized_Users.json", "Authorized Users.json"];
   const AUTHORIZED_MANAGERS_FILE_ID = "";
   const AUTHORIZED_MANAGERS_SEARCH_ID = "1319617";
   const AUTHORIZED_MANAGERS_SEARCH_URL = "https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl?searchid=1319617";
@@ -2897,7 +2897,7 @@ Health & Hospitality	DIRECT	NL	West	West
     name: ["manager", "name", "scm", "scmanager", "salesconsultantmanager", "authorizedmanager"],
     email: ["email", "emailaddress", "workemail"],
     role: ["role", "title", "jobtitle"],
-    groups: ["scindustrygroup", "scindustrygroups", "industrygroup", "industrygroups", "group", "groups"],
+    groups: ["scindustrygroup", "scindustrygroups", "scstaffingindustry", "scstaffingindustries", "industrygroup", "industrygroups", "vertical", "verticals", "group", "groups"],
     canOwn: ["canown", "owner", "canownscr", "canbescmowner"],
     canView: ["canview", "viewer", "canviewqueue", "canviewscmqueue"],
     active: ["active", "inactive", "status", "enabled"]
@@ -2908,7 +2908,10 @@ Health & Hospitality	DIRECT	NL	West	West
     const aliases = AUTHORIZED_MANAGER_HEADER_ALIASES[key] || [];
     if (aliases.includes(normalized)) return true;
     if (key === "name") return normalized.includes("manager") && !normalized.includes("email");
-    if (key === "groups") return normalized.includes("industry") && normalized.includes("group");
+    if (key === "groups") return (normalized.includes("industry") && normalized.includes("group"))
+      || (normalized.includes("staffing") && normalized.includes("industry"))
+      || normalized === "vertical"
+      || normalized === "verticals";
     if (key === "canOwn") return normalized.includes("can") && normalized.includes("own");
     if (key === "canView") return normalized.includes("can") && normalized.includes("view");
     return false;
@@ -6880,6 +6883,10 @@ Health & Hospitality	DIRECT	NL	West	West
     return allScmOwnerOptions().slice().sort((a, b) => a.localeCompare(b));
   }
 
+  function authorizedManagersLoaded() {
+    return Boolean(authorizedManagerRecords.length || authorizedManagersMetadata.rowCount);
+  }
+
   function listValuesFromString(value) {
     const raw = normalizeSpaces(value);
     if (!raw) return [];
@@ -7903,6 +7910,7 @@ Health & Hospitality	DIRECT	NL	West	West
     if (!status) return;
     status.textContent = message;
     status.className = `scr-helper-notes-status${state ? ` is-${state}` : ""}`;
+    if (card) card.classList.toggle("is-working", state === "working");
   }
 
   function updateRowSearchText(row) {
@@ -8003,13 +8011,13 @@ Health & Hospitality	DIRECT	NL	West	West
     if (!ownerConfig) throw new Error("Could not determine EPM owner because this row is not AMO or Direct.");
 
     const ownerNames = epmOwnerNamesForRow(row);
-    setStaffingNotesStatus(card, `Resolving EPM owner ${ownerConfig.displayName}...`);
+    setStaffingNotesStatus(card, `⏳ Resolving EPM owner ${ownerConfig.displayName}...`, "working");
     const match = await lookupRosterAssignee(ownerNames);
     if (!match || !match.id) {
       throw new Error(`Could not find EPM owner ${ownerConfig.displayName} in the SC roster.`);
     }
 
-    setStaffingNotesStatus(card, `Assigning EPM owner ${match.name || ownerConfig.displayName}...`);
+    setStaffingNotesStatus(card, `⏳ Assigning EPM owner ${match.name || ownerConfig.displayName}...`, "working");
     await submitAssignee(row, match.id);
     updateRowAssignedTo(row, match.name || ownerConfig.displayName);
     return match;
@@ -8026,6 +8034,7 @@ Health & Hospitality	DIRECT	NL	West	West
       ? epmOwnerConfigForRow(row)
       : null;
     if (epmOwner) return uniqueSorted([epmOwner.displayName].concat(epmOwner.aliases || []));
+    if (authorizedManagersLoaded()) return [];
 
     return productsScmOwnerOptions();
   }
@@ -8065,7 +8074,7 @@ Health & Hospitality	DIRECT	NL	West	West
           <div class="scr-helper-owner-modal-head">
             <div>
               <div id="scr-helper-owner-modal-title" class="scr-helper-owner-modal-title">Cross-staff to ${escapeHtml(family)}</div>
-              <div class="scr-helper-owner-modal-subtitle">${escapeHtml(options.length ? "Choose an SCM owner, or route without an owner." : "No authorized-manager list is loaded yet. You can still route without an owner.")}</div>
+              <div class="scr-helper-owner-modal-subtitle">${escapeHtml(options.length ? "Choose an SCM owner, or route to the industry queue only." : "No authorized SCM owners are loaded for this industry. You can still route to the industry queue.")}</div>
             </div>
             <button type="button" class="scr-helper-owner-modal-close" title="Cancel">×</button>
           </div>
@@ -8075,14 +8084,14 @@ Health & Hospitality	DIRECT	NL	West	West
           </label>
           <div class="scr-helper-owner-modal-list" role="listbox"></div>
           <label class="scr-helper-owner-notify">
-            <input class="scr-helper-owner-notify-input" type="checkbox" checked>
+            <input class="scr-helper-owner-notify-input" type="checkbox" disabled>
             <span>Open email notification draft for SCM owner</span>
           </label>
           <div class="scr-helper-owner-modal-message" aria-live="polite"></div>
           <div class="scr-helper-owner-modal-actions">
-            <button type="button" class="scr-helper-owner-route-only">Route without owner</button>
+            <button type="button" class="scr-helper-owner-route-only" title="Route to the industry queue without assigning an SCM owner.">Route to Industry</button>
             <button type="button" class="scr-helper-owner-cancel">Cancel</button>
-            <button type="button" class="scr-helper-owner-save">Route to owner</button>
+            <button type="button" class="scr-helper-owner-save" title="Route to the selected SCM owner.">Route to SCM Owner</button>
           </div>
         </div>
       `;
@@ -8095,6 +8104,7 @@ Health & Hospitality	DIRECT	NL	West	West
       const routeOnly = backdrop.querySelector(".scr-helper-owner-route-only");
       const notifyInput = backdrop.querySelector(".scr-helper-owner-notify-input");
       let selectedOwnerName = defaultOwner || "";
+      let notifyTouched = false;
 
       function close(value) {
         backdrop.remove();
@@ -8103,9 +8113,18 @@ Health & Hospitality	DIRECT	NL	West	West
 
       function updateSaveLabel() {
         const ownerName = selectedOwnerName || matchOwnerOption(input.value, options);
-        routeOnly.textContent = "Route without owner";
-        save.textContent = "Route to owner";
+        routeOnly.textContent = "Route to Industry";
+        save.textContent = "Route to SCM Owner";
         save.disabled = !ownerName;
+        if (notifyInput) {
+          notifyInput.disabled = !ownerName;
+          if (!ownerName) {
+            notifyInput.checked = false;
+            notifyTouched = false;
+          } else if (!notifyTouched) {
+            notifyInput.checked = true;
+          }
+        }
       }
 
       function filteredOptions() {
@@ -8149,7 +8168,7 @@ Health & Hospitality	DIRECT	NL	West	West
       function saveSelection() {
         const value = normalizeSpaces(input.value);
         if (!value) {
-          message.textContent = "Choose an SCM owner first, or use Route without owner.";
+          message.textContent = "Choose an SCM owner first, or use Route to Industry.";
           input.focus();
           return;
         }
@@ -8163,23 +8182,14 @@ Health & Hospitality	DIRECT	NL	West	West
       }
 
       function routeSelectionWithoutAssignment() {
-        const value = normalizeSpaces(input.value);
-        if (!value) {
-          close({ ownerName: "", notifyOwner: false });
-          return;
-        }
-        const ownerName = selectedOwner();
-        if (!ownerName) {
-          message.textContent = `No authorized manager matched "${value}".`;
-          input.focus();
-          return;
-        }
-        close({ ownerName, notifyOwner: notifyOwner() });
+        close({ ownerName: "", notifyOwner: false });
       }
 
       input.addEventListener("input", () => {
         const matched = matchOwnerOption(input.value, options);
-        selectedOwnerName = matched && normalizeKey(matched) === normalizeKey(input.value) ? matched : "";
+        const nextOwnerName = matched && normalizeKey(matched) === normalizeKey(input.value) ? matched : "";
+        if (nextOwnerName && normalizeKey(nextOwnerName) !== normalizeKey(selectedOwnerName)) notifyTouched = false;
+        selectedOwnerName = nextOwnerName;
         renderOptions();
       });
       input.addEventListener("keydown", event => {
@@ -8199,11 +8209,13 @@ Health & Hospitality	DIRECT	NL	West	West
         const option = closestElement(event.target, ".scr-helper-owner-option");
         if (!option) return;
         selectedOwnerName = option.dataset.ownerName || "";
+        notifyTouched = false;
         input.value = selectedOwnerName;
         renderOptions();
         message.textContent = selectedOwnerName ? `Selected ${selectedOwnerName}.` : "";
         save.focus();
       });
+      if (notifyInput) notifyInput.addEventListener("change", () => { notifyTouched = true; });
       routeOnly.addEventListener("click", routeSelectionWithoutAssignment);
       backdrop.querySelector(".scr-helper-owner-cancel").addEventListener("click", () => close(null));
       backdrop.querySelector(".scr-helper-owner-modal-close").addEventListener("click", () => close(null));
@@ -8264,6 +8276,7 @@ Health & Hospitality	DIRECT	NL	West	West
       const ownerName = cleanPersonName(owner.name) || getCurrentUserName() || "Current user";
       const ownershipNote = normalizeMultiline(row.staffingNotes) ? "" : promptForOwnershipNote(ownerName);
       setOwnershipStatus(button, `Opening SCR and assigning to ${ownerName}...`);
+      setStaffingNotesStatus(card, `⏳ Assigning to ${ownerName}...`, "working");
       await submitAssignee(row, owner.id);
       updateRowAssignedTo(row, ownerName);
       updateOwnershipDisplay(button, ownerName);
@@ -8299,7 +8312,7 @@ Health & Hospitality	DIRECT	NL	West	West
     if (!row) return;
 
     button.disabled = true;
-    setStaffingNotesStatus(card, "Resolving Sales Rep email...");
+    setStaffingNotesStatus(card, "⏳ Resolving Sales Rep email...", "working");
 
     try {
       const recipient = await resolveSalesRepEmail(row);
@@ -8329,7 +8342,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const value = textarea.value;
     const previousRoutingKey = crossIndustryRoutingKey(row);
     button.disabled = true;
-    setStaffingNotesStatus(card, "Saving...");
+    setStaffingNotesStatus(card, "⏳ Saving notes...", "working");
 
     try {
       await submitStaffingNotes(row, value);
@@ -8364,7 +8377,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const buttons = card ? Array.from(card.querySelectorAll(".scr-helper-xvr-button")) : [];
     buttons.forEach(item => { item.disabled = true; });
     const isEpmRoute = target && normalizeKey(target.family) === normalizeKey(EPM_INDUSTRY_GROUP);
-    setStaffingNotesStatus(card, isEpmRoute ? "Saving EPM route..." : "Saving cross-industry route...");
+    setStaffingNotesStatus(card, isEpmRoute ? "⏳ Saving EPM route..." : "⏳ Saving cross-industry route...", "working");
 
     try {
       let assignmentError = null;
@@ -8388,7 +8401,13 @@ Health & Hospitality	DIRECT	NL	West	West
       if (assignmentError) {
         window.alert("The cross-industry route was saved, but IQUEUE could not update the Assigned To field from this page. Staff SCR is still available if you need to assign it manually.");
       }
-      if (assignment.ownerName && assignment.notifyOwner === false) {
+      if (!assignment.ownerName) {
+        row.routingNotice = {
+          message: `Route saved to ${target && target.family || "industry"} queue.`,
+          state: "success",
+          links: []
+        };
+      } else if (assignment.notifyOwner === false) {
         row.routingNotice = {
           message: "Route saved; SCM email notification skipped.",
           state: "success",
@@ -8396,7 +8415,7 @@ Health & Hospitality	DIRECT	NL	West	West
         };
       } else if (assignment.ownerName) {
         try {
-          setStaffingNotesStatus(card, "Route saved. Opening owner notification draft...");
+          setStaffingNotesStatus(card, "⏳ Route saved. Opening owner notification draft...", "working");
           const notice = await sendOwnerRouteEmail(row, assignment.ownerName, target);
           row.routingNotice = {
             message: `Route saved; Outlook compose opened for ${notice.email}. Review and send it. If it did not appear, use the links below.`,
@@ -9584,11 +9603,32 @@ Health & Hospitality	DIRECT	NL	West	West
       }
 
       #${HELPER_ID} .scr-helper-card {
+        position: relative;
         border: 1px solid var(--rw-slate-50);
         border-left: 5px solid var(--scr-industry-color, var(--ns-ui-primary-mid));
         border-radius: 8px;
         background: #ffffff;
         overflow: hidden;
+      }
+
+      #${HELPER_ID} .scr-helper-card.is-working {
+        box-shadow: 0 0 0 2px rgba(241, 177, 63, 0.35), 0 6px 18px rgba(60, 69, 69, 0.12);
+      }
+
+      #${HELPER_ID} .scr-helper-card.is-working::after {
+        content: "⏳ Working...";
+        position: absolute;
+        right: 12px;
+        bottom: 10px;
+        z-index: 2;
+        border: 1px solid var(--rw-brand-yellow);
+        border-radius: 999px;
+        padding: 4px 9px;
+        background: #fff4d8;
+        color: #7a4a00;
+        font-size: 11px;
+        font-weight: 800;
+        box-shadow: 0 2px 6px rgba(60, 69, 69, 0.14);
       }
 
       #${HELPER_ID} .scr-helper-card.is-request-amo,
@@ -10052,12 +10092,13 @@ Health & Hospitality	DIRECT	NL	West	West
       .scr-helper-owner-modal-actions button {
         border: 1px solid var(--rw-slate-50);
         border-radius: 4px;
-        padding: 7px 10px;
+        padding: 9px 13px;
         background: #ffffff;
         color: var(--rw-slate-150);
         cursor: pointer;
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 800;
+        min-height: 36px;
       }
 
       .scr-helper-owner-modal-actions button:disabled {
@@ -10071,10 +10112,11 @@ Health & Hospitality	DIRECT	NL	West	West
         border-color: var(--ns-ui-primary);
         background: var(--ns-ui-primary);
         color: #ffffff;
+        box-shadow: 0 2px 6px rgba(54, 103, 125, 0.22);
       }
 
       .scr-helper-owner-modal-actions .scr-helper-owner-route-only {
-        border-color: var(--rw-slate-50);
+        border-color: var(--ns-ui-primary-mid);
         background: var(--ns-ui-primary-soft);
         color: var(--ns-ui-primary);
       }
@@ -10143,6 +10185,18 @@ Health & Hospitality	DIRECT	NL	West	West
       #${HELPER_ID} .scr-helper-notes-status.is-error {
         color: var(--rw-oracle-red);
         font-weight: 700;
+      }
+
+      #${HELPER_ID} .scr-helper-notes-status.is-working {
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid var(--rw-brand-yellow);
+        border-radius: 999px;
+        padding: 4px 8px;
+        background: #fff4d8;
+        color: #7a4a00;
+        font-size: 12px;
+        font-weight: 800;
       }
 
       #${HELPER_ID} .scr-helper-notice-links {
