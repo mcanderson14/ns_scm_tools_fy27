@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.93B
+// @version      27.0.0.94B
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -17,6 +17,7 @@
 // @grant        unsafeWindow
 // @connect      github.com
 // @connect      raw.githubusercontent.com
+// @connect      graph.microsoft.com
 // @run-at       document-idle
 // @downloadURL  https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js
 // @updateURL    https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js
@@ -40,12 +41,13 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.93B";
+  const HELPER_VERSION = "27.0.0.94B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
   const GRAPH_TOKEN_REFRESH_URL = "https://mcanderson14.github.io/ns_scm_tools_fy27/calendar-refresh.html";
   const GRAPH_TOKEN_STATUS_KEY = "iqueue-graph-token-status-v1";
+  const GRAPH_ACCESS_TOKEN_KEY = "iqueue-graph-access-token-v1";
   const GRAPH_TOKEN_STATUS_STALE_MS = 26 * 60 * 60 * 1000;
   const GRAPH_TOKEN_EXPIRING_SOON_MS = 2 * 60 * 60 * 1000;
   const HELPER_STATE_STORAGE_KEY = "fy27-unified-sc-staffing-queue-assistant-state-v1";
@@ -3071,6 +3073,19 @@ Health & Hospitality	DIRECT	NL	West	West
     };
   }
 
+  function authorizedManagerForName(name) {
+    const targetKeys = personNameKeys(name);
+    if (!targetKeys.length) return null;
+    return authorizedManagerRecords.find(record => (
+      personNameKeys(record.name).some(key => targetKeys.includes(key))
+    )) || null;
+  }
+
+  function authorizedManagerEmailForName(name) {
+    const manager = authorizedManagerForName(name);
+    return normalizeSpaces(manager && manager.email || "");
+  }
+
   function readCachedAuthorizedManagers() {
     try {
       const cached = JSON.parse(localStorage.getItem(AUTHORIZED_MANAGERS_CACHE_KEY) || "null");
@@ -4847,12 +4862,13 @@ Health & Hospitality	DIRECT	NL	West	West
   function renderStaffingNotesEditor(row, notes) {
     const disabled = row.internalId ? "" : "disabled";
     const disabledHelp = row.internalId ? "" : `<div class="scr-helper-notes-help">Open the SCR to edit notes; no internal id was returned on this row.</div>`;
+    const notice = row.routingNotice && row.routingNotice.message ? row.routingNotice : null;
     return `
       <div class="scr-helper-notes-editor">
         <textarea class="scr-helper-notes-input" data-row-id="${escapeHtml(row.id)}" placeholder="No staffing notes yet.">${escapeHtml(notes || "")}</textarea>
         <div class="scr-helper-notes-actions">
           <button type="button" class="scr-helper-notes-save" data-row-id="${escapeHtml(row.id)}" ${disabled}>Save notes</button>
-          <span class="scr-helper-notes-status" aria-live="polite"></span>
+          <span class="scr-helper-notes-status${notice && notice.state ? ` is-${escapeHtml(notice.state)}` : ""}" aria-live="polite">${notice ? escapeHtml(notice.message) : ""}</span>
         </div>
         ${disabledHelp}
       </div>
@@ -5662,6 +5678,213 @@ Health & Hospitality	DIRECT	NL	West	West
     }
   }
 
+  function graphTokenScopesFromPayload(payload) {
+    if (!payload || typeof payload !== "object") return [];
+    const scopes = [];
+    if (typeof payload.scp === "string") scopes.push(...payload.scp.split(/\s+/));
+    if (Array.isArray(payload.roles)) scopes.push(...payload.roles);
+    return uniqueSorted(scopes.map(normalizeSpaces).filter(Boolean));
+  }
+
+  function graphTokenHasScope(tokenInfo, scope) {
+    const wanted = normalizeKey(scope);
+    return Boolean(tokenInfo && Array.isArray(tokenInfo.scopes) && tokenInfo.scopes.some(item => normalizeKey(item) === wanted));
+  }
+
+  function tokenLooksLikeJwt(value) {
+    return /\beyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\b/.test(String(value || ""));
+  }
+
+  function jwtTokensFromString(value) {
+    const matches = String(value || "").match(/\beyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\b/g);
+    return matches || [];
+  }
+
+  function graphTokenCandidateScore(token, source = "") {
+    const payload = decodeJwtPayload(token);
+    if (!payload) return 0;
+    const expiresAt = Number(payload.exp || 0) * 1000;
+    if (!expiresAt || expiresAt <= Date.now()) return 0;
+
+    const scopes = graphTokenScopesFromPayload(payload);
+    const aud = normalizeSpaces(payload.aud || "");
+    const sourceKey = normalizeKey(source);
+    let score = 10;
+    if (/graph\.microsoft\.com/i.test(aud) || aud === "00000003-0000-0000-c000-000000000000") score += 50;
+    if (scopes.some(scope => /^mail\.send$/i.test(scope))) score += 30;
+    if (scopes.some(scope => /^calendars?\./i.test(scope))) score += 10;
+    if (/access|graph|token|bearer/.test(sourceKey)) score += 8;
+    score += Math.min(12, Math.max(0, Math.floor((expiresAt - Date.now()) / (60 * 60 * 1000))));
+    return score;
+  }
+
+  function graphTokenInfoFromToken(token, source = "") {
+    const payload = decodeJwtPayload(token);
+    if (!payload) return null;
+    const expiresAt = Number(payload.exp || 0) * 1000;
+    const scopes = graphTokenScopesFromPayload(payload);
+    return {
+      token,
+      source,
+      checkedAt: Date.now(),
+      expiresAt,
+      scopes,
+      audience: normalizeSpaces(payload.aud || ""),
+      user: normalizeSpaces(payload.upn || payload.preferred_username || payload.email || payload.unique_name || "")
+    };
+  }
+
+  function storeGraphAccessTokenFromToken(token, source = "") {
+    const info = graphTokenInfoFromToken(token, source);
+    if (!info || !info.token || !info.expiresAt || info.expiresAt <= Date.now()) return null;
+    gmSetValue(GRAPH_ACCESS_TOKEN_KEY, info);
+    return info;
+  }
+
+  function captureBearerTokenFromText(value, source = "") {
+    const text = String(value || "");
+    const bearerMatch = text.match(/Bearer\s+(eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)/i);
+    if (bearerMatch) return storeGraphAccessTokenFromToken(bearerMatch[1], source);
+    const tokens = jwtTokensFromString(text);
+    for (const token of tokens) {
+      if (graphTokenCandidateScore(token, source) > 0) return storeGraphAccessTokenFromToken(token, source);
+    }
+    return null;
+  }
+
+  function captureBearerTokenFromHeaders(headers, source = "") {
+    if (!headers) return null;
+    try {
+      if (typeof Headers !== "undefined" && headers instanceof Headers) {
+        return captureBearerTokenFromText(headers.get("Authorization") || headers.get("authorization") || "", source);
+      }
+      if (Array.isArray(headers)) {
+        for (const [key, value] of headers) {
+          if (/^authorization$/i.test(key)) {
+            const info = captureBearerTokenFromText(value, source);
+            if (info) return info;
+          }
+        }
+        return null;
+      }
+      if (typeof headers === "object") {
+        const key = Object.keys(headers).find(item => /^authorization$/i.test(item));
+        return key ? captureBearerTokenFromText(headers[key], source) : null;
+      }
+    } catch (error) {
+      console.warn("IQUEUE could not inspect request headers for Graph token", error);
+    }
+    return null;
+  }
+
+  function collectGraphTokenCandidatesFromValue(value, source = "", depth = 0) {
+    if (depth > 4 || value == null) return [];
+    if (typeof value === "string") {
+      return jwtTokensFromString(value).map(token => ({ token, source }));
+    }
+    if (Array.isArray(value)) {
+      return value.flatMap((item, index) => collectGraphTokenCandidatesFromValue(item, `${source}[${index}]`, depth + 1));
+    }
+    if (typeof value === "object") {
+      return Object.entries(value).flatMap(([key, item]) => (
+        collectGraphTokenCandidatesFromValue(item, source ? `${source}.${key}` : key, depth + 1)
+      ));
+    }
+    return [];
+  }
+
+  function collectGraphTokenCandidatesFromStorage(storage, label) {
+    const candidates = [];
+    if (!storage) return candidates;
+    try {
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index);
+        const raw = storage.getItem(key);
+        if (!raw || !tokenLooksLikeJwt(raw)) continue;
+        let value = raw;
+        try {
+          value = JSON.parse(raw);
+        } catch (error) {
+          value = raw;
+        }
+        candidates.push(...collectGraphTokenCandidatesFromValue(value, `${label}:${key}`));
+      }
+    } catch (error) {
+      console.warn(`IQUEUE could not inspect ${label} for Graph token`, error);
+    }
+    return candidates;
+  }
+
+  function collectGraphTokenCandidatesFromPageFields() {
+    try {
+      return Array.from(document.querySelectorAll("textarea,input"))
+        .flatMap(field => {
+          const value = field && field.value || "";
+          if (!tokenLooksLikeJwt(value)) return [];
+          const name = field.getAttribute("name") || field.id || field.placeholder || "field";
+          return collectGraphTokenCandidatesFromValue(value, `page:${name}`);
+        });
+    } catch (error) {
+      console.warn("IQUEUE could not inspect refresh-page fields for Graph token", error);
+      return [];
+    }
+  }
+
+  function graphAccessTokenFromRefreshPage() {
+    const candidates = []
+      .concat(collectGraphTokenCandidatesFromStorage(window.localStorage, "localStorage"))
+      .concat(collectGraphTokenCandidatesFromStorage(window.sessionStorage, "sessionStorage"))
+      .concat(collectGraphTokenCandidatesFromPageFields())
+      .map(candidate => ({
+        ...candidate,
+        score: graphTokenCandidateScore(candidate.token, candidate.source)
+      }))
+      .filter(candidate => candidate.score > 0)
+      .sort((left, right) => right.score - left.score);
+
+    const best = candidates[0];
+    return best ? graphTokenInfoFromToken(best.token, best.source) : null;
+  }
+
+  function installGraphTokenRequestCapture() {
+    if (window.__iqueueGraphTokenCaptureInstalled) return;
+    window.__iqueueGraphTokenCaptureInstalled = true;
+
+    try {
+      const originalFetch = window.fetch;
+      if (typeof originalFetch === "function") {
+        window.fetch = function patchedIqueueFetch(input, init) {
+          try {
+            if (init && init.headers) captureBearerTokenFromHeaders(init.headers, "fetch:init");
+            if (input && input.headers) captureBearerTokenFromHeaders(input.headers, "fetch:request");
+          } catch (error) {
+            console.warn("IQUEUE fetch token capture failed", error);
+          }
+          return originalFetch.apply(this, arguments);
+        };
+      }
+    } catch (error) {
+      console.warn("IQUEUE could not patch fetch for Graph token capture", error);
+    }
+
+    try {
+      const OriginalXhr = window.XMLHttpRequest;
+      if (OriginalXhr && OriginalXhr.prototype) {
+        const originalSetRequestHeader = OriginalXhr.prototype.setRequestHeader;
+        OriginalXhr.prototype.setRequestHeader = function patchedIqueueSetRequestHeader(name, value) {
+          try {
+            if (/^authorization$/i.test(name)) captureBearerTokenFromText(value, "xhr");
+          } catch (error) {
+            console.warn("IQUEUE XHR token capture failed", error);
+          }
+          return originalSetRequestHeader.apply(this, arguments);
+        };
+      }
+    } catch (error) {
+      console.warn("IQUEUE could not patch XHR for Graph token capture", error);
+    }
+  }
+
   function expiryFromUnknownValue(value, depth = 0) {
     if (depth > 4 || value == null) return 0;
     if (typeof value === "number") {
@@ -5743,18 +5966,26 @@ Health & Hospitality	DIRECT	NL	West	West
   function publishGraphTokenStatusFromRefreshPage() {
     const pageStatus = graphTokenStatusFromPageText();
     const storageExpiry = graphTokenStatusFromStorage();
-    const expiresAt = pageStatus.expiresAt || storageExpiry || 0;
+    const tokenInfo = graphAccessTokenFromRefreshPage();
+    const expiresAt = tokenInfo && tokenInfo.expiresAt || pageStatus.expiresAt || storageExpiry || 0;
     const valid = Boolean(pageStatus.valid || expiresAt > Date.now());
+    if (tokenInfo && tokenInfo.token && tokenInfo.expiresAt > Date.now()) {
+      storeGraphAccessTokenFromToken(tokenInfo.token, tokenInfo.source || "calendar-refresh");
+    }
     gmSetValue(GRAPH_TOKEN_STATUS_KEY, {
       checkedAt: Date.now(),
       source: "calendar-refresh",
       valid,
       expiresAt,
+      tokenAvailable: Boolean(tokenInfo && tokenInfo.token),
+      mailSendAvailable: graphTokenHasScope(tokenInfo, "Mail.Send"),
+      scopes: tokenInfo && tokenInfo.scopes || [],
       message: valid ? "Saved token ready." : pageStatus.message || "Token status not found."
     });
   }
 
   function installGraphTokenRefreshPageBridge() {
+    installGraphTokenRequestCapture();
     publishGraphTokenStatusFromRefreshPage();
     window.setTimeout(publishGraphTokenStatusFromRefreshPage, 750);
     window.setTimeout(publishGraphTokenStatusFromRefreshPage, 2500);
@@ -5781,6 +6012,14 @@ Health & Hospitality	DIRECT	NL	West	West
     return value && typeof value === "object" ? value : null;
   }
 
+  function readGraphAccessTokenBridge() {
+    const value = gmGetValue(GRAPH_ACCESS_TOKEN_KEY, null);
+    if (!value || typeof value !== "object" || !value.token) return null;
+    const expiresAt = Number(value.expiresAt || 0);
+    if (!expiresAt || expiresAt <= Date.now()) return null;
+    return value;
+  }
+
   async function checkGraphTokenStatus(options = {}) {
     const force = Boolean(options.force);
     if (force) setGraphTokenStatus("Checking Microsoft Graph token...", "checking");
@@ -5798,6 +6037,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const age = Date.now() - Number(bridge.checkedAt || 0);
     const expiresAt = Number(bridge.expiresAt || 0);
     const expiryText = formatGraphTokenExpiry(expiresAt);
+    const tokenInfo = readGraphAccessTokenBridge();
     if (age > GRAPH_TOKEN_STATUS_STALE_MS) {
       setGraphTokenStatus(
         "Microsoft Graph token status is stale.",
@@ -5816,6 +6056,24 @@ Health & Hospitality	DIRECT	NL	West	West
       return bridge;
     }
 
+    if (!tokenInfo) {
+      setGraphTokenStatus(
+        "Microsoft Graph token is valid, but IQUEUE cannot read the access token yet.",
+        "warn",
+        "Open the refresh page once after installing this IQUEUE update."
+      );
+      return bridge;
+    }
+
+    if (!graphTokenHasScope(tokenInfo, "Mail.Send")) {
+      setGraphTokenStatus(
+        "Microsoft Graph token may be missing Mail.Send.",
+        "warn",
+        "Graph email notification requires a token with Mail.Send permission."
+      );
+      return bridge;
+    }
+
     if (expiresAt && expiresAt - Date.now() <= GRAPH_TOKEN_EXPIRING_SOON_MS) {
       setGraphTokenStatus(
         `Microsoft Graph token expires soon${expiryText ? ` (${expiryText})` : ""}.`,
@@ -5829,6 +6087,161 @@ Health & Hospitality	DIRECT	NL	West	West
       force ? "good" : ""
     );
     return bridge;
+  }
+
+  function graphRequest(options) {
+    const request = {
+      method: options.method || "GET",
+      url: options.url,
+      headers: options.headers || {},
+      data: options.body || undefined,
+      timeout: options.timeout || 20000
+    };
+
+    if (typeof GM_xmlhttpRequest === "function") {
+      return new Promise((resolve, reject) => {
+        GM_xmlhttpRequest({
+          ...request,
+          onload(response) {
+            const text = String(response.responseText || "");
+            let body = text;
+            try {
+              body = text ? JSON.parse(text) : null;
+            } catch (error) {
+              body = text;
+            }
+            if (response.status >= 200 && response.status < 300) {
+              resolve({ status: response.status, body });
+              return;
+            }
+            const message = body && typeof body === "object" && body.error
+              ? body.error.message || body.error.code
+              : text || `HTTP ${response.status}`;
+            reject(new Error(`Graph request failed: ${message}`));
+          },
+          onerror() {
+            reject(new Error("Graph request failed: network error"));
+          },
+          ontimeout() {
+            reject(new Error("Graph request failed: timed out"));
+          }
+        });
+      });
+    }
+
+    if (typeof GM !== "undefined" && GM && typeof GM.xmlHttpRequest === "function") {
+      return Promise.resolve(GM.xmlHttpRequest(request)).then(response => {
+        if (response.status >= 200 && response.status < 300) {
+          return { status: response.status, body: response.responseText || "" };
+        }
+        throw new Error(`Graph request failed: HTTP ${response.status}`);
+      });
+    }
+
+    return fetch(options.url, {
+      method: options.method || "GET",
+      headers: options.headers || {},
+      body: options.body || undefined
+    }).then(async response => {
+      if (response.ok) return { status: response.status, body: await response.text() };
+      throw new Error(`Graph request failed: HTTP ${response.status}`);
+    });
+  }
+
+  function graphMailHtmlForOwnerRoute(row, ownerName, target) {
+    const summary = buildRowSummary(row);
+    const scrLabel = formatScrTitlePrefix(row.scrDisplayId) || row.title || "SC Request";
+    const opportunity = summary.opportunityDisplay || "Missing Opportunity";
+    const company = summary.companyDisplay || "";
+    const editUrl = editUrlForRow(row);
+    const routedBy = getCurrentUserName() || "IQUEUE user";
+    const targetFamily = target && target.family || primaryDisplayedIndustryFamily(row) || "selected queue";
+    const ownerTag = scmOwnerTag(ownerName);
+    const rows = [
+      ["SCM Owner", ownerName],
+      ["Routed By", routedBy],
+      ["Cross Industry Queue", targetFamily],
+      ["Request Type", requestTypeLabel(row.amoDirect)],
+      ["Date Needed", summary.dateNeeded],
+      ["Company", company],
+      ["Opportunity", opportunity],
+      ["Sales Rep", summary.salesRep],
+      ["Regional Director", summary.salesDirector],
+      ["SCM Hashtag", ownerTag]
+    ].filter(([, value]) => normalizeSpaces(value));
+
+    return `
+      <div style="font-family: Arial, Helvetica, sans-serif; color: #3C4545; font-size: 14px; line-height: 1.45;">
+        <p>${escapeHtml(routedBy)} routed an SCR to your IQUEUE owner view.</p>
+        <p>
+          <strong>${escapeHtml(scrLabel)}</strong>
+          ${opportunity ? ` | ${escapeHtml(opportunity)}` : ""}
+          ${company ? ` | ${escapeHtml(company)}` : ""}
+        </p>
+        <table style="border-collapse: collapse; margin: 12px 0;">
+          <tbody>
+            ${rows.map(([label, value]) => `
+              <tr>
+                <td style="padding: 4px 10px 4px 0; color: #697778; font-weight: 700;">${escapeHtml(label)}</td>
+                <td style="padding: 4px 0;">${escapeHtml(value)}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+        ${editUrl ? `<p><a href="${escapeHtml(editUrl)}">Open SCR</a></p>` : ""}
+      </div>
+    `;
+  }
+
+  function graphMailSubjectForOwnerRoute(row, target) {
+    const summary = buildRowSummary(row);
+    const scrLabel = formatScrTitlePrefix(row.scrDisplayId) || row.title || "SC Request";
+    const targetFamily = target && target.family || primaryDisplayedIndustryFamily(row) || "SCM owner";
+    const opportunity = summary.opportunityDisplay || "";
+    const company = summary.companyDisplay || "";
+    return normalizeSpaces(`IQUEUE: ${targetFamily} SCR routed to you - ${scrLabel}${opportunity ? ` | ${opportunity}` : ""}${company ? ` | ${company}` : ""}`).slice(0, 240);
+  }
+
+  async function sendOwnerRouteEmail(row, ownerName, target) {
+    const email = authorizedManagerEmailForName(ownerName);
+    if (!email) throw new Error(`No email address found for ${ownerName} in Authorized Managers.`);
+
+    const tokenInfo = readGraphAccessTokenBridge();
+    if (!tokenInfo || !tokenInfo.token) {
+      throw new Error("Microsoft Graph token is unavailable. Refresh the token page once after installing this IQUEUE update.");
+    }
+    if (!graphTokenHasScope(tokenInfo, "Mail.Send")) {
+      throw new Error("Microsoft Graph token is missing Mail.Send permission.");
+    }
+
+    await graphRequest({
+      method: "POST",
+      url: "https://graph.microsoft.com/v1.0/me/sendMail",
+      headers: {
+        Authorization: `Bearer ${tokenInfo.token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        message: {
+          subject: graphMailSubjectForOwnerRoute(row, target),
+          body: {
+            contentType: "HTML",
+            content: graphMailHtmlForOwnerRoute(row, ownerName, target)
+          },
+          toRecipients: [
+            {
+              emailAddress: {
+                address: email,
+                name: ownerName
+              }
+            }
+          ]
+        },
+        saveToSentItems: true
+      })
+    });
+
+    return email;
   }
 
   if (isGraphTokenRefreshPage()) {
@@ -7433,6 +7846,23 @@ Health & Hospitality	DIRECT	NL	West	West
       updateRowHashtags(row, nextValue);
       if (assignmentError) {
         window.alert("The cross-industry route was saved, but IQUEUE could not update the Assigned To field from this page. Staff SCR is still available if you need to assign it manually.");
+      }
+      if (assignment.ownerName) {
+        try {
+          setStaffingNotesStatus(card, "Route saved. Sending owner notification...");
+          const email = await sendOwnerRouteEmail(row, assignment.ownerName, target);
+          row.routingNotice = {
+            message: `Route saved; email sent to ${email}.`,
+            state: "success"
+          };
+        } catch (emailError) {
+          console.warn("IQUEUE could not send owner route email", emailError);
+          row.routingNotice = {
+            message: `Route saved; email not sent: ${emailError.message || emailError}`,
+            state: "error"
+          };
+          setGraphTokenStatus("Route email was not sent.", "warn", emailError.message || String(emailError));
+        }
       }
       updateIndustrySubgroupFilterOptions();
       renderResults();
