@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.120B
+// @version      27.0.0.121B
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -41,7 +41,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.120B";
+  const HELPER_VERSION = "27.0.0.121B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -5060,7 +5060,6 @@ Health & Hospitality	DIRECT	NL	West	West
           <div class="scr-helper-notes-button-stack">
             <button type="button" class="scr-helper-notes-save" data-row-id="${escapeHtml(row.id)}" ${disabled}>Save notes</button>
             <button type="button" class="scr-helper-request-info" data-row-id="${escapeHtml(row.id)}" ${disabled}>Email Sales</button>
-            <button type="button" class="scr-helper-slack-sales" data-row-id="${escapeHtml(row.id)}" ${disabled}>Slack Sales</button>
           </div>
           <span class="scr-helper-notes-status${notice && notice.state ? ` is-${escapeHtml(notice.state)}` : ""}" aria-live="polite">${notice ? escapeHtml(notice.message) : ""}</span>
           ${noticeLinks}
@@ -6869,45 +6868,6 @@ Health & Hospitality	DIRECT	NL	West	West
     return lines.filter(line => line !== "").join("\r\n");
   }
 
-  function requesterSlackText(row) {
-    const summary = buildRowSummary(row);
-    const scrLabel = formatScrTitlePrefix(row.scrDisplayId) || row.title || "SC Request";
-    const viewUrl = viewUrlForRow(row);
-    const lines = [
-      "I have questions regarding this SC Request:",
-      "",
-      [scrLabel, summary.opportunityDisplay || "Missing Opportunity", summary.companyDisplay].filter(Boolean).join(" | "),
-      viewUrl ? `Open SCR: ${viewUrl}` : ""
-    ];
-    return lines.filter(line => line !== "").join("\n");
-  }
-
-  function slackClientUrl() {
-    return "https://app.slack.com/client";
-  }
-
-  async function copyTextToClipboard(text) {
-    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-      await navigator.clipboard.writeText(text);
-      return;
-    }
-
-    const textarea = document.createElement("textarea");
-    textarea.value = text;
-    textarea.setAttribute("readonly", "readonly");
-    textarea.style.position = "fixed";
-    textarea.style.left = "-9999px";
-    textarea.style.top = "0";
-    document.body.appendChild(textarea);
-    textarea.focus();
-    textarea.select();
-    try {
-      if (!document.execCommand("copy")) throw new Error("Clipboard copy command failed.");
-    } finally {
-      textarea.remove();
-    }
-  }
-
   function buildEmailComposeDraft(email, subject, body, labels = {}) {
     const compactBody = body.length > 1400
       ? `${body.slice(0, 1350)}\r\n\r\n[Details trimmed for draft length. Open the SCR for full context.]`
@@ -8532,39 +8492,6 @@ Health & Hospitality	DIRECT	NL	West	West
     }
   }
 
-  async function handleRequesterSlack(button) {
-    const card = button.closest(".scr-helper-card");
-    const row = searchRows.find(item => item.id === button.dataset.rowId);
-    if (!row) return;
-
-    button.disabled = true;
-    setStaffingNotesStatus(card, "⏳ Preparing Slack message...", "working");
-
-    try {
-      const recipient = await resolveSalesRepEmail(row);
-      const message = requesterSlackText(row);
-      await copyTextToClipboard(message);
-      const query = recipient.email || recipient.name || buildRowSummary(row).salesRep || "";
-      const slackUrl = slackClientUrl();
-      openEditUrlWithGm(slackUrl);
-      row.routingNotice = {
-        message: `Slack message copied; Slack opened. Search for ${query || "the Sales Rep"}, paste, and send it.`,
-        state: "success",
-        links: [
-          { label: "Open Slack", href: slackUrl }
-        ]
-      };
-      renderResults();
-    } catch (error) {
-      console.warn("IQUEUE could not prepare Slack Sales message", error);
-      row.routingNotice = {
-        message: `Could not prepare Slack message: ${error.message || error}`,
-        state: "error"
-      };
-      renderResults();
-    }
-  }
-
   async function handleStaffingNotesSave(button) {
     const card = button.closest(".scr-helper-card");
     const textarea = card && card.querySelector(".scr-helper-notes-input");
@@ -9101,12 +9028,6 @@ Health & Hospitality	DIRECT	NL	West	West
       const requestInfoButton = closestElement(event.target, ".scr-helper-request-info");
       if (requestInfoButton) {
         handleRequesterInfoEmail(requestInfoButton);
-        return;
-      }
-
-      const slackSalesButton = closestElement(event.target, ".scr-helper-slack-sales");
-      if (slackSalesButton) {
-        handleRequesterSlack(slackSalesButton);
         return;
       }
 
@@ -10519,29 +10440,12 @@ Health & Hospitality	DIRECT	NL	West	West
         cursor: pointer;
       }
 
-      #${HELPER_ID} .scr-helper-slack-sales {
-        flex: 0 0 auto;
-        border: 1px solid var(--rw-pine-100);
-        border-radius: 4px;
-        padding: 6px 9px;
-        background: #ffffff;
-        color: var(--rw-pine-100);
-        font-size: 12px;
-        font-weight: 800;
-        cursor: pointer;
-      }
-
       #${HELPER_ID} .scr-helper-request-info:hover {
         border-color: var(--ns-ui-primary);
         color: var(--ns-ui-primary);
       }
 
-      #${HELPER_ID} .scr-helper-slack-sales:hover {
-        background: var(--rw-neutral-30);
-      }
-
-      #${HELPER_ID} .scr-helper-request-info:disabled,
-      #${HELPER_ID} .scr-helper-slack-sales:disabled {
+      #${HELPER_ID} .scr-helper-request-info:disabled {
         border-color: var(--rw-slate-50);
         background: var(--rw-neutral-30);
         color: var(--rw-slate-100);
