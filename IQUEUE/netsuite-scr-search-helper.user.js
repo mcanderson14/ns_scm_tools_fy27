@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.99B
+// @version      27.0.0.101B
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -41,7 +41,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.99B";
+  const HELPER_VERSION = "27.0.0.101B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -5836,7 +5836,6 @@ Health & Hospitality	DIRECT	NL	West	West
       valid,
       expiresAt,
       tokenAvailable: Boolean(tokenInfo && tokenInfo.token),
-      mailSendAvailable: graphTokenHasScope(tokenInfo, "Mail.Send"),
       scopes: tokenInfo && tokenInfo.scopes || status.scopes || [],
       message: status.message || (valid ? "Saved token ready." : "Token status not found.")
     });
@@ -6270,15 +6269,6 @@ Health & Hospitality	DIRECT	NL	West	West
       return bridge;
     }
 
-    if (!graphTokenHasScope(tokenInfo, "Mail.Send")) {
-      setGraphTokenStatus(
-        "Microsoft Graph token is missing Mail.Send.",
-        "warn",
-        "Graph email notification requires a token with Mail.Send permission."
-      );
-      return bridge;
-    }
-
     if (expiresAt && expiresAt - Date.now() <= GRAPH_TOKEN_EXPIRING_SOON_MS) {
       setGraphTokenStatus(
         `Microsoft Graph token expires soon${expiryText ? ` (${expiryText})` : ""}.`,
@@ -6407,46 +6397,56 @@ Health & Hospitality	DIRECT	NL	West	West
     return normalizeSpaces(`IQUEUE: ${targetFamily} SCR routed to you - ${scrLabel}${opportunity ? ` | ${opportunity}` : ""}${company ? ` | ${company}` : ""}`).slice(0, 240);
   }
 
+  function ownerRouteMailText(row, ownerName, target) {
+    const summary = buildRowSummary(row);
+    const scrLabel = formatScrTitlePrefix(row.scrDisplayId) || row.title || "SC Request";
+    const routedBy = getCurrentUserName() || "IQUEUE user";
+    const targetFamily = target && target.family || primaryDisplayedIndustryFamily(row) || "selected queue";
+    const editUrl = editUrlForRow(row);
+    const lines = [
+      `${routedBy} routed an SCR to your IQUEUE owner view.`,
+      "",
+      `${scrLabel}${summary.opportunityDisplay ? ` | ${summary.opportunityDisplay}` : ""}${summary.companyDisplay ? ` | ${summary.companyDisplay}` : ""}`,
+      "",
+      `SCM Owner: ${ownerName}`,
+      `Cross Industry Queue: ${targetFamily}`,
+      `Request Type: ${requestTypeLabel(row.amoDirect) || "Unknown"}`,
+      `Date Needed: ${summary.dateNeeded || "Unknown"}`,
+      `Company: ${summary.companyDisplay || "Unknown"}`,
+      `Opportunity: ${summary.opportunityDisplay || "Missing Opportunity"}`,
+      `Sales Rep: ${summary.salesRep || "Unknown"}`,
+      `Regional Director: ${summary.salesDirector || "Unknown"}`,
+      `SCM Hashtag: ${scmOwnerTag(ownerName)}`,
+      editUrl ? `Open SCR: ${editUrl}` : ""
+    ];
+    return lines.filter(line => line !== "").join("\r\n");
+  }
+
+  function openOwnerRouteEmailDraft(row, ownerName, target, email, reason = "") {
+    const subject = graphMailSubjectForOwnerRoute(row, target);
+    const fullBody = ownerRouteMailText(row, ownerName, target);
+    const compactBody = fullBody.length > 1200
+      ? `${fullBody.slice(0, 1150)}\r\n\r\n[Details trimmed for draft length. Open the SCR for full context.]`
+      : fullBody;
+    const url = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(compactBody)}`;
+    const link = document.createElement("a");
+    link.href = url;
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    return {
+      email,
+      mode: "draft",
+      reason: reason || "Microsoft Graph email send is unavailable.",
+      subject
+    };
+  }
+
   async function sendOwnerRouteEmail(row, ownerName, target) {
     const email = authorizedManagerEmailForName(ownerName);
     if (!email) throw new Error(`No email address found for ${ownerName} in Authorized Managers.`);
-
-    const tokenInfo = readGraphAccessTokenBridge();
-    if (!tokenInfo || !tokenInfo.token) {
-      throw new Error("Microsoft Graph token is unavailable. Use IQUEUE's Refresh token link once so the token page can sync the saved token back to this queue.");
-    }
-    if (!graphTokenHasScope(tokenInfo, "Mail.Send")) {
-      throw new Error("Microsoft Graph token is missing Mail.Send permission.");
-    }
-
-    await graphRequest({
-      method: "POST",
-      url: "https://graph.microsoft.com/v1.0/me/sendMail",
-      headers: {
-        Authorization: `Bearer ${tokenInfo.token}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        message: {
-          subject: graphMailSubjectForOwnerRoute(row, target),
-          body: {
-            contentType: "HTML",
-            content: graphMailHtmlForOwnerRoute(row, ownerName, target)
-          },
-          toRecipients: [
-            {
-              emailAddress: {
-                address: email,
-                name: ownerName
-              }
-            }
-          ]
-        },
-        saveToSentItems: true
-      })
-    });
-
-    return email;
+    return openOwnerRouteEmailDraft(row, ownerName, target, email, "Owner notifications use Outlook drafts.");
   }
 
   if (isGraphTokenRefreshPage()) {
@@ -8058,10 +8058,10 @@ Health & Hospitality	DIRECT	NL	West	West
       }
       if (assignment.ownerName) {
         try {
-          setStaffingNotesStatus(card, "Route saved. Sending owner notification...");
-          const email = await sendOwnerRouteEmail(row, assignment.ownerName, target);
+          setStaffingNotesStatus(card, "Route saved. Opening owner notification draft...");
+          const notice = await sendOwnerRouteEmail(row, assignment.ownerName, target);
           row.routingNotice = {
-            message: `Route saved; email sent to ${email}.`,
+            message: `Route saved; Outlook draft opened for ${notice.email}. Review and send it.`,
             state: "success"
           };
         } catch (emailError) {
@@ -8194,7 +8194,6 @@ Health & Hospitality	DIRECT	NL	West	West
           <div class="scr-helper-header-meta">
             <div id="scr-helper-version" class="scr-helper-version">Version ${escapeHtml(HELPER_VERSION)}</div>
             <a id="scr-helper-update-link" class="scr-helper-update-link" href="${escapeHtml(SCRIPT_UPDATE_URL)}" target="_blank" rel="noopener noreferrer" hidden>Update available</a>
-            <div id="scr-helper-graph-token-status" class="scr-helper-graph-token-status" hidden></div>
             <div id="scr-helper-status" class="scr-helper-status">Loading ${escapeHtml(CURRENT_QUEUE.loadingLabel)} (${escapeHtml(SAVED_SEARCH_ID)}).</div>
           </div>
         </div>
@@ -8214,9 +8213,6 @@ Health & Hospitality	DIRECT	NL	West	West
           </label>
           <button type="button" id="scr-helper-refresh-mapping" class="scr-helper-options-button">Refresh Mapping JSONs</button>
           <button type="button" id="scr-helper-check-update" class="scr-helper-options-button">Check for IQUEUE Update</button>
-          <button type="button" id="scr-helper-check-graph-token" class="scr-helper-options-button">Check Graph Token</button>
-          <a id="scr-helper-refresh-graph-token" class="scr-helper-options-link" href="${escapeHtml(GRAPH_TOKEN_REFRESH_RELAY_URL)}" target="_blank">Refresh Microsoft Graph token</a>
-          <div id="scr-helper-graph-token-options-status" class="scr-helper-options-status" hidden></div>
         </div>
       </div>
       <div class="scr-helper-filter-shell">
@@ -8427,17 +8423,6 @@ Health & Hospitality	DIRECT	NL	West	West
         button.textContent = "Check for IQUEUE Update";
       }
     });
-    document.getElementById("scr-helper-check-graph-token").addEventListener("click", async event => {
-      const button = event.currentTarget;
-      button.disabled = true;
-      button.textContent = "Checking...";
-      try {
-        await checkGraphTokenStatus({ force: true });
-      } finally {
-        button.disabled = false;
-        button.textContent = "Check Graph Token";
-      }
-    });
     document.addEventListener("click", event => {
       const portlet = document.getElementById(HELPER_ID);
       if (portlet && !portlet.contains(event.target)) {
@@ -8521,7 +8506,6 @@ Health & Hospitality	DIRECT	NL	West	West
     setFiltersCollapsed(filtersCollapsed, { persist: false });
     hydrateCurrentUserName();
     checkForScriptUpdate();
-    checkGraphTokenStatus();
   }
 
   function removeExistingHelperArtifacts() {
