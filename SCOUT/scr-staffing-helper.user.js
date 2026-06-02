@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.0.7
+// @version      27.0.8
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.0.7
+   SCOUT — SC Operations Utility Tool  27.0.8
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.0.7';
+  const SCRIPT_VERSION = '27.0.8';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -12462,14 +12462,23 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     document.body.appendChild(panel);
     wireScoutUpdateBanner();
     setTimeout(() => checkScoutUpdate(false), 1200);
-    refreshProductOptionsFromScrForm();
-    refreshAmoDeliverableOptions();
-    refreshAmoDeliverableOptionsAsync();
-    setTimeout(refreshIndustryOptionsFromBOW, 100);
     setTimeout(resumePendingStaffAction, 700);
 
     // Initialise the panel width CSS variable from localStorage
     document.documentElement.style.setProperty('--sc-panel-w', getPanelWidth() + 'px');
+
+    let panelReferenceDataStarted = false;
+    let myTeamLoaded = false;
+
+    function deferPanelWork(fn, delay) {
+      setTimeout(function () {
+        try {
+          fn();
+        } catch (e) {
+          console.warn('[SCOUT] Deferred panel load failed:', e.message || e);
+        }
+      }, delay || 0);
+    }
 
     /* ── Open / Close helpers ─────────────────────────────────────── */
     function openPanel() {
@@ -12480,13 +12489,30 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     function closePanel() {
       document.documentElement.classList.remove('sc-panel-open');
     }
-    function refreshPanelContext() {
-      loadStaffingContext(empName);
+    function ensurePanelReferenceData() {
       refreshProductOptionsFromScrForm();
       refreshAmoDeliverableOptions();
-      refreshAmoDeliverableOptionsAsync();
-      refreshProductSkillOptionsFromMatrix();
-      refreshIndustryOptionsFromBOW();
+      if (PRODUCT_SKILL_OPTIONS_CACHE && PRODUCT_SKILL_OPTIONS_CACHE.length) {
+        applyProductSkillOptions(PRODUCT_SKILL_OPTIONS_CACHE);
+      }
+      if (INDUSTRY_OPTIONS_CACHE && INDUSTRY_OPTIONS_CACHE.length) {
+        applyIndustryOptions(INDUSTRY_OPTIONS_CACHE);
+      }
+      if (panelReferenceDataStarted) return;
+      panelReferenceDataStarted = true;
+      deferPanelWork(refreshAmoDeliverableOptionsAsync, 0);
+      deferPanelWork(refreshProductSkillOptionsFromMatrix, 80);
+      deferPanelWork(refreshIndustryOptionsFromBOW, 180);
+    }
+    function ensureMyTeamLoaded() {
+      if (myTeamLoaded) return;
+      myTeamLoaded = true;
+      loadMyTeam(empIds, empName);
+    }
+    function refreshPanelContext() {
+      loadStaffingContext(empName);
+      ensurePanelReferenceData();
+      ensureMyTeamLoaded();
       autoPopulateFromForm();
       detectTravelRequired();
       updateRequestInsights('direct');
@@ -12569,6 +12595,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     document.getElementById('sc-save-dashboard-url').addEventListener('click', () => {
       const confirmEl = document.getElementById('sc-save-confirm');
       saveSettingsFromForm();
+      myTeamLoaded = true;
       loadMyTeam(empIds, empName);
       confirmEl.classList.add('show');
       setTimeout(() => confirmEl.classList.remove('show'), 2500);
@@ -12638,6 +12665,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     // My Team — refresh button
     document.getElementById('sc-myteam-refresh').addEventListener('click', (ev) => {
       ev.stopPropagation();
+      myTeamLoaded = true;
       loadMyTeam(empIds, empName);
     });
 
@@ -12668,9 +12696,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     wireCollapsibleCard('sc-amo-product-skills-card', 'sc-amo-product-skills-toggle');
     wireCollapsibleCard('sc-amo-industry-card', 'sc-amo-industry-toggle');
     wireCollapsibleCard('sc-amo-filters-card', 'sc-amo-filters-toggle');
-
-    // Kick off initial My Team load
-    loadMyTeam(empIds, empName);
 
     // Quick SC Lookup
     (function () {
@@ -12790,14 +12815,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       runAmoSearch(empRec, empIds, empName);
     });
 
-    // NetSuite view-mode pages can finish hydrating field text after the
-    // userscript injects. Read request type/deliverable on load so the active
-    // Direct/AMO tab is correct before the user starts staffing.
-    setTimeout(function () {
-      autoPopulateFromForm();
-      detectTravelRequired();
-    }, 250);
-    setTimeout(autoPopulateFromForm, 1200);
     if (getPanelOpenState()) {
       setTimeout(openScoutPanel, 350);
     }
