@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.91B
+// @version      27.0.0.93B
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -40,7 +40,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.91B";
+  const HELPER_VERSION = "27.0.0.93B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -7158,9 +7158,9 @@ Health & Hospitality	DIRECT	NL	West	West
           <div class="scr-helper-owner-modal-list" role="listbox"></div>
           <div class="scr-helper-owner-modal-message" aria-live="polite"></div>
           <div class="scr-helper-owner-modal-actions">
-            <button type="button" class="scr-helper-owner-route-only">Route only</button>
+            <button type="button" class="scr-helper-owner-route-only">Route without owner</button>
             <button type="button" class="scr-helper-owner-cancel">Cancel</button>
-            <button type="button" class="scr-helper-owner-save">Save route</button>
+            <button type="button" class="scr-helper-owner-save">Route to owner</button>
           </div>
         </div>
       `;
@@ -7170,6 +7170,7 @@ Health & Hospitality	DIRECT	NL	West	West
       const list = backdrop.querySelector(".scr-helper-owner-modal-list");
       const message = backdrop.querySelector(".scr-helper-owner-modal-message");
       const save = backdrop.querySelector(".scr-helper-owner-save");
+      const routeOnly = backdrop.querySelector(".scr-helper-owner-route-only");
       let selectedOwnerName = defaultOwner || "";
 
       function close(value) {
@@ -7179,7 +7180,9 @@ Health & Hospitality	DIRECT	NL	West	West
 
       function updateSaveLabel() {
         const ownerName = selectedOwnerName || matchOwnerOption(input.value, options);
-        save.textContent = ownerName ? "Save route & owner" : "Save route";
+        routeOnly.textContent = "Route without owner";
+        save.textContent = "Route to owner";
+        save.disabled = !ownerName;
       }
 
       function filteredOptions() {
@@ -7217,6 +7220,22 @@ Health & Hospitality	DIRECT	NL	West	West
       }
 
       function saveSelection() {
+        const value = normalizeSpaces(input.value);
+        if (!value) {
+          message.textContent = "Choose an SCM owner first, or use Route without owner.";
+          input.focus();
+          return;
+        }
+        const ownerName = selectedOwner();
+        if (!ownerName) {
+          message.textContent = `No authorized manager matched "${value}".`;
+          input.focus();
+          return;
+        }
+        close({ ownerName });
+      }
+
+      function routeSelectionWithoutAssignment() {
         const value = normalizeSpaces(input.value);
         if (!value) {
           close({ ownerName: "" });
@@ -7258,7 +7277,7 @@ Health & Hospitality	DIRECT	NL	West	West
         message.textContent = selectedOwnerName ? `Selected ${selectedOwnerName}.` : "";
         save.focus();
       });
-      backdrop.querySelector(".scr-helper-owner-route-only").addEventListener("click", () => close({ ownerName: "" }));
+      routeOnly.addEventListener("click", routeSelectionWithoutAssignment);
       backdrop.querySelector(".scr-helper-owner-cancel").addEventListener("click", () => close(null));
       backdrop.querySelector(".scr-helper-owner-modal-close").addEventListener("click", () => close(null));
       save.addEventListener("click", saveSelection);
@@ -7270,22 +7289,6 @@ Health & Hospitality	DIRECT	NL	West	West
       input.focus();
       if (defaultOwner) input.select();
     });
-  }
-
-  async function assignRowToScmOwner(row, ownerName, card) {
-    const cleanOwnerName = cleanPersonName(ownerName);
-    if (!cleanOwnerName) return null;
-
-    setStaffingNotesStatus(card, `Resolving SCM owner ${cleanOwnerName}...`);
-    const match = await lookupRosterAssignee([cleanOwnerName]);
-    if (!match || !match.id) {
-      throw new Error(`Could not find SCM owner ${cleanOwnerName} in the SC roster.`);
-    }
-
-    setStaffingNotesStatus(card, `Assigning SCM owner ${match.name || cleanOwnerName}...`);
-    await submitAssignee(row, match.id);
-    updateRowAssignedTo(row, match.name || cleanOwnerName);
-    return match;
   }
 
   function setOwnershipStatus(button, message, state = "") {
@@ -7411,14 +7414,7 @@ Health & Hospitality	DIRECT	NL	West	West
 
     try {
       let assignmentError = null;
-      if (assignment.ownerName) {
-        try {
-          await assignRowToScmOwner(row, assignment.ownerName, card);
-        } catch (error) {
-          assignmentError = error;
-          console.warn("SCR helper could not assign selected SCM owner; saving route tag anyway", error);
-        }
-      } else if (isEpmRoute) {
+      if (isEpmRoute && !assignment.ownerName) {
         try {
           await routeRowToEpmAssignee(row, card);
         } catch (error) {
@@ -9075,6 +9071,13 @@ Health & Hospitality	DIRECT	NL	West	West
         font-weight: 800;
       }
 
+      .scr-helper-owner-modal-actions button:disabled {
+        border-color: var(--rw-slate-50);
+        background: var(--rw-neutral-30);
+        color: var(--rw-slate-100);
+        cursor: not-allowed;
+      }
+
       .scr-helper-owner-modal-actions .scr-helper-owner-save {
         border-color: var(--ns-ui-primary);
         background: var(--ns-ui-primary);
@@ -9085,6 +9088,14 @@ Health & Hospitality	DIRECT	NL	West	West
         border-color: var(--rw-slate-50);
         background: var(--ns-ui-primary-soft);
         color: var(--ns-ui-primary);
+      }
+
+      .scr-helper-owner-modal-actions button:disabled,
+      .scr-helper-owner-modal-actions .scr-helper-owner-save:disabled {
+        border-color: var(--rw-slate-50);
+        background: var(--rw-neutral-30);
+        color: var(--rw-slate-100);
+        cursor: not-allowed;
       }
 
       #${HELPER_ID} .scr-helper-notes-save {
