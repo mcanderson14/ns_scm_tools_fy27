@@ -12,7 +12,7 @@
       <div>
         <p class="eyebrow">NetSuite SCM Tools</p>
         <h1>FY27 Queue Mapping JSON Maker</h1>
-        <div id="app-version" class="app-version">Version 27.0.2</div>
+        <div id="app-version" class="app-version">Version 27.0.3</div>
       </div>
       <span id="status-pill" class="status-pill">Waiting for Excel</span>
     </header>
@@ -38,6 +38,13 @@
             <small>Generates the SCM owner mapping for regional relationships.</small>
           </span>
         </label>
+        <label class="mode-card">
+          <input type="radio" name="mapping-type" value="authorizedManagers">
+          <span>
+            <strong>Authorized Managers</strong>
+            <small>Generates the SCM owner/viewer list from saved search 1319617.</small>
+          </span>
+        </label>
       </div>
 
       <div class="input-grid">
@@ -48,9 +55,9 @@
         </label>
 
         <label class="url-box">
-          <span>SharePoint URL</span>
+          <span>Workbook URL</span>
           <div class="url-row">
-            <input id="sharepoint-url" type="url" placeholder="Paste a SharePoint workbook link">
+            <input id="sharepoint-url" type="url" placeholder="Paste a workbook link">
             <button id="load-url" type="button">Try URL</button>
           </div>
           <small>Works only when the URL allows browser download access from this page. Manual upload is the reliable fallback.</small>

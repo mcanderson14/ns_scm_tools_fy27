@@ -3,16 +3,21 @@
 
   const SCHEMA = "ns-scm-tools.region-map.v3";
   const PRODUCTS_SCM_SCHEMA = "ns-scm-tools.scm-relationships.v3";
-  const TOOL_VERSION = "27.0.2";
+  const AUTHORIZED_MANAGERS_SCHEMA = "ns-scm-tools.authorized-managers.v1";
+  const TOOL_VERSION = "27.0.3";
   const TOOL_NAME = "FY27 Queue Mapping JSON Maker";
   const CONFIG_STORAGE_KEY = "ns-scm-tools-region-map-industry-config-v1";
   const REGION_MAPPING_TYPE = "region";
   const PRODUCTS_SCM_MAPPING_TYPE = "productsScm";
+  const AUTHORIZED_MANAGERS_MAPPING_TYPE = "authorizedManagers";
   const REGION_OUTPUT_FILE_NAME = "SC_Industry_State_Region_Mapping.json";
   const PRODUCTS_SCM_OUTPUT_FILE_NAME = "Products_SCM_Relationship_Mapping.json";
+  const AUTHORIZED_MANAGERS_OUTPUT_FILE_NAME = "Authorized_Managers.json";
+  const AUTHORIZED_MANAGERS_SEARCH_URL = "https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl?searchid=1319617";
   const SOURCE_DESCRIPTIONS = {
     [REGION_MAPPING_TYPE]: "Use an Excel workbook where row 1 contains SC industry groups, row 2 contains Direct/AMO, and column A contains state/province codes.",
-    [PRODUCTS_SCM_MAPPING_TYPE]: "Use an Excel workbook with columns for Sales Region, AMO/Direct, Regional Director or RSM, SCM owner, and optional SCM Director. SCM ownership applies across SC Industry Groups."
+    [PRODUCTS_SCM_MAPPING_TYPE]: "Use an Excel workbook with columns for Sales Region, AMO/Direct, Regional Director or RSM, SCM owner, and optional SCM Director. SCM ownership applies across SC Industry Groups.",
+    [AUTHORIZED_MANAGERS_MAPPING_TYPE]: "Use an Excel export from NetSuite saved search 1319617. Expected columns include Manager/Name, Email, Role, SC Industry Group(s), Can Own, Can View, and Active."
   };
   const PRODUCTS_SCM_HEADER_ALIASES = {
     salesRegion: ["salesregion", "region", "salesarea"],
@@ -20,6 +25,15 @@
     regionalDirector: ["rd", "regionaldirector", "regionalsalesmanager", "rsm", "salesdirector", "salesdir", "regionaldirectorregionalsalesmanager"],
     scm: ["scm", "scmanager", "solutionconsultingmanager", "productsscm", "productsscmmanager", "scmowner", "queueowner", "productsscmqueueowner"],
     scmDirector: ["scmdirector", "scmdirectors", "scdirector", "scdirectors", "queuedirector", "queuedirectors", "managerdirector", "managerdirectors", "authorizeddirector", "authorizeddirectors", "director", "directors"]
+  };
+  const AUTHORIZED_MANAGER_HEADER_ALIASES = {
+    name: ["name", "manager", "scm", "scmanager", "solutionconsultingmanager", "authorizedmanager", "employee", "employeename", "owner", "queueowner"],
+    email: ["email", "emailaddress", "workemail", "employeeemail"],
+    role: ["role", "title", "jobtitle", "managerrole", "type"],
+    groups: ["scindustrygroup", "scindustrygroups", "industrygroup", "industrygroups", "industryfamily", "industryfamilies", "groups", "scgroups", "queuegroups"],
+    canOwn: ["canown", "ownereligible", "assignable", "canbeassigned", "assignowner", "ownscr", "queueowner"],
+    canView: ["canview", "viewer", "viewqueue", "canviewqueue", "queueviewer", "view"],
+    active: ["active", "isinactive", "inactive", "status"]
   };
   const DEFAULT_INDUSTRY_GROUPS = [
     "Business Services",
@@ -205,20 +219,21 @@
   }
 
   function outputFileNameForMode() {
-    return state.mappingType === PRODUCTS_SCM_MAPPING_TYPE
-      ? PRODUCTS_SCM_OUTPUT_FILE_NAME
-      : REGION_OUTPUT_FILE_NAME;
+    if (state.mappingType === PRODUCTS_SCM_MAPPING_TYPE) return PRODUCTS_SCM_OUTPUT_FILE_NAME;
+    if (state.mappingType === AUTHORIZED_MANAGERS_MAPPING_TYPE) return AUTHORIZED_MANAGERS_OUTPUT_FILE_NAME;
+    return REGION_OUTPUT_FILE_NAME;
   }
 
   function updateMappingTypeUi() {
-    const isProductsScm = state.mappingType === PRODUCTS_SCM_MAPPING_TYPE;
+    const usesFlatWorkbook = state.mappingType === PRODUCTS_SCM_MAPPING_TYPE
+      || state.mappingType === AUTHORIZED_MANAGERS_MAPPING_TYPE;
     if (elements["source-description"]) {
       elements["source-description"].textContent = SOURCE_DESCRIPTIONS[state.mappingType] || SOURCE_DESCRIPTIONS[REGION_MAPPING_TYPE];
     }
     if (elements["region-parsing-settings"]) {
-      elements["region-parsing-settings"].hidden = isProductsScm;
+      elements["region-parsing-settings"].hidden = usesFlatWorkbook;
     }
-    if (elements["industry-map-panel"] && isProductsScm) {
+    if (elements["industry-map-panel"] && usesFlatWorkbook) {
       elements["industry-map-panel"].hidden = true;
     }
   }
@@ -226,16 +241,16 @@
   async function handleUrlLoad() {
     const url = (elements["sharepoint-url"].value || "").trim();
     if (!url) {
-      setStatus("Paste a SharePoint workbook URL first", true);
+      setStatus("Paste a workbook URL first", true);
       return;
     }
 
-    setStatus("Trying SharePoint URL...");
+    setStatus("Trying workbook URL...");
     try {
       const response = await fetch(url, { credentials: "include" });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const buffer = await response.arrayBuffer();
-      state.workbookName = fileNameFromUrl(url) || "sharepoint-workbook.xlsx";
+      state.workbookName = fileNameFromUrl(url) || "linked-workbook.xlsx";
       state.outputFileName = outputFileNameForMode();
       await parseArrayBuffer(buffer);
     } catch (error) {
@@ -262,12 +277,13 @@
   function reprocessWorkbook() {
     if (!state.workbook) return;
     try {
-      const output = state.mappingType === PRODUCTS_SCM_MAPPING_TYPE
-        ? buildProductsScmJson(state.workbook, state.workbookName)
-        : buildMappingJson(state.workbook, state.workbookName);
+      const output = buildJsonForCurrentMode(state.workbook, state.workbookName);
       state.jsonText = JSON.stringify(output, null, 2);
       renderOutput(output);
-      if (output.schema === PRODUCTS_SCM_SCHEMA && (output.counts.incompleteRows || output.counts.duplicateExactKeys)) {
+      if (output.schema === AUTHORIZED_MANAGERS_SCHEMA && (output.counts.incompleteRows || output.counts.duplicateManagers || output.counts.missingGroups)) {
+        const reviewCount = output.counts.incompleteRows + output.counts.duplicateManagers + output.counts.missingGroups;
+        setStatus(`Review ${reviewCount} manager issue${reviewCount === 1 ? "" : "s"}`, true);
+      } else if (output.schema === PRODUCTS_SCM_SCHEMA && (output.counts.incompleteRows || output.counts.duplicateExactKeys)) {
         const reviewCount = output.counts.incompleteRows + output.counts.duplicateExactKeys;
         setStatus(`Review ${reviewCount} SCM relationship issue${reviewCount === 1 ? "" : "s"}`, true);
       } else if (output.counts.unresolvedIndustryGroups) {
@@ -279,6 +295,12 @@
       setStatus(error.message || "Could not convert workbook", true);
       console.error(error);
     }
+  }
+
+  function buildJsonForCurrentMode(workbook, fileName) {
+    if (state.mappingType === PRODUCTS_SCM_MAPPING_TYPE) return buildProductsScmJson(workbook, fileName);
+    if (state.mappingType === AUTHORIZED_MANAGERS_MAPPING_TYPE) return buildAuthorizedManagersJson(workbook, fileName);
+    return buildMappingJson(workbook, fileName);
   }
 
   function buildMappingJson(workbook, fileName) {
@@ -543,6 +565,146 @@
     };
   }
 
+  function buildAuthorizedManagersJson(workbook, fileName) {
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const matrix = window.XLSX.utils.sheet_to_json(sheet, {
+      header: 1,
+      blankrows: false,
+      raw: false
+    });
+
+    const header = detectAuthorizedManagersHeader(matrix);
+    if (!header) throw new Error("No Authorized Managers header row was found.");
+
+    const managerMap = new Map();
+    const incompleteRows = [];
+    const missingGroups = [];
+    const duplicateRows = [];
+
+    for (let rowIndex = header.rowIndex + 1; rowIndex < matrix.length; rowIndex += 1) {
+      const row = matrix[rowIndex] || [];
+      if (!row.some(cleanCell)) continue;
+
+      const name = cleanPersonName(row[header.indexes.name]);
+      const email = cleanEmail(row[header.indexes.email]);
+      const role = cleanCell(row[header.indexes.role]);
+      const groups = parseGroupList(row[header.indexes.groups]);
+      const active = parseBooleanCell(row[header.indexes.active], true, { inactiveMeansFalse: true });
+      const canOwn = parseBooleanCell(row[header.indexes.canOwn], defaultCanOwnForRole(role));
+      const canView = parseBooleanCell(row[header.indexes.canView], true);
+
+      if (!name) {
+        incompleteRows.push({
+          sourceRow: rowIndex + 1,
+          missing: ["Name"],
+          values: row.map(cleanCell).filter(Boolean)
+        });
+        continue;
+      }
+
+      if (!groups.length) {
+        missingGroups.push({
+          sourceRow: rowIndex + 1,
+          name,
+          role,
+          message: "No SC Industry Group was returned. This manager will not be assignable until a group is added."
+        });
+      }
+
+      const nameKey = normalizePersonKey(name);
+      const record = managerMap.get(nameKey);
+      if (record) {
+        duplicateRows.push({
+          name,
+          firstSourceRow: record.sourceRows[0],
+          sourceRow: rowIndex + 1
+        });
+        record.sourceRows.push(rowIndex + 1);
+        record.email = record.email || email;
+        record.role = mergeTextList([record.role, role]).join("; ");
+        record.groups = uniqueSorted(record.groups.concat(groups));
+        record.groupKeys = record.groups.map(normalizeKey);
+        record.canOwn = Boolean(record.canOwn || canOwn);
+        record.canView = Boolean(record.canView || canView);
+        record.active = Boolean(record.active || active);
+        continue;
+      }
+
+      managerMap.set(nameKey, {
+        sourceRows: [rowIndex + 1],
+        name,
+        nameKey,
+        email,
+        role,
+        groups,
+        groupKeys: groups.map(normalizeKey),
+        canOwn,
+        canView,
+        active
+      });
+    }
+
+    const authorizedManagers = Array.from(managerMap.values())
+      .map(record => ({
+        ...record,
+        groups: uniqueSorted(record.groups),
+        groupKeys: uniqueSorted(record.groups.map(normalizeKey))
+      }))
+      .sort((left, right) => alphaSort(left.name, right.name));
+    if (!authorizedManagers.length) throw new Error("No authorized manager rows were generated.");
+
+    const activeManagers = authorizedManagers.filter(manager => manager.active);
+    const canOwnManagers = activeManagers.filter(manager => manager.canOwn && manager.groups.length);
+    const canViewManagers = activeManagers.filter(manager => manager.canView);
+    const industryGroups = uniqueSorted(authorizedManagers.flatMap(manager => manager.groups));
+    const groupLookup = {};
+    industryGroups.forEach(group => {
+      const groupKey = normalizeKey(group);
+      groupLookup[groupKey] = canOwnManagers
+        .filter(manager => manager.groupKeys.includes(groupKey) || manager.groupKeys.includes("all") || manager.groups.includes("*"))
+        .map(manager => manager.name);
+    });
+
+    return {
+      schema: AUTHORIZED_MANAGERS_SCHEMA,
+      generator: {
+        name: TOOL_NAME,
+        version: TOOL_VERSION
+      },
+      generatedAt: new Date().toISOString(),
+      source: {
+        fileName: fileName || "",
+        sheetName,
+        searchUrl: AUTHORIZED_MANAGERS_SEARCH_URL,
+        headerRow: header.rowIndex + 1,
+        firstDataRow: header.rowIndex + 2,
+        detectedHeaders: header.detectedHeaders
+      },
+      counts: {
+        managers: authorizedManagers.length,
+        activeManagers: activeManagers.length,
+        canOwn: canOwnManagers.length,
+        canView: canViewManagers.length,
+        industryGroups: industryGroups.length,
+        incompleteRows: incompleteRows.length,
+        duplicateManagers: duplicateRows.length,
+        missingGroups: missingGroups.length
+      },
+      industryGroups,
+      authorizedManagers,
+      canOwnManagers: canOwnManagers.map(manager => manager.name),
+      canViewManagers: canViewManagers.map(manager => manager.name),
+      managerLookup: Object.fromEntries(authorizedManagers.map(manager => [manager.nameKey, manager])),
+      groupLookup,
+      review: {
+        incompleteRows,
+        duplicateRows,
+        missingGroups
+      }
+    };
+  }
+
   function detectMappingColumns(industryRow, modeRow, stateColumnIndex) {
     const columns = [];
     let activeIndustry = "";
@@ -679,6 +841,85 @@
       .sort((left, right) => alphaSort(left.scm, right.scm));
   }
 
+  function detectAuthorizedManagersHeader(matrix) {
+    const maxRows = Math.min(matrix.length, 15);
+    const candidates = [];
+
+    for (let rowIndex = 0; rowIndex < maxRows; rowIndex += 1) {
+      const row = matrix[rowIndex] || [];
+      const normalizedHeaders = row.map(normalizeKey);
+      const indexes = {
+        name: findProductsHeaderIndex(normalizedHeaders, AUTHORIZED_MANAGER_HEADER_ALIASES.name),
+        email: findProductsHeaderIndex(normalizedHeaders, AUTHORIZED_MANAGER_HEADER_ALIASES.email),
+        role: findProductsHeaderIndex(normalizedHeaders, AUTHORIZED_MANAGER_HEADER_ALIASES.role),
+        groups: findProductsHeaderIndex(normalizedHeaders, AUTHORIZED_MANAGER_HEADER_ALIASES.groups),
+        canOwn: findProductsHeaderIndex(normalizedHeaders, AUTHORIZED_MANAGER_HEADER_ALIASES.canOwn),
+        canView: findProductsHeaderIndex(normalizedHeaders, AUTHORIZED_MANAGER_HEADER_ALIASES.canView),
+        active: findProductsHeaderIndex(normalizedHeaders, AUTHORIZED_MANAGER_HEADER_ALIASES.active)
+      };
+      const requiredCount = indexes.name >= 0 ? 1 : 0;
+      const score = requiredCount * 10
+        + (indexes.email >= 0 ? 2 : 0)
+        + (indexes.role >= 0 ? 2 : 0)
+        + (indexes.groups >= 0 ? 3 : 0)
+        + (indexes.canOwn >= 0 ? 1 : 0)
+        + (indexes.canView >= 0 ? 1 : 0)
+        + (indexes.active >= 0 ? 1 : 0);
+      if (requiredCount) candidates.push({ rowIndex, row, indexes, score });
+    }
+
+    candidates.sort((left, right) => right.score - left.score || left.rowIndex - right.rowIndex);
+    const winner = candidates[0];
+    if (!winner) return null;
+
+    return {
+      rowIndex: winner.rowIndex,
+      indexes: winner.indexes,
+      detectedHeaders: Object.fromEntries(Object.entries(winner.indexes).map(([key, index]) => [
+        key,
+        productsHeaderCellInfo(winner.row, index)
+      ]))
+    };
+  }
+
+  function parseGroupList(value) {
+    const text = cleanCell(value);
+    if (!text) return [];
+    return uniqueSorted(
+      text
+        .split(/\s*(?:;|\||,|\n|\r|\t)\s*/g)
+        .map(cleanCell)
+        .filter(Boolean)
+        .map(group => resolveIndustryGroup(group) || group)
+    );
+  }
+
+  function cleanEmail(value) {
+    const match = cleanCell(value).match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+    return match ? match[0].toLowerCase() : "";
+  }
+
+  function parseBooleanCell(value, fallback = false, options = {}) {
+    const text = cleanCell(value);
+    if (!text) return Boolean(fallback);
+    if (/^(?:y|yes|true|t|1|active|enabled)$/i.test(text)) return true;
+    if (/^(?:n|no|false|f|0|disabled)$/i.test(text)) return false;
+    if (options.inactiveMeansFalse && /inactive|terminated|disabled/i.test(text)) return false;
+    if (/active|enabled/i.test(text)) return true;
+    return Boolean(fallback);
+  }
+
+  function defaultCanOwnForRole(role) {
+    const text = cleanCell(role);
+    if (!text) return true;
+    if (/\b(?:director|avp|vp|vice\s*president|leader|executive)\b/i.test(text)) return false;
+    return true;
+  }
+
+  function mergeTextList(values) {
+    return uniqueSorted(values.map(cleanCell).filter(Boolean));
+  }
+
   function buildEmojiMappings(industryGroups) {
     const scIndustryGroups = { ...DEFAULT_EMOJI_MAPPINGS.scIndustryGroups };
     industryGroups.forEach(group => {
@@ -705,6 +946,10 @@
 
     if (output.schema === PRODUCTS_SCM_SCHEMA) {
       renderProductsScmOutput(output);
+      return;
+    }
+    if (output.schema === AUTHORIZED_MANAGERS_SCHEMA) {
+      renderAuthorizedManagersOutput(output);
       return;
     }
 
@@ -782,6 +1027,43 @@
         row.requestTypes.join(", "),
         row.salesRegions.join(", "),
         row.regionalDirectors.join(", ")
+      ])
+    );
+  }
+
+  function renderAuthorizedManagersOutput(output) {
+    elements["columns-preview-title"].textContent = "Authorized Managers";
+    elements["spot-checks-title"].textContent = "Assignment Groups";
+    elements["summary-text"].textContent = `${output.counts.managers.toLocaleString()} authorized manager row${output.counts.managers === 1 ? "" : "s"} generated from ${output.source.sheetName}.`;
+
+    renderStats([
+      ["Managers", output.counts.managers],
+      ["Active", output.counts.activeManagers],
+      ["Can Own", output.counts.canOwn],
+      ["Can View", output.counts.canView],
+      ["SC Groups", output.counts.industryGroups],
+      ["Review Items", output.counts.incompleteRows + output.counts.duplicateManagers + output.counts.missingGroups]
+    ]);
+
+    elements["columns-preview"].innerHTML = renderTable(
+      ["Manager", "Email", "Role", "Groups", "Can Own", "Can View", "Active", "Source Rows"],
+      output.authorizedManagers.map(row => [
+        row.name,
+        row.email || "",
+        row.role || "",
+        row.groups.join(", ") || "Missing",
+        row.canOwn ? "Yes" : "No",
+        row.canView ? "Yes" : "No",
+        row.active ? "Yes" : "No",
+        row.sourceRows.join(", ")
+      ])
+    );
+
+    elements["spot-checks"].innerHTML = renderTable(
+      ["SC Industry Group", "Assignable Managers"],
+      output.industryGroups.map(group => [
+        group,
+        (output.groupLookup[normalizeKey(group)] || []).join(", ") || "None"
       ])
     );
   }

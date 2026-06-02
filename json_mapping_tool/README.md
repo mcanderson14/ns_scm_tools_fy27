@@ -2,12 +2,13 @@
 
 Static browser tool for converting FY27 queue mapping Excel workbooks into JSON mapping files.
 
-Current tool version: `27.0.2`.
+Current tool version: `27.0.3`.
 
 The tool currently supports two outputs:
 
 - `SC_Industry_State_Region_Mapping.json`
 - `Products_SCM_Relationship_Mapping.json`
+- `Authorized_Managers.json`
 
 ## SC Industry State Region Mapping
 
@@ -48,6 +49,32 @@ The generated JSON uses schema `ns-scm-tools.scm-relationships.v3` and includes:
 5. For state-region mappings, clarify any workbook industry labels that are not mapped.
 6. Download the JSON file.
 7. Upload the JSON file to NetSuite File Cabinet when the queue helper is ready to consume external mappings.
+
+## Authorized Managers
+
+Use the `Authorized Managers` mode for an Excel export from NetSuite saved search `1319617`:
+
+`https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl?searchid=1319617`
+
+Recommended columns:
+
+- `Name` or `Manager`
+- `Email`
+- `Role` or `Title`
+- `SC Industry Group` or `Groups`
+- `Can Own`
+- `Can View`
+- `Active`
+
+The generated JSON uses schema `ns-scm-tools.authorized-managers.v1` and includes:
+
+- `authorizedManagers`: one row per deduped manager.
+- `canOwnManagers`: active managers eligible for manual SCR owner assignment.
+- `canViewManagers`: active managers/directors allowed to view SCM queue controls.
+- `groupLookup`: assignable managers by SC Industry Group.
+- `review`: incomplete, duplicate, or missing-group rows to inspect before uploading.
+
+If `Can Own` is missing, the tool defaults directors, AVPs, VPs, leaders, and executives to `false`; other roles default to `true`. `Can View` defaults to `true`. Missing groups are included in review because they should not become assignable until a group is supplied.
 
 ## SC Industry Group Clarification
 
