@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.107B
+// @version      27.0.0.112B
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -41,7 +41,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.107B";
+  const HELPER_VERSION = "27.0.0.112B";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -69,8 +69,13 @@
   const AUTHORIZED_MANAGERS_FILE_NAME = "Authorized_Managers.json";
   const AUTHORIZED_MANAGERS_FILE_NAMES = [AUTHORIZED_MANAGERS_FILE_NAME, "Authorized Managers.json", "Authorized_Users.json", "Authorized Users.json"];
   const AUTHORIZED_MANAGERS_FILE_ID = "";
+  const AUTHORIZED_MANAGERS_FOLDER_URL = "https://nlcorp.app.netsuite.com/app/common/media/482833928?folder=482833928&ifrmcntnr=T";
   const AUTHORIZED_MANAGERS_SEARCH_ID = "1319617";
   const AUTHORIZED_MANAGERS_SEARCH_URL = "https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl?searchid=1319617";
+  const AUTHORIZED_MANAGERS_SEARCH_URLS = [
+    AUTHORIZED_MANAGERS_SEARCH_URL,
+    "https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl?searchid=1319617"
+  ];
   const AUTHORIZED_MANAGERS_CACHE_KEY = "iqueue-authorized-managers-v1";
   const AUTHORIZED_MANAGERS_REFRESH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
   const LOGO_LARGE_URL = "https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/IQ_large_logo.png";
@@ -2430,18 +2435,36 @@ Health & Hospitality	DIRECT	NL	West	West
   }
 
   function authorizedManagersUrlCandidates() {
-    if (!AUTHORIZED_MANAGERS_FILE_ID) return [];
     const origin = window.location.origin || "https://nlcorp.app.netsuite.com";
+    const fileIdUrls = AUTHORIZED_MANAGERS_FILE_ID
+      ? [
+          `${origin}/core/media/media.nl?id=${encodeURIComponent(AUTHORIZED_MANAGERS_FILE_ID)}&c=NLCORP&_xt=.json`,
+          `${origin}/core/media/media.nl?id=${encodeURIComponent(AUTHORIZED_MANAGERS_FILE_ID)}&_xt=.json`,
+          `${origin}/app/common/media/mediaitem.nl?id=${encodeURIComponent(AUTHORIZED_MANAGERS_FILE_ID)}`
+        ]
+      : [];
     return orderedUnique([
-      `${origin}/core/media/media.nl?id=${encodeURIComponent(AUTHORIZED_MANAGERS_FILE_ID)}&c=NLCORP&_xt=.json`,
-      `${origin}/core/media/media.nl?id=${encodeURIComponent(AUTHORIZED_MANAGERS_FILE_ID)}&_xt=.json`,
-      `${origin}/app/common/media/mediaitem.nl?id=${encodeURIComponent(AUTHORIZED_MANAGERS_FILE_ID)}`
-    ]);
+      AUTHORIZED_MANAGERS_FOLDER_URL,
+      ...fileIdUrls
+    ].filter(Boolean));
   }
 
   function extractMappingDownloadUrls(html, baseUrl, fileName = EXTERNAL_MAPPING_FILE_NAME, fileId = EXTERNAL_MAPPING_FILE_ID) {
     const urls = [];
     const text = String(html || "");
+    const fileNames = (Array.isArray(fileName) ? fileName : [fileName])
+      .map(name => String(name || ""))
+      .filter(Boolean);
+    const fileIds = [fileId]
+      .map(id => String(id || ""))
+      .filter(Boolean);
+    try {
+      const base = new URL(baseUrl || window.location.href, window.location.href);
+      const idFromBase = base.searchParams.get("id");
+      if (idFromBase) fileIds.push(idFromBase);
+    } catch (error) {
+      // Ignore malformed base URLs; normal URL candidates still apply.
+    }
 
     try {
       const doc = new DOMParser().parseFromString(text, "text/html");
@@ -2449,10 +2472,11 @@ Health & Hospitality	DIRECT	NL	West	West
         const href = node.getAttribute("href") || node.getAttribute("src");
         if (!href) return;
         const absolute = new URL(href, baseUrl || window.location.href).href;
-        const matchesFileName = Boolean(fileName && absolute.includes(fileName));
-        const matchesFileId = Boolean(fileId && (
-          (absolute.includes("/core/media/media.nl") && absolute.includes(`id=${fileId}`))
-          || (absolute.includes("/app/common/media/") && absolute.includes(fileId))
+        const linkText = normalizeSpaces(node.textContent || "");
+        const matchesFileName = fileNames.some(name => absolute.includes(name) || linkText.includes(name));
+        const matchesFileId = fileIds.some(id => (
+          (absolute.includes("/core/media/media.nl") && absolute.includes(`id=${id}`))
+          || (absolute.includes("/app/common/media/") && absolute.includes(id))
         ));
         if (matchesFileName || matchesFileId) {
           urls.push(absolute);
@@ -2465,7 +2489,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const regex = /https?:\/\/[^"'<>\s]+(?:media\.nl|mediaitem\.nl)[^"'<>\s]*/gi;
     Array.from(text.matchAll(regex)).forEach(match => {
       const url = match[0].replace(/&amp;/g, "&");
-      if ((fileId && url.includes(fileId)) || (fileName && url.includes(fileName))) urls.push(url);
+      if (fileIds.some(id => url.includes(id)) || fileNames.some(name => url.includes(name))) urls.push(url);
     });
 
     return orderedUnique(urls).filter(url => url !== baseUrl);
@@ -2895,9 +2919,9 @@ Health & Hospitality	DIRECT	NL	West	West
 
   const AUTHORIZED_MANAGER_HEADER_ALIASES = {
     name: ["manager", "name", "scm", "scmanager", "salesconsultantmanager", "authorizedmanager"],
-    email: ["email", "emailaddress", "workemail"],
+    email: ["email", "emailaddress", "workemail", "oracleemailaddress", "oracleemail"],
     role: ["role", "title", "jobtitle"],
-    groups: ["scindustrygroup", "scindustrygroups", "scstaffingindustry", "scstaffingindustries", "industrygroup", "industrygroups", "vertical", "verticals", "group", "groups"],
+    groups: ["scindustrygroup", "scindustrygroups", "scstaffingindustry", "scstaffingindustries", "industrygroup", "industrygroups", "salesvertical", "salesverticals", "vertical", "verticals", "group", "groups"],
     canOwn: ["canown", "owner", "canownscr", "canbescmowner"],
     canView: ["canview", "viewer", "canviewqueue", "canviewscmqueue"],
     active: ["active", "inactive", "status", "enabled"]
@@ -2918,6 +2942,11 @@ Health & Hospitality	DIRECT	NL	West	West
   }
 
   function authorizedManagerHeaderIndex(headers, key) {
+    if (key === "name") {
+      const preferredAliases = ["name", "scm", "scmanager", "salesconsultantmanager", "authorizedmanager"];
+      const preferredIndex = headers.findIndex(header => preferredAliases.includes(normalizeHeader(header)));
+      if (preferredIndex >= 0) return preferredIndex;
+    }
     return headers.findIndex(header => authorizedManagerHeaderMatches(header, key));
   }
 
@@ -3041,8 +3070,8 @@ Health & Hospitality	DIRECT	NL	West	West
     };
   }
 
-  async function fetchAuthorizedManagersFromSavedSearch() {
-    const response = await fetch(AUTHORIZED_MANAGERS_SEARCH_URL, {
+  async function fetchAuthorizedManagersFromSavedSearch(searchUrl = AUTHORIZED_MANAGERS_SEARCH_URL) {
+    const response = await fetch(searchUrl, {
       credentials: "include",
       cache: "no-cache"
     });
@@ -3052,7 +3081,7 @@ Health & Hospitality	DIRECT	NL	West	West
     return authorizedManagersDataFromTable(doc, {
       label: `Saved Search ${AUTHORIZED_MANAGERS_SEARCH_ID}`,
       searchId: AUTHORIZED_MANAGERS_SEARCH_ID,
-      searchUrl: AUTHORIZED_MANAGERS_SEARCH_URL
+      searchUrl
     });
   }
 
@@ -3272,14 +3301,16 @@ Health & Hospitality	DIRECT	NL	West	West
   async function fetchAuthorizedManagersData() {
     const errors = [];
 
-    try {
-      const data = await fetchAuthorizedManagersFromSavedSearch();
-      return {
-        data,
-        label: `Saved Search ${AUTHORIZED_MANAGERS_SEARCH_ID}`
-      };
-    } catch (error) {
-      errors.push(`Saved Search ${AUTHORIZED_MANAGERS_SEARCH_ID}: ${error.message || error}`);
+    for (const searchUrl of AUTHORIZED_MANAGERS_SEARCH_URLS) {
+      try {
+        const data = await fetchAuthorizedManagersFromSavedSearch(searchUrl);
+        return {
+          data,
+          label: `Saved Search ${AUTHORIZED_MANAGERS_SEARCH_ID}`
+        };
+      } catch (error) {
+        errors.push(`Saved Search ${AUTHORIZED_MANAGERS_SEARCH_ID}: ${error.message || error}`);
+      }
     }
 
     try {
@@ -3294,7 +3325,7 @@ Health & Hospitality	DIRECT	NL	West	West
 
     for (const url of authorizedManagersUrlCandidates()) {
       try {
-        const data = await fetchMappingJsonFromUrl(url, new Set(), AUTHORIZED_MANAGERS_FILE_NAME, AUTHORIZED_MANAGERS_FILE_ID);
+        const data = await fetchMappingJsonFromUrl(url, new Set(), AUTHORIZED_MANAGERS_FILE_NAMES, AUTHORIZED_MANAGERS_FILE_ID);
         return {
           data,
           label: `File Cabinet ${AUTHORIZED_MANAGERS_FILE_NAME}`
@@ -5415,7 +5446,10 @@ Health & Hospitality	DIRECT	NL	West	West
     const items = [];
     const add = (label, value, displayValue = value, extra = {}) => {
       const normalized = normalizeSpaces(value);
-      if (normalized) items.push({ label, value: normalizeSpaces(displayValue) || normalized, removable: true, ...extra });
+      if (normalized) {
+        const groupKey = extra.groupKey || `${extra.removeType || "filter"}:${extra.removeKey || normalizeKey(label)}`;
+        items.push({ label, value: normalizeSpaces(displayValue) || normalized, removable: true, groupKey, ...extra });
+      }
     };
 
     add("SC Industry Group", controls.industry.value, industryOptionLabel(controls.industry.value), { removeType: "select", removeKey: "industry" });
@@ -5425,27 +5459,27 @@ Health & Hospitality	DIRECT	NL	West	West
     add("Sales Vertical", controls.salesVertical.value, controls.salesVertical.value, { removeType: "select", removeKey: "salesVertical" });
     PEOPLE_FILTERS.forEach(filter => {
       selectedPeopleFilterValues(filter.key).forEach(person => {
-        add(filter.label, person, person, { removeType: "people", removeKey: filter.key });
+        add(filter.label, person, person, { removeType: "people", removeKey: filter.key, groupKey: "people" });
       });
     });
     if (controls.productsScmOwnerMe && controls.productsScmOwnerMe.checked) {
-      add("SCM Owner", currentProductsScmUserName() ? `Me (${currentProductsScmUserName()})` : "Me", undefined, { removeType: "checkbox", removeKey: "productsScmOwnerMe" });
+      add("SCM Owner", currentProductsScmUserName() ? `Me (${currentProductsScmUserName()})` : "Me", undefined, { removeType: "checkbox", removeKey: "productsScmOwnerMe", groupKey: "scmOwner" });
     }
     if (controls.productsScmOwner) {
       productsScmOwnerValuesFromString(controls.productsScmOwner.value).forEach(owner => {
-        add("SCM Owner", owner, owner, { removeType: "productsScmOwner" });
+        add("SCM Owner", owner, owner, { removeType: "productsScmOwner", groupKey: "scmOwner" });
       });
     }
     if (controls.staffingRegions) {
       staffingRegionValuesFromString(controls.staffingRegions.value).forEach(region => {
-        add("SC Region", region, region, { removeType: "staffingRegion" });
+        add("SC Region", region, region, { removeType: "staffingRegion", groupKey: "staffingRegion" });
       });
     } else {
       add("SC Region", controls.staffingRegion.value, controls.staffingRegion.value, { removeType: "select", removeKey: "staffingRegion" });
     }
     add("Type", controls.amoDirect.value, controls.amoDirect.value, { removeType: "select", removeKey: "amoDirect" });
     if (controls.assignedToMe && controls.assignedToMe.checked) {
-      add("Assigned", getCurrentUserName() ? `Me (${getCurrentUserName()})` : "Me", undefined, { removeType: "checkbox", removeKey: "assignedToMe" });
+      add("Assigned", getCurrentUserName() ? `Me (${getCurrentUserName()})` : "Me", undefined, { removeType: "checkbox", removeKey: "assignedToMe", connectorBefore: items.length ? "OR" : "" });
     }
     if (controls.unmappedOnly && controls.unmappedOnly.checked) add("Review", "Unmapped", undefined, { removeType: "checkbox", removeKey: "unmappedOnly" });
     if (controls.hideTigerEnterprise && controls.hideTigerEnterprise.checked) add("Hidden", "Enterprise / Tiger", undefined, { removeType: "checkbox", removeKey: "hideTigerEnterprise" });
@@ -5460,9 +5494,15 @@ Health & Hospitality	DIRECT	NL	West	West
     if (!summary) return;
 
     const items = filterSummaryItems(getControls());
+    const connectorFor = (item, index) => {
+      if (!index) return "";
+      if (item.connectorBefore) return item.connectorBefore;
+      return item.groupKey && item.groupKey === items[index - 1].groupKey ? "OR" : "AND";
+    };
     summary.classList.toggle("is-empty", !items.length);
     summary.innerHTML = items.length
-      ? items.map(item => `
+      ? items.map((item, index) => `
+          ${connectorFor(item, index) ? `<span class="scr-helper-filter-operator is-${escapeHtml(connectorFor(item, index).toLowerCase())}" title="${escapeHtml(connectorFor(item, index) === "OR" ? "Either filter value can match" : "Both filter groups must match")}">${escapeHtml(connectorFor(item, index))}</span>` : ""}
           <span class="scr-helper-filter-chip${item.removable ? " is-removable" : ""}">
             <span>${escapeHtml(item.label)}</span>
             <strong>${escapeHtml(item.value)}</strong>
@@ -9388,8 +9428,31 @@ Health & Hospitality	DIRECT	NL	West	West
       #${HELPER_ID} .scr-helper-filter-summary {
         display: flex;
         flex-wrap: wrap;
+        align-items: center;
         gap: 6px;
         padding: 0 12px 9px;
+      }
+
+      #${HELPER_ID} .scr-helper-filter-operator {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 30px;
+        border-radius: 999px;
+        padding: 3px 6px;
+        color: #ffffff;
+        font-size: 10px;
+        font-weight: 900;
+        letter-spacing: 0;
+        line-height: 1;
+      }
+
+      #${HELPER_ID} .scr-helper-filter-operator.is-and {
+        background: var(--ns-ui-primary);
+      }
+
+      #${HELPER_ID} .scr-helper-filter-operator.is-or {
+        background: var(--rw-pine-100);
       }
 
       #${HELPER_ID} .scr-helper-filter-chip {
