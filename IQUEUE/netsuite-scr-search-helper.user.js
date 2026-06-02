@@ -1,16 +1,24 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0.82B
+// @version      27.0.1
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
 // @match        https://nlcorp-sb2.app.netsuite.com/app/common/search/searchresults.nl*
 // @match        https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl*
 // @match        https://nlcorp-sb2.app.netsuite.com/app/common/search/savedsearchresults.nl*
+// @match        https://mcanderson14.github.io/ns_scm_tools_fy27/calendar-refresh.html*
+// @grant        GM_getValue
+// @grant        GM_setValue
 // @grant        GM_openInTab
+// @grant        GM_xmlhttpRequest
+// @grant        GM.xmlHttpRequest
 // @grant        unsafeWindow
-// @run-at       document-idle
+// @connect      github.com
+// @connect      raw.githubusercontent.com
+// @connect      graph.microsoft.com
+// @run-at       document-end
 // @downloadURL  https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js
 // @updateURL    https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js
 // ==/UserScript==
@@ -33,10 +41,19 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.0.82B";
+  const HELPER_VERSION = "27.0.1";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+  const GRAPH_TOKEN_REFRESH_URL = "https://mcanderson14.github.io/ns_scm_tools_fy27/calendar-refresh.html";
+  const GRAPH_TOKEN_REFRESH_RELAY_URL = `${GRAPH_TOKEN_REFRESH_URL}?iqueueRelay=1`;
+  const GRAPH_TOKEN_STATUS_KEY = "iqueue-graph-token-status-v1";
+  const GRAPH_ACCESS_TOKEN_KEY = "iqueue-graph-access-token-v1";
+  const GRAPH_TOKEN_RELAY_KIND = "iqueue-graph-token-relay-v1";
+  const CALENDAR_GRAPH_TOKEN_VAULT_KEY = "sc-staffing-dashboard-graph-explorer-token-vault-v2";
+  const CALENDAR_GRAPH_TOKEN_LOCAL_KEY = "sc-staffing-dashboard-graph-explorer-local-key-v1";
+  const GRAPH_TOKEN_STATUS_STALE_MS = 26 * 60 * 60 * 1000;
+  const GRAPH_TOKEN_EXPIRING_SOON_MS = 2 * 60 * 60 * 1000;
   const HELPER_STATE_STORAGE_KEY = "fy27-unified-sc-staffing-queue-assistant-state-v1";
   const EXTERNAL_MAPPING_FILE_NAME = "SC_Industry_State_Region_Mapping.json";
   const EXTERNAL_MAPPING_FILE_ID = "482253421";
@@ -48,7 +65,19 @@
   const PRODUCTS_SCM_MAPPING_FILE_URL = "https://nlcorp.app.netsuite.com/app/common/media/482833928?folder=482833928&ifrmcntnr=T";
   const PRODUCTS_SCM_MAPPING_CACHE_KEY = "iqueue-products-scm-relationship-mapping-v1";
   const PRODUCTS_SCM_MAPPING_REFRESH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
-  const PRODUCTS_SCM_OWNER_TAG_PREFIX = "#pscm-owner-";
+  const PRODUCTS_SCM_OWNER_TAG_PREFIX = "#scm-owner-";
+  const AUTHORIZED_MANAGERS_FILE_NAME = "Authorized_Managers.json";
+  const AUTHORIZED_MANAGERS_FILE_NAMES = [AUTHORIZED_MANAGERS_FILE_NAME, "Authorized Managers.json", "Authorized_Users.json", "Authorized Users.json"];
+  const AUTHORIZED_MANAGERS_FILE_ID = "";
+  const AUTHORIZED_MANAGERS_FOLDER_URL = "https://nlcorp.app.netsuite.com/app/common/media/482833928?folder=482833928&ifrmcntnr=T";
+  const AUTHORIZED_MANAGERS_SEARCH_ID = "1319617";
+  const AUTHORIZED_MANAGERS_SEARCH_URL = "https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl?searchid=1319617";
+  const AUTHORIZED_MANAGERS_SEARCH_URLS = [
+    AUTHORIZED_MANAGERS_SEARCH_URL,
+    "https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl?searchid=1319617"
+  ];
+  const AUTHORIZED_MANAGERS_CACHE_KEY = "iqueue-authorized-managers-v1";
+  const AUTHORIZED_MANAGERS_REFRESH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
   const LOGO_LARGE_URL = "https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/IQ_large_logo.png";
   const LOGO_SMALL_URL = "https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/IQ_small_logo.png";
   const UNMAPPED_FILTER_LABEL = "Other/Unmapped";
@@ -180,9 +209,24 @@
     ["mediaandpublishing", "Business Services"],
     ["advertisingmediaandpublishing", "Business Services"]
   ]);
+  const SC_INDUSTRY_GROUP_ALIASES = new Map(Object.entries({
+    "Business Service": "Business Services",
+    "Business Services": "Business Services",
+    "Construction": "Construction & Energy",
+    "Construction and Energy": "Construction & Energy",
+    "Construction & Energy": "Construction & Energy",
+    "Consumer Service": "Consumer Services",
+    "Consumer Services": "Consumer Services",
+    "Enterprise Performance Management": "EPM",
+    "EPM": "EPM",
+    "Health and Hospitality": "Health & Hospitality",
+    "Health & Hospitality": "Health & Hospitality",
+    "Products": "Products",
+    "Software": "Software"
+  }).map(([alias, canonical]) => [normalizeKey(alias), canonical]));
   const CROSS_INDUSTRY_TARGETS = [
     { family: "Business Services", tag: "#xvr-bizsvcs" },
-    { family: "Construction", tag: "#xvr-conenergy" },
+    { family: "Construction & Energy", label: "Construction", tag: "#xvr-conenergy" },
     { family: "Consumer Services", tag: "#xvr-consumersvcs" },
     { family: "EPM", tag: "#xvr-epm", markerTag: EPM_REQUESTED_TAG, title: "Mark this SCR as EPM Requested SC" },
     { family: "Products", tag: "#xvr-products" },
@@ -197,10 +241,12 @@
   ];
 
   const params = new URLSearchParams(window.location.search);
+  const IS_GRAPH_TOKEN_REFRESH_PAGE = window.location.hostname === "mcanderson14.github.io"
+    && /\/ns_scm_tools_fy27\/calendar-refresh\.html$/i.test(window.location.pathname);
   const CURRENT_SEARCH_ID = params.get("searchid") || "";
   const CURRENT_QUEUE = QUEUE_CONFIGS[CURRENT_SEARCH_ID];
-  if (!CURRENT_QUEUE) return;
-  const SAVED_SEARCH_ID = CURRENT_QUEUE.searchId;
+  if (!CURRENT_QUEUE && !IS_GRAPH_TOKEN_REFRESH_PAGE) return;
+  const SAVED_SEARCH_ID = CURRENT_QUEUE ? CURRENT_QUEUE.searchId : "";
 
   const MAPPING_TSV = `
 Industry Family	Direct/AMO	State	Sales Region	SC_Staffing_Region
@@ -1151,6 +1197,8 @@ Health & Hospitality	DIRECT	NL	West	West
   };
   let productsScmRelationships = [];
   let productsScmAuthorizedScms = [];
+  let productsScmAuthorizedDirectors = [];
+  let productsScmAuthorizedViewers = [];
   let productsScmByExactKey = new Map();
   let productsScmByDirectorKey = new Map();
   let productsScmMetadata = {
@@ -1159,6 +1207,23 @@ Health & Hospitality	DIRECT	NL	West	West
     rowCount: 0,
     loadedAt: 0,
     schema: "",
+    authorizedDirectorCount: 0,
+    authorizedViewerCount: 0,
+    stale: false,
+    error: ""
+  };
+  let authorizedManagerRecords = [];
+  let authorizedManagerCanOwnNames = [];
+  let authorizedManagerCanViewNames = [];
+  let authorizedManagerGroupLookup = new Map();
+  let authorizedManagersMetadata = {
+    source: "not-loaded",
+    label: "Not loaded",
+    rowCount: 0,
+    loadedAt: 0,
+    schema: "",
+    canOwnCount: 0,
+    canViewCount: 0,
     stale: false,
     error: ""
   };
@@ -1188,6 +1253,7 @@ Health & Hospitality	DIRECT	NL	West	West
   let currentUserNameCache;
   let currentUserRosterCache;
   const rosterAssigneeLookupCache = new Map();
+  const salesRepEmailLookupCache = new Map();
   let refreshSequence = 0;
   let helperState = readHelperState();
   if (!Object.prototype.hasOwnProperty.call(helperState, "maximized")) helperState.maximized = true;
@@ -1195,6 +1261,19 @@ Health & Hospitality	DIRECT	NL	West	West
 
   function normalizeKey(value) {
     return String(value || "").toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]/g, "");
+  }
+
+  function canonicalScIndustryGroupAlias(value) {
+    return SC_INDUSTRY_GROUP_ALIASES.get(normalizeKey(value)) || "";
+  }
+
+  function scIndustryGroupKeyVariants(value) {
+    const raw = normalizeSpaces(value);
+    const rawKey = normalizeKey(raw);
+    const alias = canonicalScIndustryGroupAlias(raw);
+    const aliasKey = normalizeKey(alias);
+    const canonical = findCanonicalIndustry(raw || alias);
+    return uniqueSorted([rawKey, aliasKey, normalizeKey(canonical)].filter(Boolean));
   }
 
   function normalizeMappingState(value) {
@@ -1477,16 +1556,75 @@ Health & Hospitality	DIRECT	NL	West	West
     return Boolean(row);
   }
 
-  function productsScmUserIsAuthorized(name = getCurrentUserName()) {
+  function personListHasName(values, name) {
     const userKeys = personNameKeys(name);
-    if (!userKeys.length || !productsScmAuthorizedScms.length) return false;
-    return productsScmAuthorizedScms.some(scm => personNameKeys(scm).some(key => userKeys.includes(key)));
+    if (!userKeys.length || !values.length) return false;
+    return values.some(value => personNameKeys(value).some(key => userKeys.includes(key)));
+  }
+
+  function productsScmUserIsOwner(name = getCurrentUserName()) {
+    return personListHasName(productsScmAuthorizedScms, name);
+  }
+
+  function productsScmUserIsDirector(name = getCurrentUserName()) {
+    return personListHasName(productsScmAuthorizedDirectors, name);
+  }
+
+  function productsScmUserIsViewer(name = getCurrentUserName()) {
+    return personListHasName(productsScmAuthorizedViewers, name);
+  }
+
+  function authorizedManagerUserCanView(name = getCurrentUserName()) {
+    return personListHasName(authorizedManagerCanOwnNames, name) || personListHasName(authorizedManagerCanViewNames, name);
+  }
+
+  function productsScmUserCanView(name = getCurrentUserName()) {
+    return productsScmUserIsOwner(name) || productsScmUserIsDirector(name) || productsScmUserIsViewer(name) || authorizedManagerUserCanView(name);
+  }
+
+  function productsScmUserIsAuthorized(name = getCurrentUserName()) {
+    return productsScmUserCanView(name);
   }
 
   function currentProductsScmUserName() {
     const userKeys = personNameKeys(getCurrentUserName());
     if (!userKeys.length) return "";
-    return productsScmAuthorizedScms.find(scm => personNameKeys(scm).some(key => userKeys.includes(key))) || "";
+    return allScmOwnerOptions().find(scm => personNameKeys(scm).some(key => userKeys.includes(key))) || "";
+  }
+
+  function currentProductsScmDirectorName() {
+    const userKeys = personNameKeys(getCurrentUserName());
+    if (!userKeys.length) return "";
+    return productsScmAuthorizedDirectors.find(director => personNameKeys(director).some(key => userKeys.includes(key))) || "";
+  }
+
+  function currentProductsScmViewerName() {
+    const userKeys = personNameKeys(getCurrentUserName());
+    if (!userKeys.length) return "";
+    return productsScmAuthorizedViewers.find(viewer => personNameKeys(viewer).some(key => userKeys.includes(key))) || "";
+  }
+
+  function scmOwnerNameFromTagKey(ownerKey) {
+    const key = normalizeKey(ownerKey);
+    if (!key) return "";
+
+    const option = allScmOwnerOptions().find(scm => (
+      normalizeKey(scm) === key || personNameKeys(scm).some(nameKey => personKeyMatches(nameKey, key))
+    ));
+    if (option) return option;
+
+    const manager = authorizedManagerRecords.find(record => (
+      normalizeKey(record.name) === key
+        || normalizeKey(record.nameKey) === key
+        || personNameKeys(record.name).some(nameKey => personKeyMatches(nameKey, key))
+        || emailLocalPartKeys(record.email).some(nameKey => personKeyMatches(nameKey, key))
+    ));
+    if (manager && manager.name) return manager.name;
+
+    const currentName = getCurrentUserName();
+    return personNameKeys(currentName).some(nameKey => personKeyMatches(nameKey, key)) || normalizeKey(currentName) === key
+      ? currentName
+      : "";
   }
 
   function productsScmOwnerFromGroup(rows, source) {
@@ -1539,13 +1677,11 @@ Health & Hospitality	DIRECT	NL	West	West
 
     const ownerTag = text.match(/#(?:scm-owner|pscm-owner)-([a-z0-9]+)/i);
     const ownerKey = ownerTag ? normalizeKey(ownerTag[1]) : "";
-    const taggedOwner = ownerKey
-      ? productsScmAuthorizedScms.find(scm => normalizeKey(scm) === ownerKey)
-      : "";
-    return taggedOwner
+    const taggedOwner = ownerKey ? scmOwnerNameFromTagKey(ownerKey) : "";
+    return ownerKey
       ? {
-        scm: taggedOwner,
-        scmKey: normalizeKey(taggedOwner),
+        scm: taggedOwner || ownerKey,
+        scmKey: ownerKey,
         source: "explicit",
         sourceLabel: "Explicit SCM owner"
       }
@@ -1611,7 +1747,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const owner = productsScmOwnerForRow(row);
     if (!owner || !owner.scm) return false;
     const targetKeys = personNameKeys(ownerName);
-    return Boolean(targetKeys.length && personNameKeys(owner.scm).some(key => targetKeys.includes(key)));
+    return personKeyListsOverlap(personNameKeys(owner.scm), targetKeys);
   }
 
   function rowMatchesProductsScmOwnerFilter(row, ownerNames, includeUnmappedOwnerRows) {
@@ -1621,7 +1757,7 @@ Health & Hospitality	DIRECT	NL	West	West
       const rowOwnerKeys = personNameKeys(owner.scm);
       return ownerNames.some(name => {
         const targetKeys = personNameKeys(name);
-        return Boolean(targetKeys.length && rowOwnerKeys.some(key => targetKeys.includes(key)));
+        return personKeyListsOverlap(rowOwnerKeys, targetKeys);
       });
     }
     return Boolean(includeUnmappedOwnerRows && owner.source === "unmapped");
@@ -1697,10 +1833,32 @@ Health & Hospitality	DIRECT	NL	West	West
       .join(", ");
   }
 
-  function valueWithCrossIndustryTag(value, tag, markerTag = "") {
-    const cleaned = stripCrossIndustryTags(value);
+  function stripScmOwnerTags(value) {
+    return normalizeMultiline(value)
+      .split(/[\n,;]+/)
+      .map(normalizeSpaces)
+      .filter(part => part && !/#(?:scm-owner|pscm-owner)-[a-z0-9]+/i.test(part))
+      .join(", ");
+  }
+
+  function scmOwnerTag(ownerName) {
+    const key = normalizeKey(ownerName);
+    return key ? `${PRODUCTS_SCM_OWNER_TAG_PREFIX}${key}` : "";
+  }
+
+  function valueWithCrossIndustryTag(value, tag, markerTag = "", ownerName = null) {
+    const cleaned = ownerName === null
+      ? stripCrossIndustryTags(value)
+      : stripScmOwnerTags(stripCrossIndustryTags(value));
     const tags = ["#xvr", tag, markerTag].map(normalizeSpaces).filter(Boolean);
+    if (ownerName) tags.push(scmOwnerTag(ownerName));
     return [cleaned].concat(tags).filter(Boolean).join(", ");
+  }
+
+  function valueWithScmOwnerTag(value, ownerName) {
+    const cleaned = stripScmOwnerTags(value);
+    const tag = scmOwnerTag(ownerName);
+    return [cleaned, tag].filter(Boolean).join(", ");
   }
 
   function cleanPersonName(value) {
@@ -1709,6 +1867,18 @@ Health & Hospitality	DIRECT	NL	West	West
       .replace(/\s+\|\s+.*$/g, "")
       .replace(/\b(?:preferences|log\s*out|logout|help)\b.*$/i, "");
     return normalizeSpaces(text);
+  }
+
+  function cleanPersonList(value) {
+    if (Array.isArray(value)) return uniqueSorted(value.map(cleanPersonName).filter(Boolean));
+    const text = String(value || "").replace(/\u00a0/g, " ").trim();
+    if (!text) return [];
+    return uniqueSorted(
+      text
+        .split(/\s*(?:;|\||\n|\r|\t)\s*/g)
+        .map(cleanPersonName)
+        .filter(Boolean)
+    );
   }
 
   function personNameKeys(value) {
@@ -1735,6 +1905,20 @@ Health & Hospitality	DIRECT	NL	West	West
     }
 
     return [...keys].filter(Boolean);
+  }
+
+  function personKeyMatches(left, right) {
+    const leftKey = normalizeKey(left);
+    const rightKey = normalizeKey(right);
+    if (!leftKey || !rightKey) return false;
+    if (leftKey === rightKey) return true;
+    return Math.min(leftKey.length, rightKey.length) >= 8
+      && (leftKey.startsWith(rightKey) || rightKey.startsWith(leftKey));
+  }
+
+  function personKeyListsOverlap(leftKeys, rightKeys) {
+    return Boolean((leftKeys || []).length && (rightKeys || []).length
+      && leftKeys.some(left => rightKeys.some(right => personKeyMatches(left, right))));
   }
 
   function normalizeRosterName(value) {
@@ -2284,9 +2468,37 @@ Health & Hospitality	DIRECT	NL	West	West
     ]);
   }
 
+  function authorizedManagersUrlCandidates() {
+    const origin = window.location.origin || "https://nlcorp.app.netsuite.com";
+    const fileIdUrls = AUTHORIZED_MANAGERS_FILE_ID
+      ? [
+          `${origin}/core/media/media.nl?id=${encodeURIComponent(AUTHORIZED_MANAGERS_FILE_ID)}&c=NLCORP&_xt=.json`,
+          `${origin}/core/media/media.nl?id=${encodeURIComponent(AUTHORIZED_MANAGERS_FILE_ID)}&_xt=.json`,
+          `${origin}/app/common/media/mediaitem.nl?id=${encodeURIComponent(AUTHORIZED_MANAGERS_FILE_ID)}`
+        ]
+      : [];
+    return orderedUnique([
+      AUTHORIZED_MANAGERS_FOLDER_URL,
+      ...fileIdUrls
+    ].filter(Boolean));
+  }
+
   function extractMappingDownloadUrls(html, baseUrl, fileName = EXTERNAL_MAPPING_FILE_NAME, fileId = EXTERNAL_MAPPING_FILE_ID) {
     const urls = [];
     const text = String(html || "");
+    const fileNames = (Array.isArray(fileName) ? fileName : [fileName])
+      .map(name => String(name || ""))
+      .filter(Boolean);
+    const fileIds = [fileId]
+      .map(id => String(id || ""))
+      .filter(Boolean);
+    try {
+      const base = new URL(baseUrl || window.location.href, window.location.href);
+      const idFromBase = base.searchParams.get("id");
+      if (idFromBase) fileIds.push(idFromBase);
+    } catch (error) {
+      // Ignore malformed base URLs; normal URL candidates still apply.
+    }
 
     try {
       const doc = new DOMParser().parseFromString(text, "text/html");
@@ -2294,11 +2506,13 @@ Health & Hospitality	DIRECT	NL	West	West
         const href = node.getAttribute("href") || node.getAttribute("src");
         if (!href) return;
         const absolute = new URL(href, baseUrl || window.location.href).href;
-        if (
-          absolute.includes(fileName)
-          || (absolute.includes("/core/media/media.nl") && absolute.includes(`id=${fileId}`))
-          || (absolute.includes("/app/common/media/") && absolute.includes(fileId))
-        ) {
+        const linkText = normalizeSpaces(node.textContent || "");
+        const matchesFileName = fileNames.some(name => absolute.includes(name) || linkText.includes(name));
+        const matchesFileId = fileIds.some(id => (
+          (absolute.includes("/core/media/media.nl") && absolute.includes(`id=${id}`))
+          || (absolute.includes("/app/common/media/") && absolute.includes(id))
+        ));
+        if (matchesFileName || matchesFileId) {
           urls.push(absolute);
         }
       });
@@ -2309,7 +2523,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const regex = /https?:\/\/[^"'<>\s]+(?:media\.nl|mediaitem\.nl)[^"'<>\s]*/gi;
     Array.from(text.matchAll(regex)).forEach(match => {
       const url = match[0].replace(/&amp;/g, "&");
-      if (url.includes(fileId) || url.includes(fileName)) urls.push(url);
+      if (fileIds.some(id => url.includes(id)) || fileNames.some(name => url.includes(name))) urls.push(url);
     });
 
     return orderedUnique(urls).filter(url => url !== baseUrl);
@@ -2474,9 +2688,16 @@ Health & Hospitality	DIRECT	NL	West	West
     if (mappingMetadata.error) parts.push(`fallback active: ${shortMappingError(mappingMetadata.error)}`);
     const productsParts = [`SCM relationships: ${productsScmMetadata.label}`];
     if (productsScmMetadata.rowCount) productsParts.push(`${productsScmMetadata.rowCount.toLocaleString()} rels`);
+    if (productsScmMetadata.authorizedDirectorCount) productsParts.push(`${productsScmMetadata.authorizedDirectorCount.toLocaleString()} director viewers`);
+    if (productsScmMetadata.authorizedViewerCount) productsParts.push(`${productsScmMetadata.authorizedViewerCount.toLocaleString()} extra viewers`);
     if (productsScmMetadata.stale) productsParts.push("cached");
     if (productsScmMetadata.error) productsParts.push(`not loaded: ${shortMappingError(productsScmMetadata.error)}`);
-    return `${parts.join(" · ")}. ${productsParts.join(" · ")}`;
+    const managerParts = [`Authorized Managers: ${authorizedManagersMetadata.label}`];
+    if (authorizedManagersMetadata.rowCount) managerParts.push(`${authorizedManagersMetadata.rowCount.toLocaleString()} managers`);
+    if (authorizedManagersMetadata.canOwnCount) managerParts.push(`${authorizedManagersMetadata.canOwnCount.toLocaleString()} can own`);
+    if (authorizedManagersMetadata.stale) managerParts.push("cached");
+    if (authorizedManagersMetadata.error) managerParts.push(`not loaded: ${shortMappingError(authorizedManagersMetadata.error)}`);
+    return `${parts.join(" · ")}. ${productsParts.join(" · ")}. ${managerParts.join(" · ")}`;
   }
 
   async function loadExternalMapping(options = {}) {
@@ -2511,6 +2732,7 @@ Health & Hospitality	DIRECT	NL	West	West
       const requestType = normalizeAmoDirect(record.requestType || record.amoDirect || record.directAmo || "");
       const regionalDirector = cleanPersonName(record.regionalDirector || record.rd || record.rsm || record.salesDirector || "");
       const scm = cleanPersonName(record.scm || record.productsScmOwner || record.queueOwner || "");
+      const directors = cleanPersonList(record.directors || record.authorizedDirectors || record.scmDirectors || record.scDirector || record.scmDirector || "");
       return {
         sourceRow: record.sourceRow || "",
         salesRegion,
@@ -2520,9 +2742,21 @@ Health & Hospitality	DIRECT	NL	West	West
         regionalDirector,
         regionalDirectorKey: normalizeKey(regionalDirector),
         scm,
-        scmKey: normalizeKey(scm)
+        scmKey: normalizeKey(scm),
+        directors,
+        directorKeys: directors.map(normalizeKey)
       };
     }).filter(row => row.requestType && row.regionalDirector && row.scm);
+  }
+
+  function cleanAuthorizedPersonList(values) {
+    if (!Array.isArray(values)) return [];
+    return uniqueSorted(values.flatMap(value => {
+      if (value && typeof value === "object") {
+        return cleanPersonList(value.name || value.displayName || value.email || "");
+      }
+      return cleanPersonList(value);
+    }));
   }
 
   function buildProductsScmRelationshipMap(rows, keyGetter) {
@@ -2544,9 +2778,14 @@ Health & Hospitality	DIRECT	NL	West	West
     const authorized = Array.isArray(data.authorizedScms)
       ? data.authorizedScms.map(cleanPersonName).filter(Boolean)
       : uniqueSorted(rows.map(row => row.scm));
+    const authorizedDirectors = cleanAuthorizedPersonList(data.authorizedDirectors)
+      .concat(rows.flatMap(row => row.directors || []));
+    const authorizedViewers = cleanAuthorizedPersonList(data.authorizedViewers);
 
     productsScmRelationships = rows;
     productsScmAuthorizedScms = uniqueSorted(authorized.concat(rows.map(row => row.scm)));
+    productsScmAuthorizedDirectors = uniqueSorted(authorizedDirectors);
+    productsScmAuthorizedViewers = uniqueSorted(authorizedViewers);
     productsScmByExactKey = buildProductsScmRelationshipMap(
       rows,
       row => `${row.requestTypeKey}|${row.regionalDirectorKey}|${row.salesRegionKey}`
@@ -2562,6 +2801,8 @@ Health & Hospitality	DIRECT	NL	West	West
       loadedAt: options.loadedAt || Date.now(),
       schema: data.schema || "",
       generatedAt: data.generatedAt || "",
+      authorizedDirectorCount: productsScmAuthorizedDirectors.length,
+      authorizedViewerCount: productsScmAuthorizedViewers.length,
       stale: Boolean(options.stale),
       error: ""
     };
@@ -2704,6 +2945,454 @@ Health & Hospitality	DIRECT	NL	West	West
       productsScmMetadata = {
         ...productsScmMetadata,
         error: error.message || "SCM relationship load failed"
+      };
+      updateProductsScmControls();
+      renderResults();
+    }
+  }
+
+  const AUTHORIZED_MANAGER_HEADER_ALIASES = {
+    name: ["manager", "name", "scm", "scmanager", "salesconsultantmanager", "authorizedmanager"],
+    email: ["email", "emailaddress", "workemail", "oracleemailaddress", "oracleemail"],
+    role: ["role", "title", "jobtitle"],
+    groups: ["scindustrygroup", "scindustrygroups", "scstaffingindustry", "scstaffingindustries", "industrygroup", "industrygroups", "salesvertical", "salesverticals", "vertical", "verticals", "group", "groups"],
+    canOwn: ["canown", "owner", "canownscr", "canbescmowner"],
+    canView: ["canview", "viewer", "canviewqueue", "canviewscmqueue"],
+    active: ["active", "inactive", "status", "enabled"]
+  };
+
+  function authorizedManagerHeaderMatches(header, key) {
+    const normalized = normalizeHeader(header);
+    const aliases = AUTHORIZED_MANAGER_HEADER_ALIASES[key] || [];
+    if (aliases.includes(normalized)) return true;
+    if (key === "name") return normalized.includes("manager") && !normalized.includes("email");
+    if (key === "groups") return (normalized.includes("industry") && normalized.includes("group"))
+      || (normalized.includes("staffing") && normalized.includes("industry"))
+      || normalized === "vertical"
+      || normalized === "verticals";
+    if (key === "canOwn") return normalized.includes("can") && normalized.includes("own");
+    if (key === "canView") return normalized.includes("can") && normalized.includes("view");
+    return false;
+  }
+
+  function authorizedManagerHeaderIndex(headers, key) {
+    if (key === "name") {
+      const preferredAliases = ["name", "scm", "scmanager", "salesconsultantmanager", "authorizedmanager"];
+      const preferredIndex = headers.findIndex(header => preferredAliases.includes(normalizeHeader(header)));
+      if (preferredIndex >= 0) return preferredIndex;
+    }
+    return headers.findIndex(header => authorizedManagerHeaderMatches(header, key));
+  }
+
+  function cleanIndustryGroupList(value) {
+    if (Array.isArray(value)) {
+      return uniqueSorted(value.flatMap(cleanIndustryGroupList));
+    }
+    const text = normalizeMultiline(value);
+    if (!text) return [];
+    return uniqueSorted(text
+      .split(/[\n,;|]+/)
+      .map(normalizeSpaces)
+      .filter(Boolean));
+  }
+
+  function parseBooleanValue(value, fallback = false, options = {}) {
+    const text = normalizeSpaces(value);
+    if (!text) return Boolean(fallback);
+    if (/^(?:y|yes|true|t|1|active|enabled)$/i.test(text)) return true;
+    if (/^(?:n|no|false|f|0|disabled)$/i.test(text)) return false;
+    if (options.inactiveMeansFalse && /inactive|terminated|disabled/i.test(text)) return false;
+    if (/active|enabled/i.test(text)) return true;
+    return Boolean(fallback);
+  }
+
+  function defaultCanOwnForManagerRole(role) {
+    return true;
+  }
+
+  function scoreAuthorizedManagerHeader(cells) {
+    if (cells.length < 2) return 0;
+    const headers = cells.map(normalizeHeader);
+    let score = 0;
+    if (headers.some(header => authorizedManagerHeaderMatches(header, "name"))) score += 6;
+    if (headers.some(header => authorizedManagerHeaderMatches(header, "groups"))) score += 5;
+    if (headers.some(header => authorizedManagerHeaderMatches(header, "email"))) score += 2;
+    if (headers.some(header => authorizedManagerHeaderMatches(header, "canOwn"))) score += 2;
+    if (headers.some(header => authorizedManagerHeaderMatches(header, "canView"))) score += 2;
+    return score;
+  }
+
+  function findAuthorizedManagersTable(root) {
+    const candidates = [];
+    Array.from(root.querySelectorAll("table")).forEach(table => {
+      const rows = Array.from(table.querySelectorAll("tr"));
+      rows.forEach((row, rowIndex) => {
+        const cells = rowCells(row);
+        const score = scoreAuthorizedManagerHeader(cells);
+        if (!score) return;
+        candidates.push({
+          table,
+          headerIndex: rowIndex,
+          score,
+          columnCount: cells.length
+        });
+      });
+    });
+    candidates.sort((a, b) => b.score - a.score || b.columnCount - a.columnCount);
+    return candidates[0] || null;
+  }
+
+  function authorizedManagersDataFromTable(root, source = {}) {
+    const result = findAuthorizedManagersTable(root);
+    if (!result) throw new Error("Could not find an Authorized Managers result table.");
+
+    const rows = Array.from(result.table.querySelectorAll("tr"));
+    const headers = makeUniqueHeaders(rowCells(rows[result.headerIndex] || { children: [] }));
+    const indexes = {
+      name: authorizedManagerHeaderIndex(headers, "name"),
+      email: authorizedManagerHeaderIndex(headers, "email"),
+      role: authorizedManagerHeaderIndex(headers, "role"),
+      groups: authorizedManagerHeaderIndex(headers, "groups"),
+      canOwn: authorizedManagerHeaderIndex(headers, "canOwn"),
+      canView: authorizedManagerHeaderIndex(headers, "canView"),
+      active: authorizedManagerHeaderIndex(headers, "active")
+    };
+    if (indexes.name < 0) throw new Error("Authorized Managers search is missing a Manager/Name column.");
+
+    const records = [];
+    rows.slice(result.headerIndex + 1).forEach((row, offset) => {
+      const cells = rowCellInfos(row);
+      if (!cells.length) return;
+      const get = key => {
+        const index = indexes[key];
+        if (index < 0 || index >= cells.length) return "";
+        return normalizeSpaces(cells[index].rawText || cells[index].text);
+      };
+      const name = cleanPersonName(get("name"));
+      if (!name || /^(?:name|manager)$/i.test(name)) return;
+      const role = get("role");
+      const groups = indexes.groups >= 0 ? cleanIndustryGroupList(get("groups")) : [];
+      const active = parseBooleanValue(get("active"), true, { inactiveMeansFalse: true });
+      const canOwn = parseBooleanValue(get("canOwn"), defaultCanOwnForManagerRole(role));
+      const canView = parseBooleanValue(get("canView"), true);
+      records.push({
+        sourceRows: [result.headerIndex + offset + 2],
+        name,
+        nameKey: normalizeKey(name),
+        email: get("email"),
+        role,
+        groups,
+        groupKeys: groups.map(normalizeKey),
+        canOwn,
+        canView,
+        active
+      });
+    });
+
+    return {
+      schema: "ns-scm-tools.authorized-managers.v1",
+      generatedAt: new Date().toISOString(),
+      source: {
+        ...source,
+        headerRow: result.headerIndex + 1,
+        detectedHeaders: headers
+      },
+      authorizedManagers: records
+    };
+  }
+
+  async function fetchAuthorizedManagersFromSavedSearch(searchUrl = AUTHORIZED_MANAGERS_SEARCH_URL) {
+    const response = await fetch(searchUrl, {
+      credentials: "include",
+      cache: "no-cache"
+    });
+    if (!response.ok) throw new Error(`Saved search ${AUTHORIZED_MANAGERS_SEARCH_ID}: request failed ${response.status}`);
+    const html = await response.text();
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    return authorizedManagersDataFromTable(doc, {
+      label: `Saved Search ${AUTHORIZED_MANAGERS_SEARCH_ID}`,
+      searchId: AUTHORIZED_MANAGERS_SEARCH_ID,
+      searchUrl
+    });
+  }
+
+  function parseAuthorizedManagerRows(data) {
+    const rows = Array.isArray(data && data.authorizedManagers) ? data.authorizedManagers : [];
+    return rows.map(record => {
+      const name = cleanPersonName(record.name || record.manager || record.displayName || "");
+      const groups = cleanIndustryGroupList(record.groups || record.scIndustryGroups || record.industryGroups || "");
+      const groupKeys = Array.isArray(record.groupKeys)
+        ? record.groupKeys.map(normalizeKey).filter(Boolean)
+        : groups.map(normalizeKey);
+      const expandedGroupKeys = uniqueSorted(
+        groupKeys.concat(groups.flatMap(scIndustryGroupKeyVariants))
+      );
+      return {
+        sourceRows: Array.isArray(record.sourceRows) ? record.sourceRows : [],
+        name,
+        nameKey: normalizeKey(record.nameKey || name),
+        email: normalizeSpaces(record.email || ""),
+        role: normalizeSpaces(record.role || ""),
+        groups,
+        groupKeys: expandedGroupKeys,
+        canOwn: record.canOwn !== false,
+        canView: record.canView !== false,
+        active: record.active !== false
+      };
+    }).filter(record => record.name && record.active);
+  }
+
+  function applyAuthorizedManagersData(data, options = {}) {
+    const rows = parseAuthorizedManagerRows(data);
+    if (!rows.length) throw new Error("Authorized managers JSON did not produce any usable rows.");
+
+    const canOwnRows = rows.filter(row => row.canOwn && row.groupKeys.length);
+    const canViewRows = rows.filter(row => row.canView);
+    const groupLookup = new Map();
+    canOwnRows.forEach(row => {
+      const keys = row.groupKeys.includes("all") || row.groups.includes("*")
+        ? industryOptions.map(normalizeKey).filter(Boolean)
+        : row.groupKeys;
+      keys.forEach(key => {
+        if (!key) return;
+        const owners = groupLookup.get(key) || [];
+        owners.push(row.name);
+        groupLookup.set(key, owners);
+      });
+    });
+
+    authorizedManagerRecords = rows;
+    authorizedManagerCanOwnNames = uniqueSorted(canOwnRows.map(row => row.name));
+    authorizedManagerCanViewNames = uniqueSorted(canViewRows.map(row => row.name));
+    authorizedManagerGroupLookup = new Map(
+      Array.from(groupLookup.entries()).map(([key, names]) => [key, uniqueSorted(names)])
+    );
+    authorizedManagersMetadata = {
+      source: options.fromCache ? "cache" : "file-cabinet",
+      label: options.label || (options.fromCache ? `Cached ${AUTHORIZED_MANAGERS_FILE_NAME}` : `File Cabinet ${AUTHORIZED_MANAGERS_FILE_NAME}`),
+      rowCount: rows.length,
+      loadedAt: options.loadedAt || Date.now(),
+      schema: data.schema || "",
+      generatedAt: data.generatedAt || "",
+      canOwnCount: authorizedManagerCanOwnNames.length,
+      canViewCount: authorizedManagerCanViewNames.length,
+      stale: Boolean(options.stale),
+      error: ""
+    };
+  }
+
+  function emailLocalPartKeys(email) {
+    const local = normalizeSpaces(email).split("@")[0] || "";
+    if (!local) return [];
+    const spaced = local.replace(/[._-]+/g, " ");
+    const keys = new Set([normalizeKey(local), normalizeKey(spaced)]);
+    const parts = spaced.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      const first = parts[0];
+      const last = parts[parts.length - 1];
+      keys.add(normalizeKey(`${first}${last}`));
+      keys.add(normalizeKey(`${last}${first}`));
+      keys.add(normalizeKey(`${first} ${last}`));
+      keys.add(normalizeKey(`${last} ${first}`));
+    }
+    return [...keys].filter(Boolean);
+  }
+
+  function inferOracleEmailFromName(name) {
+    const text = cleanPersonName(name);
+    if (!text) return "";
+    const commaName = text.match(/^([^,]+),\s*(.+)$/);
+    let first = "";
+    let middle = "";
+    let last = "";
+    if (commaName) {
+      last = normalizeSpaces(commaName[1]).split(/\s+/)[0] || "";
+      const givenParts = normalizeSpaces(commaName[2]).split(/\s+/).filter(Boolean);
+      first = givenParts[0] || "";
+      middle = givenParts.length === 2 && /^[A-Za-z]\.?$/.test(givenParts[1]) ? givenParts[1] : "";
+    } else {
+      const parts = text.split(/\s+/).filter(Boolean);
+      first = parts[0] || "";
+      last = parts.length > 1 ? parts[parts.length - 1] : "";
+      middle = parts.length === 3 && /^[A-Za-z]\.?$/.test(parts[1]) ? parts[1] : "";
+    }
+    const cleanFirst = first.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const cleanMiddle = middle.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const cleanLast = last.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (cleanFirst && cleanMiddle && cleanLast) return `${cleanFirst}.${cleanMiddle}.${cleanLast}@oracle.com`;
+    return cleanFirst && cleanLast ? `${cleanFirst}.${cleanLast}@oracle.com` : "";
+  }
+
+  function authorizedManagerForName(name) {
+    const targetKeys = personNameKeys(name);
+    if (!targetKeys.length) return null;
+    const targetKeySet = new Set(targetKeys);
+    return authorizedManagerRecords.find(record => (
+      personNameKeys(record.name)
+        .concat(record.nameKey)
+        .concat(emailLocalPartKeys(record.email))
+        .filter(Boolean)
+        .some(key => targetKeySet.has(key))
+    )) || null;
+  }
+
+  function authorizedManagerEmailForName(name) {
+    const manager = authorizedManagerForName(name);
+    return normalizeSpaces(manager && manager.email || inferOracleEmailFromName(name) || cleanPersonName(name));
+  }
+
+  function readCachedAuthorizedManagers() {
+    try {
+      const cached = JSON.parse(localStorage.getItem(AUTHORIZED_MANAGERS_CACHE_KEY) || "null");
+      if (!cached || !cached.data || !cached.loadedAt) return null;
+      return cached;
+    } catch (error) {
+      console.warn("IQUEUE could not read cached authorized managers JSON", error);
+      return null;
+    }
+  }
+
+  function writeCachedAuthorizedManagers(data) {
+    try {
+      localStorage.setItem(AUTHORIZED_MANAGERS_CACHE_KEY, JSON.stringify({
+        loadedAt: Date.now(),
+        data
+      }));
+    } catch (error) {
+      console.warn("IQUEUE could not cache authorized managers JSON", error);
+    }
+  }
+
+  function applyCachedAuthorizedManagers() {
+    const cached = readCachedAuthorizedManagers();
+    if (!cached) return false;
+    const stale = Date.now() - cached.loadedAt > AUTHORIZED_MANAGERS_REFRESH_INTERVAL_MS;
+    try {
+      applyAuthorizedManagersData(cached.data, {
+        fromCache: true,
+        loadedAt: cached.loadedAt,
+        stale
+      });
+      return true;
+    } catch (error) {
+      console.warn("IQUEUE ignored invalid cached authorized managers JSON", error);
+      return false;
+    }
+  }
+
+  function shouldFetchAuthorizedManagers() {
+    const cached = readCachedAuthorizedManagers();
+    if (!cached) return true;
+    return Date.now() - cached.loadedAt > AUTHORIZED_MANAGERS_REFRESH_INTERVAL_MS;
+  }
+
+  function loadAuthorizedManagersWithSuiteScript() {
+    const pageWindow = getPageWindow();
+    if (!pageWindow || typeof pageWindow.require !== "function") {
+      return Promise.reject(new Error("NetSuite require was not available."));
+    }
+
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      let timer;
+      const finish = callback => value => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        callback(value);
+      };
+      timer = setTimeout(finish(reject), 12000, new Error("Timed out loading authorized managers JSON."));
+
+      try {
+        pageWindow.require(["N/file", "N/search"], (file, search) => {
+          try {
+            let fileId = AUTHORIZED_MANAGERS_FILE_ID;
+            if (!fileId) {
+              for (const fileName of AUTHORIZED_MANAGERS_FILE_NAMES) {
+                const results = search.create({
+                  type: "file",
+                  filters: [["name", "is", fileName]],
+                  columns: ["internalid", "name"]
+                }).run().getRange({ start: 0, end: 1 }) || [];
+                const result = results[0];
+                fileId = result && (result.getValue({ name: "internalid" }) || result.id);
+                if (fileId) break;
+              }
+            }
+            if (!fileId) throw new Error(`${AUTHORIZED_MANAGERS_FILE_NAMES.join(" or ")} was not found in the NetSuite File Cabinet.`);
+            const mappingFile = file.load({ id: fileId });
+            finish(resolve)(parseMappingJsonText(mappingFile.getContents()));
+          } catch (error) {
+            finish(reject)(error);
+          }
+        }, finish(reject));
+      } catch (error) {
+        finish(reject)(error);
+      }
+    });
+  }
+
+  async function fetchAuthorizedManagersData() {
+    const errors = [];
+
+    for (const searchUrl of AUTHORIZED_MANAGERS_SEARCH_URLS) {
+      try {
+        const data = await fetchAuthorizedManagersFromSavedSearch(searchUrl);
+        return {
+          data,
+          label: `Saved Search ${AUTHORIZED_MANAGERS_SEARCH_ID}`
+        };
+      } catch (error) {
+        errors.push(`Saved Search ${AUTHORIZED_MANAGERS_SEARCH_ID}: ${error.message || error}`);
+      }
+    }
+
+    try {
+      const data = await loadAuthorizedManagersWithSuiteScript();
+      return {
+        data,
+        label: `N/file ${AUTHORIZED_MANAGERS_FILE_NAME}`
+      };
+    } catch (error) {
+      errors.push(`N/file: ${error.message || error}`);
+    }
+
+    for (const url of authorizedManagersUrlCandidates()) {
+      try {
+        const data = await fetchMappingJsonFromUrl(url, new Set(), AUTHORIZED_MANAGERS_FILE_NAMES, AUTHORIZED_MANAGERS_FILE_ID);
+        return {
+          data,
+          label: `File Cabinet ${AUTHORIZED_MANAGERS_FILE_NAME}`
+        };
+      } catch (error) {
+        errors.push(error.message || String(error));
+      }
+    }
+
+    throw new Error(errors.join(" | "));
+  }
+
+  async function loadAuthorizedManagers(options = {}) {
+    const force = Boolean(options.force);
+    if (!force && !shouldFetchAuthorizedManagers()) return;
+
+    try {
+      const result = await fetchAuthorizedManagersData();
+      const data = result.data || result;
+      writeCachedAuthorizedManagers(data);
+      applyAuthorizedManagersData(data, {
+        fromCache: false,
+        loadedAt: Date.now(),
+        label: result.label
+      });
+      updateProductsScmControls();
+      updateFilterSummary();
+      renderResults();
+    } catch (error) {
+      console.warn("IQUEUE could not load authorized managers JSON", error);
+      authorizedManagersMetadata = {
+        ...authorizedManagersMetadata,
+        error: error.message || "Authorized managers load failed"
       };
       updateProductsScmControls();
       renderResults();
@@ -3177,6 +3866,8 @@ Health & Hospitality	DIRECT	NL	West	West
   function findCanonicalIndustry(value) {
     const key = normalizeKey(value);
     if (!key) return "";
+    const alias = canonicalScIndustryGroupAlias(value);
+    if (alias) return alias;
     if (industryByKey.has(key)) return industryByKey.get(key);
 
     const match = industryOptions.find(option => {
@@ -3611,8 +4302,10 @@ Health & Hospitality	DIRECT	NL	West	West
   function urlFromValue(value) {
     const text = normalizeSpaces(value);
     if (!text || /^-?n\/?a-?$/i.test(text)) return "";
-    if (/^https?:\/\//i.test(text)) return text;
-    if (/^[\w.-]+\.[a-z]{2,}(\/.*)?$/i.test(text)) return `https://${text}`;
+    const absolute = text.match(/https?:\/\/[^\s<>"']+/i);
+    if (absolute) return absolute[0].replace(/[),.;]+$/g, "");
+    const domain = text.match(/\b(?:www\.)?[\w.-]+\.[a-z]{2,}(?:\/[^\s<>"']*)?/i);
+    if (domain) return `https://${domain[0].replace(/[),.;]+$/g, "")}`;
     return "";
   }
 
@@ -3621,7 +4314,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const value = normalizeSpaces(field && field.value);
     const href = link ? link.href : urlFromValue(value);
     if (!href) return value ? escapeHtml(value) : "";
-    return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(fallbackLabel || link && link.text || value || href)}</a>`;
+    return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(fallbackLabel || value || link && link.text || href)}</a>`;
   }
 
   function normalizeYesNo(value, defaultValue = "") {
@@ -3660,6 +4353,8 @@ Health & Hospitality	DIRECT	NL	West	West
     requestingTravel: [/Requesting\s*Travel\s*\(Y\/N\)/i, /Requesting\s*Travel/i],
     companySize: [/Company\s*Size/i, /Employees/i, /Number\s*of\s*Employees/i],
     annualRevenue: [/Annual\s*Revenue/i, /Company\s*Revenue/i],
+    website: [/Website/i, /Web\s*Address/i, /Company\s*Website/i],
+    linkedin: [/LinkedIn/i, /Linked\s*In/i],
     billingAddress: [/Billing\s*Address/i, /Bill\s*Address/i],
     billingCity: [/Billing\s*City/i, /Bill\s*City/i],
     billingState: [/Billing\s*State/i, /Bill\s*State/i, /Billing\s*Province/i, /Bill\s*Province/i],
@@ -3824,6 +4519,23 @@ Health & Hospitality	DIRECT	NL	West	West
     if (candidateLink) return cleanDisplayValue(candidateLink.text);
 
     return "";
+  }
+
+  function getWebsiteField(fields) {
+    const field = findField(fields, [
+      /website/, /web\s*address/, /customer.*web/, /\burl\b/
+    ], [/linkedin/]);
+    const extracted = field ? extractLabeledValue(field.value, labeledValuePatterns.website) : "";
+    const fromCompound = extractFromFields(fields, labeledValuePatterns.website);
+    const direct = field && !looksLikeCompoundValue(field.value) ? cleanDisplayValue(field.value) : "";
+    const value = extracted || fromCompound || direct;
+    if (!value && !field) return null;
+    return {
+      label: field && field.label || "Website",
+      value: value || field && field.value || "",
+      rawValue: value || field && field.rawValue || "",
+      links: field && Array.isArray(field.links) ? field.links : []
+    };
   }
 
   function cleanAnnualRevenueValue(value) {
@@ -4206,6 +4918,24 @@ Health & Hospitality	DIRECT	NL	West	West
     return row.editUrl || makeEditUrl("", row.internalId);
   }
 
+  function viewUrlForRow(row) {
+    if (!row) return "";
+    const internalId = row.internalId || recordIdFromUrl(row.editUrl);
+    const origin = window.location.origin || "https://nlcorp.app.netsuite.com";
+    if (internalId) {
+      return `${origin}/app/common/custom/custrecordentry.nl?rectype=${encodeURIComponent(SCR_RECORD_TYPE)}&id=${encodeURIComponent(internalId)}`;
+    }
+    const editUrl = editUrlForRow(row);
+    if (!editUrl) return "";
+    try {
+      const url = new URL(editUrl, origin);
+      url.searchParams.delete("e");
+      return url.href;
+    } catch (error) {
+      return editUrl.replace(/([?&])e=T(&?)/i, (match, prefix, suffix) => (prefix === "?" && suffix ? "?" : prefix === "?" ? "" : suffix ? prefix : ""));
+    }
+  }
+
   function renderStaffScrControl(row, requestColor) {
     const editUrl = editUrlForRow(row);
     const style = requestColor && editUrl ? `style="background-color: ${escapeHtml(requestColor)};"` : "";
@@ -4231,13 +4961,17 @@ Health & Hospitality	DIRECT	NL	West	West
 
   function renderAssignedToWithOwnership(row, assignedTo) {
     const assignedName = normalizeSpaces(assignedTo);
-    const isMine = rowAssignedToMatchesCurrentUser(row);
+    const isAssignedMine = rowAssignedToMatchesCurrentUser(row);
+    const isExplicitOwnerMine = rowExplicitScmOwnerMatchesCurrentUser(row);
+    const isMine = isAssignedMine || isExplicitOwnerMine;
     const disabled = !row.internalId || isMine ? "disabled" : "";
     const title = !row.internalId
       ? "No SCR internal id was returned on this row."
-      : isMine
+      : isExplicitOwnerMine
+        ? "This SCR is already explicitly owned by you."
+        : isAssignedMine
         ? "This SCR is already assigned to you."
-        : "Assign this SCR to the current user.";
+        : "Set the current user as explicit SCM owner.";
 
     return `
       <div class="scr-helper-assigned-line">
@@ -4294,7 +5028,7 @@ Health & Hospitality	DIRECT	NL	West	West
           title="${escapeHtml(target.title || `Mark this SCR for ${target.family} queue visibility`)}"
           ${style}
           ${disabled}
-        >${escapeHtml(industryOptionLabel(target.family))}</button>
+        >${escapeHtml(target.label || industryOptionLabel(target.family))}</button>
       `;
     }).join("");
 
@@ -4309,12 +5043,26 @@ Health & Hospitality	DIRECT	NL	West	West
   function renderStaffingNotesEditor(row, notes) {
     const disabled = row.internalId ? "" : "disabled";
     const disabledHelp = row.internalId ? "" : `<div class="scr-helper-notes-help">Open the SCR to edit notes; no internal id was returned on this row.</div>`;
+    const notice = row.routingNotice && row.routingNotice.message ? row.routingNotice : null;
+    const noticeLinks = notice && Array.isArray(notice.links) && notice.links.length
+      ? `<div class="scr-helper-notice-links">${notice.links.map(link => `
+          <a
+            class="scr-helper-notice-link"
+            href="${escapeHtml(link.href)}"
+            ${/^mailto:/i.test(link.href) ? "" : `target="_blank" rel="noopener noreferrer"`}
+          >${escapeHtml(link.label)}</a>
+        `).join("")}</div>`
+      : "";
     return `
       <div class="scr-helper-notes-editor">
         <textarea class="scr-helper-notes-input" data-row-id="${escapeHtml(row.id)}" placeholder="No staffing notes yet.">${escapeHtml(notes || "")}</textarea>
         <div class="scr-helper-notes-actions">
-          <button type="button" class="scr-helper-notes-save" data-row-id="${escapeHtml(row.id)}" ${disabled}>Save notes</button>
-          <span class="scr-helper-notes-status" aria-live="polite"></span>
+          <div class="scr-helper-notes-button-stack">
+            <button type="button" class="scr-helper-notes-save" data-row-id="${escapeHtml(row.id)}" ${disabled}>Save notes</button>
+            <button type="button" class="scr-helper-request-info" data-row-id="${escapeHtml(row.id)}" ${disabled}>Email Sales</button>
+          </div>
+          <span class="scr-helper-notes-status${notice && notice.state ? ` is-${escapeHtml(notice.state)}` : ""}" aria-live="polite">${notice ? escapeHtml(notice.message) : ""}</span>
+          ${noticeLinks}
         </div>
         ${disabledHelp}
       </div>
@@ -4445,9 +5193,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const companyField = findField(fields, [
       /company\s*name/, /prospect.*customer/, /customer.*prospect/, /\bcustomer\b/, /\bcompany\b/, /\baccount\b/
     ], [/state/, /province/, /website/, /linkedin/, /size/, /revenue/]);
-    const websiteField = findField(fields, [
-      /website/, /web\s*address/, /customer.*web/, /\burl\b/
-    ], [/linkedin/]);
+    const websiteField = getWebsiteField(fields);
     const linkedinField = findField(fields, [
       /linkedin/, /linked\s*in/
     ]);
@@ -4541,6 +5287,20 @@ Health & Hospitality	DIRECT	NL	West	West
     };
   }
 
+  function rowAssignedToCurrentUser(row) {
+    return rowAssignedToMatchesCurrentUser(row) || currentUserOwnsEpmRow(row);
+  }
+
+  function currentExplicitScmOwnerName() {
+    return currentProductsScmUserName() || getCurrentUserName();
+  }
+
+  function rowExplicitScmOwnerMatchesCurrentUser(row) {
+    const owner = productsScmExplicitOwner(row);
+    const currentOwner = currentExplicitScmOwnerName();
+    return Boolean(owner && owner.scm && currentOwner && personMatchesNames(owner.scm, [currentOwner, getCurrentUserName()]));
+  }
+
   function rowMatchesFilters(row, controls) {
     const industry = controls.industry.value;
     const gtmIndustry = controls.gtmIndustry.value;
@@ -4565,37 +5325,56 @@ Health & Hospitality	DIRECT	NL	West	West
     const salesVerticalKey = normalizeKey(salesVertical);
     const staffingRegionKeys = staffingRegions.map(normalizeKey).filter(Boolean);
     const amoDirectKey = normalizeKey(normalizeAmoDirect(amoDirect));
+    const productsScmOwnerMeActive = productsScmOwnerMe && productsScmUserIsOwner();
+    const peopleFiltersActive = PEOPLE_FILTERS.some(filter => selectedPeopleFilterValues(filter.key).length);
+    const hasNonAssignedFilters = Boolean(
+      industry
+      || gtmIndustry
+      || industrySubgroup
+      || salesRegion
+      || salesVertical
+      || staffingRegionKeys.length
+      || amoDirect
+      || productsScmOwnerMeActive
+      || productsScmOwners.length
+      || unmappedOnly
+      || hideTigerEnterprise
+      || slaHotlist
+      || text
+      || peopleFiltersActive
+    );
+    const assignedToCurrentUser = assignedToMe && rowAssignedToCurrentUser(row);
 
-    if (hideTigerEnterprise && rowIsTigerEnterpriseOpp(row)) return false;
-    if (unmappedOnly && !isUnmappedReviewRow(row)) return false;
-    if (slaHotlist && !rowSlaInfo(row).passed) return false;
-    if (industry && !rowMatchesIndustryFamily(row, industryKey)) return false;
-    if (gtmIndustry && !isUnmappedReviewRow(row) && row.gtmIndustryKey !== gtmIndustryKey) return false;
-    if (industrySubgroup && !isUnmappedReviewRow(row) && row.gtmIndustrySubgroupKey !== industrySubgroupKey) return false;
-    if (salesRegion && !isUnmappedReviewRow(row) && normalizeKey(canonicalSalesRegion(row.originalSalesRegion) || row.mappedSalesRegion) !== salesRegionKey) return false;
-    if (salesVertical && normalizeKey(row.salesVertical) !== salesVerticalKey) return false;
-    if (!rowMatchesPeopleFilters(row)) return false;
-    if (productsScmUserIsAuthorized() && (productsScmOwnerMe || productsScmOwners.length)) {
-      const selectedProductsScms = [
-        productsScmOwnerMe ? currentProductsScmUserName() || getCurrentUserName() : "",
-        ...productsScmOwners
-      ].filter(Boolean);
-      const includeUnmappedProductsScmOwners = Boolean(staffingRegionKeys.length);
-      if (!rowMatchesProductsScmOwnerFilter(row, selectedProductsScms, includeUnmappedProductsScmOwners)) return false;
-    }
-    if (staffingRegionKeys.length) {
-      const rowStaffingRegionKeys = effectiveStaffingRegionKeys(row, industryKey);
-      if (!staffingRegionKeys.some(regionKey => rowStaffingRegionKeys.includes(regionKey))) return false;
-    }
-    if (amoDirect && normalizeKey(normalizeAmoDirect(row.amoDirect)) !== amoDirectKey) return false;
-    if (assignedToMe) {
-      const epmAssignedToMe = industryKey === normalizeKey(EPM_INDUSTRY_GROUP)
-        && rowMatchesEpmQueue(row)
-        && currentUserOwnsEpmRow(row);
-      if (!rowAssignedToMatchesCurrentUser(row) && !epmAssignedToMe) return false;
-    }
-    if (text && !row.allText.includes(text)) return false;
-    return true;
+    const matchesSelectedFilters = () => {
+      if (hideTigerEnterprise && rowIsTigerEnterpriseOpp(row)) return false;
+      if (unmappedOnly && !isUnmappedReviewRow(row)) return false;
+      if (slaHotlist && !rowSlaInfo(row).passed) return false;
+      if (industry && !rowMatchesIndustryFamily(row, industryKey)) return false;
+      if (gtmIndustry && !isUnmappedReviewRow(row) && row.gtmIndustryKey !== gtmIndustryKey) return false;
+      if (industrySubgroup && !isUnmappedReviewRow(row) && row.gtmIndustrySubgroupKey !== industrySubgroupKey) return false;
+      if (salesRegion && !isUnmappedReviewRow(row) && normalizeKey(canonicalSalesRegion(row.originalSalesRegion) || row.mappedSalesRegion) !== salesRegionKey) return false;
+      if (salesVertical && normalizeKey(row.salesVertical) !== salesVerticalKey) return false;
+      if (!rowMatchesPeopleFilters(row)) return false;
+      if (productsScmUserCanView() && (productsScmOwnerMeActive || productsScmOwners.length)) {
+        const selectedProductsScms = [
+          productsScmOwnerMeActive ? currentProductsScmUserName() || getCurrentUserName() : "",
+          ...productsScmOwners
+        ].filter(Boolean);
+        const includeUnmappedProductsScmOwners = Boolean(staffingRegionKeys.length);
+        if (!rowMatchesProductsScmOwnerFilter(row, selectedProductsScms, includeUnmappedProductsScmOwners)) return false;
+      }
+      if (staffingRegionKeys.length) {
+        const rowStaffingRegionKeys = effectiveStaffingRegionKeys(row, industryKey);
+        if (!staffingRegionKeys.some(regionKey => rowStaffingRegionKeys.includes(regionKey))) return false;
+      }
+      if (amoDirect && normalizeKey(normalizeAmoDirect(row.amoDirect)) !== amoDirectKey) return false;
+      if (text && !row.allText.includes(text)) return false;
+      return true;
+    };
+
+    const selectedFiltersMatch = matchesSelectedFilters();
+    if (!assignedToMe) return selectedFiltersMatch;
+    return hasNonAssignedFilters ? selectedFiltersMatch || assignedToCurrentUser : assignedToCurrentUser;
   }
 
   function renderRow(row) {
@@ -4695,7 +5474,7 @@ Health & Hospitality	DIRECT	NL	West	West
       ]),
       renderSummaryColumn("Company", [
         renderSummaryItem("Company Name", "", { html: companyHtml || escapeHtml(summary.companyField && summary.companyField.value || "") }),
-        renderSummaryItem("Website", "", { html: externalLinkHtml(summary.websiteField, "Website") }),
+        renderSummaryItem("Website", "", { html: externalLinkHtml(summary.websiteField) }),
         renderSummaryItem("LinkedIn", "", { html: externalLinkHtml(summary.linkedinField, "LinkedIn") }),
         renderSummaryItem("Company Size", summary.companySize),
         renderSummaryItem("Annual Revenue", summary.annualRevenue || "Unknown"),
@@ -4735,7 +5514,10 @@ Health & Hospitality	DIRECT	NL	West	West
     const items = [];
     const add = (label, value, displayValue = value, extra = {}) => {
       const normalized = normalizeSpaces(value);
-      if (normalized) items.push({ label, value: normalizeSpaces(displayValue) || normalized, removable: true, ...extra });
+      if (normalized) {
+        const groupKey = extra.groupKey || `${extra.removeType || "filter"}:${extra.removeKey || normalizeKey(label)}`;
+        items.push({ label, value: normalizeSpaces(displayValue) || normalized, removable: true, section: "queue", groupKey, ...extra });
+      }
     };
 
     add("SC Industry Group", controls.industry.value, industryOptionLabel(controls.industry.value), { removeType: "select", removeKey: "industry" });
@@ -4743,34 +5525,34 @@ Health & Hospitality	DIRECT	NL	West	West
     add("FY27 GTM Industry Subgroup", controls.industrySubgroup.value, gtmSubgroupOptionLabel(controls.industrySubgroup.value), { removeType: "select", removeKey: "industrySubgroup" });
     add("Sales Region", controls.salesRegion.value, controls.salesRegion.value, { removeType: "select", removeKey: "salesRegion" });
     add("Sales Vertical", controls.salesVertical.value, controls.salesVertical.value, { removeType: "select", removeKey: "salesVertical" });
-    PEOPLE_FILTERS.forEach(filter => {
-      selectedPeopleFilterValues(filter.key).forEach(person => {
-        add(filter.label, person, person, { removeType: "people", removeKey: filter.key });
-      });
-    });
-    if (controls.productsScmOwnerMe && controls.productsScmOwnerMe.checked) {
-      add("SCM Owner", currentProductsScmUserName() ? `Me (${currentProductsScmUserName()})` : "Me", undefined, { removeType: "checkbox", removeKey: "productsScmOwnerMe" });
-    }
-    if (controls.productsScmOwner) {
-      productsScmOwnerValuesFromString(controls.productsScmOwner.value).forEach(owner => {
-        add("SCM Owner", owner, owner, { removeType: "productsScmOwner" });
-      });
-    }
     if (controls.staffingRegions) {
       staffingRegionValuesFromString(controls.staffingRegions.value).forEach(region => {
-        add("SC Region", region, region, { removeType: "staffingRegion" });
+        add("SC Region", region, region, { removeType: "staffingRegion", groupKey: "staffingRegion" });
       });
     } else {
       add("SC Region", controls.staffingRegion.value, controls.staffingRegion.value, { removeType: "select", removeKey: "staffingRegion" });
     }
     add("Type", controls.amoDirect.value, controls.amoDirect.value, { removeType: "select", removeKey: "amoDirect" });
-    if (controls.assignedToMe && controls.assignedToMe.checked) {
-      add("Assigned", getCurrentUserName() ? `Me (${getCurrentUserName()})` : "Me", undefined, { removeType: "checkbox", removeKey: "assignedToMe" });
+    if (controls.productsScmOwnerMe && controls.productsScmOwnerMe.checked) {
+      add("SCM Owner", currentProductsScmUserName() ? `Me (${currentProductsScmUserName()})` : "Me", undefined, { removeType: "checkbox", removeKey: "productsScmOwnerMe", groupKey: "scmOwner", section: "owner" });
     }
-    if (controls.unmappedOnly && controls.unmappedOnly.checked) add("Review", "Unmapped", undefined, { removeType: "checkbox", removeKey: "unmappedOnly" });
-    if (controls.hideTigerEnterprise && controls.hideTigerEnterprise.checked) add("Hidden", "Enterprise / Tiger", undefined, { removeType: "checkbox", removeKey: "hideTigerEnterprise" });
-    if (controls.slaHotlist && controls.slaHotlist.checked) add("SLA", "Past 24h", undefined, { removeType: "checkbox", removeKey: "slaHotlist" });
-    add("Search", controls.text.value, controls.text.value, { removeType: "text", removeKey: "text" });
+    if (controls.productsScmOwner) {
+      productsScmOwnerValuesFromString(controls.productsScmOwner.value).forEach(owner => {
+        add("SCM Owner", owner, owner, { removeType: "productsScmOwner", groupKey: "scmOwner", section: "owner" });
+      });
+    }
+    PEOPLE_FILTERS.forEach(filter => {
+      selectedPeopleFilterValues(filter.key).forEach(person => {
+        add(filter.label, person, person, { removeType: "people", removeKey: filter.key, groupKey: "people", section: "people" });
+      });
+    });
+    if (controls.assignedToMe && controls.assignedToMe.checked) {
+      add("Assigned", getCurrentUserName() ? `Me (${getCurrentUserName()})` : "Me", undefined, { removeType: "checkbox", removeKey: "assignedToMe", section: "assigned", sectionConnector: items.length ? "OR" : "" });
+    }
+    if (controls.unmappedOnly && controls.unmappedOnly.checked) add("Review", "Unmapped", undefined, { removeType: "checkbox", removeKey: "unmappedOnly", section: "flags" });
+    if (controls.hideTigerEnterprise && controls.hideTigerEnterprise.checked) add("Hidden", "Enterprise / Tiger", undefined, { removeType: "checkbox", removeKey: "hideTigerEnterprise", section: "flags" });
+    if (controls.slaHotlist && controls.slaHotlist.checked) add("SLA", "Past 24h", undefined, { removeType: "checkbox", removeKey: "slaHotlist", section: "flags" });
+    add("Search", controls.text.value, controls.text.value, { removeType: "text", removeKey: "text", section: "search" });
 
     return items;
   }
@@ -4780,14 +5562,65 @@ Health & Hospitality	DIRECT	NL	West	West
     if (!summary) return;
 
     const items = filterSummaryItems(getControls());
+    const connectorFor = (lineItems, item, index) => {
+      if (!index) return "";
+      if (item.connectorBefore) return item.connectorBefore;
+      return item.groupKey && item.groupKey === lineItems[index - 1].groupKey ? "OR" : "AND";
+    };
+    const renderConnector = connector => connector
+      ? `<span class="scr-helper-filter-operator is-${escapeHtml(connector.toLowerCase())}" title="${escapeHtml(connector === "OR" ? "Either filter group can match" : "Both filter groups must match")}">${escapeHtml(connector)}</span>`
+      : "";
+    const renderExpression = lineItems => {
+      const groupRanges = new Map();
+      lineItems.forEach((item, index) => {
+        if (!item.groupKey) return;
+        const range = groupRanges.get(item.groupKey) || { first: index, last: index, count: 0 };
+        range.last = index;
+        range.count += 1;
+        groupRanges.set(item.groupKey, range);
+      });
+      const opensGroup = (item, index) => {
+        const range = item.groupKey && groupRanges.get(item.groupKey);
+        return Boolean(range && range.count > 1 && range.first === index);
+      };
+      const closesGroup = (item, index) => {
+        const range = item.groupKey && groupRanges.get(item.groupKey);
+        return Boolean(range && range.count > 1 && range.last === index);
+      };
+      return lineItems.map((item, index) => `
+        ${renderConnector(connectorFor(lineItems, item, index))}
+        ${opensGroup(item, index) ? `<span class="scr-helper-filter-paren" aria-hidden="true">(</span>` : ""}
+        <span class="scr-helper-filter-chip${item.removable ? " is-removable" : ""}">
+          <span>${escapeHtml(item.label)}</span>
+          <strong>${escapeHtml(item.value)}</strong>
+          ${item.removable ? `<button type="button" class="scr-helper-filter-chip-remove" data-filter-remove="${escapeHtml(item.removeType)}" data-filter-key="${escapeHtml(item.removeKey || "")}" data-filter-value="${escapeHtml(item.value)}" aria-label="Remove ${escapeHtml(item.value)}">×</button>` : ""}
+        </span>
+        ${closesGroup(item, index) ? `<span class="scr-helper-filter-paren" aria-hidden="true">)</span>` : ""}
+      `).join("");
+    };
+    const sections = [];
+    items.forEach(item => {
+      const key = item.section || "queue";
+      let section = sections.find(entry => entry.key === key);
+      if (!section) {
+        section = {
+          key,
+          connector: sections.length ? item.sectionConnector || "AND" : "",
+          items: []
+        };
+        sections.push(section);
+      } else if (item.sectionConnector) {
+        section.connector = item.sectionConnector;
+      }
+      section.items.push(item);
+    });
     summary.classList.toggle("is-empty", !items.length);
     summary.innerHTML = items.length
-      ? items.map(item => `
-          <span class="scr-helper-filter-chip${item.removable ? " is-removable" : ""}">
-            <span>${escapeHtml(item.label)}</span>
-            <strong>${escapeHtml(item.value)}</strong>
-            ${item.removable ? `<button type="button" class="scr-helper-filter-chip-remove" data-filter-remove="${escapeHtml(item.removeType)}" data-filter-key="${escapeHtml(item.removeKey || "")}" data-filter-value="${escapeHtml(item.value)}" aria-label="Remove ${escapeHtml(item.value)}">×</button>` : ""}
-          </span>
+      ? sections.map(section => `
+          <div class="scr-helper-filter-expression-line">
+            ${renderConnector(section.connector)}
+            <span class="scr-helper-filter-expression">${renderExpression(section.items)}</span>
+          </div>
         `).join("")
       : `<span class="scr-helper-filter-empty">No filters applied</span>`;
   }
@@ -4935,28 +5768,106 @@ Health & Hospitality	DIRECT	NL	West	West
     }
   }
 
-  function setScriptUpdateAvailable(remoteVersion) {
-    const portlet = document.getElementById(HELPER_ID);
-    const version = document.getElementById("scr-helper-version");
-    const link = document.getElementById("scr-helper-update-link");
-    if (!portlet || !version || !link) return;
-
-    portlet.classList.add("scr-helper-update-available");
-    version.textContent = `Version ${HELPER_VERSION} · Update ${remoteVersion} available`;
-    link.hidden = false;
-    link.href = SCRIPT_UPDATE_URL;
-    link.textContent = "Update available";
+  function gmGetValue(key, fallback = null) {
+    try {
+      return typeof GM_getValue === "function" ? GM_getValue(key, fallback) : fallback;
+    } catch (error) {
+      console.warn("IQUEUE could not read Tampermonkey storage", error);
+      return fallback;
+    }
   }
 
-  function clearScriptUpdateAvailable() {
+  function gmSetValue(key, value) {
+    try {
+      if (typeof GM_setValue === "function") GM_setValue(key, value);
+    } catch (error) {
+      console.warn("IQUEUE could not write Tampermonkey storage", error);
+    }
+  }
+
+  function scriptUpdateCheckUrl() {
+    const separator = SCRIPT_UPDATE_URL.includes("?") ? "&" : "?";
+    return `${SCRIPT_UPDATE_URL}${separator}t=${Date.now()}`;
+  }
+
+  function fetchScriptUpdateText() {
+    const url = scriptUpdateCheckUrl();
+    const request = {
+      method: "GET",
+      url,
+      headers: {
+        "Cache-Control": "no-cache"
+      },
+      timeout: 15000
+    };
+
+    if (typeof GM_xmlhttpRequest === "function") {
+      return new Promise((resolve, reject) => {
+        GM_xmlhttpRequest({
+          ...request,
+          onload(response) {
+            if (response.status >= 200 && response.status < 300) {
+              resolve(String(response.responseText || ""));
+              return;
+            }
+            reject(new Error(`Update check failed: ${response.status || "unknown status"}`));
+          },
+          onerror() {
+            reject(new Error("Update check failed: network error"));
+          },
+          ontimeout() {
+            reject(new Error("Update check failed: timed out"));
+          }
+        });
+      });
+    }
+
+    if (typeof GM !== "undefined" && GM && typeof GM.xmlHttpRequest === "function") {
+      return Promise.resolve(GM.xmlHttpRequest(request)).then(response => {
+        if (response.status >= 200 && response.status < 300) return String(response.responseText || "");
+        throw new Error(`Update check failed: ${response.status || "unknown status"}`);
+      });
+    }
+
+    return fetch(url, {
+      cache: "no-cache",
+      credentials: "omit"
+    }).then(response => {
+      if (!response.ok) throw new Error(`Update check failed: ${response.status}`);
+      return response.text();
+    });
+  }
+
+  function setScriptUpdateStatus(message = "", options = {}) {
     const portlet = document.getElementById(HELPER_ID);
     const version = document.getElementById("scr-helper-version");
     const link = document.getElementById("scr-helper-update-link");
     if (!portlet || !version || !link) return;
 
-    portlet.classList.remove("scr-helper-update-available");
-    version.textContent = `Version ${HELPER_VERSION}`;
-    link.hidden = true;
+    const tone = options.tone || "";
+    portlet.classList.toggle("scr-helper-update-available", tone === "available");
+    portlet.classList.toggle("scr-helper-update-checking", tone === "checking");
+    portlet.classList.toggle("scr-helper-update-error", tone === "error");
+    version.textContent = `Version ${HELPER_VERSION}${message ? ` · ${message}` : ""}`;
+    version.title = options.title || "";
+    link.hidden = !options.linkVisible;
+    if (options.linkVisible) {
+      link.href = options.href || SCRIPT_UPDATE_URL;
+      link.textContent = options.linkText || "Update available";
+    }
+  }
+
+  function setScriptUpdateAvailable(remoteVersion) {
+    setScriptUpdateStatus(`Update ${remoteVersion} available`, {
+      tone: "available",
+      linkVisible: true,
+      href: SCRIPT_UPDATE_URL,
+      linkText: "Update available"
+    });
+  }
+
+  function clearScriptUpdateAvailable(message = "") {
+    setScriptUpdateStatus(message);
   }
 
   async function checkForScriptUpdate(options = {}) {
@@ -4968,20 +5879,1031 @@ Health & Hospitality	DIRECT	NL	West	West
     }
 
     try {
-      const response = await fetch(`${SCRIPT_UPDATE_URL}?t=${Date.now()}`, {
-        cache: "no-cache",
-        credentials: "omit"
-      });
-      if (!response.ok) throw new Error(`Update check failed: ${response.status}`);
-      const remoteVersion = scriptVersionFromText(await response.text());
+      if (force) setScriptUpdateStatus("Checking for update...", { tone: "checking" });
+      const remoteVersion = scriptVersionFromText(await fetchScriptUpdateText());
+      if (!remoteVersion) throw new Error("Update check failed: remote version not found");
       const updateAvailable = Boolean(remoteVersion && compareScriptVersions(HELPER_VERSION, remoteVersion) < 0);
       writeUpdateCheckCache({ remoteVersion, updateAvailable });
       if (updateAvailable) setScriptUpdateAvailable(remoteVersion);
-      else clearScriptUpdateAvailable();
+      else {
+        const currentMessage = compareScriptVersions(HELPER_VERSION, remoteVersion) === 0
+          ? `Up to date (${remoteVersion})`
+          : `No newer update (latest ${remoteVersion})`;
+        clearScriptUpdateAvailable(force ? currentMessage : "");
+      }
     } catch (error) {
       console.warn("IQUEUE update check failed", error);
       writeUpdateCheckCache({ error: error.message || "Update check failed", updateAvailable: false });
+      if (force) {
+        setScriptUpdateStatus("Update check failed", {
+          tone: "error",
+          title: error.message || "Update check failed"
+        });
+      }
     }
+  }
+
+  function setGraphTokenStatus(message, tone = "", detail = "") {
+    const status = document.getElementById("scr-helper-graph-token-status");
+    const optionsStatus = document.getElementById("scr-helper-graph-token-options-status");
+    const text = normalizeSpaces(message);
+    const shouldShowRefreshLink = Boolean(text && tone !== "good" && tone !== "checking");
+    const html = text
+      ? `${escapeHtml(text)}${shouldShowRefreshLink ? ` <a href="${escapeHtml(GRAPH_TOKEN_REFRESH_RELAY_URL)}" target="_blank">Refresh token</a>` : ""}`
+      : "";
+    [status, optionsStatus].filter(Boolean).forEach(element => {
+      element.hidden = !text;
+      element.dataset.tone = tone || "";
+      element.innerHTML = html;
+      element.title = detail || "";
+    });
+  }
+
+  function isGraphTokenRefreshPage() {
+    return IS_GRAPH_TOKEN_REFRESH_PAGE;
+  }
+
+  function decodeJwtPayload(token) {
+    const parts = String(token || "").split(".");
+    if (parts.length < 2) return null;
+    try {
+      const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+      const padded = payload.padEnd(Math.ceil(payload.length / 4) * 4, "=");
+      return JSON.parse(atob(padded));
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function graphTokenBase64ToBytes(value) {
+    const binary = atob(String(value || ""));
+    return Uint8Array.from(binary, char => char.charCodeAt(0));
+  }
+
+  function graphTokenScopesFromPayload(payload) {
+    if (!payload || typeof payload !== "object") return [];
+    const scopes = [];
+    if (typeof payload.scp === "string") scopes.push(...payload.scp.split(/\s+/));
+    if (Array.isArray(payload.roles)) scopes.push(...payload.roles);
+    return uniqueSorted(scopes.map(normalizeSpaces).filter(Boolean));
+  }
+
+  function graphTokenHasScope(tokenInfo, scope) {
+    const wanted = normalizeKey(scope);
+    return Boolean(tokenInfo && Array.isArray(tokenInfo.scopes) && tokenInfo.scopes.some(item => normalizeKey(item) === wanted));
+  }
+
+  function tokenLooksLikeJwt(value) {
+    return /\beyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\b/.test(String(value || ""));
+  }
+
+  function jwtTokensFromString(value) {
+    const matches = String(value || "").match(/\beyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\b/g);
+    return matches || [];
+  }
+
+  function graphTokenCandidateScore(token, source = "") {
+    const payload = decodeJwtPayload(token);
+    if (!payload) return 0;
+    const expiresAt = Number(payload.exp || 0) * 1000;
+    if (!expiresAt || expiresAt <= Date.now()) return 0;
+
+    const scopes = graphTokenScopesFromPayload(payload);
+    const aud = normalizeSpaces(payload.aud || "");
+    const sourceKey = normalizeKey(source);
+    let score = 10;
+    if (/graph\.microsoft\.com/i.test(aud) || aud === "00000003-0000-0000-c000-000000000000") score += 50;
+    if (scopes.some(scope => /^mail\.send$/i.test(scope))) score += 30;
+    if (scopes.some(scope => /^calendars?\./i.test(scope))) score += 10;
+    if (/access|graph|token|bearer/.test(sourceKey)) score += 8;
+    score += Math.min(12, Math.max(0, Math.floor((expiresAt - Date.now()) / (60 * 60 * 1000))));
+    return score;
+  }
+
+  function graphTokenInfoFromToken(token, source = "") {
+    const payload = decodeJwtPayload(token);
+    if (!payload) return null;
+    const expiresAt = Number(payload.exp || 0) * 1000;
+    const scopes = graphTokenScopesFromPayload(payload);
+    return {
+      token,
+      source,
+      checkedAt: Date.now(),
+      expiresAt,
+      scopes,
+      audience: normalizeSpaces(payload.aud || ""),
+      user: normalizeSpaces(payload.upn || payload.preferred_username || payload.email || payload.unique_name || "")
+    };
+  }
+
+  function storeGraphAccessTokenFromToken(token, source = "") {
+    const info = graphTokenInfoFromToken(token, source);
+    if (!info || !info.token || !info.expiresAt || info.expiresAt <= Date.now()) return null;
+    gmSetValue(GRAPH_ACCESS_TOKEN_KEY, info);
+    return info;
+  }
+
+  function writeGraphTokenStatusBridge(tokenInfo, status = {}) {
+    const expiresAt = Number(tokenInfo && tokenInfo.expiresAt || status.expiresAt || 0);
+    const valid = Boolean(tokenInfo && tokenInfo.token && expiresAt > Date.now() || status.valid);
+    gmSetValue(GRAPH_TOKEN_STATUS_KEY, {
+      checkedAt: Date.now(),
+      source: status.source || tokenInfo && tokenInfo.source || "calendar-refresh",
+      valid,
+      expiresAt,
+      tokenAvailable: Boolean(tokenInfo && tokenInfo.token),
+      scopes: tokenInfo && tokenInfo.scopes || status.scopes || [],
+      message: status.message || (valid ? "Saved token ready." : "Token status not found.")
+    });
+  }
+
+  function graphTokenRelayTargets() {
+    return [
+      "https://nlcorp.app.netsuite.com",
+      "https://nlcorp-sb2.app.netsuite.com"
+    ];
+  }
+
+  function postGraphTokenRelay(tokenInfo) {
+    if (!tokenInfo || !tokenInfo.token || !isGraphTokenRefreshPage()) return;
+    const payload = {
+      kind: GRAPH_TOKEN_RELAY_KIND,
+      token: tokenInfo.token,
+      expiresAt: tokenInfo.expiresAt || 0,
+      source: tokenInfo.source || "calendar-refresh"
+    };
+    const targets = [window.opener, window.parent].filter(target => target && target !== window);
+    targets.forEach(target => {
+      graphTokenRelayTargets().forEach(origin => {
+        try {
+          target.postMessage(payload, origin);
+        } catch (error) {
+          console.warn("IQUEUE could not post Graph token relay", error);
+        }
+      });
+    });
+  }
+
+  function installGraphTokenRelayListener() {
+    if (window.__iqueueGraphTokenRelayListenerInstalled) return;
+    window.__iqueueGraphTokenRelayListenerInstalled = true;
+    window.addEventListener("message", event => {
+      if (event.origin !== "https://mcanderson14.github.io") return;
+      const data = event.data || {};
+      if (!data || data.kind !== GRAPH_TOKEN_RELAY_KIND || !data.token) return;
+      const tokenInfo = storeGraphAccessTokenFromToken(data.token, data.source || "calendar-refresh:postMessage");
+      if (!tokenInfo) {
+        setGraphTokenStatus("Microsoft Graph token relay did not contain a usable access token.", "warn");
+        return;
+      }
+      writeGraphTokenStatusBridge(tokenInfo, {
+        source: "calendar-refresh:postMessage",
+        message: "Saved token ready."
+      });
+      setGraphTokenStatus(
+        `Graph token synced${tokenInfo.expiresAt ? ` until ${formatGraphTokenExpiry(tokenInfo.expiresAt)}` : ""}.`,
+        "good"
+      );
+    });
+  }
+
+  function captureBearerTokenFromText(value, source = "") {
+    const text = String(value || "");
+    const bearerMatch = text.match(/Bearer\s+(eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)/i);
+    if (bearerMatch) return storeGraphAccessTokenFromToken(bearerMatch[1], source);
+    const tokens = jwtTokensFromString(text);
+    for (const token of tokens) {
+      if (graphTokenCandidateScore(token, source) > 0) return storeGraphAccessTokenFromToken(token, source);
+    }
+    return null;
+  }
+
+  function captureBearerTokenFromHeaders(headers, source = "") {
+    if (!headers) return null;
+    try {
+      if (typeof Headers !== "undefined" && headers instanceof Headers) {
+        return captureBearerTokenFromText(headers.get("Authorization") || headers.get("authorization") || "", source);
+      }
+      if (Array.isArray(headers)) {
+        for (const [key, value] of headers) {
+          if (/^authorization$/i.test(key)) {
+            const info = captureBearerTokenFromText(value, source);
+            if (info) return info;
+          }
+        }
+        return null;
+      }
+      if (typeof headers === "object") {
+        const key = Object.keys(headers).find(item => /^authorization$/i.test(item));
+        return key ? captureBearerTokenFromText(headers[key], source) : null;
+      }
+    } catch (error) {
+      console.warn("IQUEUE could not inspect request headers for Graph token", error);
+    }
+    return null;
+  }
+
+  function collectGraphTokenCandidatesFromValue(value, source = "", depth = 0) {
+    if (depth > 4 || value == null) return [];
+    if (typeof value === "string") {
+      return jwtTokensFromString(value).map(token => ({ token, source }));
+    }
+    if (Array.isArray(value)) {
+      return value.flatMap((item, index) => collectGraphTokenCandidatesFromValue(item, `${source}[${index}]`, depth + 1));
+    }
+    if (typeof value === "object") {
+      return Object.entries(value).flatMap(([key, item]) => (
+        collectGraphTokenCandidatesFromValue(item, source ? `${source}.${key}` : key, depth + 1)
+      ));
+    }
+    return [];
+  }
+
+  function collectGraphTokenCandidatesFromStorage(storage, label) {
+    const candidates = [];
+    if (!storage) return candidates;
+    try {
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index);
+        const raw = storage.getItem(key);
+        if (!raw || !tokenLooksLikeJwt(raw)) continue;
+        let value = raw;
+        try {
+          value = JSON.parse(raw);
+        } catch (error) {
+          value = raw;
+        }
+        candidates.push(...collectGraphTokenCandidatesFromValue(value, `${label}:${key}`));
+      }
+    } catch (error) {
+      console.warn(`IQUEUE could not inspect ${label} for Graph token`, error);
+    }
+    return candidates;
+  }
+
+  function collectGraphTokenCandidatesFromPageFields() {
+    try {
+      return Array.from(document.querySelectorAll("textarea,input"))
+        .flatMap(field => {
+          const value = field && field.value || "";
+          if (!tokenLooksLikeJwt(value)) return [];
+          const name = field.getAttribute("name") || field.id || field.placeholder || "field";
+          return collectGraphTokenCandidatesFromValue(value, `page:${name}`);
+        });
+    } catch (error) {
+      console.warn("IQUEUE could not inspect refresh-page fields for Graph token", error);
+      return [];
+    }
+  }
+
+  function graphAccessTokenFromRefreshPage() {
+    const candidates = []
+      .concat(collectGraphTokenCandidatesFromStorage(window.localStorage, "localStorage"))
+      .concat(collectGraphTokenCandidatesFromStorage(window.sessionStorage, "sessionStorage"))
+      .concat(collectGraphTokenCandidatesFromPageFields())
+      .map(candidate => ({
+        ...candidate,
+        score: graphTokenCandidateScore(candidate.token, candidate.source)
+      }))
+      .filter(candidate => candidate.score > 0)
+      .sort((left, right) => right.score - left.score);
+
+    const best = candidates[0];
+    return best ? graphTokenInfoFromToken(best.token, best.source) : null;
+  }
+
+  async function graphAccessTokenFromRefreshPageEncryptedVault() {
+    try {
+      if (!window.crypto || !window.crypto.subtle) return null;
+      const rawRecord = window.localStorage.getItem(CALENDAR_GRAPH_TOKEN_VAULT_KEY);
+      const rawKey = window.localStorage.getItem(CALENDAR_GRAPH_TOKEN_LOCAL_KEY);
+      if (!rawRecord || !rawKey) return null;
+
+      const record = JSON.parse(rawRecord);
+      if (!record || record.kind !== "sc-calendar-graph-explorer-token-vault" || record.keyMode !== "browser-local") return null;
+      if (!record.ciphertext || !record.iv) return null;
+
+      const key = await window.crypto.subtle.importKey(
+        "raw",
+        graphTokenBase64ToBytes(rawKey),
+        { name: "AES-GCM" },
+        false,
+        ["decrypt"]
+      );
+      const plaintext = await window.crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: graphTokenBase64ToBytes(record.iv) },
+        key,
+        graphTokenBase64ToBytes(record.ciphertext)
+      );
+      const payload = JSON.parse(new TextDecoder().decode(plaintext));
+      const token = normalizeSpaces(payload && payload.token || "");
+      return token ? storeGraphAccessTokenFromToken(token, "calendar-refresh:encrypted-vault") : null;
+    } catch (error) {
+      console.warn("IQUEUE could not read encrypted Graph token vault", error);
+      return null;
+    }
+  }
+
+  async function graphAccessTokenFromRefreshPageVault() {
+    const pageWindow = typeof unsafeWindow !== "undefined" ? unsafeWindow : window;
+    const readerNames = ["getStoredGraphExplorerToken", "getGraphExplorerToken"];
+    for (const readerName of readerNames) {
+      const reader = pageWindow && pageWindow[readerName];
+      if (typeof reader !== "function") continue;
+      try {
+        const value = await reader.call(pageWindow);
+        const token = typeof value === "string" ? value : value && value.token;
+        const info = token ? storeGraphAccessTokenFromToken(token, `calendar-refresh:${readerName}`) : null;
+        if (info) return info;
+      } catch (error) {
+        console.warn(`IQUEUE could not read Graph token through ${readerName}`, error);
+      }
+    }
+    return graphAccessTokenFromRefreshPageEncryptedVault();
+  }
+
+  function installGraphTokenRequestCapture() {
+    if (window.__iqueueGraphTokenCaptureInstalled) return;
+    window.__iqueueGraphTokenCaptureInstalled = true;
+
+    try {
+      const originalFetch = window.fetch;
+      if (typeof originalFetch === "function") {
+        window.fetch = function patchedIqueueFetch(input, init) {
+          try {
+            if (init && init.headers) captureBearerTokenFromHeaders(init.headers, "fetch:init");
+            if (input && input.headers) captureBearerTokenFromHeaders(input.headers, "fetch:request");
+          } catch (error) {
+            console.warn("IQUEUE fetch token capture failed", error);
+          }
+          return originalFetch.apply(this, arguments);
+        };
+      }
+    } catch (error) {
+      console.warn("IQUEUE could not patch fetch for Graph token capture", error);
+    }
+
+    try {
+      const OriginalXhr = window.XMLHttpRequest;
+      if (OriginalXhr && OriginalXhr.prototype) {
+        const originalSetRequestHeader = OriginalXhr.prototype.setRequestHeader;
+        OriginalXhr.prototype.setRequestHeader = function patchedIqueueSetRequestHeader(name, value) {
+          try {
+            if (/^authorization$/i.test(name)) captureBearerTokenFromText(value, "xhr");
+          } catch (error) {
+            console.warn("IQUEUE XHR token capture failed", error);
+          }
+          return originalSetRequestHeader.apply(this, arguments);
+        };
+      }
+    } catch (error) {
+      console.warn("IQUEUE could not patch XHR for Graph token capture", error);
+    }
+  }
+
+  function expiryFromUnknownValue(value, depth = 0) {
+    if (depth > 4 || value == null) return 0;
+    if (typeof value === "number") {
+      if (value > 1000000000000) return value;
+      if (value > 1000000000) return value * 1000;
+      return 0;
+    }
+    if (typeof value === "string") {
+      const text = value.trim();
+      const jwtMatch = text.match(/\beyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\b/);
+      if (jwtMatch) {
+        const payload = decodeJwtPayload(jwtMatch[0]);
+        if (payload && payload.exp) return Number(payload.exp) * 1000;
+      }
+      if (/^\d{10,13}$/.test(text)) return expiryFromUnknownValue(Number(text), depth + 1);
+      const parsedDate = Date.parse(text);
+      return Number.isFinite(parsedDate) ? parsedDate : 0;
+    }
+    if (Array.isArray(value)) {
+      return value.map(item => expiryFromUnknownValue(item, depth + 1)).filter(Boolean).sort((a, b) => b - a)[0] || 0;
+    }
+    if (typeof value === "object") {
+      const preferredKeys = Object.keys(value).filter(key => /(?:expires?|expiry|expiration|expiresAt|expiresOn|exp|validUntil)/i.test(key));
+      for (const key of preferredKeys) {
+        const expiry = expiryFromUnknownValue(value[key], depth + 1);
+        if (expiry) return expiry;
+      }
+      return Object.values(value).map(item => expiryFromUnknownValue(item, depth + 1)).filter(Boolean).sort((a, b) => b - a)[0] || 0;
+    }
+    return 0;
+  }
+
+  function graphTokenStatusFromStorage() {
+    const expiries = [];
+    try {
+      for (let index = 0; index < window.localStorage.length; index += 1) {
+        const key = window.localStorage.key(index);
+        const raw = window.localStorage.getItem(key);
+        if (!raw) continue;
+        let value = raw;
+        try {
+          value = JSON.parse(raw);
+        } catch (error) {
+          value = raw;
+        }
+        const expiry = expiryFromUnknownValue(value);
+        if (expiry) expiries.push(expiry);
+      }
+    } catch (error) {
+      console.warn("IQUEUE could not inspect refresh-page local storage", error);
+    }
+    return expiries.sort((a, b) => b - a)[0] || 0;
+  }
+
+  function graphTokenStatusFromPageText() {
+    const text = normalizeSpaces(document.body && document.body.innerText || "");
+    if (!text) return { valid: false, expiresAt: 0, message: "Token status not found." };
+
+    const expired = /\b(?:expired|not\s+ready|missing|invalid)\b/i.test(text) && !/saved\s+token\s+ready/i.test(text);
+    const expiryMatch = text.match(/Expires\s+(.+?)(?:\s*\(([^)]*)\)|$)/i);
+    let expiresAt = expiryMatch ? Date.parse(normalizeSpaces(expiryMatch[1])) : 0;
+    if (!expiresAt && expiryMatch && expiryMatch[2]) {
+      const relative = expiryMatch[2].match(/(\d+(?:\.\d+)?)\s*(hr|hour|hours|min|minute|minutes)/i);
+      if (relative) {
+        const amount = Number(relative[1]);
+        const unit = relative[2].toLowerCase();
+        expiresAt = Date.now() + amount * (/^h/.test(unit) ? 60 * 60 * 1000 : 60 * 1000);
+      }
+    }
+
+    const ready = /saved\s+token\s+ready/i.test(text) || /token\s+saved/i.test(text);
+    return {
+      valid: Boolean(!expired && (ready || expiresAt > Date.now())),
+      expiresAt,
+      message: ready ? "Saved token ready." : expired ? "Token expired or missing." : "Token status not found."
+    };
+  }
+
+  async function publishGraphTokenStatusFromRefreshPage() {
+    const pageStatus = graphTokenStatusFromPageText();
+    const storageExpiry = graphTokenStatusFromStorage();
+    const tokenInfo = graphAccessTokenFromRefreshPage() || await graphAccessTokenFromRefreshPageVault();
+    const expiresAt = tokenInfo && tokenInfo.expiresAt || pageStatus.expiresAt || storageExpiry || 0;
+    const valid = Boolean(pageStatus.valid || expiresAt > Date.now());
+    if (tokenInfo && tokenInfo.token && tokenInfo.expiresAt > Date.now()) {
+      storeGraphAccessTokenFromToken(tokenInfo.token, tokenInfo.source || "calendar-refresh");
+      postGraphTokenRelay(tokenInfo);
+    }
+    writeGraphTokenStatusBridge(tokenInfo, {
+      source: "calendar-refresh",
+      valid,
+      expiresAt,
+      message: valid ? "Saved token ready." : pageStatus.message || "Token status not found."
+    });
+  }
+
+  function installGraphTokenRefreshPageBridge() {
+    const scheduleGraphTokenPublish = (delay = 0) => {
+      window.setTimeout(() => {
+        Promise.resolve(publishGraphTokenStatusFromRefreshPage()).catch(error => {
+          console.warn("IQUEUE could not publish Graph token status from refresh page", error);
+        });
+      }, delay);
+    };
+    installGraphTokenRequestCapture();
+    scheduleGraphTokenPublish();
+    scheduleGraphTokenPublish(750);
+    scheduleGraphTokenPublish(2500);
+    try {
+      const observer = new MutationObserver(() => scheduleGraphTokenPublish());
+      observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    } catch (error) {
+      // MutationObserver can fail on unusual partial page loads; timed checks above still cover normal use.
+    }
+    window.addEventListener("storage", () => scheduleGraphTokenPublish());
+  }
+
+  function formatGraphTokenExpiry(expiresAt) {
+    if (!expiresAt) return "";
+    try {
+      return new Date(expiresAt).toLocaleString();
+    } catch (error) {
+      return "";
+    }
+  }
+
+  function readGraphTokenStatusBridge() {
+    const value = gmGetValue(GRAPH_TOKEN_STATUS_KEY, null);
+    return value && typeof value === "object" ? value : null;
+  }
+
+  function readGraphAccessTokenBridge() {
+    const value = gmGetValue(GRAPH_ACCESS_TOKEN_KEY, null);
+    if (!value || typeof value !== "object" || !value.token) return null;
+    const expiresAt = Number(value.expiresAt || 0);
+    if (!expiresAt || expiresAt <= Date.now()) return null;
+    return value;
+  }
+
+  async function checkGraphTokenStatus(options = {}) {
+    const force = Boolean(options.force);
+    if (force) setGraphTokenStatus("Checking Microsoft Graph token...", "checking");
+
+    const bridge = readGraphTokenStatusBridge();
+    if (!bridge || !bridge.checkedAt) {
+      setGraphTokenStatus(
+        force ? "Open the refresh page to verify Microsoft Graph token status." : "",
+        force ? "warn" : "",
+        "IQUEUE has not yet seen token status from calendar-refresh.html."
+      );
+      return bridge;
+    }
+
+    const age = Date.now() - Number(bridge.checkedAt || 0);
+    const expiresAt = Number(bridge.expiresAt || 0);
+    const expiryText = formatGraphTokenExpiry(expiresAt);
+    const tokenInfo = readGraphAccessTokenBridge();
+    if (age > GRAPH_TOKEN_STATUS_STALE_MS) {
+      setGraphTokenStatus(
+        "Microsoft Graph token status is stale.",
+        "warn",
+        "Open the refresh page so IQUEUE can read the latest token status."
+      );
+      return bridge;
+    }
+
+    if (!bridge.valid || expiresAt && expiresAt <= Date.now()) {
+      setGraphTokenStatus(
+        "Microsoft Graph token needs refresh.",
+        "warn",
+        bridge.message || "The refresh page reported an expired or missing token."
+      );
+      return bridge;
+    }
+
+    if (!tokenInfo) {
+      setGraphTokenStatus(
+        "Microsoft Graph token is valid, but IQUEUE cannot read the access token yet.",
+        "warn",
+        "Open the refresh page from IQUEUE's Refresh token link so it can sync the token back to this queue."
+      );
+      return bridge;
+    }
+
+    if (expiresAt && expiresAt - Date.now() <= GRAPH_TOKEN_EXPIRING_SOON_MS) {
+      setGraphTokenStatus(
+        `Microsoft Graph token expires soon${expiryText ? ` (${expiryText})` : ""}.`,
+        "warn"
+      );
+      return bridge;
+    }
+
+    setGraphTokenStatus(
+      force ? `Graph token valid${expiryText ? ` until ${expiryText}` : ""}.` : "",
+      force ? "good" : ""
+    );
+    return bridge;
+  }
+
+  function graphRequest(options) {
+    const request = {
+      method: options.method || "GET",
+      url: options.url,
+      headers: options.headers || {},
+      data: options.body || undefined,
+      timeout: options.timeout || 20000
+    };
+
+    if (typeof GM_xmlhttpRequest === "function") {
+      return new Promise((resolve, reject) => {
+        GM_xmlhttpRequest({
+          ...request,
+          onload(response) {
+            const text = String(response.responseText || "");
+            let body = text;
+            try {
+              body = text ? JSON.parse(text) : null;
+            } catch (error) {
+              body = text;
+            }
+            if (response.status >= 200 && response.status < 300) {
+              resolve({ status: response.status, body });
+              return;
+            }
+            const message = body && typeof body === "object" && body.error
+              ? body.error.message || body.error.code
+              : text || `HTTP ${response.status}`;
+            reject(new Error(`Graph request failed: ${message}`));
+          },
+          onerror() {
+            reject(new Error("Graph request failed: network error"));
+          },
+          ontimeout() {
+            reject(new Error("Graph request failed: timed out"));
+          }
+        });
+      });
+    }
+
+    if (typeof GM !== "undefined" && GM && typeof GM.xmlHttpRequest === "function") {
+      return Promise.resolve(GM.xmlHttpRequest(request)).then(response => {
+        if (response.status >= 200 && response.status < 300) {
+          return { status: response.status, body: response.responseText || "" };
+        }
+        throw new Error(`Graph request failed: HTTP ${response.status}`);
+      });
+    }
+
+    return fetch(options.url, {
+      method: options.method || "GET",
+      headers: options.headers || {},
+      body: options.body || undefined
+    }).then(async response => {
+      if (response.ok) return { status: response.status, body: await response.text() };
+      throw new Error(`Graph request failed: HTTP ${response.status}`);
+    });
+  }
+
+  function graphMailHtmlForOwnerRoute(row, ownerName, target) {
+    const summary = buildRowSummary(row);
+    const scrLabel = formatScrTitlePrefix(row.scrDisplayId) || row.title || "SC Request";
+    const opportunity = summary.opportunityDisplay || "Missing Opportunity";
+    const company = summary.companyDisplay || "";
+    const editUrl = editUrlForRow(row);
+    const routedBy = getCurrentUserName() || "IQUEUE user";
+    const targetFamily = target && target.family || primaryDisplayedIndustryFamily(row) || "selected queue";
+    const rows = [
+      ["SCM Owner", ownerName],
+      ["Routed By", routedBy],
+      ["SC Staffing Industry", targetFamily],
+      ["Request Type", requestTypeLabel(row.amoDirect)],
+      ["Date Needed", summary.dateNeeded],
+      ["Company", company],
+      ["Opportunity", opportunity],
+      ["Sales Rep", summary.salesRep],
+      ["Regional Director", summary.salesDirector]
+    ].filter(([, value]) => normalizeSpaces(value));
+
+    return `
+      <div style="font-family: Arial, Helvetica, sans-serif; color: #3C4545; font-size: 14px; line-height: 1.45;">
+        <p>${escapeHtml(routedBy)} routed an SCR to your IQUEUE owner view.</p>
+        <p>
+          <strong>${escapeHtml(scrLabel)}</strong>
+          ${opportunity ? ` | ${escapeHtml(opportunity)}` : ""}
+          ${company ? ` | ${escapeHtml(company)}` : ""}
+        </p>
+        <table style="border-collapse: collapse; margin: 12px 0;">
+          <tbody>
+            ${rows.map(([label, value]) => `
+              <tr>
+                <td style="padding: 4px 10px 4px 0; color: #697778; font-weight: 700;">${escapeHtml(label)}</td>
+                <td style="padding: 4px 0;">${escapeHtml(value)}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+        ${editUrl ? `<p><a href="${escapeHtml(editUrl)}">Open SCR</a></p>` : ""}
+      </div>
+    `;
+  }
+
+  function graphMailSubjectForOwnerRoute(row, target) {
+    const summary = buildRowSummary(row);
+    const scrLabel = formatScrTitlePrefix(row.scrDisplayId) || row.title || "SC Request";
+    const targetFamily = target && target.family || primaryDisplayedIndustryFamily(row) || "SCM owner";
+    const opportunity = summary.opportunityDisplay || "";
+    const company = summary.companyDisplay || "";
+    return normalizeSpaces(`IQUEUE: ${targetFamily} SCR routed to you - ${scrLabel}${opportunity ? ` | ${opportunity}` : ""}${company ? ` | ${company}` : ""}`).slice(0, 240);
+  }
+
+  function ownerRouteMailText(row, ownerName, target) {
+    const summary = buildRowSummary(row);
+    const scrLabel = formatScrTitlePrefix(row.scrDisplayId) || row.title || "SC Request";
+    const routedBy = getCurrentUserName() || "IQUEUE user";
+    const targetFamily = target && target.family || primaryDisplayedIndustryFamily(row) || "selected queue";
+    const editUrl = editUrlForRow(row);
+    const lines = [
+      `${routedBy} routed an SCR to your IQUEUE owner view.`,
+      "",
+      `${scrLabel}${summary.opportunityDisplay ? ` | ${summary.opportunityDisplay}` : ""}${summary.companyDisplay ? ` | ${summary.companyDisplay}` : ""}`,
+      "",
+      `SCM Owner: ${ownerName}`,
+      `SC Staffing Industry: ${targetFamily}`,
+      `Request Type: ${requestTypeLabel(row.amoDirect) || "Unknown"}`,
+      `Date Needed: ${summary.dateNeeded || "Unknown"}`,
+      `Company: ${summary.companyDisplay || "Unknown"}`,
+      `Opportunity: ${summary.opportunityDisplay || "Missing Opportunity"}`,
+      `Sales Rep: ${summary.salesRep || "Unknown"}`,
+      `Regional Director: ${summary.salesDirector || "Unknown"}`,
+      editUrl ? `Open SCR: ${editUrl}` : ""
+    ];
+    return lines.filter(line => line !== "").join("\r\n");
+  }
+
+  function openOwnerRouteEmailDraft(row, ownerName, target, email, reason = "") {
+    const subject = graphMailSubjectForOwnerRoute(row, target);
+    const fullBody = ownerRouteMailText(row, ownerName, target);
+    const compactBody = fullBody.length > 1200
+      ? `${fullBody.slice(0, 1150)}\r\n\r\n[Details trimmed for draft length. Open the SCR for full context.]`
+      : fullBody;
+    const outlookUrl = `https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(email)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(compactBody)}`;
+    const mailtoUrl = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(compactBody)}`;
+    openEditUrlWithGm(outlookUrl);
+    return {
+      email,
+      mode: "draft",
+      reason: reason || "Microsoft Graph email send is unavailable.",
+      subject,
+      links: [
+        { label: "Open Outlook draft", href: outlookUrl },
+        { label: "Mailto fallback", href: mailtoUrl }
+      ]
+    };
+  }
+
+  async function sendOwnerRouteEmail(row, ownerName, target) {
+    const email = authorizedManagerEmailForName(ownerName);
+    if (!email) throw new Error(`No email address found for ${ownerName} in Authorized Managers.`);
+    return openOwnerRouteEmailDraft(row, ownerName, target, email, "Owner notifications use Outlook drafts.");
+  }
+
+  function findSalesRepField(fields) {
+    const direct = findField(fields, [
+      /sales\s*rep$/, /salesrep$/, /opp.*sales.*rep/, /sales.*representative/
+    ], [/manager/, /mgr/, /yrs.*live/, /regional/, /director/, /vp/, /leader/]);
+    if (direct) return direct;
+
+    return (fields || []).find(field => {
+      const text = `${field.label || ""} ${field.value || ""} ${field.rawValue || ""}`;
+      return /sales\s*rep\s*:/i.test(text)
+        && !/sales\s*rep\s*(?:manager|mgr|yrs)/i.test(text)
+        && !/(regional\s*(?:director|dir|vp)|industry\s*leader|sales\s*director|sales\s*dir)/i.test(text);
+    }) || null;
+  }
+
+  function salesRepEmployeeIdFromField(field, salesRepName) {
+    if (!field || !Array.isArray(field.links) || !field.links.length) return "";
+    const employeeLinks = field.links.filter(link => (
+      /employee|\/entity\/employee|empcenter/i.test(link.href || "")
+    ));
+    if (!employeeLinks.length) return "";
+
+    const targetKeys = personNameKeys(salesRepName);
+    const namedLink = employeeLinks.find(link => personKeyListsOverlap(personNameKeys(link.text), targetKeys));
+    const link = namedLink || (employeeLinks.length === 1 ? employeeLinks[0] : null);
+    return recordIdFromUrl(link && link.href);
+  }
+
+  function pickEmployeeEmailMatch(rows, names) {
+    const candidates = (rows || []).filter(row => row && row.email);
+    if (!candidates.length) return null;
+
+    const variants = [...new Set(names.flatMap(rosterNameVariants))];
+    const targetKeys = names.flatMap(personNameKeys);
+    const exact = candidates.find(row => {
+      const rowName = normalizeRosterName(row.name);
+      return rowName && variants.some(variant => rowName === variant || rowName.includes(variant) || variant.includes(rowName));
+    });
+    if (exact) return exact;
+
+    const keyed = candidates.find(row => personKeyListsOverlap(personNameKeys(row.name), targetKeys));
+    return keyed || (candidates.length === 1 ? candidates[0] : null);
+  }
+
+  function employeeLookupRow(id, name, email, source) {
+    const cleanEmail = normalizeSpaces(email);
+    if (!cleanEmail) return null;
+    return {
+      id: normalizeSpaces(id),
+      name: cleanPersonName(name),
+      email: cleanEmail,
+      source: source || "employee"
+    };
+  }
+
+  function lookupEmployeeEmailWithNlapi(pageWindow, names, employeeId) {
+    if (employeeId && typeof pageWindow.nlapiLookupField === "function") {
+      const email = normalizeLookupFieldValue(pageWindow.nlapiLookupField("employee", employeeId, "email"));
+      const name = normalizeLookupFieldValue(pageWindow.nlapiLookupField("employee", employeeId, "entityid"));
+      const row = employeeLookupRow(employeeId, name || names[0], email, "employee record");
+      if (row) return row;
+    }
+
+    if (typeof pageWindow.nlapiSearchRecord !== "function" || typeof pageWindow.nlobjSearchFilter !== "function") {
+      return null;
+    }
+
+    for (const term of rosterSearchTerms(names)) {
+      const filters = [
+        new pageWindow.nlobjSearchFilter("entityid", null, "contains", term),
+        new pageWindow.nlobjSearchFilter("isinactive", null, "is", "F")
+      ];
+      const columns = [
+        new pageWindow.nlobjSearchColumn("internalid"),
+        new pageWindow.nlobjSearchColumn("entityid"),
+        new pageWindow.nlobjSearchColumn("email")
+      ];
+      const results = pageWindow.nlapiSearchRecord("employee", null, filters, columns) || [];
+      const rows = results.map(result => employeeLookupRow(
+        result.getValue("internalid") || result.getId && result.getId(),
+        result.getValue("entityid") || result.getText("entityid"),
+        result.getValue("email"),
+        "employee search"
+      )).filter(Boolean);
+      const match = pickEmployeeEmailMatch(rows, names);
+      if (match) return match;
+    }
+
+    return null;
+  }
+
+  function lookupEmployeeEmailWithRequire(pageWindow, names, employeeId) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      let timer;
+      const finish = callback => result => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        callback(result);
+      };
+      timer = setTimeout(finish(reject), 8000, new Error("Timed out resolving Sales Rep email."));
+
+      try {
+        pageWindow.require(["N/search"], search => {
+          try {
+            const employeeType = search.Type && search.Type.EMPLOYEE || "employee";
+            if (employeeId) {
+              const result = search.lookupFields({
+                type: employeeType,
+                id: employeeId,
+                columns: ["entityid", "email"]
+              });
+              finish(resolve)(employeeLookupRow(
+                employeeId,
+                normalizeLookupFieldValue(result && result.entityid) || names[0],
+                normalizeLookupFieldValue(result && result.email),
+                "employee record"
+              ));
+              return;
+            }
+
+            for (const term of rosterSearchTerms(names)) {
+              const results = search.create({
+                type: employeeType,
+                filters: [["entityid", "contains", term], "AND", ["isinactive", "is", "F"]],
+                columns: ["internalid", "entityid", "email"]
+              }).run().getRange({ start: 0, end: 25 }) || [];
+              const rows = results.map(result => employeeLookupRow(
+                result.getValue({ name: "internalid" }),
+                result.getValue({ name: "entityid" }),
+                result.getValue({ name: "email" }),
+                "employee search"
+              )).filter(Boolean);
+              const match = pickEmployeeEmailMatch(rows, names);
+              if (match) {
+                finish(resolve)(match);
+                return;
+              }
+            }
+            finish(resolve)(null);
+          } catch (error) {
+            finish(reject)(error);
+          }
+        }, finish(reject));
+      } catch (error) {
+        finish(reject)(error);
+      }
+    });
+  }
+
+  async function resolveSalesRepEmail(row) {
+    const summary = buildRowSummary(row);
+    const salesRepName = cleanPersonName(summary.salesRep);
+    if (!salesRepName) throw new Error("No Sales Rep was returned on this SCR row.");
+
+    const fields = row && (row.allFields || row.fields) || [];
+    const salesRepField = findSalesRepField(fields);
+    const employeeId = salesRepEmployeeIdFromField(salesRepField, salesRepName);
+    const cacheKey = employeeId
+      ? `id:${employeeId}`
+      : `name:${personNameKeys(salesRepName).sort().join("|") || normalizeKey(salesRepName)}`;
+    if (salesRepEmailLookupCache.has(cacheKey)) return salesRepEmailLookupCache.get(cacheKey);
+
+    const names = [salesRepName];
+    const pageWindow = getPageWindow();
+    let match = null;
+    if (pageWindow && (typeof pageWindow.nlapiLookupField === "function" || typeof pageWindow.nlapiSearchRecord === "function")) {
+      try {
+        match = lookupEmployeeEmailWithNlapi(pageWindow, names, employeeId);
+      } catch (error) {
+        console.warn("IQUEUE nlapi employee email lookup failed", error);
+      }
+    }
+    if (!match && pageWindow && typeof pageWindow.require === "function") {
+      try {
+        match = await lookupEmployeeEmailWithRequire(pageWindow, names, employeeId);
+      } catch (error) {
+        console.warn("IQUEUE N/search employee email lookup failed", error);
+      }
+    }
+    if (!match) {
+      const inferred = inferOracleEmailFromName(salesRepName);
+      match = inferred
+        ? employeeLookupRow("", salesRepName, inferred, "oracle email fallback")
+        : {
+          id: "",
+          name: salesRepName,
+          email: salesRepName,
+          source: "Outlook name resolution"
+        };
+    }
+    if (!match || !match.email) throw new Error(`No Sales Rep recipient was available for ${salesRepName}.`);
+
+    const resolved = {
+      name: match.name || salesRepName,
+      email: match.email,
+      source: match.source || "employee"
+    };
+    salesRepEmailLookupCache.set(cacheKey, resolved);
+    return resolved;
+  }
+
+  function requestInfoQueueLabel(row) {
+    const info = getCrossIndustryInfoForRow(row);
+    if (info.targets.length) return info.targets.map(target => target.family).join(", ");
+    if (info.includeAll) return "All industry queues";
+    return primaryDisplayedIndustryFamily(row) || row && row.industryFamily || "Unknown";
+  }
+
+  function requestInfoOwnerName(row) {
+    const mappedOwner = productsScmOwnerForRow(row);
+    return currentProductsScmUserName()
+      || getCurrentUserName()
+      || mappedOwner && mappedOwner.scm
+      || "IQUEUE user";
+  }
+
+  function requesterInfoMailSubject(row) {
+    const summary = buildRowSummary(row);
+    const scrLabel = formatScrTitlePrefix(row.scrDisplayId) || row.title || "SC Request";
+    return normalizeSpaces(`Questions regarding ${scrLabel}${summary.opportunityDisplay ? ` | ${summary.opportunityDisplay}` : ""}`).slice(0, 240);
+  }
+
+  function requesterInfoMailText(row) {
+    const summary = buildRowSummary(row);
+    const ownerName = requestInfoOwnerName(row);
+    const scrLabel = formatScrTitlePrefix(row.scrDisplayId) || row.title || "SC Request";
+    const editUrl = editUrlForRow(row);
+    const lines = [
+      `${ownerName} has questions regarding a submitted SC Request:`,
+      "",
+      [scrLabel, summary.opportunityDisplay || "Missing Opportunity", summary.companyDisplay].filter(Boolean).join(" | "),
+      "",
+      `SCM Owner: ${ownerName}`,
+      `SC Staffing Industry: ${requestInfoQueueLabel(row)}`,
+      `Request Type: ${requestTypeLabel(row.amoDirect) || "Unknown"}`,
+      `Date Needed: ${summary.dateNeeded || "Unknown"}`,
+      `Company: ${summary.companyDisplay || "Unknown"}`,
+      `Opportunity: ${summary.opportunityDisplay || "Missing Opportunity"}`,
+      `Sales Rep: ${summary.salesRep || "Unknown"}`,
+      `Regional Director: ${summary.salesDirector || "Unknown"}`,
+      editUrl ? `Open SCR: ${editUrl}` : ""
+    ];
+    return lines.filter(line => line !== "").join("\r\n");
+  }
+
+  function buildEmailComposeDraft(email, subject, body, labels = {}) {
+    const compactBody = body.length > 1400
+      ? `${body.slice(0, 1350)}\r\n\r\n[Details trimmed for draft length. Open the SCR for full context.]`
+      : body;
+    const outlookUrl = `https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(email)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(compactBody)}`;
+    const mailtoUrl = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(compactBody)}`;
+    return {
+      email,
+      subject,
+      body: compactBody,
+      mailtoUrl,
+      outlookUrl,
+      links: [
+        { label: labels.outlook || "Open Outlook web compose", href: outlookUrl },
+        { label: labels.mailto || "Mailto fallback", href: mailtoUrl }
+      ]
+    };
+  }
+
+  function openRequesterInfoDraft(row, recipient) {
+    const draft = buildEmailComposeDraft(
+      recipient.email,
+      requesterInfoMailSubject(row),
+      requesterInfoMailText(row),
+      {
+        mailto: "Open email compose",
+        outlook: "Open Outlook web compose"
+      }
+    );
+    openEditUrlWithGm(draft.outlookUrl);
+    return draft;
+  }
+
+  if (isGraphTokenRefreshPage()) {
+    installGraphTokenRefreshPageBridge();
+    return;
   }
 
   function optionValueFor(control, value) {
@@ -5106,8 +7028,16 @@ Health & Hospitality	DIRECT	NL	West	West
     return selected.some(filter => filter.values.includes(normalizeKey(rowPeopleFilterValue(row, filter.key))));
   }
 
+  function allScmOwnerOptions() {
+    return uniqueSorted(productsScmAuthorizedScms.concat(authorizedManagerCanOwnNames));
+  }
+
   function productsScmOwnerOptions() {
-    return productsScmAuthorizedScms.slice().sort((a, b) => a.localeCompare(b));
+    return allScmOwnerOptions().slice().sort((a, b) => a.localeCompare(b));
+  }
+
+  function authorizedManagersLoaded() {
+    return Boolean(authorizedManagerRecords.length || authorizedManagersMetadata.rowCount);
   }
 
   function listValuesFromString(value) {
@@ -5225,7 +7155,7 @@ Health & Hospitality	DIRECT	NL	West	West
   }
 
   function addProductsScmOwnerFilter(value) {
-    if (!productsScmUserIsAuthorized()) return;
+    if (!productsScmUserCanView()) return;
     const owner = closestProductsScmOwnerOption(value);
     if (!owner) return;
     const input = document.getElementById("scr-helper-products-scm-owner-filter");
@@ -5268,6 +7198,11 @@ Health & Hospitality	DIRECT	NL	West	West
     const input = document.getElementById("scr-helper-products-scm-owner-filter");
     const panel = document.getElementById("scr-helper-products-scm-owner-suggestions");
     if (!input || !panel) return;
+    if (!productsScmUserCanView()) {
+      panel.hidden = true;
+      panel.innerHTML = "";
+      return;
+    }
 
     const options = matchingProductsScmOwnerOptions(input.value);
     panel.hidden = !options.length;
@@ -5426,12 +7361,12 @@ Health & Hospitality	DIRECT	NL	West	West
       ? `${searchRows.length} of ${searchResultTotal} NetSuite results loaded`
       : `${searchRows.length} loaded SCRs`;
     const assignedText = controls.assignedToMe && controls.assignedToMe.checked && getCurrentUserName()
-      ? `; assigned to ${getCurrentUserName()}`
+      ? `; includes assigned to ${getCurrentUserName()}`
       : "";
     const slaText = controls.slaHotlist && controls.slaHotlist.checked
       ? `; ${visibleRows.length} past SLA`
       : "";
-    const productsOwnerText = productsScmUserIsAuthorized() && (controls.productsScmOwnerMe && controls.productsScmOwnerMe.checked || controls.productsScmOwner && productsScmOwnerValuesFromString(controls.productsScmOwner.value).length)
+    const productsOwnerText = productsScmUserCanView() && (controls.productsScmOwnerMe && controls.productsScmOwnerMe.checked && productsScmUserIsOwner() || controls.productsScmOwner && productsScmOwnerValuesFromString(controls.productsScmOwner.value).length)
       ? "; SCM owner view"
       : "";
     status.textContent = `${visibleRows.length} of ${loadedText} shown${unmappedCount ? `; ${unmappedCount} unmapped` : ""}${slaText}${assignedText}${productsOwnerText}. ${mappingStatusText()}.`;
@@ -5464,14 +7399,17 @@ Health & Hospitality	DIRECT	NL	West	West
     const note = document.getElementById("scr-helper-products-scm-note");
     if (!row || !checkbox || !input) return;
 
-    const authorized = productsScmUserIsAuthorized();
-    row.hidden = !authorized;
-    checkbox.disabled = !authorized;
-    input.disabled = !authorized;
-    if (!authorized) {
+    const canView = productsScmUserCanView();
+    const isOwner = productsScmUserIsOwner();
+    row.hidden = !canView;
+    checkbox.disabled = !isOwner;
+    input.disabled = !canView;
+    if (!canView) {
       checkbox.checked = false;
       renderProductsScmOwnerTokens([]);
       hideProductsScmOwnerSuggestions();
+    } else if (!isOwner) {
+      checkbox.checked = false;
     }
 
     if (datalist) {
@@ -5485,8 +7423,12 @@ Health & Hospitality	DIRECT	NL	West	West
         note.textContent = `SCM relationship mapping not loaded: ${shortMappingError(productsScmMetadata.error)}`;
       } else if (!productsScmMetadata.rowCount) {
         note.textContent = "SCM relationship mapping not loaded";
-      } else if (authorized) {
+      } else if (isOwner) {
         note.textContent = `SCM owner: ${currentProductsScmUserName() || getCurrentUserName()}`;
+      } else if (productsScmUserIsDirector()) {
+        note.textContent = `Director view: ${currentProductsScmDirectorName() || getCurrentUserName()}`;
+      } else if (productsScmUserIsViewer()) {
+        note.textContent = `SCM queue viewer: ${currentProductsScmViewerName() || getCurrentUserName()}`;
       } else {
         note.textContent = "SCM owner controls hidden for this user";
       }
@@ -5733,10 +7675,19 @@ Health & Hospitality	DIRECT	NL	West	West
     return rows;
   }
 
-  async function refreshRows() {
+  async function refreshRows(options = {}) {
     const sequence = ++refreshSequence;
     const status = document.getElementById("scr-helper-status");
     if (status) status.textContent = `Loading ${CURRENT_QUEUE.loadingLabel} (${SAVED_SEARCH_ID}).`;
+
+    const retryCount = options.retryCount || 0;
+    if (!findResultTable(document) && retryCount < 12) {
+      renderStartupSplash(`Waiting for NetSuite search results (${SAVED_SEARCH_ID}).`);
+      window.setTimeout(() => {
+        if (sequence === refreshSequence) refreshRows({ retryCount: retryCount + 1 });
+      }, 250);
+      return;
+    }
 
     const currentRows = parseSearchResults(document, "scr-row");
     searchResultTotal = Math.max(findSearchResultTotal(document), currentRows.length);
@@ -5904,7 +7855,11 @@ Health & Hospitality	DIRECT	NL	West	West
 
   function rowNeedsRoutingHashtagHydration(row) {
     if (!row || !row.internalId || row.hashtagsHydrated) return false;
-    if (getCrossIndustryInfoForRow(row).targets.length) return false;
+    const routingText = crossIndustryTextForRow(row);
+    const hasCrossIndustryRoute = getCrossIndustryInfo(routingText).targets.length;
+    const hasExplicitOwnerTag = /#(?:scm-owner|pscm-owner)-[a-z0-9]+/i.test(routingText);
+    if (hasCrossIndustryRoute && !hasExplicitOwnerTag) return true;
+    if (hasCrossIndustryRoute) return false;
     return !rowHasReturnedHashtagsField(row) || rowHasCrossVerticalFlag(row);
   }
 
@@ -6117,6 +8072,7 @@ Health & Hospitality	DIRECT	NL	West	West
     if (!status) return;
     status.textContent = message;
     status.className = `scr-helper-notes-status${state ? ` is-${state}` : ""}`;
+    if (card) card.classList.toggle("is-working", state === "working");
   }
 
   function updateRowSearchText(row) {
@@ -6217,16 +8173,223 @@ Health & Hospitality	DIRECT	NL	West	West
     if (!ownerConfig) throw new Error("Could not determine EPM owner because this row is not AMO or Direct.");
 
     const ownerNames = epmOwnerNamesForRow(row);
-    setStaffingNotesStatus(card, `Resolving EPM owner ${ownerConfig.displayName}...`);
+    setStaffingNotesStatus(card, `⏳ Resolving EPM owner ${ownerConfig.displayName}...`, "working");
     const match = await lookupRosterAssignee(ownerNames);
     if (!match || !match.id) {
       throw new Error(`Could not find EPM owner ${ownerConfig.displayName} in the SC roster.`);
     }
 
-    setStaffingNotesStatus(card, `Assigning EPM owner ${match.name || ownerConfig.displayName}...`);
+    setStaffingNotesStatus(card, `⏳ Assigning EPM owner ${match.name || ownerConfig.displayName}...`, "working");
     await submitAssignee(row, match.id);
     updateRowAssignedTo(row, match.name || ownerConfig.displayName);
     return match;
+  }
+
+  function crossIndustryOwnerOptions(row, target) {
+    const family = target && target.family || "";
+    const keys = scIndustryGroupKeyVariants(family);
+    const authorizedOwners = uniqueSorted(keys.flatMap(key => authorizedManagerGroupLookup.get(key) || []));
+    if (authorizedOwners.length) return authorizedOwners;
+
+    const epmOwner = normalizeKey(family) === normalizeKey(EPM_INDUSTRY_GROUP)
+      ? epmOwnerConfigForRow(row)
+      : null;
+    if (epmOwner) return uniqueSorted([epmOwner.displayName].concat(epmOwner.aliases || []));
+    if (authorizedManagersLoaded()) return [];
+
+    return productsScmOwnerOptions();
+  }
+
+  function defaultCrossIndustryOwner(row, target) {
+    if (!target || normalizeKey(target.family) !== normalizeKey(EPM_INDUSTRY_GROUP)) return "";
+    const ownerConfig = epmOwnerConfigForRow(row);
+    return ownerConfig ? ownerConfig.displayName : "";
+  }
+
+  function matchOwnerOption(value, options) {
+    const text = normalizeSpaces(value);
+    if (!text) return "";
+    const numeric = text.match(/^\d+$/);
+    if (numeric) {
+      const index = Number(text) - 1;
+      if (index >= 0 && index < options.length) return options[index];
+    }
+
+    const key = normalizeKey(text);
+    return options.find(option => normalizeKey(option) === key)
+      || options.find(option => normalizeKey(option).startsWith(key))
+      || options.find(option => normalizeKey(option).includes(key))
+      || "";
+  }
+
+  function showCrossIndustryAssignmentDialog(row, target) {
+    const family = target && target.family || "selected queue";
+    const defaultOwner = defaultCrossIndustryOwner(row, target);
+    const options = uniqueSorted([defaultOwner].concat(crossIndustryOwnerOptions(row, target)).filter(Boolean));
+
+    return new Promise(resolve => {
+      const backdrop = document.createElement("div");
+      backdrop.className = "scr-helper-owner-modal-backdrop";
+      backdrop.innerHTML = `
+        <div class="scr-helper-owner-modal" role="dialog" aria-modal="true" aria-labelledby="scr-helper-owner-modal-title">
+          <div class="scr-helper-owner-modal-head">
+            <div>
+              <div id="scr-helper-owner-modal-title" class="scr-helper-owner-modal-title">Cross-staff to ${escapeHtml(family)}</div>
+              <div class="scr-helper-owner-modal-subtitle">${escapeHtml(options.length ? "Choose an SCM owner, or route to the industry queue only." : "No authorized SCM owners are loaded for this industry. You can still route to the industry queue.")}</div>
+            </div>
+            <button type="button" class="scr-helper-owner-modal-close" title="Cancel">×</button>
+          </div>
+          <label class="scr-helper-owner-modal-field">
+            <span>SCM Owner</span>
+            <input class="scr-helper-owner-modal-input" type="search" placeholder="Start typing a manager name" autocomplete="off" value="${escapeHtml(defaultOwner)}">
+          </label>
+          <div class="scr-helper-owner-modal-list" role="listbox"></div>
+          <label class="scr-helper-owner-notify">
+            <input class="scr-helper-owner-notify-input" type="checkbox" disabled>
+            <span>Open email notification draft for SCM owner</span>
+          </label>
+          <div class="scr-helper-owner-modal-message" aria-live="polite"></div>
+          <div class="scr-helper-owner-modal-actions">
+            <button type="button" class="scr-helper-owner-route-only" title="Route to the industry queue without assigning an SCM owner.">Route to Industry</button>
+            <button type="button" class="scr-helper-owner-cancel">Cancel</button>
+            <button type="button" class="scr-helper-owner-save" title="Route to the selected SCM owner.">Route to SCM Owner</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(backdrop);
+
+      const input = backdrop.querySelector(".scr-helper-owner-modal-input");
+      const list = backdrop.querySelector(".scr-helper-owner-modal-list");
+      const message = backdrop.querySelector(".scr-helper-owner-modal-message");
+      const save = backdrop.querySelector(".scr-helper-owner-save");
+      const routeOnly = backdrop.querySelector(".scr-helper-owner-route-only");
+      const notifyInput = backdrop.querySelector(".scr-helper-owner-notify-input");
+      let selectedOwnerName = defaultOwner || "";
+      let notifyTouched = false;
+
+      function close(value) {
+        backdrop.remove();
+        resolve(value);
+      }
+
+      function updateSaveLabel() {
+        const ownerName = selectedOwner();
+        routeOnly.textContent = "Route to Industry";
+        save.textContent = ownerName ? `Route to ${ownerName}` : "Route to SCM Owner";
+        save.disabled = !ownerName;
+        save.classList.toggle("is-ready", Boolean(ownerName));
+        if (notifyInput) {
+          notifyInput.disabled = !ownerName;
+          if (!ownerName) {
+            notifyInput.checked = false;
+            notifyTouched = false;
+          } else if (!notifyTouched) {
+            notifyInput.checked = true;
+          }
+        }
+      }
+
+      function filteredOptions() {
+        const key = normalizeKey(input.value);
+        return options
+          .filter(option => !key || normalizeKey(option).includes(key))
+          .slice(0, 80);
+      }
+
+      function renderOptions() {
+        const visible = filteredOptions();
+        list.innerHTML = visible.map(option => `
+          <button
+            type="button"
+            class="scr-helper-owner-option${normalizeKey(option) === normalizeKey(selectedOwnerName) ? " is-selected" : ""}"
+            data-owner-name="${escapeHtml(option)}"
+            role="option"
+            aria-selected="${normalizeKey(option) === normalizeKey(selectedOwnerName) ? "true" : "false"}"
+          >
+            ${escapeHtml(option)}
+          </button>
+        `).join("");
+        list.hidden = !visible.length;
+        message.textContent = options.length || normalizeSpaces(input.value)
+          ? ""
+          : "Upload or load Authorized_Managers.json to show filtered SCM owners.";
+        updateSaveLabel();
+      }
+
+      function selectedOwner() {
+        const value = normalizeSpaces(input.value);
+        if (!value) return "";
+        if (selectedOwnerName && normalizeKey(value) === normalizeKey(selectedOwnerName)) return selectedOwnerName;
+        return matchOwnerOption(value, options);
+      }
+
+      function notifyOwner() {
+        return Boolean(notifyInput && notifyInput.checked);
+      }
+
+      function saveSelection() {
+        const value = normalizeSpaces(input.value);
+        if (!value) {
+          message.textContent = "Choose an SCM owner first, or use Route to Industry.";
+          input.focus();
+          return;
+        }
+        const ownerName = selectedOwner();
+        if (!ownerName) {
+          message.textContent = `No authorized manager matched "${value}".`;
+          input.focus();
+          return;
+        }
+        close({ ownerName, notifyOwner: notifyOwner() });
+      }
+
+      function routeSelectionWithoutAssignment() {
+        close({ ownerName: "", notifyOwner: false });
+      }
+
+      input.addEventListener("input", () => {
+        const matched = matchOwnerOption(input.value, options);
+        const nextOwnerName = matched && normalizeKey(matched) === normalizeKey(input.value) ? matched : "";
+        if (nextOwnerName && normalizeKey(nextOwnerName) !== normalizeKey(selectedOwnerName)) notifyTouched = false;
+        selectedOwnerName = nextOwnerName;
+        renderOptions();
+      });
+      input.addEventListener("keydown", event => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          close(null);
+          return;
+        }
+        if (event.key === "Enter") {
+          event.preventDefault();
+          const visible = filteredOptions();
+          if (visible.length === 1) input.value = visible[0];
+          saveSelection();
+        }
+      });
+      list.addEventListener("click", event => {
+        const option = closestElement(event.target, ".scr-helper-owner-option");
+        if (!option) return;
+        selectedOwnerName = option.dataset.ownerName || "";
+        notifyTouched = false;
+        input.value = selectedOwnerName;
+        renderOptions();
+        message.textContent = selectedOwnerName ? `Selected ${selectedOwnerName}.` : "";
+        save.focus();
+      });
+      if (notifyInput) notifyInput.addEventListener("change", () => { notifyTouched = true; });
+      routeOnly.addEventListener("click", routeSelectionWithoutAssignment);
+      backdrop.querySelector(".scr-helper-owner-cancel").addEventListener("click", () => close(null));
+      backdrop.querySelector(".scr-helper-owner-modal-close").addEventListener("click", () => close(null));
+      save.addEventListener("click", saveSelection);
+      backdrop.addEventListener("click", event => {
+        if (event.target === backdrop) close(null);
+      });
+
+      renderOptions();
+      input.focus();
+      if (defaultOwner) input.select();
+    });
   }
 
   function setOwnershipStatus(button, message, state = "") {
@@ -6238,15 +8401,10 @@ Health & Hospitality	DIRECT	NL	West	West
   }
 
   function updateOwnershipDisplay(button, ownerName) {
-    const line = button && button.closest(".scr-helper-assigned-line");
-    const nameNode = line && line.querySelector(".scr-helper-assigned-name");
-    if (nameNode) {
-      nameNode.textContent = ownerName || "Current user";
-    }
     if (button) {
       button.textContent = "Owned by Me";
       button.disabled = true;
-      button.title = "This SCR is already assigned to you.";
+      button.title = "This SCR is explicitly owned by you.";
     }
   }
 
@@ -6267,16 +8425,18 @@ Health & Hospitality	DIRECT	NL	West	West
     setStaffingNotesStatus(card, "");
 
     try {
-      const owner = await lookupCurrentUserRoster();
-      if (!owner || !owner.id) {
-        throw new Error("Could not find the current user in the SC roster.");
+      const ownerName = cleanPersonName(currentExplicitScmOwnerName());
+      if (!ownerName) {
+        throw new Error("Could not determine the current user.");
       }
 
-      const ownerName = cleanPersonName(owner.name) || getCurrentUserName() || "Current user";
       const ownershipNote = normalizeMultiline(row.staffingNotes) ? "" : promptForOwnershipNote(ownerName);
-      setOwnershipStatus(button, `Opening SCR and assigning to ${ownerName}...`);
-      await submitAssignee(row, owner.id);
-      updateRowAssignedTo(row, ownerName);
+      setOwnershipStatus(button, `Saving explicit SCM owner ${ownerName}...`);
+      setStaffingNotesStatus(card, `⏳ Saving explicit SCM owner ${ownerName}...`, "working");
+      const currentHashtags = row.hashtags || await lookupSingleField(row, HASHTAGS_FIELD_ID);
+      const nextHashtags = valueWithScmOwnerTag(currentHashtags, ownerName);
+      await submitHashtags(row, nextHashtags);
+      updateRowHashtags(row, nextHashtags);
       updateOwnershipDisplay(button, ownerName);
 
       if (ownershipNote) {
@@ -6287,20 +8447,48 @@ Health & Hospitality	DIRECT	NL	West	West
           const textarea = card && card.querySelector(".scr-helper-notes-input");
           if (textarea) textarea.value = ownershipNote;
         } catch (noteError) {
-          console.warn("SCR helper assigned ownership but could not save ownership note", noteError);
-          setOwnershipStatus(button, "Assigned, but note did not save.", "error");
-          setStaffingNotesStatus(card, "Assigned, but ownership note did not save.", "error");
+          console.warn("SCR helper saved explicit ownership but could not save ownership note", noteError);
+          setOwnershipStatus(button, "Owner saved, but note did not save.", "error");
+          setStaffingNotesStatus(card, "Owner saved, but ownership note did not save.", "error");
           return;
         }
       }
 
       setOwnershipStatus(button, "Ownership saved", "success");
       setStaffingNotesStatus(card, "Ownership saved", "success");
+      renderResults();
     } catch (error) {
       console.warn("SCR helper failed to take ownership", error);
-      button.disabled = rowAssignedToMatchesCurrentUser(row) || !row.internalId;
-      setOwnershipStatus(button, "Could not assign through background edit.", "error");
-      setStaffingNotesStatus(card, "Could not assign through background edit. Staff SCR is still available.", "error");
+      button.disabled = rowAssignedToMatchesCurrentUser(row) || rowExplicitScmOwnerMatchesCurrentUser(row) || !row.internalId;
+      setOwnershipStatus(button, "Could not save explicit owner.", "error");
+      setStaffingNotesStatus(card, "Could not save explicit SCM owner from this page. Staff SCR is still available.", "error");
+    }
+  }
+
+  async function handleRequesterInfoEmail(button) {
+    const card = button.closest(".scr-helper-card");
+    const row = searchRows.find(item => item.id === button.dataset.rowId);
+    if (!row) return;
+
+    button.disabled = true;
+    setStaffingNotesStatus(card, "⏳ Resolving Sales Rep email...", "working");
+
+    try {
+      const recipient = await resolveSalesRepEmail(row);
+      const draft = openRequesterInfoDraft(row, recipient);
+      row.routingNotice = {
+        message: `Info request email opened for ${draft.email}. Review and send it. If it did not appear, use the links below.`,
+        state: "success",
+        links: draft.links || []
+      };
+      renderResults();
+    } catch (error) {
+      console.warn("IQUEUE could not compose requester info email", error);
+      row.routingNotice = {
+        message: `Could not compose requester email: ${error.message || error}`,
+        state: "error"
+      };
+      renderResults();
     }
   }
 
@@ -6313,7 +8501,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const value = textarea.value;
     const previousRoutingKey = crossIndustryRoutingKey(row);
     button.disabled = true;
-    setStaffingNotesStatus(card, "Saving...");
+    setStaffingNotesStatus(card, "⏳ Saving notes...", "working");
 
     try {
       await submitStaffingNotes(row, value);
@@ -6341,16 +8529,27 @@ Health & Hospitality	DIRECT	NL	West	West
     const tag = button.dataset.xvrTag;
     if (!row || !tag) return;
 
+    const target = CROSS_INDUSTRY_TARGETS.find(item => item.tag === tag);
+    const assignment = await showCrossIndustryAssignmentDialog(row, target);
+    if (!assignment) return;
+
     const buttons = card ? Array.from(card.querySelectorAll(".scr-helper-xvr-button")) : [];
     buttons.forEach(item => { item.disabled = true; });
-    const target = CROSS_INDUSTRY_TARGETS.find(item => item.tag === tag);
     const isEpmRoute = target && normalizeKey(target.family) === normalizeKey(EPM_INDUSTRY_GROUP);
-    setStaffingNotesStatus(card, isEpmRoute ? "Saving EPM route..." : "Saving cross-industry hashtag...");
+    setStaffingNotesStatus(card, isEpmRoute ? "⏳ Saving EPM route..." : "⏳ Saving cross-industry route...", "working");
 
     try {
-      if (isEpmRoute) await routeRowToEpmAssignee(row, card);
+      let assignmentError = null;
+      if (isEpmRoute && !assignment.ownerName) {
+        try {
+          await routeRowToEpmAssignee(row, card);
+        } catch (error) {
+          assignmentError = error;
+          console.warn("SCR helper could not assign EPM owner; saving route tag anyway", error);
+        }
+      }
       const currentHashtags = row.hashtags || await lookupSingleField(row, HASHTAGS_FIELD_ID);
-      const nextValue = valueWithCrossIndustryTag(currentHashtags, tag, target && target.markerTag);
+      const nextValue = valueWithCrossIndustryTag(currentHashtags, tag, target && target.markerTag, assignment.ownerName || "");
       await submitHashtags(row, nextValue);
       try {
         await submitCrossVertical(row, "T");
@@ -6358,6 +8557,39 @@ Health & Hospitality	DIRECT	NL	West	West
         console.warn("SCR helper could not set Cross-Vertical flag", crossVerticalError);
       }
       updateRowHashtags(row, nextValue);
+      if (assignmentError) {
+        window.alert("The cross-industry route was saved, but IQUEUE could not update the Assigned To field from this page. Staff SCR is still available if you need to assign it manually.");
+      }
+      if (!assignment.ownerName) {
+        row.routingNotice = {
+          message: `Route saved to ${target && target.family || "industry"} queue.`,
+          state: "success",
+          links: []
+        };
+      } else if (assignment.notifyOwner === false) {
+        row.routingNotice = {
+          message: "Route saved; SCM email notification skipped.",
+          state: "success",
+          links: []
+        };
+      } else if (assignment.ownerName) {
+        try {
+          setStaffingNotesStatus(card, "⏳ Route saved. Opening owner notification draft...", "working");
+          const notice = await sendOwnerRouteEmail(row, assignment.ownerName, target);
+          row.routingNotice = {
+            message: `Route saved; Outlook compose opened for ${notice.email}. Review and send it. If it did not appear, use the links below.`,
+            state: "success",
+            links: notice.links || []
+          };
+        } catch (emailError) {
+          console.warn("IQUEUE could not send owner route email", emailError);
+          row.routingNotice = {
+            message: `Route saved; email not sent: ${emailError.message || emailError}`,
+            state: "error"
+          };
+          setGraphTokenStatus("Route email was not sent.", "warn", emailError.message || String(emailError));
+        }
+      }
       updateIndustrySubgroupFilterOptions();
       renderResults();
     } catch (error) {
@@ -6394,6 +8626,38 @@ Health & Hospitality	DIRECT	NL	West	West
   function reloadPageWithHelperState() {
     saveHelperState();
     window.location.reload();
+  }
+
+  function afterNextPaint(callback) {
+    if (typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(() => window.requestAnimationFrame(callback));
+      return;
+    }
+    window.setTimeout(callback, 0);
+  }
+
+  function scheduleBackgroundTask(callback, delay = 750) {
+    if (typeof window.requestIdleCallback === "function") {
+      window.requestIdleCallback(callback, { timeout: delay + 1000 });
+      return;
+    }
+    window.setTimeout(callback, delay);
+  }
+
+  function renderStartupSplash(message = "Loading IQUEUE...") {
+    const list = document.getElementById("scr-helper-results");
+    const status = document.getElementById("scr-helper-status");
+    if (status) status.textContent = message;
+    if (!list || searchRows.length) return;
+    list.innerHTML = `
+      <div class="scr-helper-loading-splash" role="status" aria-live="polite">
+        <div class="scr-helper-loading-mark">⏳</div>
+        <div>
+          <div class="scr-helper-loading-title">Loading IQUEUE</div>
+          <div class="scr-helper-loading-text">${escapeHtml(message)}</div>
+        </div>
+      </div>
+    `;
   }
 
   function setupPortletResize(portlet) {
@@ -6695,9 +8959,18 @@ Health & Hospitality	DIRECT	NL	West	West
     document.getElementById("scr-helper-refresh-mapping").addEventListener("click", () => {
       loadExternalMapping({ force: true });
       loadProductsScmMapping({ force: true });
+      loadAuthorizedManagers({ force: true });
     });
-    document.getElementById("scr-helper-check-update").addEventListener("click", () => {
-      checkForScriptUpdate({ force: true });
+    document.getElementById("scr-helper-check-update").addEventListener("click", async event => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      button.textContent = "Checking...";
+      try {
+        await checkForScriptUpdate({ force: true });
+      } finally {
+        button.disabled = false;
+        button.textContent = "Check for IQUEUE Update";
+      }
     });
     document.addEventListener("click", event => {
       const portlet = document.getElementById(HELPER_ID);
@@ -6749,6 +9022,12 @@ Health & Hospitality	DIRECT	NL	West	West
       const saveButton = closestElement(event.target, ".scr-helper-notes-save");
       if (saveButton) {
         handleStaffingNotesSave(saveButton);
+        return;
+      }
+
+      const requestInfoButton = closestElement(event.target, ".scr-helper-request-info");
+      if (requestInfoButton) {
+        handleRequesterInfoEmail(requestInfoButton);
         return;
       }
 
@@ -6970,6 +9249,34 @@ Health & Hospitality	DIRECT	NL	West	West
         text-decoration: underline;
       }
 
+      #${HELPER_ID} .scr-helper-graph-token-status {
+        width: fit-content;
+        margin-top: 4px;
+        border: 1px solid rgba(122, 74, 0, 0.42);
+        border-radius: 4px;
+        padding: 2px 6px;
+        background: #fff8df;
+        color: #7a4a00;
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1.3;
+      }
+
+      #${HELPER_ID} .scr-helper-graph-token-status[data-tone="good"] {
+        border-color: rgba(31, 122, 77, 0.38);
+        background: #e8f4ed;
+        color: #1f7a4d;
+      }
+
+      #${HELPER_ID} .scr-helper-graph-token-status a {
+        color: inherit;
+        text-decoration: underline;
+      }
+
+      #${HELPER_ID} .scr-helper-graph-token-status[hidden] {
+        display: none;
+      }
+
       #${HELPER_ID} .scr-helper-status {
         margin-top: 2px;
         color: var(--rw-neutral-30);
@@ -7072,6 +9379,50 @@ Health & Hospitality	DIRECT	NL	West	West
 
       #${HELPER_ID} .scr-helper-options-button:hover {
         background: #24495a;
+      }
+
+      #${HELPER_ID} .scr-helper-options-link {
+        display: flex;
+        justify-content: center;
+        width: 100%;
+        margin-top: 9px;
+        border: 1px solid var(--ns-ui-primary);
+        border-radius: 4px;
+        padding: 7px 10px;
+        color: var(--ns-ui-primary);
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.2;
+        text-decoration: none;
+      }
+
+      #${HELPER_ID} .scr-helper-options-link:hover {
+        background: var(--ns-ui-primary-soft);
+      }
+
+      #${HELPER_ID} .scr-helper-options-status {
+        margin-top: 9px;
+        border-radius: 4px;
+        padding: 7px 8px;
+        background: #fff8df;
+        color: #7a4a00;
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1.35;
+      }
+
+      #${HELPER_ID} .scr-helper-options-status[data-tone="good"] {
+        background: #e8f4ed;
+        color: #1f7a4d;
+      }
+
+      #${HELPER_ID} .scr-helper-options-status a {
+        color: inherit;
+        text-decoration: underline;
+      }
+
+      #${HELPER_ID} .scr-helper-options-status[hidden] {
+        display: none;
       }
 
       #${HELPER_ID} .scr-helper-icon-button,
@@ -7186,9 +9537,55 @@ Health & Hospitality	DIRECT	NL	West	West
 
       #${HELPER_ID} .scr-helper-filter-summary {
         display: flex;
-        flex-wrap: wrap;
+        flex-direction: column;
+        align-items: stretch;
         gap: 6px;
         padding: 0 12px 9px;
+      }
+
+      #${HELPER_ID} .scr-helper-filter-expression-line {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+      }
+
+      #${HELPER_ID} .scr-helper-filter-expression {
+        display: inline-flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+      }
+
+      #${HELPER_ID} .scr-helper-filter-operator {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 30px;
+        border-radius: 999px;
+        padding: 3px 6px;
+        color: #ffffff;
+        font-size: 10px;
+        font-weight: 900;
+        letter-spacing: 0;
+        line-height: 1;
+      }
+
+      #${HELPER_ID} .scr-helper-filter-operator.is-and {
+        background: var(--ns-ui-primary);
+      }
+
+      #${HELPER_ID} .scr-helper-filter-operator.is-or {
+        background: var(--rw-pine-100);
+      }
+
+      #${HELPER_ID} .scr-helper-filter-paren {
+        display: inline-flex;
+        align-items: center;
+        color: var(--rw-slate-150);
+        font-size: 20px;
+        font-weight: 900;
+        line-height: 1;
       }
 
       #${HELPER_ID} .scr-helper-filter-chip {
@@ -7412,6 +9809,44 @@ Health & Hospitality	DIRECT	NL	West	West
         padding: 12px 16px 16px;
       }
 
+      #${HELPER_ID} .scr-helper-loading-splash {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 148px;
+        border: 1px solid var(--rw-slate-50);
+        border-radius: 8px;
+        padding: 18px;
+        background: linear-gradient(90deg, var(--rw-ocean-30), #ffffff 72%);
+        color: var(--rw-slate-150);
+        box-shadow: inset 4px 0 0 var(--ns-ui-primary);
+      }
+
+      #${HELPER_ID} .scr-helper-loading-mark {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 38px;
+        height: 38px;
+        border-radius: 999px;
+        background: #fff4d8;
+        color: #7a4a00;
+        font-size: 18px;
+      }
+
+      #${HELPER_ID} .scr-helper-loading-title {
+        color: var(--ns-ui-primary);
+        font-size: 15px;
+        font-weight: 800;
+      }
+
+      #${HELPER_ID} .scr-helper-loading-text {
+        margin-top: 3px;
+        color: var(--rw-slate-100);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
       #${HELPER_ID}.scr-helper-fullscreen .scr-helper-summary-grid {
         grid-template-columns: repeat(5, minmax(0, 1fr));
       }
@@ -7443,11 +9878,32 @@ Health & Hospitality	DIRECT	NL	West	West
       }
 
       #${HELPER_ID} .scr-helper-card {
+        position: relative;
         border: 1px solid var(--rw-slate-50);
         border-left: 5px solid var(--scr-industry-color, var(--ns-ui-primary-mid));
         border-radius: 8px;
         background: #ffffff;
         overflow: hidden;
+      }
+
+      #${HELPER_ID} .scr-helper-card.is-working {
+        box-shadow: 0 0 0 2px rgba(241, 177, 63, 0.35), 0 6px 18px rgba(60, 69, 69, 0.12);
+      }
+
+      #${HELPER_ID} .scr-helper-card.is-working::after {
+        content: "⏳ Working...";
+        position: absolute;
+        right: 12px;
+        bottom: 10px;
+        z-index: 2;
+        border: 1px solid var(--rw-brand-yellow);
+        border-radius: 999px;
+        padding: 4px 9px;
+        background: #fff4d8;
+        color: #7a4a00;
+        font-size: 11px;
+        font-weight: 800;
+        box-shadow: 0 2px 6px rgba(60, 69, 69, 0.14);
       }
 
       #${HELPER_ID} .scr-helper-card.is-request-amo,
@@ -7713,8 +10169,15 @@ Health & Hospitality	DIRECT	NL	West	West
 
       #${HELPER_ID} .scr-helper-notes-actions {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         gap: 8px;
+      }
+
+      #${HELPER_ID} .scr-helper-notes-button-stack {
+        display: flex;
+        flex: 0 0 auto;
+        flex-direction: column;
+        gap: 6px;
       }
 
       #${HELPER_ID} .scr-helper-xvr-controls {
@@ -7764,6 +10227,190 @@ Health & Hospitality	DIRECT	NL	West	West
         line-height: 1.35;
       }
 
+      .scr-helper-owner-modal-backdrop {
+        --ns-ui-primary: #36677D;
+        --ns-ui-primary-soft: #E7F2F5;
+        --ns-ui-primary-mid: #94BFCE;
+        --rw-neutral-30: #F1EFED;
+        --rw-slate-50: #C2D4D4;
+        --rw-slate-100: #697778;
+        --rw-slate-150: #3C4545;
+        position: fixed;
+        inset: 0;
+        z-index: 2147483646;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: rgba(15, 31, 35, 0.42);
+      }
+
+      .scr-helper-owner-modal {
+        width: min(520px, calc(100vw - 40px));
+        max-height: min(620px, calc(100vh - 40px));
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        border: 1px solid var(--rw-slate-50);
+        border-radius: 8px;
+        box-shadow: 0 16px 38px rgba(15, 31, 35, 0.22);
+        background: #ffffff;
+        color: var(--rw-slate-150);
+        padding: 16px;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      .scr-helper-owner-modal-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+      }
+
+      .scr-helper-owner-modal-title {
+        color: var(--ns-ui-primary);
+        font-size: 16px;
+        font-weight: 800;
+        line-height: 1.25;
+      }
+
+      .scr-helper-owner-modal-subtitle,
+      .scr-helper-owner-modal-message {
+        color: var(--rw-slate-100);
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .scr-helper-owner-modal-close {
+        flex: 0 0 auto;
+        border: 1px solid var(--rw-slate-50);
+        border-radius: 4px;
+        background: #ffffff;
+        color: var(--rw-slate-150);
+        width: 28px;
+        height: 28px;
+        cursor: pointer;
+        font-size: 18px;
+        line-height: 1;
+      }
+
+      .scr-helper-owner-modal-field {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        color: var(--rw-slate-100);
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .scr-helper-owner-modal-input {
+        min-height: 34px;
+        border: 1px solid var(--rw-slate-50);
+        border-radius: 4px;
+        padding: 7px 9px;
+        color: var(--rw-slate-150);
+        font-size: 13px;
+      }
+
+      .scr-helper-owner-modal-input:focus {
+        border-color: var(--ns-ui-primary);
+        outline: 2px solid var(--ns-ui-primary-soft);
+      }
+
+      .scr-helper-owner-notify {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        color: var(--rw-slate-150);
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.3;
+      }
+
+      .scr-helper-owner-notify input {
+        margin: 0;
+      }
+
+      .scr-helper-owner-modal-list {
+        display: grid;
+        gap: 5px;
+        overflow: auto;
+        max-height: 260px;
+        padding-right: 2px;
+      }
+
+      .scr-helper-owner-option {
+        border: 1px solid var(--rw-slate-50);
+        border-radius: 4px;
+        padding: 7px 9px;
+        background: #ffffff;
+        color: var(--rw-slate-150);
+        cursor: pointer;
+        text-align: left;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .scr-helper-owner-option:hover {
+        border-color: var(--ns-ui-primary);
+        background: var(--ns-ui-primary-soft);
+        color: var(--ns-ui-primary);
+      }
+
+      .scr-helper-owner-option.is-selected {
+        border-color: var(--ns-ui-primary);
+        background: var(--ns-ui-primary-soft);
+        color: var(--ns-ui-primary);
+        box-shadow: inset 3px 0 0 var(--ns-ui-primary);
+      }
+
+      .scr-helper-owner-modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .scr-helper-owner-modal-actions button {
+        border: 1px solid var(--rw-slate-50);
+        border-radius: 4px;
+        padding: 9px 13px;
+        background: #ffffff;
+        color: var(--rw-slate-150);
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 800;
+        min-height: 36px;
+      }
+
+      .scr-helper-owner-modal-actions button:disabled {
+        border-color: var(--rw-slate-50);
+        background: var(--rw-neutral-30);
+        color: var(--rw-slate-100);
+        cursor: not-allowed;
+      }
+
+      .scr-helper-owner-modal-actions .scr-helper-owner-save {
+        border-color: var(--ns-ui-primary, #36677D);
+        background: var(--ns-ui-primary, #36677D);
+        color: #ffffff;
+        box-shadow: 0 2px 6px rgba(54, 103, 125, 0.22);
+      }
+
+      .scr-helper-owner-modal-actions .scr-helper-owner-route-only {
+        border-color: var(--ns-ui-primary-mid, #94BFCE);
+        background: var(--ns-ui-primary-soft, #E7F2F5);
+        color: var(--ns-ui-primary, #36677D);
+      }
+
+      .scr-helper-owner-modal-actions button:disabled,
+      .scr-helper-owner-modal-actions .scr-helper-owner-save:disabled {
+        border-color: var(--rw-slate-50);
+        background: var(--rw-neutral-30);
+        color: var(--rw-slate-100);
+        cursor: not-allowed;
+      }
+
       #${HELPER_ID} .scr-helper-notes-save {
         flex: 0 0 auto;
         border: 0;
@@ -7778,6 +10425,30 @@ Health & Hospitality	DIRECT	NL	West	West
 
       #${HELPER_ID} .scr-helper-notes-save:disabled {
         background: var(--rw-slate-50);
+        cursor: not-allowed;
+      }
+
+      #${HELPER_ID} .scr-helper-request-info {
+        flex: 0 0 auto;
+        border: 1px solid var(--ns-ui-primary-mid);
+        border-radius: 4px;
+        padding: 6px 9px;
+        background: var(--ns-ui-primary-soft);
+        color: var(--ns-ui-primary);
+        font-size: 12px;
+        font-weight: 800;
+        cursor: pointer;
+      }
+
+      #${HELPER_ID} .scr-helper-request-info:hover {
+        border-color: var(--ns-ui-primary);
+        color: var(--ns-ui-primary);
+      }
+
+      #${HELPER_ID} .scr-helper-request-info:disabled {
+        border-color: var(--rw-slate-50);
+        background: var(--rw-neutral-30);
+        color: var(--rw-slate-100);
         cursor: not-allowed;
       }
 
@@ -7796,6 +10467,37 @@ Health & Hospitality	DIRECT	NL	West	West
       #${HELPER_ID} .scr-helper-notes-status.is-error {
         color: var(--rw-oracle-red);
         font-weight: 700;
+      }
+
+      #${HELPER_ID} .scr-helper-notes-status.is-working {
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid var(--rw-brand-yellow);
+        border-radius: 999px;
+        padding: 4px 8px;
+        background: #fff4d8;
+        color: #7a4a00;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      #${HELPER_ID} .scr-helper-notice-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        width: 100%;
+        margin-top: 4px;
+      }
+
+      #${HELPER_ID} .scr-helper-notice-link {
+        border: 1px solid var(--ns-ui-primary-mid);
+        border-radius: 4px;
+        padding: 4px 7px;
+        background: var(--ns-ui-primary-soft);
+        color: var(--ns-ui-primary);
+        font-size: 11px;
+        font-weight: 800;
+        text-decoration: none;
       }
 
       #${HELPER_ID} .scr-helper-muted {
@@ -7843,12 +10545,35 @@ Health & Hospitality	DIRECT	NL	West	West
     document.head.appendChild(style);
   }
 
-  applyCachedExternalMapping();
-  applyCachedProductsScmMapping();
-  removeExistingHelperArtifacts();
-  addStyles();
-  insertPortlet();
-  refreshRows();
-  loadExternalMapping();
-  loadProductsScmMapping();
+  function applyStartupCachedData() {
+    applyCachedExternalMapping();
+    applyCachedProductsScmMapping();
+    applyCachedAuthorizedManagers();
+    updateMappingFilterOptions();
+    updateProductsScmControls();
+    updateFilterSummary();
+  }
+
+  function loadStartupBackgroundData() {
+    loadExternalMapping();
+    loadProductsScmMapping();
+    loadAuthorizedManagers();
+  }
+
+  function startHelper() {
+    installGraphTokenRelayListener();
+    removeExistingHelperArtifacts();
+    addStyles();
+    insertPortlet();
+    renderStartupSplash(`Preparing ${CURRENT_QUEUE.loadingLabel}.`);
+
+    afterNextPaint(() => {
+      renderStartupSplash(`Loading ${CURRENT_QUEUE.loadingLabel} (${SAVED_SEARCH_ID}).`);
+      applyStartupCachedData();
+      refreshRows();
+      scheduleBackgroundTask(loadStartupBackgroundData, 900);
+    });
+  }
+
+  startHelper();
 })();
