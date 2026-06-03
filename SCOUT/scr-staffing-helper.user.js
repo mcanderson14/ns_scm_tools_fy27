@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.0.11
+// @version      27.0.13
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.0.11
+   SCOUT — SC Operations Utility Tool  27.0.13
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.0.11';
+  const SCRIPT_VERSION = '27.0.13';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -6570,9 +6570,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   ──────────────────────────────────────────────────────────────── */
 
   function baseFilters(empRec, joinField) {
-    const teamId = empRec && typeof empRec.getValue === 'function'
-      ? empRec.getValue('custrecord_emproster_salesteam')
-      : '';
     const filters = [
       new nlobjSearchFilter('custrecord_emproster_rosterstatus', joinField, 'is', 1),
       new nlobjSearchFilter('custrecord_emproster_eminactive',   joinField, 'is', 'F'),
@@ -6580,7 +6577,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       new nlobjSearchFilter('custrecord_emproster_salesregion',  joinField, 'is', ROSTER_SALES_REGION_ID),
       new nlobjSearchFilter('custrecord_emproster_sales_qb',     joinField, 'is', 25),
     ];
-    if (teamId) filters.push(new nlobjSearchFilter('custrecord_emproster_salesteam', joinField, 'is', teamId));
     return filters;
   }
 
@@ -6596,6 +6592,19 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       new nlobjSearchFilter('custrecord_emproster_salesregion',  joinField, 'is', ROSTER_SALES_REGION_ID),
       new nlobjSearchFilter('custrecord_emproster_sales_qb',     joinField, 'is', 25),
     ];
+  }
+
+  function isAmoSalesTeam(value) {
+    return /\bamo\b/i.test(String(value || '').trim());
+  }
+
+  function matchesStaffingMode(member, mode) {
+    const isAmo = isAmoSalesTeam(member && member.salesteam);
+    return mode === 'amo' ? isAmo : !isAmo;
+  }
+
+  function filterByStaffingMode(members, mode) {
+    return (members || []).filter(member => matchesStaffingMode(member, mode || 'direct'));
   }
 
   function uiFilters(opts, joinField, empIds) {
@@ -8323,6 +8332,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       const locationAtr = escAttr(e.location);
       const avail       = availabilityClass(e.availability);
       const availLabel  = availabilityLabel(e.availability);
+      const nameTone    = scNameToneClass(e);
       const stackRank   = Math.max(0, Math.min(100, Number(e.stackRank) || 0));
       const indRating   = Math.max(0, Math.min(4, Number(e.industryRating) || 0));
       const indLabel    = ratingLabel(indRating);
@@ -8355,7 +8365,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                 data-location="${locationAtr}">
             </label>
             <div class="sc-card-name-block">
-              <a class="sc-card-name"
+              <a class="sc-card-name ${nameTone}"
                  href="/app/common/custom/custrecordentry.nl?rectype=1572&id=${empHrefId}"
                  target="_blank"
                  title="${employeeAtr}">${employee}</a>
@@ -8750,15 +8760,16 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     setTimeout(() => {
       try {
         const allSkillRows    = skillIds.length ? getSkillData(skillIds, empRec, empIds, filterOpts) : [];
-        const skillRows       = allSkillRows.filter(r => !isExcludedVertical(r.vertical));
+        const skillRows       = filterByStaffingMode(allSkillRows, 'direct').filter(r => !isExcludedVertical(r.vertical));
         const allIndustryRows = industryId ? getIndustryData(industryId, empRec, empIds, filterOpts) : [];
-        const industryRows    = allIndustryRows.filter(r => !isExcludedVertical(r.vertical));
+        const industryRows    = filterByStaffingMode(allIndustryRows, 'direct').filter(r => !isExcludedVertical(r.vertical));
         let consolidated      = consolidateData(skillRows, industryRows, sortKey, skillIds.length, matchOperator);
         if (!consolidated.length && hasAdditionalSkillFilters(additionalSkillOpts) && !skillIds.length && !industryId) {
           consolidated = getRosterCandidates(empRec, empIds, filterOpts, 'direct');
         }
         consolidated          = applyAdditionalSkillFilters(consolidated, additionalSkillOpts);
         enrichMembersWithRosterData(consolidated);
+        consolidated = filterByStaffingMode(consolidated, 'direct');
         consolidated = consolidated.filter(e => !isExcludedVertical(e.vertical));
         consolidated = applyRegionFilter(consolidated, filterOpts);
         consolidated = applyMyTeamLimit(consolidated, filterOpts, empIds);
@@ -8864,7 +8875,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               skill:        r.getText('custrecord_ssm_skill_entry'),
               ratingRaw:    parseRatingValue(r.getText('custrecord_ssm_skill_rating') || r.getValue('custrecord_ssm_skill_rating')),
             }))
-            .filter(r => r.salesteam === 'AMO' && !isExcludedVertical(r.vertical) && parseInt(r.ratingRaw, 10) >= 1);
+            .filter(r => isAmoSalesTeam(r.salesteam) && !isExcludedVertical(r.vertical) && parseInt(r.ratingRaw, 10) >= 1);
           skillRows = applySalesVerticalFilter(skillRows, filterOpts);
         }
 
@@ -8899,7 +8910,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                 vertical:       readVerticalAmo(r, indJoin),
                 industryRating: parseRatingValue(r.getText('custrecord_sr_ind_rating') || r.getValue('custrecord_sr_ind_rating')),
               }))
-              .filter(r => r.salesteam === 'AMO' && !isExcludedVertical(r.vertical) && parseInt(r.industryRating, 10) >= 1);
+              .filter(r => isAmoSalesTeam(r.salesteam) && !isExcludedVertical(r.vertical) && parseInt(r.industryRating, 10) >= 1);
             industryRows = applySalesVerticalFilter(industryRows, filterOpts);
           }
         }
@@ -8910,6 +8921,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         }
         consolidated = applyAdditionalSkillFilters(consolidated, additionalSkillOpts);
         enrichMembersWithRosterData(consolidated);
+        consolidated = filterByStaffingMode(consolidated, 'amo');
         consolidated = consolidated.filter(e => !isExcludedVertical(e.vertical));
         consolidated = applySalesVerticalFilter(consolidated, filterOpts);
         consolidated = applyRegionFilter(consolidated, filterOpts);
@@ -9246,6 +9258,8 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       { re: new RegExp('\\bworking\\s+with\\s+' + NAME, 'i'), allowLowercase: false },
       // "Hoping we can work with Mark Newkirk on this one"
       { re: new RegExp('\\bhoping\\s+(?:we\\s+can\\s+)?work\\s+with\\s+' + NAME, 'i'), allowLowercase: false },
+      // "Just closed a very similar deal with Abbey Vahhaji if there's any chance we can tap her"
+      { re: new RegExp('\\bclosed\\b[^.\\n\\r]{0,120}\\bdeal\\s+with\\s+' + NAME + '[^.\\n\\r]{0,160}\\btap\\s+(?:him|her|them)\\b', 'i'), allowLowercase: false },
       // "Andrew Kravet is available and coordinated with him on this, Please staff"
       { re: new RegExp(NAME + '\\s+is\\s+available[^.\\n\\r]{0,160}\\bplease\\s+staff\\b', 'i'), allowLowercase: false },
       // "Looking to get Corey Tenanes assigned here if possible"
@@ -9369,7 +9383,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   }
 
   function scNameToneClass(member) {
-    return /amo/i.test(member && member.salesteam ? member.salesteam : '')
+    return isAmoSalesTeam(member && member.salesteam)
       ? 'sc-card-name-amo'
       : 'sc-card-name-direct';
   }
@@ -9432,7 +9446,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const rows = nlapiSearchRecord('customrecord_emproster', null, filters, cols) || [];
     return rows
       .map(rosterMemberFromRosterSearch)
-      .filter(r => mode !== 'amo' || r.salesteam === 'AMO');
+      .filter(r => matchesStaffingMode(r, mode || 'direct'));
   }
 
   function searchSkillEntriesByRosterName(searchTerm) {
