@@ -5,9 +5,10 @@
   const PRODUCTS_SCM_SCHEMA = "ns-scm-tools.scm-relationships.v3";
   const AUTHORIZED_MANAGERS_SCHEMA = "ns-scm-tools.authorized-managers.v1";
   const GTM_SC_INDUSTRY_SCHEMA = "ns-scm-tools.gtm-sc-industry.v1";
-  const TOOL_VERSION = "27.0.4";
+  const TOOL_VERSION = "27.0.5";
   const TOOL_NAME = "FY27 Queue Mapping JSON Maker";
   const CONFIG_STORAGE_KEY = "ns-scm-tools-region-map-industry-config-v1";
+  const EMOJI_CONFIG_STORAGE_KEY = "ns-scm-tools-emoji-config-v1";
   const REGION_MAPPING_TYPE = "region";
   const PRODUCTS_SCM_MAPPING_TYPE = "productsScm";
   const AUTHORIZED_MANAGERS_MAPPING_TYPE = "authorizedManagers";
@@ -148,6 +149,7 @@
     workbook: null,
     detectedIndustryLabels: [],
     industryConfig: loadIndustryConfig(),
+    emojiConfig: loadEmojiConfig(),
     jsonText: "",
     outputFileName: REGION_OUTPUT_FILE_NAME
   };
@@ -174,6 +176,11 @@
       "industry-map-table",
       "new-industry-group",
       "add-industry-group",
+      "emoji-map-panel",
+      "emoji-map-summary",
+      "emoji-map-filter",
+      "emoji-map-missing-only",
+      "emoji-map-table",
       "status-pill",
       "results-panel",
       "summary-text",
@@ -204,6 +211,9 @@
       handleAddIndustryGroup();
     });
     elements["industry-map-table"].addEventListener("change", handleIndustryMappingChange);
+    elements["emoji-map-filter"].addEventListener("input", renderEmojiMappingTable);
+    elements["emoji-map-missing-only"].addEventListener("change", renderEmojiMappingTable);
+    elements["emoji-map-table"].addEventListener("change", handleEmojiMappingChange);
     ["industry-row", "mode-row", "data-row", "state-column"].forEach(id => {
       elements[id].addEventListener("change", reprocessWorkbook);
     });
@@ -248,6 +258,9 @@
     }
     if (elements["industry-map-panel"] && usesFlatWorkbook) {
       elements["industry-map-panel"].hidden = true;
+    }
+    if (elements["emoji-map-panel"] && state.mappingType !== GTM_SC_INDUSTRY_MAPPING_TYPE) {
+      elements["emoji-map-panel"].hidden = true;
     }
   }
 
@@ -746,6 +759,7 @@
     const scIndustryEmojiOverrides = {};
     const gtmSubgroupEmojiOverrides = {};
     const missingEmojiMappings = [];
+    const missingEmojiKeys = new Set();
 
     for (let rowIndex = header.rowIndex + 1; rowIndex < matrix.length; rowIndex += 1) {
       const row = matrix[rowIndex] || [];
@@ -755,12 +769,12 @@
       const scIndustryGroup = resolveIndustryGroup(rawScIndustryGroup) || rawScIndustryGroup;
       const gtmIndustry = cleanCell(row[header.indexes.gtmIndustry]);
       const gtmIndustrySubgroup = cleanCell(row[header.indexes.gtmIndustrySubgroup]);
-      const scIndustryGroupEmoji = header.indexes.scIndustryGroupEmoji >= 0
-        ? cleanCell(row[header.indexes.scIndustryGroupEmoji])
-        : defaultScIndustryGroupEmoji(scIndustryGroup);
-      const gtmIndustrySubgroupEmoji = header.indexes.gtmIndustrySubgroupEmoji >= 0
-        ? cleanCell(row[header.indexes.gtmIndustrySubgroupEmoji])
-        : defaultGtmIndustrySubgroupEmoji(gtmIndustrySubgroup);
+      const scIndustryGroupEmoji = resolveScIndustryGroupEmoji(scIndustryGroup, header.indexes.scIndustryGroupEmoji >= 0
+        ? row[header.indexes.scIndustryGroupEmoji]
+        : "");
+      const gtmIndustrySubgroupEmoji = resolveGtmIndustrySubgroupEmoji(gtmIndustrySubgroup, header.indexes.gtmIndustrySubgroupEmoji >= 0
+        ? row[header.indexes.gtmIndustrySubgroupEmoji]
+        : "");
       const missing = [];
 
       if (!scIndustryGroup) missing.push("SC Industry Group");
@@ -812,8 +826,8 @@
 
       scIndustryEmojiOverrides[scIndustryGroup] = scIndustryGroupEmoji || "";
       gtmSubgroupEmojiOverrides[gtmIndustrySubgroup] = gtmIndustrySubgroupEmoji || "";
-      if (!scIndustryGroupEmoji) missingEmojiMappings.push({ type: "SC Industry Group", value: scIndustryGroup, sourceRow: rowIndex + 1 });
-      if (!gtmIndustrySubgroupEmoji) missingEmojiMappings.push({ type: "GTM Industry Subgroup", value: gtmIndustrySubgroup, sourceRow: rowIndex + 1 });
+      addMissingEmojiMapping(missingEmojiMappings, missingEmojiKeys, "SC Industry Group", scIndustryGroup, rowIndex + 1);
+      addMissingEmojiMapping(missingEmojiMappings, missingEmojiKeys, "GTM Industry Subgroup", gtmIndustrySubgroup, rowIndex + 1);
     }
 
     if (!rows.length) throw new Error("No GTM mapping rows were generated.");
@@ -1084,6 +1098,18 @@
     lookup[key].push(record);
   }
 
+  function addMissingEmojiMapping(rows, seenKeys, type, value, sourceRow) {
+    if (!value) return;
+    const key = `${type}|${normalizeKey(value)}`;
+    if (seenKeys.has(key)) return;
+    const emoji = type === "SC Industry Group"
+      ? resolveScIndustryGroupEmoji(value)
+      : resolveGtmIndustrySubgroupEmoji(value);
+    if (emoji) return;
+    seenKeys.add(key);
+    rows.push({ type, value, sourceRow });
+  }
+
   function defaultScIndustryGroupEmoji(group) {
     const key = normalizeKey(group);
     const entry = Object.entries(DEFAULT_EMOJI_MAPPINGS.scIndustryGroups)
@@ -1096,6 +1122,30 @@
     const entry = Object.entries(DEFAULT_EMOJI_MAPPINGS.gtmIndustrySubgroups)
       .find(([name]) => normalizeKey(name) === key);
     return entry ? cleanCell(entry[1]) : "";
+  }
+
+  function configuredScIndustryGroupEmoji(group) {
+    return configuredEmojiValue("scIndustryGroups", group);
+  }
+
+  function configuredGtmIndustrySubgroupEmoji(subgroup) {
+    return configuredEmojiValue("gtmIndustrySubgroups", subgroup);
+  }
+
+  function configuredEmojiValue(type, label) {
+    const key = normalizeKey(label);
+    if (!key) return "";
+    const configured = state.emojiConfig && state.emojiConfig[type] || {};
+    const match = Object.entries(configured).find(([name]) => normalizeKey(name) === key);
+    return match ? cleanCell(match[1]) : "";
+  }
+
+  function resolveScIndustryGroupEmoji(group, workbookValue = "") {
+    return cleanCell(workbookValue) || configuredScIndustryGroupEmoji(group) || defaultScIndustryGroupEmoji(group);
+  }
+
+  function resolveGtmIndustrySubgroupEmoji(subgroup, workbookValue = "") {
+    return cleanCell(workbookValue) || configuredGtmIndustrySubgroupEmoji(subgroup) || defaultGtmIndustrySubgroupEmoji(subgroup);
   }
 
   function parseGroupList(value) {
@@ -1145,9 +1195,15 @@
     });
 
     return {
-      scIndustryGroups: sortObjectByKey(scIndustryGroups),
+      scIndustryGroups: sortObjectByKey({
+        ...scIndustryGroups,
+        ...state.emojiConfig.scIndustryGroups
+      }),
       gtmIndustries: sortObjectByKey(DEFAULT_EMOJI_MAPPINGS.gtmIndustries),
-      gtmIndustrySubgroups: sortObjectByKey(DEFAULT_EMOJI_MAPPINGS.gtmIndustrySubgroups)
+      gtmIndustrySubgroups: sortObjectByKey({
+        ...DEFAULT_EMOJI_MAPPINGS.gtmIndustrySubgroups,
+        ...state.emojiConfig.gtmIndustrySubgroups
+      })
     };
   }
 
@@ -1326,6 +1382,7 @@
             output.emojiMappings.scIndustryGroups[group] || "Fallback"
           ])
         );
+    renderEmojiMappingPanel(output);
   }
 
   function renderStats(items) {
@@ -1393,6 +1450,108 @@
         </tbody>
       </table>
     `;
+  }
+
+  function renderEmojiMappingPanel(output) {
+    const panel = elements["emoji-map-panel"];
+    if (!panel) return;
+    if (!output || output.schema !== GTM_SC_INDUSTRY_SCHEMA) {
+      panel.hidden = true;
+      return;
+    }
+
+    panel.hidden = false;
+    const rows = emojiMappingRowsForOutput(output);
+    const missingCount = rows.filter(row => !row.emoji).length;
+    elements["emoji-map-summary"].textContent = missingCount
+      ? `${missingCount} emoji mapping${missingCount === 1 ? "" : "s"} need a value. Add them here and regenerate the JSON without changing Excel.`
+      : `${rows.length} emoji mapping${rows.length === 1 ? "" : "s"} ready.`;
+    renderEmojiMappingTable(output);
+  }
+
+  function emojiMappingRowsForOutput(output) {
+    if (!output || output.schema !== GTM_SC_INDUSTRY_SCHEMA) return [];
+    const scRows = (output.scIndustryGroups || []).map(label => ({
+      type: "scIndustryGroups",
+      typeLabel: "SC Industry Group",
+      label,
+      emoji: resolveScIndustryGroupEmoji(label)
+    }));
+    const subgroupRows = (output.gtmIndustrySubgroups || []).map(label => ({
+      type: "gtmIndustrySubgroups",
+      typeLabel: "GTM Industry Subgroup",
+      label,
+      emoji: resolveGtmIndustrySubgroupEmoji(label)
+    }));
+    return scRows.concat(subgroupRows).sort((left, right) => alphaSort(left.typeLabel, right.typeLabel) || alphaSort(left.label, right.label));
+  }
+
+  function currentOutputJson() {
+    try {
+      return state.jsonText ? JSON.parse(state.jsonText) : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function renderEmojiMappingTable(output = currentOutputJson()) {
+    const target = elements["emoji-map-table"];
+    if (!target) return;
+    const filterText = normalizeKey(elements["emoji-map-filter"].value);
+    const missingOnly = elements["emoji-map-missing-only"].checked;
+    const rows = emojiMappingRowsForOutput(output).filter(row => {
+      if (missingOnly && row.emoji) return false;
+      if (!filterText) return true;
+      return normalizeKey(`${row.typeLabel} ${row.label} ${row.emoji}`).includes(filterText);
+    });
+
+    target.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Value</th>
+            <th>Emoji</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(row => `
+            <tr class="${row.emoji ? "" : "needs-clarification"}">
+              <td>${escapeHtml(row.typeLabel)}</td>
+              <td>${escapeHtml(row.label)}</td>
+              <td>
+                <input
+                  class="emoji-input"
+                  type="text"
+                  maxlength="12"
+                  value="${escapeHtml(row.emoji)}"
+                  data-emoji-type="${escapeHtml(row.type)}"
+                  data-emoji-label="${escapeHtml(row.label)}"
+                  aria-label="Emoji for ${escapeHtml(row.label)}"
+                >
+              </td>
+              <td>${row.emoji ? "Ready" : "Missing"}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+  }
+
+  function handleEmojiMappingChange(event) {
+    const input = event.target && event.target.matches("[data-emoji-type][data-emoji-label]")
+      ? event.target
+      : null;
+    if (!input) return;
+    const type = input.dataset.emojiType;
+    const label = cleanCell(input.dataset.emojiLabel);
+    const emoji = cleanCell(input.value);
+    if (!label || !state.emojiConfig[type]) return;
+    if (emoji) state.emojiConfig[type][label] = emoji;
+    else delete state.emojiConfig[type][label];
+    saveEmojiConfig();
+    reprocessWorkbook();
   }
 
   function handleIndustryMappingChange(event) {
@@ -1519,6 +1678,55 @@
           .sort(([a], [b]) => alphaSort(a, b))
       )
     };
+  }
+
+  function defaultEmojiConfig() {
+    return {
+      scIndustryGroups: { ...DEFAULT_EMOJI_MAPPINGS.scIndustryGroups },
+      gtmIndustrySubgroups: { ...DEFAULT_EMOJI_MAPPINGS.gtmIndustrySubgroups }
+    };
+  }
+
+  function loadEmojiConfig() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(EMOJI_CONFIG_STORAGE_KEY) || "null");
+      if (parsed && typeof parsed === "object") return cleanEmojiConfig(parsed);
+    } catch (error) {
+      console.warn("Could not read saved emoji mapping config", error);
+    }
+    return cleanEmojiConfig(defaultEmojiConfig());
+  }
+
+  function cleanEmojiConfig(config) {
+    const defaults = defaultEmojiConfig();
+    return {
+      scIndustryGroups: cleanEmojiMap({
+        ...defaults.scIndustryGroups,
+        ...config.scIndustryGroups
+      }),
+      gtmIndustrySubgroups: cleanEmojiMap({
+        ...defaults.gtmIndustrySubgroups,
+        ...config.gtmIndustrySubgroups,
+        ...config.gtmSubgroups
+      })
+    };
+  }
+
+  function cleanEmojiMap(values) {
+    return Object.fromEntries(
+      Object.entries(values || {})
+        .map(([label, emoji]) => [cleanCell(label), cleanCell(emoji)])
+        .filter(([label]) => label)
+        .sort(([left], [right]) => alphaSort(left, right))
+    );
+  }
+
+  function saveEmojiConfig() {
+    try {
+      localStorage.setItem(EMOJI_CONFIG_STORAGE_KEY, JSON.stringify(state.emojiConfig));
+    } catch (error) {
+      console.warn("Could not save emoji mapping config", error);
+    }
   }
 
   function resolveIndustryGroup(sourceIndustryFamily) {

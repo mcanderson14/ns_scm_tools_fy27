@@ -2,7 +2,7 @@
 
 Static browser tool for converting FY27 queue mapping Excel workbooks into JSON mapping files.
 
-Current tool version: `27.0.4`.
+Current tool version: `27.0.5`.
 
 The tool currently supports these outputs:
 
@@ -98,6 +98,8 @@ The generated JSON uses schema `ns-scm-tools.gtm-sc-industry.v1` and includes:
 - `industryLookup`: fallback lookup by GTM Industry.
 - `emojiMappings`: SC Industry Group and GTM Industry Subgroup emojis used by IQUEUE, with embedded fallbacks when an emoji is blank or missing.
 - `review`: incomplete, duplicate, or missing-emoji rows to inspect before uploading.
+
+The Excel file does not need emoji columns. When new SC Industry Groups or GTM Industry Subgroups appear, use the builder's `Emoji Mapping` panel to add or adjust emojis. Those values are saved in browser storage and included in the downloaded JSON.
 
 ## SC Industry Group Clarification
 
