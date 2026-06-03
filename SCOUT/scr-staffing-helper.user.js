@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.0.8
+// @version      27.0.11
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.0.8
+   SCOUT — SC Operations Utility Tool  27.0.11
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.0.8';
+  const SCRIPT_VERSION = '27.0.11';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -1257,6 +1257,12 @@ html.sc-resizing #sc-skills-toggle { transition: none !important; }
   overflow: hidden;
 }
 .sc-result-card:last-child { margin-bottom: 0; }
+.sc-result-card.sc-team-card-amo .sc-card-head {
+  border-left: 3px solid var(--sc-red);
+}
+.sc-result-card.sc-team-card-amo .sc-card-select-label input[type="checkbox"] {
+  accent-color: var(--sc-red);
+}
 
 .sc-card-head {
   display: flex;
@@ -3758,6 +3764,21 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     return String(name || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, ' ').trim();
   }
 
+  const PRODUCT_NAME_ALIASES = {
+    wms: ['Warehouse Management System', 'Warehouse Management'],
+    'warehouse management system': ['WMS', 'Warehouse Management'],
+    'warehouse management': ['WMS', 'Warehouse Management System'],
+  };
+
+  function productNameKeys(name) {
+    const key = normalizeProductName(name);
+    if (!key) return [];
+    const aliases = PRODUCT_NAME_ALIASES[key] || [];
+    return [key, ...aliases.map(normalizeProductName)]
+      .filter(Boolean)
+      .filter((item, index, arr) => arr.indexOf(item) === index);
+  }
+
   const RETIRED_PRODUCT_SKILL_KEYS = new Set([
     'WMS-Lite',
     'WMS-Advanced',
@@ -3768,10 +3789,12 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   }
 
   function productNamesCompatible(a, b) {
-    const aKey = normalizeProductName(a);
-    const bKey = normalizeProductName(b);
-    if (!aKey || !bKey) return false;
-    return aKey === bKey || aKey.includes(bKey) || bKey.includes(aKey);
+    const aKeys = productNameKeys(a);
+    const bKeys = productNameKeys(b);
+    if (!aKeys.length || !bKeys.length) return false;
+    return aKeys.some(aKey => bKeys.some(bKey =>
+      aKey === bKey || aKey.includes(bKey) || bKey.includes(aKey)
+    ));
   }
 
   function getScrProductOptionControls() {
@@ -3967,7 +3990,8 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const keys = [skillKey, productKey].filter(Boolean);
     const textMatch = (scrOptions.options || []).find(option => {
       const optionKey = normalizeProductName(option.text);
-      return keys.some(key => optionKey === key || optionKey.includes(key) || key.includes(optionKey));
+      return keys.some(key => optionKey === key || optionKey.includes(key) || key.includes(optionKey)) ||
+        productNamesCompatible(skillText, option.text);
     });
     if (textMatch) return textMatch;
 
@@ -7945,6 +7969,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       ...salesSubregionColumns(null),
       ...verticalAmoColumns(null),
       new nlobjSearchColumn('custrecord_emproster_sales_tier'),
+      new nlobjSearchColumn('custrecord_emproster_salesteam'),
       new nlobjSearchColumn('custrecord_emproster_emp'),
     ];
   }
@@ -7970,6 +7995,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       region:        readSalesSubregion(r, null),
       vertical:      readVerticalAmo(r, null),
       tier:          (r.getText('custrecord_emproster_sales_tier') || '').replace('Solution Consultant - ', ''),
+      salesteam:     r.getText('custrecord_emproster_salesteam') || '',
       employeeRecId: r.getValue('custrecord_emproster_emp') || '',
       email:         '',   // filled in by getEmployeeEmails()
       weightedScore: 0,
@@ -8462,10 +8488,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       const region      = escHtml(e.region);
       const location    = escHtml(e.location);
       const locationAtr = escAttr(e.location);
+      const isAmoMember = /amo/i.test(e.salesteam || '');
+      const nameTone    = scNameToneClass(e);
+      const cardTone    = isAmoMember ? ' sc-team-card-amo' : '';
+      const staffBtnClass = isAmoMember ? 'sc-amo-staff-btn' : 'sc-staff-btn';
       const avail       = availabilityClass(e.availability);
       const availLabel  = availabilityLabel(e.availability);
       return `
-        <div class="sc-result-card">
+        <div class="sc-result-card${cardTone}">
           <div class="sc-card-head">
             <label class="sc-card-select-label" title="Select for multi-calendar view">
               <input type="checkbox" class="sc-consultant-checkbox"
@@ -8477,7 +8507,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                 data-location="${locationAtr}">
             </label>
             <div class="sc-card-name-block">
-              <a class="sc-card-name"
+              <a class="sc-card-name ${nameTone}"
                  href="/app/common/custom/custrecordentry.nl?rectype=1572&id=${empHrefId}"
                  target="_blank"
                  title="${employeeAtr}">${employee}</a>
@@ -8501,7 +8531,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                   data-vertical="${verticalAtr}"
                   data-location="${locationAtr}"
                   title="View calendar for ${employeeAtr}">📅 View Cal</button>
-                <button class="sc-staff-btn"
+                <button class="${staffBtnClass}"
                   data-empid="${empId}"
                   data-empname="${employeeAtr}"
                   title="Staff ${employeeAtr}">✔ Staff</button>
@@ -8549,7 +8579,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     });
 
     // Wire Staff buttons
-    area.querySelectorAll('.sc-staff-btn').forEach(btn => {
+    area.querySelectorAll('.sc-staff-btn, .sc-amo-staff-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const scId   = btn.dataset.empid;
         const scName = btn.dataset.empname;
@@ -9230,8 +9260,8 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       { re: new RegExp('\\btag\\s+' + NAME, 'i'), allowLowercase: true },
       // "Preferred SC: Name" / "Prefer SC: Name" — require "sc" to avoid "prefer Standard SOW"
       { re: new RegExp('prefer(?:red|ring)?\\s+sc\\s*[:\\-]?\\s*' + NAME, 'i'), allowLowercase: true },
-      // "Would like to work with / Would like Michael Anderson"
-      { re: new RegExp('would\\s+like\\s+(?:to\\s+work\\s+with\\s+)?' + NAME, 'i'), allowLowercase: false },
+      // "Would like to work with / have / Would like Michael Anderson"
+      { re: new RegExp('would\\s+like\\s+(?:(?:to\\s+)?(?:work\\s+with|have)\\s+)?' + NAME, 'i'), allowLowercase: false },
       // NS form prompt: "Is there a specific SC … why? Austin Schaub"
       { re: new RegExp('specific\\s+sc[^?]*\\?\\s*' + NAME, 'i'), allowLowercase: true },
     ];
