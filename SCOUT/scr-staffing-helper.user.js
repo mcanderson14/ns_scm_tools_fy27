@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.0.14
+// @version      27.0.15
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.0.14
+   SCOUT — SC Operations Utility Tool  27.0.15
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.0.14';
+  const SCRIPT_VERSION = '27.0.15';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -6804,8 +6804,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       new nlobjSearchColumn('custrecord_sr_ind_rating_employee'),
       new nlobjSearchColumn('internalid', join),
       new nlobjSearchColumn('custrecord_sr_ind_rating'),
+      new nlobjSearchColumn('custrecord_emproster_avail', join),
+      ...availabilityNotesColumns(join),
+      ...managerAvailResColumns(join),
+      new nlobjSearchColumn('custrecord_emproster_mgrroster', join),
+      new nlobjSearchColumn('custrecord_emproster_olocation', join),
       new nlobjSearchColumn('custrecord_emproster_emp', join),
       new nlobjSearchColumn('custrecord_emproster_salesteam', join),
+      new nlobjSearchColumn('custrecord_emproster_sales_tier', join),
       ...salesSubregionColumns(join),
       ...verticalAmoColumns(join),
     ];
@@ -6814,8 +6820,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     return results.map(r => ({
       employeeId:     r.getValue('internalid', join),
       employee:       r.getText('custrecord_sr_ind_rating_employee'),
+      manager:        r.getText('custrecord_emproster_mgrroster', join),
+      availability:   r.getText('custrecord_emproster_avail', join),
+      availNotes:     readAvailabilityNotes(r, join),
+      availRes:       readManagerAvailRes(r, join),
+      location:       r.getText('custrecord_emproster_olocation', join),
       employeeRecId:  r.getValue('custrecord_emproster_emp', join) || '',
       salesteam:      r.getText('custrecord_emproster_salesteam', join) || '',
+      tier:           r.getText('custrecord_emproster_sales_tier', join),
       region:         readSalesSubregion(r, join),
       vertical:       readVerticalAmo(r, join),
       industryRating: parseRatingValue(r.getText('custrecord_sr_ind_rating') || r.getValue('custrecord_sr_ind_rating')),
@@ -8314,14 +8326,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           byEmployee[key] = {
             employeeId:    r.employeeId,
             employee:      r.employee,
-            manager:       '',
-            availability:  '',
-            availNotes:    '',
-            availRes:      '',
-            location:      '',
+            manager:       r.manager || '',
+            availability:  (r.availability || '').toLowerCase(),
+            availNotes:    r.availNotes || '',
+            availRes:      r.availRes || '',
+            location:      extractShortLocation(r.location),
             region:        r.region || '',
             vertical:      r.vertical || '',
-            tier:          '',
+            tier:          (r.tier || '').replace('Solution Consultant - ', ''),
             salesteam:     r.salesteam || '',
             employeeRecId: r.employeeRecId || '',
             weightedScore: 0,
@@ -8392,6 +8404,61 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     return m ? m[0] : text;
   }
 
+  function updateRecentLoadBadges(containerId, employees) {
+    const area = document.getElementById(containerId);
+    if (!area) return;
+    const byId = {};
+    (employees || []).forEach(e => { if (e && e.employeeId) byId[String(e.employeeId)] = e; });
+    area.querySelectorAll('.sc-load-badge[data-load-empid]').forEach(badge => {
+      const member = byId[String(badge.dataset.loadEmpid || '')];
+      if (!member || member.recentLoad == null) return;
+      badge.textContent = `SCR Lst 7 dys ${Number(member.recentLoad || 0)}`;
+    });
+  }
+
+  function scheduleRecentLoadRefresh(employees, containerId) {
+    const pending = (employees || []).filter(e => e && e.employeeId && e.recentLoad == null);
+    if (!pending.length) return;
+    setTimeout(() => {
+      try {
+        enrichRecentScrLoad(pending);
+        updateRecentLoadBadges(containerId, pending);
+      } catch (e) {
+        console.warn('[Staffing Helper] Deferred SCR load lookup failed:', e.message || e);
+      }
+    }, 250);
+  }
+
+  function updateResultEmailControls(containerId, employees) {
+    const area = document.getElementById(containerId);
+    if (!area) return;
+    const byId = {};
+    (employees || []).forEach(e => { if (e && e.employeeId) byId[String(e.employeeId)] = e; });
+    area.querySelectorAll('.sc-consultant-checkbox[data-empid], .sc-viewcal-btn[data-empid]').forEach(el => {
+      const member = byId[String(el.dataset.empid || '')];
+      if (!member || !member.email) return;
+      el.dataset.email = member.email;
+      if (el.classList.contains('sc-viewcal-btn')) {
+        el.title = `Open calendar dashboard for ${member.employee} (${member.email})`;
+      }
+    });
+  }
+
+  function scheduleResultEmailRefresh(employees, containerId) {
+    const pending = (employees || []).filter(e => e && e.employeeId && !e.email);
+    if (!pending.length) return;
+    setTimeout(() => {
+      try {
+        const rosterIds = [...new Set(pending.map(e => e.employeeId).filter(Boolean))];
+        const emailMap = getEmployeeEmails(rosterIds);
+        pending.forEach(e => { e.email = emailMap[e.employeeId] || e.email || ''; });
+        updateResultEmailControls(containerId, pending);
+      } catch (e) {
+        console.warn('[Staffing Helper] Deferred email lookup failed:', e.message || e);
+      }
+    }, 125);
+  }
+
   /* ────────────────────────────────────────────────────────────────
      RENDER RESULTS
   ──────────────────────────────────────────────────────────────── */
@@ -8405,7 +8472,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       area.innerHTML = '<div class="sc-status">No results found. Try adjusting your filters.</div>';
       return;
     }
-    if (employees.some(e => e.recentLoad == null)) enrichRecentScrLoad(employees);
 
     SEARCH_RESULT_CACHE[containerId] = { employees, hasIndustry, empName, mode };
     const industrySelect = document.getElementById(mode === 'amo' ? 'sc-amo-industry' : 'sc-industry');
@@ -8440,6 +8506,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       const stackRank   = Math.max(0, Math.min(100, Number(e.stackRank) || 0));
       const indRating   = Math.max(0, Math.min(4, Number(e.industryRating) || 0));
       const indLabel    = ratingLabel(indRating);
+      const recentLoad  = e.recentLoad == null ? '...' : Number(e.recentLoad || 0);
       const skillParts  = Object.entries(e.skills || {})
         .map(([s, r]) => {
           const skill = String(s || '');
@@ -8479,7 +8546,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                 ${e.tier     ? `<span class="sc-attr-badge">${tier}</span>`     : ''}
                 ${e.region   ? `<span class="sc-attr-badge">${region}</span>`   : ''}
                 ${e.location ? `<span class="sc-attr-badge">${location}</span>` : ''}
-                <span class="sc-load-badge">SCR Lst 7 dys ${Number(e.recentLoad || 0)}</span>
+                <span class="sc-load-badge" data-load-empid="${empId}">SCR Lst 7 dys ${recentLoad}</span>
               </div>
             </div>
             <div class="sc-card-right">
@@ -8488,6 +8555,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               </span>
               <div class="sc-card-btn-row">
                 <button class="sc-viewcal-btn"
+                  data-empid="${empId}"
                   data-email="${email}"
                   data-empname="${employeeAtr}"
                   data-manager="${managerAtr}"
@@ -8547,6 +8615,8 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const nextBtn = document.getElementById(`${containerId}-next-page`);
     if (prevBtn) prevBtn.addEventListener('click', () => renderResults(employees, hasIndustry, empName, containerId, mode, page - 1));
     if (nextBtn) nextBtn.addEventListener('click', () => renderResults(employees, hasIndustry, empName, containerId, mode, page + 1));
+    scheduleResultEmailRefresh(employees, containerId);
+    scheduleRecentLoadRefresh(pageEmployees, containerId);
 
     // Wire per-card View Cal buttons (single consultant)
     area.querySelectorAll('.sc-viewcal-btn').forEach(btn => {
@@ -8761,6 +8831,10 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     return Boolean(document.getElementById(id)?.checked);
   }
 
+  function yieldToBrowser(delay) {
+    return new Promise(resolve => setTimeout(resolve, delay || 0));
+  }
+
   function normalizeVerticalFilter(value) {
     return normalizeLoose(value);
   }
@@ -8885,28 +8959,26 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     btn.disabled = true;
     area.innerHTML = '<div class="sc-status loading">Searching — this may take a few seconds…</div>';
 
-    setTimeout(() => {
+    setTimeout(async () => {
       try {
+        await yieldToBrowser();
         const allSkillRows    = skillIds.length ? getSkillData(skillIds, empRec, empIds, filterOpts) : [];
+        await yieldToBrowser();
         const skillRows       = filterByStaffingMode(allSkillRows, 'direct').filter(r => !isExcludedVertical(r.vertical));
         const allIndustryRows = industryId ? getIndustryData(industryId, empRec, empIds, filterOpts) : [];
+        await yieldToBrowser();
         const industryRows    = filterByStaffingMode(allIndustryRows, 'direct').filter(r => !isExcludedVertical(r.vertical));
         let consolidated      = consolidateData(skillRows, industryRows, sortKey, skillIds.length, matchOperator);
         if (!consolidated.length && hasAdditionalSkillFilters(additionalSkillOpts) && !skillIds.length && !industryId) {
           consolidated = getRosterCandidates(empRec, empIds, filterOpts, 'direct');
         }
+        await yieldToBrowser();
         consolidated          = applyAdditionalSkillFilters(consolidated, additionalSkillOpts);
-        enrichMembersWithRosterData(consolidated);
         consolidated = filterByStaffingMode(consolidated, 'direct');
         consolidated = consolidated.filter(e => !isExcludedVertical(e.vertical));
         consolidated = applyRegionFilter(consolidated, filterOpts);
         consolidated = applyCustomerStateFilter(consolidated, filterOpts);
         consolidated = applyMyTeamLimit(consolidated, filterOpts, empIds);
-
-        // Fetch emails for View Cal buttons
-        const rosterIds = [...new Set(consolidated.map(e => e.employeeId))];
-        const emailMap  = getEmployeeEmails(rosterIds);
-        consolidated.forEach(e => { e.email = emailMap[e.employeeId] || ''; });
 
         renderResults(consolidated, Boolean(industryId && industryRows.length), empName);
       } catch (err) {
@@ -8962,11 +9034,12 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     btn.disabled = true;
     area.innerHTML = '<div class="sc-status loading">Searching AMO SCs — this may take a few seconds…</div>';
 
-    setTimeout(() => {
+    setTimeout(async () => {
       try {
         // Build AMO skill filter using amoBaseFilters (no team/region constraint)
         const join = 'custrecord_ssm_skill_employee';
         let skillRows = [];
+        await yieldToBrowser();
         if (skillIds.length) {
           const amoSkillFilters = [
             new nlobjSearchFilter('custrecord_ssm_skill_entry', null, 'anyof', skillIds),
@@ -8990,6 +9063,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
             new nlobjSearchColumn('custrecord_ssm_skill_rating'),
           ];
           const rawSkill = nlapiSearchRecord('customrecord_ssm_entry', null, amoSkillFilters, skillCols) || [];
+          await yieldToBrowser();
           skillRows = rawSkill
             .map(r => ({
               employeeId:   r.getValue('internalid', join),
@@ -9013,6 +9087,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
         // Industry data for AMO
         let industryRows = [];
+        await yieldToBrowser();
         if (industryId) {
           const indJoin = 'custrecord_sr_ind_rating_employee';
           const industryIds = resolveIndustrySearchIds(industryId);
@@ -9026,18 +9101,31 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               new nlobjSearchColumn('custrecord_sr_ind_rating_employee'),
               new nlobjSearchColumn('internalid',          indJoin),
               new nlobjSearchColumn('custrecord_sr_ind_rating'),
+              new nlobjSearchColumn('custrecord_emproster_avail', indJoin),
+              ...availabilityNotesColumns(indJoin),
+              ...managerAvailResColumns(indJoin),
+              new nlobjSearchColumn('custrecord_emproster_mgrroster', indJoin),
+              new nlobjSearchColumn('custrecord_emproster_olocation', indJoin),
               new nlobjSearchColumn('custrecord_emproster_salesteam', indJoin),
+              new nlobjSearchColumn('custrecord_emproster_sales_tier', indJoin),
               ...salesSubregionColumns(indJoin),
               ...verticalAmoColumns(indJoin),
               new nlobjSearchColumn('custrecord_emproster_emp', indJoin),
             ];
             const rawInd = nlapiSearchRecord('customrecord_sr_industry_rating_entry', null, amoIndFilters, indCols) || [];
+            await yieldToBrowser();
             industryRows = rawInd
               .map(r => ({
                 employeeId:     r.getValue('internalid', indJoin),
                 employee:       r.getText('custrecord_sr_ind_rating_employee'),
                 employeeRecId:  r.getValue('custrecord_emproster_emp', indJoin) || '',
+                manager:        r.getText('custrecord_emproster_mgrroster', indJoin),
+                availability:   r.getText('custrecord_emproster_avail', indJoin),
+                availNotes:     readAvailabilityNotes(r, indJoin),
+                availRes:       readManagerAvailRes(r, indJoin),
+                location:       r.getText('custrecord_emproster_olocation', indJoin),
                 salesteam:      r.getText('custrecord_emproster_salesteam', indJoin),
+                tier:           r.getText('custrecord_emproster_sales_tier', indJoin),
                 region:         readSalesSubregion(r, indJoin),
                 vertical:       readVerticalAmo(r, indJoin),
                 industryRating: parseRatingValue(r.getText('custrecord_sr_ind_rating') || r.getValue('custrecord_sr_ind_rating')),
@@ -9051,18 +9139,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         if (!consolidated.length && hasAdditionalSkillFilters(additionalSkillOpts) && !skillIds.length && !industryId) {
           consolidated = getRosterCandidates(empRec, empIds, filterOpts, 'amo');
         }
+        await yieldToBrowser();
         consolidated = applyAdditionalSkillFilters(consolidated, additionalSkillOpts);
-        enrichMembersWithRosterData(consolidated);
         consolidated = filterByStaffingMode(consolidated, 'amo');
         consolidated = consolidated.filter(e => !isExcludedVertical(e.vertical));
         consolidated = applySalesVerticalFilter(consolidated, filterOpts);
         consolidated = applyRegionFilter(consolidated, filterOpts);
         consolidated = applyCustomerStateFilter(consolidated, filterOpts);
         consolidated = applyMyTeamLimit(consolidated, filterOpts, empIds);
-
-        const rosterIds = [...new Set(consolidated.map(e => e.employeeId))];
-        const emailMap  = getEmployeeEmails(rosterIds);
-        consolidated.forEach(e => { e.email = emailMap[e.employeeId] || ''; });
 
         renderResults(consolidated, Boolean(industryId && industryRows.length), empName,
                       'sc-amo-results-area', 'amo');
