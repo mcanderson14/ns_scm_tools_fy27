@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.0.13
+// @version      27.0.14
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.0.13
+   SCOUT — SC Operations Utility Tool  27.0.14
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.0.13';
+  const SCRIPT_VERSION = '27.0.14';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -398,6 +398,7 @@ Good luck with ${sc}!
   let _productSelectionSyncing = false;
   let _previousHistoryCollapsed = false;
   let _customerLicenseCollapsed = true;
+  let CURRENT_CUSTOMER_LOCATION = { city: '', state: '', country: '' };
   const CUSTOMER_LICENSE_CACHE = {};
 
   // Item 1: cached lead-on-opp flag — set by loadStaffingContext on panel open
@@ -4557,6 +4558,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                   <div class="sc-field-hint">Uses the My Team list above, including locally configured additions.</div>
                 </div>
 
+                <div class="sc-field">
+                  <label class="sc-toggle-label">
+                    <input type="checkbox" id="sc-filter-same-state">
+                    Limit to same state/province as customer
+                  </label>
+                  <div class="sc-field-hint">Uses the Request Context default billing location.</div>
+                </div>
+
               </div>
             </div>
           </div>
@@ -4734,6 +4743,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                     Limit search to My Team
                   </label>
                   <div class="sc-field-hint">Uses the My Team list above, including locally configured additions.</div>
+                </div>
+
+                <div class="sc-field">
+                  <label class="sc-toggle-label">
+                    <input type="checkbox" id="sc-amo-filter-same-state">
+                    Limit to same state/province as customer
+                  </label>
+                  <div class="sc-field-hint">Uses the Request Context default billing location.</div>
                 </div>
 
               </div>
@@ -6189,6 +6206,85 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     };
   }
 
+  const US_STATE_CODES_BY_NAME = {
+    alabama: 'AL', alaska: 'AK', arizona: 'AZ', arkansas: 'AR', california: 'CA',
+    colorado: 'CO', connecticut: 'CT', delaware: 'DE', 'district of columbia': 'DC',
+    florida: 'FL', georgia: 'GA', hawaii: 'HI', idaho: 'ID', illinois: 'IL',
+    indiana: 'IN', iowa: 'IA', kansas: 'KS', kentucky: 'KY', louisiana: 'LA',
+    maine: 'ME', maryland: 'MD', massachusetts: 'MA', michigan: 'MI',
+    minnesota: 'MN', mississippi: 'MS', missouri: 'MO', montana: 'MT',
+    nebraska: 'NE', nevada: 'NV', 'new hampshire': 'NH', 'new jersey': 'NJ',
+    'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC',
+    'north dakota': 'ND', ohio: 'OH', oklahoma: 'OK', oregon: 'OR',
+    pennsylvania: 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
+    'south dakota': 'SD', tennessee: 'TN', texas: 'TX', utah: 'UT',
+    vermont: 'VT', virginia: 'VA', washington: 'WA', 'west virginia': 'WV',
+    wisconsin: 'WI', wyoming: 'WY',
+  };
+
+  const CA_PROVINCE_CODES_BY_NAME = {
+    alberta: 'AB', 'british columbia': 'BC', manitoba: 'MB', 'new brunswick': 'NB',
+    'newfoundland and labrador': 'NL', newfoundland: 'NL', labrador: 'NL',
+    'nova scotia': 'NS', ontario: 'ON', 'prince edward island': 'PE', quebec: 'QC',
+    saskatchewan: 'SK', 'northwest territories': 'NT', nunavut: 'NU',
+    yukon: 'YT', 'yukon territory': 'YT',
+  };
+
+  const US_STATE_CODE_SET = new Set(Object.values(US_STATE_CODES_BY_NAME));
+  const CA_PROVINCE_CODE_SET = new Set(Object.values(CA_PROVINCE_CODES_BY_NAME));
+
+  function normalizeCountryCode(value) {
+    const text = normalizeLoose(value);
+    if (!text) return '';
+    if (text === 'ca' || text === 'canada') return 'CA';
+    if (text === 'us' || text === 'usa' || text === 'united states' || text === 'united states of america') return 'US';
+    return '';
+  }
+
+  function normalizeSubdivisionCode(value, countryCode) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const upper = raw.toUpperCase();
+    const loose = normalizeLoose(raw);
+    if (countryCode === 'CA') {
+      if (CA_PROVINCE_CODE_SET.has(upper)) return upper;
+      return CA_PROVINCE_CODES_BY_NAME[loose] || '';
+    }
+    if (countryCode === 'US') {
+      if (US_STATE_CODE_SET.has(upper)) return upper;
+      return US_STATE_CODES_BY_NAME[loose] || '';
+    }
+    return '';
+  }
+
+  function normalizeStateProvinceForMatch(value, countryHint) {
+    const raw = String(value || '').trim();
+    if (!raw) return null;
+    const usMatch = raw.match(/\bUS[-\s]*([A-Z]{2})\b/i);
+    if (usMatch) return { country: 'US', code: usMatch[1].toUpperCase() };
+    const caMatch = raw.match(/\bCA[-\s]*([A-Za-z][A-Za-z\s]+|[A-Z]{2})\b/i);
+    if (caMatch) {
+      const caCode = normalizeSubdivisionCode(caMatch[1].trim(), 'CA');
+      if (caCode) return { country: 'CA', code: caCode };
+    }
+
+    const hintedCountry = normalizeCountryCode(countryHint);
+    const country = hintedCountry || (/\bcanada\b/i.test(raw) ? 'CA' : '');
+    const hintedCode = normalizeSubdivisionCode(raw, country);
+    if (hintedCode) return { country, code: hintedCode };
+    const usCode = normalizeSubdivisionCode(raw, 'US');
+    if (usCode) return { country: 'US', code: usCode };
+    const caCode = normalizeSubdivisionCode(raw, 'CA');
+    if (caCode) return { country: 'CA', code: caCode };
+    return null;
+  }
+
+  function getCustomerStateProvinceTarget() {
+    const loc = CURRENT_CUSTOMER_LOCATION || {};
+    const countryHint = loc.country || (loc.state ? 'US' : '');
+    return normalizeStateProvinceForMatch(loc.state, countryHint);
+  }
+
   function readLocationFromSearchRow(row, join) {
     return normalizeCustomerLocationParts(
       readSearchValue(row, 'city', join),
@@ -7032,6 +7128,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         ...availabilityNotesColumns(null),
         ...managerAvailResColumns(null),
         new nlobjSearchColumn('custrecord_emproster_emp'),
+        new nlobjSearchColumn('custrecord_emproster_olocation'),
         new nlobjSearchColumn('custrecord_emproster_salesteam'),
         ...salesSubregionColumns(null),
         new nlobjSearchColumn('email', 'custrecord_emproster_emp'),
@@ -7047,6 +7144,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           availNotes:    readAvailabilityNotes(r, null),
           availRes:      readManagerAvailRes(r, null),
           employeeRecId: r.getValue('custrecord_emproster_emp')               || '',
+          location:      extractShortLocation(r.getText('custrecord_emproster_olocation')),
           salesteam:     r.getText('custrecord_emproster_salesteam')          || '',
           region:        readSalesSubregion(r, null),
           email:         r.getValue('email', 'custrecord_emproster_emp')      || '',
@@ -7059,6 +7157,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         m.availNotes   = d.availNotes;
         m.availRes     = d.availRes;
         m.employeeRecId = d.employeeRecId;
+        if (d.location) m.location = d.location;
         m.salesteam    = d.salesteam;
         if (d.region) m.region = d.region;
         m.email        = d.email;
@@ -8284,8 +8383,13 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
   function extractShortLocation(loc) {
     if (!loc) return '';
-    const m = loc.match(/^[\w]+-[\w]+/i);
-    return m ? m[0] : loc;
+    const text = String(loc || '').trim();
+    const us = text.match(/^US-[A-Z]{2}\b/i);
+    if (us) return us[0].toUpperCase();
+    const ca = text.match(/^CA-[A-Za-z][A-Za-z\s]+/i);
+    if (ca) return ca[0].trim();
+    const m = text.match(/^[\w]+-[\w]+/i);
+    return m ? m[0] : text;
   }
 
   /* ────────────────────────────────────────────────────────────────
@@ -8689,6 +8793,27 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     });
   }
 
+  function applyCustomerStateFilter(members, filterOpts) {
+    if (!filterOpts || !filterOpts.limitToCustomerState) return members || [];
+    const target = filterOpts.customerStateTarget || getCustomerStateProvinceTarget();
+    if (!target || !target.code) return [];
+    return (members || []).filter(member => {
+      const memberLocation = normalizeStateProvinceForMatch(member && member.location, '');
+      if (!memberLocation || !memberLocation.code) return false;
+      if (target.country && memberLocation.country && target.country !== memberLocation.country) return false;
+      return memberLocation.code === target.code;
+    });
+  }
+
+  function assertCustomerStateFilterReady(filterOpts, area) {
+    if (!filterOpts || !filterOpts.limitToCustomerState) return true;
+    if (filterOpts.customerStateTarget && filterOpts.customerStateTarget.code) return true;
+    if (area) {
+      area.innerHTML = '<div class="sc-error">Customer default billing state/province was not available for this SCR.</div>';
+    }
+    return false;
+  }
+
   function getMyTeamRosterIdSet(empIds) {
     if (MY_TEAM_ROSTER_IDS && MY_TEAM_ROSTER_IDS.size) return MY_TEAM_ROSTER_IDS;
     const ids = new Set();
@@ -8750,7 +8875,10 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       tier:     [],
       region:   getMultiSelectValues('sc-filter-region'),
       regionText: getMultiSelectTexts('sc-filter-region'),
+      limitToCustomerState: getCheckboxValue('sc-filter-same-state'),
+      customerStateTarget: getCustomerStateProvinceTarget(),
     };
+    if (!assertCustomerStateFilterReady(filterOpts, area)) return;
     const sortKey = document.getElementById('sc-filter-sort').value || 'isa';
     const matchOperator = document.getElementById('sc-filter-operator').value || 'any';
 
@@ -8772,6 +8900,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         consolidated = filterByStaffingMode(consolidated, 'direct');
         consolidated = consolidated.filter(e => !isExcludedVertical(e.vertical));
         consolidated = applyRegionFilter(consolidated, filterOpts);
+        consolidated = applyCustomerStateFilter(consolidated, filterOpts);
         consolidated = applyMyTeamLimit(consolidated, filterOpts, empIds);
 
         // Fetch emails for View Cal buttons
@@ -8823,7 +8952,10 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       tier:     [],
       region:   getMultiSelectValues('sc-amo-filter-region'),
       regionText: getMultiSelectTexts('sc-amo-filter-region'),
+      limitToCustomerState: getCheckboxValue('sc-amo-filter-same-state'),
+      customerStateTarget: getCustomerStateProvinceTarget(),
     };
+    if (!assertCustomerStateFilterReady(filterOpts, area)) return;
     const sortKey = document.getElementById('sc-amo-filter-sort').value || 'isa';
     const matchOperator = document.getElementById('sc-amo-filter-operator').value || 'any';
 
@@ -8925,6 +9057,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         consolidated = consolidated.filter(e => !isExcludedVertical(e.vertical));
         consolidated = applySalesVerticalFilter(consolidated, filterOpts);
         consolidated = applyRegionFilter(consolidated, filterOpts);
+        consolidated = applyCustomerStateFilter(consolidated, filterOpts);
         consolidated = applyMyTeamLimit(consolidated, filterOpts, empIds);
 
         const rosterIds = [...new Set(consolidated.map(e => e.employeeId))];
@@ -11741,6 +11874,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
       if (!companyId) {
         historyDebug.errors.push('No company ID found on current SCR.');
+        CURRENT_CUSTOMER_LOCATION = { city: '', state: '', country: '' };
         renderStaffingContext(body, { companyId, companySearchText, isAmoRequest, onsite, requestedSC, prevSCs: [], prevSCsOnDeal: [], leadScName, historyDebug });
         if (requestedSC) loadRequestedSCCard(requestedSC, empName || '');
         return;
@@ -11790,6 +11924,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           historyDebug.companySearchText = companySearchText;
         }
       } catch (e) { /* company lookup failed — non-fatal */ }
+      CURRENT_CUSTOMER_LOCATION = { city, state, country };
 
       let customerScrHistory = [];
       const filterCurrentScr = function (item) {
