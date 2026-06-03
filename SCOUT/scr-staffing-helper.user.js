@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.0.2
+// @version      27.0.11
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.0.2
+   SCOUT — SC Operations Utility Tool  27.0.11
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.0.2';
+  const SCRIPT_VERSION = '27.0.11';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -945,11 +945,6 @@ html.sc-resizing #sc-skills-toggle { transition: none !important; }
 .sc-save-confirm.show { opacity: 1; }
 
 /* ── Status Action Buttons ───────────────────────────────────────── */
-.sc-action-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
 .sc-action-btn {
   padding: 8px;
   border: none;
@@ -968,6 +963,25 @@ html.sc-resizing #sc-skills-toggle { transition: none !important; }
 .sc-action-btn:active { transform: scale(0.97); }
 .sc-action-btn.yellow { background: var(--sc-yellow); }
 .sc-action-btn.red    { background: var(--sc-red); }
+.sc-status-icon-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sc-status-icon-btn {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  padding: 0;
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1;
+}
+.sc-status-icon-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  filter: grayscale(0.25);
+}
 
 /* ── Form Controls ───────────────────────────────────────────────── */
 .sc-field { margin-bottom: 10px; }
@@ -1243,6 +1257,12 @@ html.sc-resizing #sc-skills-toggle { transition: none !important; }
   overflow: hidden;
 }
 .sc-result-card:last-child { margin-bottom: 0; }
+.sc-result-card.sc-team-card-amo .sc-card-head {
+  border-left: 3px solid var(--sc-red);
+}
+.sc-result-card.sc-team-card-amo .sc-card-select-label input[type="checkbox"] {
+  accent-color: var(--sc-red);
+}
 
 .sc-card-head {
   display: flex;
@@ -1934,6 +1954,12 @@ html.sc-resizing #sc-skills-toggle { transition: none !important; }
 
 /* ── Staffing Context Card ───────────────────────────────────────── */
 .sc-context-card .sc-card-title { color: var(--sc-blue-dark); }
+.sc-context-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
 .sc-ctx-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -2159,6 +2185,14 @@ html.sc-resizing #sc-skills-toggle { transition: none !important; }
 }
 .sc-prev-history-count-btn:hover {
   background: rgba(114,245,138,0.18);
+}
+.sc-prev-history-count-value {
+  display: inline-block;
+  min-width: 34px;
+  color: #72f58a;
+  font-size: 10px;
+  font-weight: 800;
+  text-align: center;
 }
 .sc-prev-history-products-summary {
   color: #d6ffe0;
@@ -3730,6 +3764,21 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     return String(name || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, ' ').trim();
   }
 
+  const PRODUCT_NAME_ALIASES = {
+    wms: ['Warehouse Management System', 'Warehouse Management'],
+    'warehouse management system': ['WMS', 'Warehouse Management'],
+    'warehouse management': ['WMS', 'Warehouse Management System'],
+  };
+
+  function productNameKeys(name) {
+    const key = normalizeProductName(name);
+    if (!key) return [];
+    const aliases = PRODUCT_NAME_ALIASES[key] || [];
+    return [key, ...aliases.map(normalizeProductName)]
+      .filter(Boolean)
+      .filter((item, index, arr) => arr.indexOf(item) === index);
+  }
+
   const RETIRED_PRODUCT_SKILL_KEYS = new Set([
     'WMS-Lite',
     'WMS-Advanced',
@@ -3740,10 +3789,12 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   }
 
   function productNamesCompatible(a, b) {
-    const aKey = normalizeProductName(a);
-    const bKey = normalizeProductName(b);
-    if (!aKey || !bKey) return false;
-    return aKey === bKey || aKey.includes(bKey) || bKey.includes(aKey);
+    const aKeys = productNameKeys(a);
+    const bKeys = productNameKeys(b);
+    if (!aKeys.length || !bKeys.length) return false;
+    return aKeys.some(aKey => bKeys.some(bKey =>
+      aKey === bKey || aKey.includes(bKey) || bKey.includes(aKey)
+    ));
   }
 
   function getScrProductOptionControls() {
@@ -3939,7 +3990,8 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const keys = [skillKey, productKey].filter(Boolean);
     const textMatch = (scrOptions.options || []).find(option => {
       const optionKey = normalizeProductName(option.text);
-      return keys.some(key => optionKey === key || optionKey.includes(key) || key.includes(optionKey));
+      return keys.some(key => optionKey === key || optionKey.includes(key) || key.includes(optionKey)) ||
+        productNamesCompatible(skillText, option.text);
     });
     if (textMatch) return textMatch;
 
@@ -4285,7 +4337,13 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
         <!-- Staffing Context Card — populated on panel open, stays pinned -->
         <div class="sc-card sc-context-card" id="sc-context-card">
-          <div class="sc-card-title">📋 Request Context</div>
+          <div class="sc-card-title sc-context-title-row">
+            <span>📋 Request Context</span>
+            <div class="sc-status-icon-actions" aria-label="Status actions">
+              <button class="sc-action-btn sc-status-icon-btn yellow" id="sc-context-btn-onhold" type="button" title="Place request On Hold" aria-label="Place request On Hold">⏸</button>
+              <button class="sc-action-btn sc-status-icon-btn red" id="sc-context-btn-cancel" type="button" title="Cancel request" aria-label="Cancel request">✕</button>
+            </div>
+          </div>
           <div id="sc-context-body">
             <div class="sc-status loading">Loading context…</div>
           </div>
@@ -4355,20 +4413,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
              DIRECT STAFFING PANE
         ═══════════════════════════════════════════════════════ -->
         <div id="sc-direct-pane" class="sc-tab-pane active">
-
-          <!-- Status Actions -->
-          <div class="sc-card sc-collapsible-card collapsed" id="sc-direct-status-card">
-            <div class="sc-card-title" id="sc-direct-status-toggle" role="button" tabindex="0" aria-expanded="false">
-              <span>Status Actions</span>
-              <span class="sc-collapsible-chevron">▼</span>
-            </div>
-            <div class="sc-collapsible-body">
-              <div class="sc-action-row">
-                <button class="sc-action-btn yellow" id="sc-btn-onhold">⏸ On Hold</button>
-                <button class="sc-action-btn red"    id="sc-btn-cancel">✕ Cancel Request</button>
-              </div>
-            </div>
-          </div>
 
           <!-- Module Insights Card (Direct) -->
           <div class="sc-card sc-insights-card" id="sc-insights-card" style="display:none">
@@ -4478,10 +4522,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
                 <div class="sc-field">
                   <label class="sc-label">SC Region</label>
-                  <select id="sc-filter-region" multiple size="3">
+                  <select id="sc-filter-region" multiple size="4">
                     <option value="48">East</option>
                     <option value="49">Central</option>
                     <option value="50">West</option>
+                    <option value="South">South</option>
                   </select>
                   <div class="sc-field-hint">Ctrl+click for multiple.</div>
                 </div>
@@ -4535,20 +4580,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
              AMO STAFFING PANE
         ═══════════════════════════════════════════════════════ -->
         <div id="sc-amo-pane" class="sc-tab-pane">
-
-          <!-- Status Actions (duplicated on AMO tab) -->
-          <div class="sc-card sc-collapsible-card collapsed" id="sc-amo-status-card">
-            <div class="sc-card-title" id="sc-amo-status-toggle" role="button" tabindex="0" aria-expanded="false">
-              <span>Status Actions</span>
-              <span class="sc-collapsible-chevron">▼</span>
-            </div>
-            <div class="sc-collapsible-body">
-              <div class="sc-action-row">
-                <button class="sc-action-btn yellow" id="sc-amo-btn-onhold">⏸ On Hold</button>
-                <button class="sc-action-btn red"    id="sc-amo-btn-cancel">✕ Cancel Request</button>
-              </div>
-            </div>
-          </div>
 
           <!-- AMO Deliverable Selector -->
           <div class="sc-card sc-card-amo">
@@ -4670,10 +4701,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
                 <div class="sc-field">
                   <label class="sc-label">SC Region</label>
-                  <select id="sc-amo-filter-region" multiple size="3">
+                  <select id="sc-amo-filter-region" multiple size="4">
                     <option value="48">East</option>
                     <option value="49">Central</option>
                     <option value="50">West</option>
+                    <option value="South">South</option>
                   </select>
                   <div class="sc-field-hint">Ctrl+click for multiple.</div>
                 </div>
@@ -4944,8 +4976,10 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const footer = `----- end of SC assignment ----\n\n`;
     const baseNote = String(requestDetailsScript || '');
     const additionalDetails = buildAdditionalRequestDetailsBlock(requestDetailsNote);
-    const separator = additionalDetails && baseNote && !/\n$/.test(baseNote) ? '\n' : '';
-    return header + baseNote + separator + additionalDetails + footer;
+    const bodyParts = [];
+    if (additionalDetails) bodyParts.push(additionalDetails.trimEnd());
+    if (baseNote) bodyParts.push(baseNote.trimEnd());
+    return header + (bodyParts.length ? `${bodyParts.join('\n\n')}\n` : '') + footer;
   }
 
   function getCurrentScrId() {
@@ -6572,9 +6606,16 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       f.push(new nlobjSearchFilter('custrecord_emproster_vertical_amo', joinField, 'anyof', opts.vertical));
     if (opts.tier && opts.tier.length > 0)
       f.push(new nlobjSearchFilter('custrecord_emproster_sales_tier', joinField, 'anyof', opts.tier));
-    if (SCOUT_CAN_READ_SALES_SUBREGION && opts.region && opts.region.length > 0)
-      f.push(new nlobjSearchFilter('custrecord_emproster_salessubregion', joinField, 'anyof', opts.region));
+    const serverRegions = getServerRegionFilterValues(opts);
+    if (SCOUT_CAN_READ_SALES_SUBREGION && serverRegions.length > 0)
+      f.push(new nlobjSearchFilter('custrecord_emproster_salessubregion', joinField, 'anyof', serverRegions));
     return f;
+  }
+
+  function getServerRegionFilterValues(opts) {
+    const values = (opts && opts.region || []).map(value => String(value || '').trim()).filter(Boolean);
+    if (!values.length) return [];
+    return values.every(value => /^\d+$/.test(value)) ? values : [];
   }
 
   function getSkillData(skillIds, empRec, empIds, filterOpts) {
@@ -6660,6 +6701,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       new nlobjSearchColumn('custrecord_sr_ind_rating'),
       new nlobjSearchColumn('custrecord_emproster_emp', join),
       new nlobjSearchColumn('custrecord_emproster_salesteam', join),
+      ...salesSubregionColumns(join),
       ...verticalAmoColumns(join),
     ];
     const results = nlapiSearchRecord('customrecord_sr_industry_rating_entry', null, filters, cols);
@@ -6669,6 +6711,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       employee:       r.getText('custrecord_sr_ind_rating_employee'),
       employeeRecId:  r.getValue('custrecord_emproster_emp', join) || '',
       salesteam:      r.getText('custrecord_emproster_salesteam', join) || '',
+      region:         readSalesSubregion(r, join),
       vertical:       readVerticalAmo(r, join),
       industryRating: parseRatingValue(r.getText('custrecord_sr_ind_rating') || r.getValue('custrecord_sr_ind_rating')),
     })).filter(r => parseInt(r.industryRating, 10) >= 1);
@@ -6981,6 +7024,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         ...managerAvailResColumns(null),
         new nlobjSearchColumn('custrecord_emproster_emp'),
         new nlobjSearchColumn('custrecord_emproster_salesteam'),
+        ...salesSubregionColumns(null),
         new nlobjSearchColumn('email', 'custrecord_emproster_emp'),
       ];
       const results = nlapiSearchRecord('customrecord_emproster', null, filters, cols);
@@ -6995,6 +7039,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           availRes:      readManagerAvailRes(r, null),
           employeeRecId: r.getValue('custrecord_emproster_emp')               || '',
           salesteam:     r.getText('custrecord_emproster_salesteam')          || '',
+          region:        readSalesSubregion(r, null),
           email:         r.getValue('email', 'custrecord_emproster_emp')      || '',
         };
       });
@@ -7006,6 +7051,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         m.availRes     = d.availRes;
         m.employeeRecId = d.employeeRecId;
         m.salesteam    = d.salesteam;
+        if (d.region) m.region = d.region;
         m.email        = d.email;
       });
     } catch (e) {
@@ -7923,6 +7969,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       ...salesSubregionColumns(null),
       ...verticalAmoColumns(null),
       new nlobjSearchColumn('custrecord_emproster_sales_tier'),
+      new nlobjSearchColumn('custrecord_emproster_salesteam'),
       new nlobjSearchColumn('custrecord_emproster_emp'),
     ];
   }
@@ -7948,6 +7995,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       region:        readSalesSubregion(r, null),
       vertical:      readVerticalAmo(r, null),
       tier:          (r.getText('custrecord_emproster_sales_tier') || '').replace('Solution Consultant - ', ''),
+      salesteam:     r.getText('custrecord_emproster_salesteam') || '',
       employeeRecId: r.getValue('custrecord_emproster_emp') || '',
       email:         '',   // filled in by getEmployeeEmails()
       weightedScore: 0,
@@ -8440,10 +8488,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       const region      = escHtml(e.region);
       const location    = escHtml(e.location);
       const locationAtr = escAttr(e.location);
+      const isAmoMember = /amo/i.test(e.salesteam || '');
+      const nameTone    = scNameToneClass(e);
+      const cardTone    = isAmoMember ? ' sc-team-card-amo' : '';
+      const staffBtnClass = isAmoMember ? 'sc-amo-staff-btn' : 'sc-staff-btn';
       const avail       = availabilityClass(e.availability);
       const availLabel  = availabilityLabel(e.availability);
       return `
-        <div class="sc-result-card">
+        <div class="sc-result-card${cardTone}">
           <div class="sc-card-head">
             <label class="sc-card-select-label" title="Select for multi-calendar view">
               <input type="checkbox" class="sc-consultant-checkbox"
@@ -8455,7 +8507,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                 data-location="${locationAtr}">
             </label>
             <div class="sc-card-name-block">
-              <a class="sc-card-name"
+              <a class="sc-card-name ${nameTone}"
                  href="/app/common/custom/custrecordentry.nl?rectype=1572&id=${empHrefId}"
                  target="_blank"
                  title="${employeeAtr}">${employee}</a>
@@ -8479,7 +8531,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                   data-vertical="${verticalAtr}"
                   data-location="${locationAtr}"
                   title="View calendar for ${employeeAtr}">📅 View Cal</button>
-                <button class="sc-staff-btn"
+                <button class="${staffBtnClass}"
                   data-empid="${empId}"
                   data-empname="${employeeAtr}"
                   title="Staff ${employeeAtr}">✔ Staff</button>
@@ -8527,7 +8579,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     });
 
     // Wire Staff buttons
-    area.querySelectorAll('.sc-staff-btn').forEach(btn => {
+    area.querySelectorAll('.sc-staff-btn, .sc-amo-staff-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const scId   = btn.dataset.empid;
         const scName = btn.dataset.empname;
@@ -8611,6 +8663,22 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     });
   }
 
+  function normalizeRegionFilter(value) {
+    return normalizeLoose(value);
+  }
+
+  function applyRegionFilter(members, filterOpts) {
+    const selected = (filterOpts && filterOpts.regionText || filterOpts && filterOpts.region || [])
+      .map(normalizeRegionFilter)
+      .filter(Boolean);
+    if (!selected.length || !SCOUT_CAN_READ_SALES_SUBREGION) return members || [];
+    return (members || []).filter(member => {
+      const region = normalizeRegionFilter(member && member.region);
+      if (!region) return false;
+      return selected.some(target => region === target || region.includes(target) || target.includes(region));
+    });
+  }
+
   function getMyTeamRosterIdSet(empIds) {
     if (MY_TEAM_ROSTER_IDS && MY_TEAM_ROSTER_IDS.size) return MY_TEAM_ROSTER_IDS;
     const ids = new Set();
@@ -8671,6 +8739,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       verticalText: getMultiSelectTexts('sc-filter-vertical'),
       tier:     [],
       region:   getMultiSelectValues('sc-filter-region'),
+      regionText: getMultiSelectTexts('sc-filter-region'),
     };
     const sortKey = document.getElementById('sc-filter-sort').value || 'isa';
     const matchOperator = document.getElementById('sc-filter-operator').value || 'any';
@@ -8691,6 +8760,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         consolidated          = applyAdditionalSkillFilters(consolidated, additionalSkillOpts);
         enrichMembersWithRosterData(consolidated);
         consolidated = consolidated.filter(e => !isExcludedVertical(e.vertical));
+        consolidated = applyRegionFilter(consolidated, filterOpts);
         consolidated = applyMyTeamLimit(consolidated, filterOpts, empIds);
 
         // Fetch emails for View Cal buttons
@@ -8741,6 +8811,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       verticalText: getMultiSelectTexts('sc-amo-filter-vertical'),
       tier:     [],
       region:   getMultiSelectValues('sc-amo-filter-region'),
+      regionText: getMultiSelectTexts('sc-amo-filter-region'),
     };
     const sortKey = document.getElementById('sc-amo-filter-sort').value || 'isa';
     const matchOperator = document.getElementById('sc-amo-filter-operator').value || 'any';
@@ -8813,6 +8884,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               new nlobjSearchColumn('internalid',          indJoin),
               new nlobjSearchColumn('custrecord_sr_ind_rating'),
               new nlobjSearchColumn('custrecord_emproster_salesteam', indJoin),
+              ...salesSubregionColumns(indJoin),
               ...verticalAmoColumns(indJoin),
               new nlobjSearchColumn('custrecord_emproster_emp', indJoin),
             ];
@@ -8823,6 +8895,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                 employee:       r.getText('custrecord_sr_ind_rating_employee'),
                 employeeRecId:  r.getValue('custrecord_emproster_emp', indJoin) || '',
                 salesteam:      r.getText('custrecord_emproster_salesteam', indJoin),
+                region:         readSalesSubregion(r, indJoin),
                 vertical:       readVerticalAmo(r, indJoin),
                 industryRating: parseRatingValue(r.getText('custrecord_sr_ind_rating') || r.getValue('custrecord_sr_ind_rating')),
               }))
@@ -8839,6 +8912,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         enrichMembersWithRosterData(consolidated);
         consolidated = consolidated.filter(e => !isExcludedVertical(e.vertical));
         consolidated = applySalesVerticalFilter(consolidated, filterOpts);
+        consolidated = applyRegionFilter(consolidated, filterOpts);
         consolidated = applyMyTeamLimit(consolidated, filterOpts, empIds);
 
         const rosterIds = [...new Set(consolidated.map(e => e.employeeId))];
@@ -9186,8 +9260,8 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       { re: new RegExp('\\btag\\s+' + NAME, 'i'), allowLowercase: true },
       // "Preferred SC: Name" / "Prefer SC: Name" — require "sc" to avoid "prefer Standard SOW"
       { re: new RegExp('prefer(?:red|ring)?\\s+sc\\s*[:\\-]?\\s*' + NAME, 'i'), allowLowercase: true },
-      // "Would like to work with / Would like Michael Anderson"
-      { re: new RegExp('would\\s+like\\s+(?:to\\s+work\\s+with\\s+)?' + NAME, 'i'), allowLowercase: false },
+      // "Would like to work with / have / Would like Michael Anderson"
+      { re: new RegExp('would\\s+like\\s+(?:(?:to\\s+)?(?:work\\s+with|have)\\s+)?' + NAME, 'i'), allowLowercase: false },
       // NS form prompt: "Is there a specific SC … why? Austin Schaub"
       { re: new RegExp('specific\\s+sc[^?]*\\?\\s*' + NAME, 'i'), allowLowercase: true },
     ];
@@ -10137,6 +10211,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
     const historyRows = ctx.previousHistoryRows || [];
     const historyGroups = groupPreviousHistoryRows(historyRows).slice(0, 8);
+    const historyTotalCount = getHistoryTotalCount(historyRows);
     const historyStatus = ctx.previousHistoryStatus || 'Loading previous SC history...';
     const historyIsLoading = /loading|checking|background|still/i.test(historyStatus);
     html += '<div class="sc-prev-history-panel' + (_previousHistoryCollapsed ? ' collapsed' : '') + '">';
@@ -10144,7 +10219,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
             '<button type="button" class="sc-prev-history-toggle" aria-expanded="' + (_previousHistoryCollapsed ? 'false' : 'true') + '">' +
             '<span class="sc-prev-history-chevron">' + (_previousHistoryCollapsed ? '▶' : '▼') + '</span>' +
             '<span class="sc-prev-history-title">Previous SC History</span></button>' +
-            '<span class="sc-prev-history-status">' + renderHistoryStatus(historyStatus) + '</span></div>';
+            '<span class="sc-prev-history-status">' + renderHistoryStatus(historyTotalCount ? `${historyTotalCount} previous SCR${historyTotalCount === 1 ? '' : 's'} found` : historyStatus) + '</span></div>';
     html += '<div class="sc-prev-history-body">';
     if (historyGroups.length) {
       html += '<table class="sc-prev-history-table"><thead><tr>' +
@@ -10156,24 +10231,31 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         const latestItem = group.items[0] || {};
         const groupId = `sc-prev-history-${index}`;
         const productSummary = getHistoryProductSummary(group.items);
+        const groupCount = getHistoryGroupCount(group);
+        const hasDetailRows = group.items.some(function (item) { return !item.summaryOnly; });
+        const latestMeta = latestItem.summaryOnly ? '' : '<span class="sc-prev-history-meta">most recent SCR ' + escHtml(latestItem.scrId || '') + '</span>';
+        const countHtml = hasDetailRows
+          ? '<button type="button" class="sc-prev-history-count-btn" data-history-detail="' + escAttr(groupId) + '" data-history-count="' + groupCount + '">' + escHtml(`${groupCount}>`) + '</button>'
+          : '<span class="sc-prev-history-count-value">' + escHtml(String(groupCount)) + '</span>';
         html += '<tr><td><span class="sc-prev-history-type sc-prev-history-type-' + typeClass + '">' +
                 escHtml(requestType || '?') + '</span></td>' +
                 '<td>' + escHtml(group.assignee && group.assignee.name ? group.assignee.name : '') +
-                '<span class="sc-prev-history-meta">most recent SCR ' + escHtml(latestItem.scrId || '') + '</span></td>' +
-                '<td><button type="button" class="sc-prev-history-count-btn" data-history-detail="' + escAttr(groupId) + '" data-history-count="' + group.items.length + '">' +
-                escHtml(`${group.items.length}>`) + '</button></td>' +
+                latestMeta + '</td>' +
+                '<td>' + countHtml + '</td>' +
                 '<td><span class="sc-prev-history-products-summary">' + escHtml(productSummary) + '</span></td>' +
                 '<td>' + escHtml(latestItem.oppId || '') + '</td></tr>';
-        html += '<tr class="sc-prev-history-detail-row" data-history-row="' + escAttr(groupId) + '"><td class="sc-prev-history-detail-cell" colspan="5">' +
-                '<div class="sc-prev-history-detail-list">';
-        group.items.forEach(function (item) {
-          html += '<div class="sc-prev-history-detail-item">' +
-                  '<span class="sc-prev-history-detail-scr">SCR ' + escHtml(item.scrId || '?') + '</span>' +
-                  '<span>' + escHtml(getHistoryItemProducts(item) || '--') + '</span>' +
-                  '<span>' + escHtml(item.oppId || '') + '</span>' +
-                  '</div>';
-        });
-        html += '</div></td></tr>';
+        if (hasDetailRows) {
+          html += '<tr class="sc-prev-history-detail-row" data-history-row="' + escAttr(groupId) + '"><td class="sc-prev-history-detail-cell" colspan="5">' +
+                  '<div class="sc-prev-history-detail-list">';
+          group.items.filter(function (item) { return !item.summaryOnly; }).forEach(function (item) {
+            html += '<div class="sc-prev-history-detail-item">' +
+                    '<span class="sc-prev-history-detail-scr">SCR ' + escHtml(item.scrId || '?') + '</span>' +
+                    '<span>' + escHtml(getHistoryItemProducts(item) || '--') + '</span>' +
+                    '<span>' + escHtml(item.oppId || '') + '</span>' +
+                    '</div>';
+          });
+          html += '</div></td></tr>';
+        }
       });
       html += '</tbody></table>';
     } else if (!historyIsLoading) {
@@ -10676,6 +10758,29 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     return map.assignee != null && (map.id != null || map.name != null || map.opp != null) ? map : null;
   }
 
+  function mapPreviousHistorySummaryHeaders(row) {
+    const map = {};
+    const cells = Array.from((row && row.cells) || []);
+    cells.forEach(function (cell, index) {
+      const header = normalizeSublistHeader(cell.textContent || '');
+      if (!header) return;
+      if (map.count == null && (/\bcount\b/.test(header) || /\bscrs?\b/.test(header))) map.count = index;
+      else if (
+        map.assignee == null &&
+        (/\bassigned\s+sc\b/.test(header) ||
+         /\bassigned\s+to\b/.test(header) ||
+         /\bassignee\b/.test(header) ||
+         /^sc\b/.test(header))
+      ) map.assignee = index;
+    });
+    return map.count != null && map.assignee != null ? map : null;
+  }
+
+  function parseHistoryCountText(text) {
+    const match = String(text || '').replace(/,/g, '').match(/\d+/);
+    return match ? parseInt(match[0], 10) : 0;
+  }
+
   function tableLooksLikeCustomerScrSublist(table) {
     const text = cleanSublistCellText(table && table.textContent || '');
     return /\bCustomer SC Request\b/i.test(text) ||
@@ -10713,6 +10818,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       .replace(/^assigned\s+(?:to|sc|consultant)\s*/i, '')
       .replace(/\b(?:yes|no|direct|amo|products|high tech|emerging|general business)\b\s*$/i, '')
       .trim();
+  }
+
+  function looksLikeHistoryOpportunityText(text) {
+    const clean = cleanSublistCellText(text);
+    if (!clean || clean.length > 180) return false;
+    return /\bOpportunity\s*#?\d{4,}\b/i.test(clean) ||
+      /\bCustomer\s*#?\d{4,}\b/i.test(clean) ||
+      /^#?\d{4,}\b/.test(clean);
   }
 
   function recordScrHistoryDebugTable(debug, source, table, rows) {
@@ -10795,6 +10908,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         const requestType = canonicalHistoryRequestType(readSublistCell(row, headerMap.directAmo));
         const productsDemoed = cleanHistoryProductsText(readSublistCell(row, headerMap.products));
         if (!assigneeName || /^assigned\s+(?:to|sc|consultant)$/i.test(assigneeName)) return;
+        if (!looksLikeHistoryOpportunityText(oppText)) return;
         const key = normalizeLoose(assigneeName);
         if (!key) return;
         const item = {
@@ -10810,6 +10924,45 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         recordScrHistorySample(debug, source, item);
       });
     });
+    return history;
+  }
+
+  function parsePreviousScHistorySummaryDocument(doc, debug) {
+    const history = [];
+    Array.from(doc.querySelectorAll('table')).forEach(function (table) {
+      if (table.closest && table.closest('#sc-skills-panel')) return;
+      const rows = Array.from(table.rows || []);
+      if (!rows.length) return;
+      let headerMap = null;
+      rows.forEach(function (row) {
+        const maybeHeader = mapPreviousHistorySummaryHeaders(row);
+        if (maybeHeader) {
+          headerMap = maybeHeader;
+          if (debug && debug.savedSearchHeaders.length < 4) debug.savedSearchHeaders.push({ summary: true, ...maybeHeader });
+          return;
+        }
+        if (!headerMap) return;
+        const assigneeName = cleanSublistAssigneeName(readSublistCell(row, headerMap.assignee));
+        const count = parseHistoryCountText(readSublistCell(row, headerMap.count));
+        if (!assigneeName || /^total$/i.test(assigneeName) || count <= 0) return;
+        const key = normalizeLoose(assigneeName);
+        if (!key) return;
+        const item = {
+          scrId: `summary:${key}`,
+          oppId: '',
+          assignee: { key, id: key, name: assigneeName },
+          requestType: '',
+          salesVertical: '',
+          productsDemoed: '',
+          summaryCount: count,
+          summaryOnly: true,
+          source: 'saved-search-summary',
+        };
+        history.push(item);
+        recordScrHistorySample(debug, 'saved-search-summary', item);
+      });
+    });
+    if (debug && history.length) debug.savedSearchSummaryRows = history.length;
     return history;
   }
 
@@ -10869,6 +11022,21 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         .trim();
     }
 
+    function extractAssignedScFromRawMetadata(metadataText) {
+      const clean = cleanSublistCellText(metadataText);
+      const matches = [];
+      const re = /([A-Z][A-Za-z'’ .-]{1,80},\s*[A-Z][A-Za-z'’ .-]{1,80})\s+(Direct|AMO)\b/ig;
+      let match;
+      while ((match = re.exec(clean))) {
+        matches.push({
+          name: cleanRawHistoryName(match[1]),
+          type: match[2],
+          index: match.index,
+        });
+      }
+      return matches.length ? matches[matches.length - 1] : null;
+    }
+
     function addRawRow(segment) {
       const match = segment.match(nameOpportunityRe);
       if (!match) return;
@@ -10878,17 +11046,22 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       const idMatch = afterName.match(/\b(\d{5,})\b/);
       const scrId = idMatch ? idMatch[1] : `${normalizeLoose(scName)}:${oppNumber}`;
       const metadataSource = idMatch ? afterName.slice((idMatch.index || 0) + idMatch[0].length) : afterName;
-      const metadata = extractRawHistoryMetadata(metadataSource, scName);
+      const assignedSc = extractAssignedScFromRawMetadata(metadataSource);
+      const assignedName = assignedSc && assignedSc.name ? assignedSc.name : scName;
+      const metadata = extractRawHistoryMetadata(metadataSource, assignedName);
+      if (!metadata.requestType && assignedSc && assignedSc.type) {
+        metadata.requestType = canonicalHistoryRequestType(assignedSc.type);
+      }
       if (/^\d+$/.test(scrId) && seenScrIds.has(scrId)) return;
-      const key = `${scrId}:${normalizeLoose(scName)}`;
-      if (!scName || seen.has(key)) return;
-      if (!/^[A-Za-z'’ .-]+,\s*[A-Za-z'’ .-]+$/.test(scName)) return;
+      const key = `${scrId}:${normalizeLoose(assignedName)}`;
+      if (!assignedName || seen.has(key)) return;
+      if (!/^[A-Za-z'’ .-]+,\s*[A-Za-z'’ .-]+$/.test(assignedName)) return;
       seen.add(key);
       if (/^\d+$/.test(scrId)) seenScrIds.add(scrId);
       const item = {
         scrId,
         oppId: `Opportunity #${oppNumber}`,
-        assignee: { key: normalizeLoose(scName), id: normalizeLoose(scName), name: scName },
+        assignee: { key: normalizeLoose(assignedName), id: normalizeLoose(assignedName), name: assignedName },
         requestType: metadata.requestType,
         salesVertical: metadata.salesVertical,
         leadSc: metadata.leadSc,
@@ -10902,7 +11075,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         debug.savedSearchRawSamples.push({
           scrId,
           oppId: item.oppId,
-          assignee: scName,
+          assignee: assignedName,
           requestType: item.requestType,
           productsDemoed: item.productsDemoed,
           segment: cleanSublistCellText(segment).slice(0, 240),
@@ -11221,7 +11394,10 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   function parsePreviousScHistorySearchHtml(html, debug) {
     const parser = new DOMParser();
     const doc = parser.parseFromString(html || '', 'text/html');
-    let rows = parseCustomerScrHistoryDocument(doc, debug, 'saved-search', false);
+    let rows = parsePreviousScHistorySummaryDocument(doc, debug);
+    if (!rows.length) {
+      rows = parseCustomerScrHistoryDocument(doc, debug, 'saved-search', false);
+    }
     if (!rows.length) {
       rows = parsePreviousScHistoryRawText(html, debug);
     }
@@ -11330,21 +11506,74 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
   function countHistoryByAssignee(history, requestType) {
     const counts = {};
+    const seen = new Set();
     (history || []).forEach(function (item) {
       if (!item || !item.assignee) return;
       if (requestType && getHistoryRequestType(item) !== requestType) return;
       const key = item.assignee.key || normalizeLoose(item.assignee.name);
       if (!key) return;
-      counts[key] = (counts[key] || 0) + 1;
+      const rollupKey = `${key}:${getHistoryRollupKey(item)}`;
+      if (!item.summaryOnly) {
+        if (seen.has(rollupKey)) return;
+        seen.add(rollupKey);
+      }
+      counts[key] = (counts[key] || 0) + getHistoryItemCount(item);
     });
     return counts;
+  }
+
+  function getHistoryRollupKey(item) {
+    if (!item) return '';
+    if (item.summaryOnly) {
+      return `summary:${item.assignee && (item.assignee.key || normalizeLoose(item.assignee.name)) || ''}`;
+    }
+    const scrId = String(item.scrId || '').trim();
+    if (scrId && !/^summary:/i.test(scrId)) return `scr:${scrId}`;
+    return [
+      'row',
+      normalizeLoose(item.oppId || ''),
+      normalizeLoose(getHistoryItemProducts(item) || ''),
+      getHistoryRequestType(item) || '',
+    ].join(':');
+  }
+
+  function dedupePreviousHistoryRows(history) {
+    const out = [];
+    const seen = new Set();
+    (history || []).forEach(function (item) {
+      if (!item || !item.assignee) return;
+      const assigneeKey = item.assignee.key || normalizeLoose(item.assignee.name);
+      if (!assigneeKey) return;
+      const key = `${assigneeKey}:${getHistoryRollupKey(item)}`;
+      if (!item.summaryOnly && seen.has(key)) return;
+      seen.add(key);
+      out.push(item);
+    });
+    return out;
+  }
+
+  function getHistoryItemCount(item) {
+    const count = parseInt(item && item.summaryCount, 10);
+    return Number.isFinite(count) && count > 0 ? count : 1;
+  }
+
+  function getHistoryGroupCount(group) {
+    return dedupePreviousHistoryRows(group && group.items || []).reduce(function (sum, item) {
+      return sum + getHistoryItemCount(item);
+    }, 0);
+  }
+
+  function getHistoryTotalCount(history) {
+    return dedupePreviousHistoryRows(history || []).reduce(function (sum, item) {
+      return sum + getHistoryItemCount(item);
+    }, 0);
   }
 
   function sortPreviousHistoryRows(history) {
     const amoCounts = countHistoryByAssignee(history, 'AMO');
     const directCounts = countHistoryByAssignee(history, 'Direct');
     const typeRank = { AMO: 0, Direct: 1 };
-    return (history || []).slice().sort(function (a, b) {
+    return dedupePreviousHistoryRows(history || []).slice().sort(function (a, b) {
       const aType = getHistoryRequestType(a);
       const bType = getHistoryRequestType(b);
       const aRank = Object.prototype.hasOwnProperty.call(typeRank, aType) ? typeRank[aType] : 2;
@@ -11394,7 +11623,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       if (!item || !item.assignee) return;
       const requestType = getHistoryRequestType(item) || 'Unknown';
       const assigneeKey = item.assignee.key || normalizeLoose(item.assignee.name);
-      const key = `${requestType}:${assigneeKey}`;
+      const key = assigneeKey;
       if (!byKey[key]) {
         byKey[key] = {
           key,
@@ -11405,9 +11634,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         groups.push(byKey[key]);
       }
       byKey[key].items.push(item);
+      const existingRank = Object.prototype.hasOwnProperty.call(typeRank, byKey[key].requestType) ? typeRank[byKey[key].requestType] : 2;
+      const nextRank = Object.prototype.hasOwnProperty.call(typeRank, requestType) ? typeRank[requestType] : 2;
+      if (nextRank < existingRank) byKey[key].requestType = requestType;
     });
     return groups.sort(function (a, b) {
-      if (b.items.length !== a.items.length) return b.items.length - a.items.length;
+      const aCount = getHistoryGroupCount(a);
+      const bCount = getHistoryGroupCount(b);
+      if (bCount !== aCount) return bCount - aCount;
       const aRank = Object.prototype.hasOwnProperty.call(typeRank, a.requestType) ? typeRank[a.requestType] : 2;
       const bRank = Object.prototype.hasOwnProperty.call(typeRank, b.requestType) ? typeRank[b.requestType] : 2;
       if (aRank !== bRank) return aRank - bRank;
@@ -11418,9 +11652,9 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   function summarizePreviousScs(history) {
     const counts = {};
     const names = {};
-    (history || []).forEach(function (item) {
+    dedupePreviousHistoryRows(history || []).forEach(function (item) {
       if (!item || !item.assignee) return;
-      counts[item.assignee.key] = (counts[item.assignee.key] || 0) + 1;
+      counts[item.assignee.key] = (counts[item.assignee.key] || 0) + getHistoryItemCount(item);
       names[item.assignee.key] = item.assignee.name;
     });
     return Object.keys(counts)
@@ -11550,12 +11784,22 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       historyDebug.savedSearchStatus = companySearchText ? 'loading in background' : 'skipped: no company search text';
 
       function renderHistoryContext() {
-        const sortedCustomerScrHistory = sortPreviousHistoryRows(customerScrHistory);
+        const summaryHistory = customerScrHistory.filter(function (item) { return item && item.summaryOnly; });
+        const detailHistory = customerScrHistory.filter(function (item) { return item && !item.summaryOnly; });
+        const displayHistory = summaryHistory.length ? summaryHistory : customerScrHistory;
+        const rolledUpHistory = dedupePreviousHistoryRows(displayHistory);
+        const sortedCustomerScrHistory = sortPreviousHistoryRows(rolledUpHistory);
+        const sortedDetailHistory = sortPreviousHistoryRows(detailHistory);
+        const historyTotalCount = getHistoryTotalCount(sortedCustomerScrHistory);
         historyDebug.mergedRows = sortedCustomerScrHistory.length;
+        historyDebug.mergedCount = historyTotalCount;
+        historyDebug.rollupRows = rolledUpHistory.length;
+        historyDebug.summaryRows = summaryHistory.length;
+        historyDebug.detailRows = detailHistory.length;
         historyDebug.mergedSamples = sortedCustomerScrHistory.slice(0, 8);
         let previousHistoryStatus = historyDebug.savedSearchStatus || 'Loading previous SC history...';
         if (sortedCustomerScrHistory.length) {
-          previousHistoryStatus = `${sortedCustomerScrHistory.length} previous SCR${sortedCustomerScrHistory.length === 1 ? '' : 's'} found`;
+          previousHistoryStatus = `${historyTotalCount} previous SCR${historyTotalCount === 1 ? '' : 's'} found`;
           if (/loading/i.test(historyDebug.savedSearchStatus || '')) {
             previousHistoryStatus += ' · still checking NetSuite';
           }
@@ -11578,7 +11822,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
         // Item 10: Deal-level SCR lookup — previous SCs on the same opportunity
         const sameOppHistory = currentOppTokens.length
-          ? sortedCustomerScrHistory.filter(function (item) {
+          ? sortedDetailHistory.filter(function (item) {
             return historyItemMatchesOpportunity(item, currentOppTokens);
           })
           : [];
@@ -11633,7 +11877,10 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         renderHistoryContext();
         savedSearchPromise.then(function (savedSearchHistory) {
           if (savedSearchHistory && savedSearchHistory.length) {
-            customerScrHistory = mergeCustomerScrHistory(customerScrHistory, savedSearchHistory.filter(filterCurrentScr));
+            const filteredSavedHistory = savedSearchHistory.filter(filterCurrentScr);
+            // Once NetSuite's saved search returns, treat it as authoritative.
+            // Visible-page parsing is only a quick interim/fallback and can pick up unrelated form tables.
+            customerScrHistory = filteredSavedHistory;
           }
           renderHistoryContext();
         }).catch(function (e) {
@@ -12245,14 +12492,23 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     document.body.appendChild(panel);
     wireScoutUpdateBanner();
     setTimeout(() => checkScoutUpdate(false), 1200);
-    refreshProductOptionsFromScrForm();
-    refreshAmoDeliverableOptions();
-    refreshAmoDeliverableOptionsAsync();
-    setTimeout(refreshIndustryOptionsFromBOW, 100);
     setTimeout(resumePendingStaffAction, 700);
 
     // Initialise the panel width CSS variable from localStorage
     document.documentElement.style.setProperty('--sc-panel-w', getPanelWidth() + 'px');
+
+    let panelReferenceDataStarted = false;
+    let myTeamLoaded = false;
+
+    function deferPanelWork(fn, delay) {
+      setTimeout(function () {
+        try {
+          fn();
+        } catch (e) {
+          console.warn('[SCOUT] Deferred panel load failed:', e.message || e);
+        }
+      }, delay || 0);
+    }
 
     /* ── Open / Close helpers ─────────────────────────────────────── */
     function openPanel() {
@@ -12263,13 +12519,30 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     function closePanel() {
       document.documentElement.classList.remove('sc-panel-open');
     }
-    function refreshPanelContext() {
-      loadStaffingContext(empName);
+    function ensurePanelReferenceData() {
       refreshProductOptionsFromScrForm();
       refreshAmoDeliverableOptions();
-      refreshAmoDeliverableOptionsAsync();
-      refreshProductSkillOptionsFromMatrix();
-      refreshIndustryOptionsFromBOW();
+      if (PRODUCT_SKILL_OPTIONS_CACHE && PRODUCT_SKILL_OPTIONS_CACHE.length) {
+        applyProductSkillOptions(PRODUCT_SKILL_OPTIONS_CACHE);
+      }
+      if (INDUSTRY_OPTIONS_CACHE && INDUSTRY_OPTIONS_CACHE.length) {
+        applyIndustryOptions(INDUSTRY_OPTIONS_CACHE);
+      }
+      if (panelReferenceDataStarted) return;
+      panelReferenceDataStarted = true;
+      deferPanelWork(refreshAmoDeliverableOptionsAsync, 0);
+      deferPanelWork(refreshProductSkillOptionsFromMatrix, 80);
+      deferPanelWork(refreshIndustryOptionsFromBOW, 180);
+    }
+    function ensureMyTeamLoaded() {
+      if (myTeamLoaded) return;
+      myTeamLoaded = true;
+      loadMyTeam(empIds, empName);
+    }
+    function refreshPanelContext() {
+      loadStaffingContext(empName);
+      ensurePanelReferenceData();
+      ensureMyTeamLoaded();
       autoPopulateFromForm();
       detectTravelRequired();
       updateRequestInsights('direct');
@@ -12352,6 +12625,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     document.getElementById('sc-save-dashboard-url').addEventListener('click', () => {
       const confirmEl = document.getElementById('sc-save-confirm');
       saveSettingsFromForm();
+      myTeamLoaded = true;
       loadMyTeam(empIds, empName);
       confirmEl.classList.add('show');
       setTimeout(() => confirmEl.classList.remove('show'), 2500);
@@ -12421,6 +12695,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     // My Team — refresh button
     document.getElementById('sc-myteam-refresh').addEventListener('click', (ev) => {
       ev.stopPropagation();
+      myTeamLoaded = true;
       loadMyTeam(empIds, empName);
     });
 
@@ -12446,16 +12721,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     wireCollapsibleCard('sc-direct-product-skills-card', 'sc-direct-product-skills-toggle');
     wireCollapsibleCard('sc-direct-industry-card', 'sc-direct-industry-toggle');
     wireCollapsibleCard('sc-direct-filters-card', 'sc-direct-filters-toggle');
-    wireCollapsibleCard('sc-direct-status-card', 'sc-direct-status-toggle');
     wireCollapsibleCard('sc-amo-additional-skills-card', 'sc-amo-additional-skills-toggle');
     wireCollapsibleCard('sc-amo-products-card', 'sc-amo-products-toggle');
     wireCollapsibleCard('sc-amo-product-skills-card', 'sc-amo-product-skills-toggle');
     wireCollapsibleCard('sc-amo-industry-card', 'sc-amo-industry-toggle');
-    wireCollapsibleCard('sc-amo-status-card', 'sc-amo-status-toggle');
     wireCollapsibleCard('sc-amo-filters-card', 'sc-amo-filters-toggle');
-
-    // Kick off initial My Team load
-    loadMyTeam(empIds, empName);
 
     // Quick SC Lookup
     (function () {
@@ -12519,14 +12789,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       runSearch(empRec, empIds, empName);
     });
 
-    ['sc-btn-onhold', 'sc-amo-btn-onhold'].forEach(btnId => {
+    ['sc-context-btn-onhold'].forEach(btnId => {
       const btn = document.getElementById(btnId);
       if (!btn || empIds.me) return;
       btn.disabled = true;
       btn.title = 'Current roster record unavailable for this role.';
     });
-    document.getElementById('sc-btn-onhold').addEventListener('click', () => setOnHold(empIds.me));
-    document.getElementById('sc-btn-cancel').addEventListener('click', () => cancelRequest(empName));
+    document.getElementById('sc-context-btn-onhold').addEventListener('click', () => setOnHold(empIds.me));
+    document.getElementById('sc-context-btn-cancel').addEventListener('click', () => cancelRequest(empName));
 
     // ── Tab switching ────────────────────────────────────────────
     document.querySelectorAll('.sc-tab-btn').forEach(tabBtn => {
@@ -12544,10 +12814,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         }
       });
     });
-
-    // ── AMO Status Actions ───────────────────────────────────────
-    document.getElementById('sc-amo-btn-onhold').addEventListener('click', () => setOnHold(empIds.me));
-    document.getElementById('sc-amo-btn-cancel').addEventListener('click', () => cancelRequest(empName));
 
     // ── AMO Product text filter ──────────────────────────────────
     document.getElementById('sc-amo-product-filter').addEventListener('input', function () {
@@ -12579,14 +12845,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       runAmoSearch(empRec, empIds, empName);
     });
 
-    // NetSuite view-mode pages can finish hydrating field text after the
-    // userscript injects. Read request type/deliverable on load so the active
-    // Direct/AMO tab is correct before the user starts staffing.
-    setTimeout(function () {
-      autoPopulateFromForm();
-      detectTravelRequired();
-    }, 250);
-    setTimeout(autoPopulateFromForm, 1200);
     if (getPanelOpenState()) {
       setTimeout(openScoutPanel, 350);
     }
