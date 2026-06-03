@@ -4,20 +4,24 @@
   const SCHEMA = "ns-scm-tools.region-map.v3";
   const PRODUCTS_SCM_SCHEMA = "ns-scm-tools.scm-relationships.v3";
   const AUTHORIZED_MANAGERS_SCHEMA = "ns-scm-tools.authorized-managers.v1";
-  const TOOL_VERSION = "27.0.3";
+  const GTM_SC_INDUSTRY_SCHEMA = "ns-scm-tools.gtm-sc-industry.v1";
+  const TOOL_VERSION = "27.0.4";
   const TOOL_NAME = "FY27 Queue Mapping JSON Maker";
   const CONFIG_STORAGE_KEY = "ns-scm-tools-region-map-industry-config-v1";
   const REGION_MAPPING_TYPE = "region";
   const PRODUCTS_SCM_MAPPING_TYPE = "productsScm";
   const AUTHORIZED_MANAGERS_MAPPING_TYPE = "authorizedManagers";
+  const GTM_SC_INDUSTRY_MAPPING_TYPE = "gtmScIndustry";
   const REGION_OUTPUT_FILE_NAME = "SC_Industry_State_Region_Mapping.json";
   const PRODUCTS_SCM_OUTPUT_FILE_NAME = "Products_SCM_Relationship_Mapping.json";
   const AUTHORIZED_MANAGERS_OUTPUT_FILE_NAME = "Authorized_Managers.json";
+  const GTM_SC_INDUSTRY_OUTPUT_FILE_NAME = "GTM_to_SC_Industry_Mapping.json";
   const AUTHORIZED_MANAGERS_SEARCH_URL = "https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl?searchid=1319617";
   const SOURCE_DESCRIPTIONS = {
     [REGION_MAPPING_TYPE]: "Use an Excel workbook where row 1 contains SC industry groups, row 2 contains Direct/AMO, and column A contains state/province codes.",
     [PRODUCTS_SCM_MAPPING_TYPE]: "Use an Excel workbook with columns for Sales Region, AMO/Direct, Regional Director or RSM, SCM owner, and optional SCM Director. SCM ownership applies across SC Industry Groups.",
-    [AUTHORIZED_MANAGERS_MAPPING_TYPE]: "Use an Excel export from NetSuite saved search 1319617. Expected columns include Manager/Name, Email, Role, SC Industry Group(s), Can Own, Can View, and Active."
+    [AUTHORIZED_MANAGERS_MAPPING_TYPE]: "Use an Excel export from NetSuite saved search 1319617. Expected columns include Manager/Name, Email, Role, SC Industry Group(s), Can Own, Can View, and Active.",
+    [GTM_SC_INDUSTRY_MAPPING_TYPE]: "Use an Excel workbook with columns for SC Industry Group, GTM Industry, and GTM Industry Subgroup. Optional emoji columns can override default display icons."
   };
   const PRODUCTS_SCM_HEADER_ALIASES = {
     salesRegion: ["salesregion", "region", "salesarea"],
@@ -35,11 +39,18 @@
     canView: ["canview", "viewer", "viewqueue", "canviewqueue", "queueviewer", "view"],
     active: ["active", "isinactive", "inactive", "status"]
   };
+  const GTM_SC_INDUSTRY_HEADER_ALIASES = {
+    scIndustryGroup: ["scindustrygroup", "scindustry", "scgroup", "industrygroup", "industryfamily", "scindustryfamily"],
+    gtmIndustry: ["gtmindustry", "fy27gtmindustry", "industry", "fy27industry"],
+    gtmIndustrySubgroup: ["gtmindustrysubgroup", "fy27gtmindustrysubgroup", "fy27gtmindusrysubgroup", "industrysubgroup", "subgroup", "gtmsubgroup"],
+    scIndustryGroupEmoji: ["scindustrygroupemoji", "scindustryemoji", "scgroupemoji", "industrygroupemoji"],
+    gtmIndustrySubgroupEmoji: ["gtmindustrysubgroupemoji", "gtmsubgroupemoji", "subgroupemoji", "industrysubgroupemoji"]
+  };
   const DEFAULT_INDUSTRY_GROUPS = [
     "Business Services",
     "Products",
     "Health & Hospitality",
-    "Construction",
+    "Construction & Energy",
     "Consumer Services",
     "Software",
     "EPM"
@@ -53,9 +64,9 @@
     "Health and Hospitality": "Health & Hospitality",
     "Life Science": "Health & Hospitality",
     "Life Sciences": "Health & Hospitality",
-    "Construction": "Construction",
-    "Construction & Energy": "Construction",
-    "Construction and Energy": "Construction",
+    "Construction": "Construction & Energy",
+    "Construction & Energy": "Construction & Energy",
+    "Construction and Energy": "Construction & Energy",
     "Consumer Services": "Consumer Services",
     "Consumer Services/NFP": "Consumer Services",
     "Consumer Services / NFP": "Consumer Services",
@@ -221,12 +232,14 @@
   function outputFileNameForMode() {
     if (state.mappingType === PRODUCTS_SCM_MAPPING_TYPE) return PRODUCTS_SCM_OUTPUT_FILE_NAME;
     if (state.mappingType === AUTHORIZED_MANAGERS_MAPPING_TYPE) return AUTHORIZED_MANAGERS_OUTPUT_FILE_NAME;
+    if (state.mappingType === GTM_SC_INDUSTRY_MAPPING_TYPE) return GTM_SC_INDUSTRY_OUTPUT_FILE_NAME;
     return REGION_OUTPUT_FILE_NAME;
   }
 
   function updateMappingTypeUi() {
     const usesFlatWorkbook = state.mappingType === PRODUCTS_SCM_MAPPING_TYPE
-      || state.mappingType === AUTHORIZED_MANAGERS_MAPPING_TYPE;
+      || state.mappingType === AUTHORIZED_MANAGERS_MAPPING_TYPE
+      || state.mappingType === GTM_SC_INDUSTRY_MAPPING_TYPE;
     if (elements["source-description"]) {
       elements["source-description"].textContent = SOURCE_DESCRIPTIONS[state.mappingType] || SOURCE_DESCRIPTIONS[REGION_MAPPING_TYPE];
     }
@@ -286,6 +299,9 @@
       } else if (output.schema === PRODUCTS_SCM_SCHEMA && (output.counts.incompleteRows || output.counts.duplicateExactKeys)) {
         const reviewCount = output.counts.incompleteRows + output.counts.duplicateExactKeys;
         setStatus(`Review ${reviewCount} SCM relationship issue${reviewCount === 1 ? "" : "s"}`, true);
+      } else if (output.schema === GTM_SC_INDUSTRY_SCHEMA && (output.counts.incompleteRows || output.counts.duplicateMappings || output.counts.missingEmojiMappings)) {
+        const reviewCount = output.counts.incompleteRows + output.counts.duplicateMappings + output.counts.missingEmojiMappings;
+        setStatus(`Review ${reviewCount} GTM mapping issue${reviewCount === 1 ? "" : "s"}`, true);
       } else if (output.counts.unresolvedIndustryGroups) {
         setStatus(`Clarify ${output.counts.unresolvedIndustryGroups} industry label${output.counts.unresolvedIndustryGroups === 1 ? "" : "s"}`, true);
       } else {
@@ -300,6 +316,7 @@
   function buildJsonForCurrentMode(workbook, fileName) {
     if (state.mappingType === PRODUCTS_SCM_MAPPING_TYPE) return buildProductsScmJson(workbook, fileName);
     if (state.mappingType === AUTHORIZED_MANAGERS_MAPPING_TYPE) return buildAuthorizedManagersJson(workbook, fileName);
+    if (state.mappingType === GTM_SC_INDUSTRY_MAPPING_TYPE) return buildGtmScIndustryJson(workbook, fileName);
     return buildMappingJson(workbook, fileName);
   }
 
@@ -705,6 +722,146 @@
     };
   }
 
+  function buildGtmScIndustryJson(workbook, fileName) {
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const matrix = window.XLSX.utils.sheet_to_json(sheet, {
+      header: 1,
+      blankrows: false,
+      raw: false
+    });
+
+    const header = detectGtmScIndustryHeader(matrix);
+    if (!header) throw new Error("No GTM to SC Industry header row was found.");
+
+    const rows = [];
+    const incompleteRows = [];
+    const duplicateMappings = [];
+    const scIndustryGroups = new Set();
+    const gtmIndustries = new Set();
+    const gtmIndustrySubgroups = new Set();
+    const lookup = {};
+    const subgroupLookup = {};
+    const industryLookup = {};
+    const scIndustryEmojiOverrides = {};
+    const gtmSubgroupEmojiOverrides = {};
+    const missingEmojiMappings = [];
+
+    for (let rowIndex = header.rowIndex + 1; rowIndex < matrix.length; rowIndex += 1) {
+      const row = matrix[rowIndex] || [];
+      if (!row.some(cleanCell)) continue;
+
+      const rawScIndustryGroup = cleanCell(row[header.indexes.scIndustryGroup]);
+      const scIndustryGroup = resolveIndustryGroup(rawScIndustryGroup) || rawScIndustryGroup;
+      const gtmIndustry = cleanCell(row[header.indexes.gtmIndustry]);
+      const gtmIndustrySubgroup = cleanCell(row[header.indexes.gtmIndustrySubgroup]);
+      const scIndustryGroupEmoji = header.indexes.scIndustryGroupEmoji >= 0
+        ? cleanCell(row[header.indexes.scIndustryGroupEmoji])
+        : defaultScIndustryGroupEmoji(scIndustryGroup);
+      const gtmIndustrySubgroupEmoji = header.indexes.gtmIndustrySubgroupEmoji >= 0
+        ? cleanCell(row[header.indexes.gtmIndustrySubgroupEmoji])
+        : defaultGtmIndustrySubgroupEmoji(gtmIndustrySubgroup);
+      const missing = [];
+
+      if (!scIndustryGroup) missing.push("SC Industry Group");
+      if (!gtmIndustry) missing.push("GTM Industry");
+      if (!gtmIndustrySubgroup) missing.push("GTM Industry Subgroup");
+
+      if (missing.length) {
+        incompleteRows.push({
+          sourceRow: rowIndex + 1,
+          missing,
+          values: row.map(cleanCell).filter(Boolean)
+        });
+        continue;
+      }
+
+      const record = {
+        sourceRow: rowIndex + 1,
+        scIndustryGroup,
+        scIndustryGroupKey: normalizeKey(scIndustryGroup),
+        sourceScIndustryGroup: rawScIndustryGroup,
+        sourceScIndustryGroupKey: normalizeKey(rawScIndustryGroup),
+        gtmIndustry,
+        gtmIndustryKey: normalizeKey(gtmIndustry),
+        gtmIndustrySubgroup,
+        gtmIndustrySubgroupKey: normalizeKey(gtmIndustrySubgroup),
+        scIndustryGroupEmoji,
+        gtmIndustrySubgroupEmoji
+      };
+      const exactKey = `${record.gtmIndustryKey}|${record.gtmIndustrySubgroupKey}`;
+
+      if (lookup[exactKey] && lookup[exactKey].scIndustryGroupKey !== record.scIndustryGroupKey) {
+        duplicateMappings.push({
+          key: exactKey,
+          firstSourceRow: lookup[exactKey].sourceRow,
+          sourceRow: record.sourceRow,
+          gtmIndustry,
+          gtmIndustrySubgroup,
+          scIndustryGroups: uniqueSorted([lookup[exactKey].scIndustryGroup, record.scIndustryGroup])
+        });
+      }
+
+      rows.push(record);
+      lookup[exactKey] = record;
+      addLookupArrayRecord(subgroupLookup, record.gtmIndustrySubgroupKey, record);
+      addLookupArrayRecord(industryLookup, record.gtmIndustryKey, record);
+      scIndustryGroups.add(scIndustryGroup);
+      gtmIndustries.add(gtmIndustry);
+      gtmIndustrySubgroups.add(gtmIndustrySubgroup);
+
+      scIndustryEmojiOverrides[scIndustryGroup] = scIndustryGroupEmoji || "";
+      gtmSubgroupEmojiOverrides[gtmIndustrySubgroup] = gtmIndustrySubgroupEmoji || "";
+      if (!scIndustryGroupEmoji) missingEmojiMappings.push({ type: "SC Industry Group", value: scIndustryGroup, sourceRow: rowIndex + 1 });
+      if (!gtmIndustrySubgroupEmoji) missingEmojiMappings.push({ type: "GTM Industry Subgroup", value: gtmIndustrySubgroup, sourceRow: rowIndex + 1 });
+    }
+
+    if (!rows.length) throw new Error("No GTM mapping rows were generated.");
+
+    return {
+      schema: GTM_SC_INDUSTRY_SCHEMA,
+      generator: {
+        name: TOOL_NAME,
+        version: TOOL_VERSION
+      },
+      generatedAt: new Date().toISOString(),
+      source: {
+        fileName: fileName || "",
+        sheetName,
+        headerRow: header.rowIndex + 1,
+        firstDataRow: header.rowIndex + 2,
+        detectedHeaders: header.detectedHeaders
+      },
+      counts: {
+        rows: rows.length,
+        scIndustryGroups: scIndustryGroups.size,
+        gtmIndustries: gtmIndustries.size,
+        gtmIndustrySubgroups: gtmIndustrySubgroups.size,
+        incompleteRows: incompleteRows.length,
+        duplicateMappings: duplicateMappings.length,
+        missingEmojiMappings: missingEmojiMappings.length
+      },
+      scIndustryGroups: [...scIndustryGroups].sort(alphaSort),
+      gtmIndustries: [...gtmIndustries].sort(alphaSort),
+      gtmIndustrySubgroups: [...gtmIndustrySubgroups].sort(alphaSort),
+      emojiMappings: {
+        scIndustryGroups: sortObjectByKey(scIndustryEmojiOverrides),
+        gtmIndustrySubgroups: sortObjectByKey(gtmSubgroupEmojiOverrides)
+      },
+      rows: rows.sort((left, right) => alphaSort(left.scIndustryGroup, right.scIndustryGroup)
+        || alphaSort(left.gtmIndustry, right.gtmIndustry)
+        || alphaSort(left.gtmIndustrySubgroup, right.gtmIndustrySubgroup)),
+      lookup,
+      subgroupLookup,
+      industryLookup,
+      review: {
+        incompleteRows,
+        duplicateMappings,
+        missingEmojiMappings
+      }
+    };
+  }
+
   function detectMappingColumns(industryRow, modeRow, stateColumnIndex) {
     const columns = [];
     let activeIndustry = "";
@@ -882,6 +1039,65 @@
     };
   }
 
+  function detectGtmScIndustryHeader(matrix) {
+    const maxRows = Math.min(matrix.length, 15);
+    const candidates = [];
+
+    for (let rowIndex = 0; rowIndex < maxRows; rowIndex += 1) {
+      const row = matrix[rowIndex] || [];
+      const normalizedHeaders = row.map(normalizeKey);
+      const indexes = {
+        scIndustryGroup: findProductsHeaderIndex(normalizedHeaders, GTM_SC_INDUSTRY_HEADER_ALIASES.scIndustryGroup),
+        gtmIndustry: findProductsHeaderIndex(normalizedHeaders, GTM_SC_INDUSTRY_HEADER_ALIASES.gtmIndustry),
+        gtmIndustrySubgroup: findProductsHeaderIndex(normalizedHeaders, GTM_SC_INDUSTRY_HEADER_ALIASES.gtmIndustrySubgroup)
+      };
+      indexes.scIndustryGroupEmoji = findProductsHeaderIndex(normalizedHeaders, GTM_SC_INDUSTRY_HEADER_ALIASES.scIndustryGroupEmoji, {
+        exactOnly: true
+      });
+      indexes.gtmIndustrySubgroupEmoji = findProductsHeaderIndex(normalizedHeaders, GTM_SC_INDUSTRY_HEADER_ALIASES.gtmIndustrySubgroupEmoji, {
+        exactOnly: true
+      });
+      const requiredCount = ["scIndustryGroup", "gtmIndustry", "gtmIndustrySubgroup"].filter(key => indexes[key] >= 0).length;
+      const score = requiredCount * 10
+        + (indexes.scIndustryGroupEmoji >= 0 ? 1 : 0)
+        + (indexes.gtmIndustrySubgroupEmoji >= 0 ? 1 : 0);
+      if (requiredCount === 3) candidates.push({ rowIndex, row, indexes, score });
+    }
+
+    candidates.sort((left, right) => right.score - left.score || left.rowIndex - right.rowIndex);
+    const winner = candidates[0];
+    if (!winner) return null;
+
+    return {
+      rowIndex: winner.rowIndex,
+      indexes: winner.indexes,
+      detectedHeaders: Object.fromEntries(Object.entries(winner.indexes).map(([key, index]) => [
+        key,
+        productsHeaderCellInfo(winner.row, index)
+      ]))
+    };
+  }
+
+  function addLookupArrayRecord(lookup, key, record) {
+    if (!key) return;
+    if (!lookup[key]) lookup[key] = [];
+    lookup[key].push(record);
+  }
+
+  function defaultScIndustryGroupEmoji(group) {
+    const key = normalizeKey(group);
+    const entry = Object.entries(DEFAULT_EMOJI_MAPPINGS.scIndustryGroups)
+      .find(([name]) => normalizeKey(name) === key);
+    return entry ? cleanCell(entry[1]) : "";
+  }
+
+  function defaultGtmIndustrySubgroupEmoji(subgroup) {
+    const key = normalizeKey(subgroup);
+    const entry = Object.entries(DEFAULT_EMOJI_MAPPINGS.gtmIndustrySubgroups)
+      .find(([name]) => normalizeKey(name) === key);
+    return entry ? cleanCell(entry[1]) : "";
+  }
+
   function parseGroupList(value) {
     const text = cleanCell(value);
     if (!text) return [];
@@ -950,6 +1166,10 @@
     }
     if (output.schema === AUTHORIZED_MANAGERS_SCHEMA) {
       renderAuthorizedManagersOutput(output);
+      return;
+    }
+    if (output.schema === GTM_SC_INDUSTRY_SCHEMA) {
+      renderGtmScIndustryOutput(output);
       return;
     }
 
@@ -1066,6 +1286,46 @@
         (output.groupLookup[normalizeKey(group)] || []).join(", ") || "None"
       ])
     );
+  }
+
+  function renderGtmScIndustryOutput(output) {
+    elements["columns-preview-title"].textContent = "GTM to SC Industry Rows";
+    elements["spot-checks-title"].textContent = "Emoji Coverage";
+    elements["summary-text"].textContent = `${output.counts.rows.toLocaleString()} GTM mapping row${output.counts.rows === 1 ? "" : "s"} generated from ${output.source.sheetName}.`;
+
+    renderStats([
+      ["Rows", output.counts.rows],
+      ["SC Groups", output.counts.scIndustryGroups],
+      ["GTM Industries", output.counts.gtmIndustries],
+      ["GTM Subgroups", output.counts.gtmIndustrySubgroups],
+      ["Review Items", output.counts.incompleteRows + output.counts.duplicateMappings + output.counts.missingEmojiMappings]
+    ]);
+
+    elements["columns-preview"].innerHTML = renderTable(
+      ["SC Industry Group", "GTM Industry", "GTM Industry Subgroup", "SC Emoji", "Subgroup Emoji", "Source Row"],
+      output.rows.map(row => [
+        row.scIndustryGroup,
+        row.gtmIndustry,
+        row.gtmIndustrySubgroup,
+        row.scIndustryGroupEmoji || "Fallback",
+        row.gtmIndustrySubgroupEmoji || "Fallback",
+        row.sourceRow
+      ])
+    );
+
+    const missing = output.review && output.review.missingEmojiMappings || [];
+    elements["spot-checks"].innerHTML = missing.length
+      ? renderTable(
+          ["Type", "Value", "Source Row"],
+          missing.map(row => [row.type, row.value, row.sourceRow])
+        )
+      : renderTable(
+          ["SC Industry Group", "Emoji"],
+          output.scIndustryGroups.map(group => [
+            group,
+            output.emojiMappings.scIndustryGroups[group] || "Fallback"
+          ])
+        );
   }
 
   function renderStats(items) {
@@ -1223,14 +1483,22 @@
 
   function cleanIndustryConfig(config) {
     const defaultConfig = defaultIndustryConfig();
-    const groups = uniqueSorted(defaultConfig.groups.concat(config.groups || []).map(cleanCell));
+    const groups = uniqueSorted(defaultConfig.groups.concat(config.groups || []).map(value => normalizeConfiguredIndustryGroup(cleanCell(value))));
     const aliases = { ...defaultConfig.aliases };
     Object.entries(config.aliases || {}).forEach(([source, target]) => {
       const sourceValue = cleanCell(source);
-      const targetValue = cleanCell(target);
+      const targetValue = normalizeConfiguredIndustryGroup(cleanCell(target));
       if (sourceValue && targetValue) aliases[sourceValue] = targetValue;
     });
     return { groups, aliases };
+  }
+
+  function normalizeConfiguredIndustryGroup(value) {
+    const text = cleanCell(value);
+    if (!text) return "";
+    if (/^construction(?:and|&)?energy$/i.test(normalizeKey(text))) return "Construction & Energy";
+    if (normalizeKey(text) === "construction") return "Construction & Energy";
+    return text;
   }
 
   function saveIndustryConfig() {

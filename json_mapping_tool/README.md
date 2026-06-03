@@ -2,13 +2,14 @@
 
 Static browser tool for converting FY27 queue mapping Excel workbooks into JSON mapping files.
 
-Current tool version: `27.0.3`.
+Current tool version: `27.0.4`.
 
-The tool currently supports two outputs:
+The tool currently supports these outputs:
 
 - `SC_Industry_State_Region_Mapping.json`
 - `Products_SCM_Relationship_Mapping.json`
 - `Authorized_Managers.json`
+- `GTM_to_SC_Industry_Mapping.json`
 
 ## SC Industry State Region Mapping
 
@@ -76,6 +77,28 @@ The generated JSON uses schema `ns-scm-tools.authorized-managers.v1` and include
 
 If `Can Own` is missing, the tool defaults directors, AVPs, VPs, leaders, and executives to `false`; other roles default to `true`. `Can View` defaults to `true`. Missing groups are included in review because they should not become assignable until a group is supplied.
 
+## GTM to SC Industry
+
+Use the `GTM to SC Industry` mode for a workbook with these columns:
+
+- `SC Industry Group`
+- `GTM Industry`
+- `GTM Industry Subgroup`
+
+Optional columns:
+
+- `SC Industry Group Emoji`
+- `GTM Industry Subgroup Emoji`
+
+The generated JSON uses schema `ns-scm-tools.gtm-sc-industry.v1` and includes:
+
+- `rows`: one row per GTM Industry/Subgroup to SC Industry Group relationship.
+- `lookup`: exact lookup keyed as `gtmIndustryKey|gtmIndustrySubgroupKey`.
+- `subgroupLookup`: fallback lookup by GTM Industry Subgroup.
+- `industryLookup`: fallback lookup by GTM Industry.
+- `emojiMappings`: SC Industry Group and GTM Industry Subgroup emojis used by IQUEUE, with embedded fallbacks when an emoji is blank or missing.
+- `review`: incomplete, duplicate, or missing-emoji rows to inspect before uploading.
+
 ## SC Industry Group Clarification
 
 The tool keeps a configurable list of canonical SC Industry Groups in browser storage. The default groups are:
@@ -83,7 +106,7 @@ The tool keeps a configurable list of canonical SC Industry Groups in browser st
 - Business Services
 - Products
 - Health & Hospitality
-- Construction
+- Construction & Energy
 - Consumer Services
 - Software
 - EPM
