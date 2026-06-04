@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.0.16
+// @version      27.0.17
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.0.16
+   SCOUT — SC Operations Utility Tool  27.0.17
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.0.16';
+  const SCRIPT_VERSION = '27.0.17';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -846,11 +846,33 @@ html.sc-resizing #sc-skills-toggle { transition: none !important; }
 }
 /* settings card inside pinned area */
 #sc-panel-pinned #sc-settings-card {
+  position: absolute;
+  top: 68px;
+  left: 0;
+  right: 0;
+  z-index: 8;
+  max-height: calc(100vh - 76px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
   border-radius: 0;
   border-left: none;
   border-right: none;
   border-top: none;
   margin: 0;
+  box-shadow: 0 12px 24px rgba(19,33,44,0.24);
+}
+#sc-panel-pinned #sc-settings-card::-webkit-scrollbar { width: 6px; }
+#sc-panel-pinned #sc-settings-card::-webkit-scrollbar-track { background: transparent; }
+#sc-panel-pinned #sc-settings-card::-webkit-scrollbar-thumb { background: var(--sc-border); border-radius: 3px; }
+#sc-settings-card .sc-settings-save-row {
+  position: sticky;
+  bottom: -1px;
+  z-index: 1;
+  margin: 10px -14px -12px;
+  padding: 10px 14px 12px;
+  border-top: 1px solid var(--sc-border);
+  background: #f0f7fb;
 }
 /* context card inside pinned area — flush, no gap */
 #sc-panel-pinned .sc-context-card {
@@ -4235,7 +4257,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       <div id="sc-panel-pinned">
 
         <!-- Settings Card (hidden by default, shown when gear clicked) -->
-        <div class="sc-card" id="sc-settings-card" style="display:none">
+        <div class="sc-card" id="sc-settings-card" style="display:none" tabindex="-1">
           <div class="sc-card-title">⚙ SCOUT Settings</div>
           <div class="sc-field">
             <label class="sc-label">Calendar Dashboard</label>
@@ -4330,7 +4352,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               Optional no-template deliverables to show if NetSuite does not expose the full AMO deliverable list.
             </div>
           </div>
-          <div style="margin-top:8px">
+          <div class="sc-settings-save-row">
             <button class="sc-save-btn" id="sc-save-dashboard-url">Save Settings</button>
             <span class="sc-save-confirm" id="sc-save-confirm">✔ Saved!</span>
           </div>
@@ -12902,6 +12924,10 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       settingsBtn.classList.toggle('active', !isOpen);
       if (!isOpen) {
         populateSettingsForm();
+        settingsCard.scrollTop = 0;
+        setTimeout(() => {
+          try { settingsCard.focus({ preventScroll: true }); } catch (e) { /* focus optional */ }
+        }, 0);
       }
     });
 
