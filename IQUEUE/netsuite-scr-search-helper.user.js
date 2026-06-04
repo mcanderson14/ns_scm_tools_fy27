@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.7
+// @version      27.0.8
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -41,7 +41,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.7";
+  const HELPER_VERSION = "27.0.8";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -1517,6 +1517,14 @@ Health & Hospitality	DIRECT	NL	West	West
     return crossIndustryFamilyKeysForRow(row).includes(techCoeKey)
       || row.industryKey === techCoeKey
       || normalizeKey(normalizeAmoDirect(row.amoDirect)) === normalizeKey(TECH_COE_REQUEST_TYPE);
+  }
+
+  function isTechCoeTarget(target) {
+    return normalizeKey(target && target.family) === normalizeKey(TECH_COE_INDUSTRY_GROUP);
+  }
+
+  function rowRequestTypeIsTechCoe(row) {
+    return normalizeKey(normalizeAmoDirect(row && row.amoDirect)) === normalizeKey(TECH_COE_REQUEST_TYPE);
   }
 
   function isOtherUnmappedIndustry(value) {
@@ -8923,6 +8931,17 @@ Health & Hospitality	DIRECT	NL	West	West
     if (!row || !tag) return;
 
     const target = CROSS_INDUSTRY_TARGETS.find(item => item.tag === tag);
+    if (isTechCoeTarget(target) && !rowRequestTypeIsTechCoe(row)) {
+      const actualType = requestTypeLabel(row.amoDirect) || normalizeSpaces(row.amoDirect) || "Not found";
+      row.routingNotice = {
+        message: `Tech COE route not saved. Request Type must be ${TECH_COE_REQUEST_TYPE}; current Request Type is ${actualType}. Open Staff SCR and update the request type first.`,
+        state: "error",
+        links: editUrlForRow(row) ? [{ label: "Staff SCR", href: editUrlForRow(row) }] : []
+      };
+      setStaffingNotesStatus(card, `Request Type must be ${TECH_COE_REQUEST_TYPE} before Tech COE routing.`, "error");
+      renderResults();
+      return;
+    }
     const assignment = await showCrossIndustryAssignmentDialog(row, target);
     if (!assignment) return;
 
