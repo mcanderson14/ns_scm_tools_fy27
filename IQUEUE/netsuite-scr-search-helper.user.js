@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.5
+// @version      27.0.6
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -41,7 +41,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.5";
+  const HELPER_VERSION = "27.0.6";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -5268,6 +5268,9 @@ Health & Hospitality	DIRECT	NL	West	West
       const style = branding
         ? `style="--xvr-color: ${escapeHtml(branding.color)}; --xvr-bg: ${escapeHtml(branding.soft)};"`
         : "";
+      const label = target.label
+        ? `${branding && branding.emoji ? `${branding.emoji} ` : ""}${target.label}`
+        : industryOptionLabel(target.family);
       return `
         <button
           type="button"
@@ -5277,7 +5280,7 @@ Health & Hospitality	DIRECT	NL	West	West
           title="${escapeHtml(target.title || `Mark this SCR for ${target.family} queue visibility`)}"
           ${style}
           ${disabled}
-        >${escapeHtml(target.label || industryOptionLabel(target.family))}</button>
+        >${escapeHtml(label)}</button>
       `;
     }).join("");
 
@@ -5521,6 +5524,7 @@ Health & Hospitality	DIRECT	NL	West	West
       industry: document.getElementById("scr-helper-industry-filter"),
       gtmIndustry: document.getElementById("scr-helper-gtm-industry-filter"),
       industrySubgroup: document.getElementById("scr-helper-industry-subgroup-filter"),
+      gtmCriteria: document.getElementById("scr-helper-gtm-criteria-values"),
       salesRegion: document.getElementById("scr-helper-sales-region-filter"),
       salesVertical: document.getElementById("scr-helper-sales-vertical-filter"),
       staffingRegion: document.getElementById("scr-helper-staffing-region-filter"),
@@ -5552,8 +5556,7 @@ Health & Hospitality	DIRECT	NL	West	West
 
   function rowMatchesFilters(row, controls) {
     const industry = controls.industry.value;
-    const gtmIndustry = controls.gtmIndustry.value;
-    const industrySubgroup = controls.industrySubgroup.value;
+    const gtmCriteria = controls.gtmCriteria ? selectedGtmCriteria() : [];
     const salesRegion = controls.salesRegion.value;
     const salesVertical = controls.salesVertical.value;
     const staffingRegions = controls.staffingRegions
@@ -5568,8 +5571,6 @@ Health & Hospitality	DIRECT	NL	West	West
     const slaHotlist = controls.slaHotlist && controls.slaHotlist.checked;
     const text = normalizeSpaces(controls.text.value).toLowerCase();
     const industryKey = normalizeKey(industry);
-    const gtmIndustryKey = normalizeKey(gtmIndustry);
-    const industrySubgroupKey = normalizeKey(industrySubgroup);
     const salesRegionKey = normalizeKey(salesRegion);
     const salesVerticalKey = normalizeKey(salesVertical);
     const staffingRegionKeys = staffingRegions.map(normalizeKey).filter(Boolean);
@@ -5578,8 +5579,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const peopleFiltersActive = PEOPLE_FILTERS.some(filter => selectedPeopleFilterValues(filter.key).length);
     const hasNonAssignedFilters = Boolean(
       industry
-      || gtmIndustry
-      || industrySubgroup
+      || gtmCriteria.length
       || salesRegion
       || salesVertical
       || staffingRegionKeys.length
@@ -5599,8 +5599,7 @@ Health & Hospitality	DIRECT	NL	West	West
       if (unmappedOnly && !isUnmappedReviewRow(row)) return false;
       if (slaHotlist && !rowSlaInfo(row).passed) return false;
       if (industry && !rowMatchesIndustryFamily(row, industryKey)) return false;
-      if (gtmIndustry && !isUnmappedReviewRow(row) && row.gtmIndustryKey !== gtmIndustryKey) return false;
-      if (industrySubgroup && !isUnmappedReviewRow(row) && row.gtmIndustrySubgroupKey !== industrySubgroupKey) return false;
+      if (!rowMatchesGtmCriteria(row, gtmCriteria)) return false;
       if (salesRegion && !isUnmappedReviewRow(row) && normalizeKey(canonicalSalesRegion(row.originalSalesRegion) || row.mappedSalesRegion) !== salesRegionKey) return false;
       if (salesVertical && normalizeKey(row.salesVertical) !== salesVerticalKey) return false;
       if (!rowMatchesPeopleFilters(row)) return false;
@@ -5770,8 +5769,15 @@ Health & Hospitality	DIRECT	NL	West	West
     };
 
     add("SC Industry Group", controls.industry.value, industryOptionLabel(controls.industry.value), { removeType: "select", removeKey: "industry" });
-    add("FY27 GTM Industry", controls.gtmIndustry.value, controls.gtmIndustry.value, { removeType: "select", removeKey: "gtmIndustry" });
-    add("FY27 GTM Industry Subgroup", controls.industrySubgroup.value, gtmSubgroupOptionLabel(controls.industrySubgroup.value), { removeType: "select", removeKey: "industrySubgroup" });
+    if (controls.gtmCriteria) {
+      selectedGtmCriteria().forEach(criterion => {
+        add("FY27 GTM", gtmCriterionLabel(criterion), gtmCriterionLabel(criterion), {
+          removeType: "gtmCriteria",
+          groupKey: "gtmCriteria",
+          removeValue: gtmCriterionKey(criterion)
+        });
+      });
+    }
     add("Sales Region", controls.salesRegion.value, controls.salesRegion.value, { removeType: "select", removeKey: "salesRegion" });
     add("Sales Vertical", controls.salesVertical.value, controls.salesVertical.value, { removeType: "select", removeKey: "salesVertical" });
     if (controls.staffingRegions) {
@@ -5842,7 +5848,7 @@ Health & Hospitality	DIRECT	NL	West	West
         <span class="scr-helper-filter-chip${item.removable ? " is-removable" : ""}">
           <span>${escapeHtml(item.label)}</span>
           <strong>${escapeHtml(item.value)}</strong>
-          ${item.removable ? `<button type="button" class="scr-helper-filter-chip-remove" data-filter-remove="${escapeHtml(item.removeType)}" data-filter-key="${escapeHtml(item.removeKey || "")}" data-filter-value="${escapeHtml(item.value)}" aria-label="Remove ${escapeHtml(item.value)}">×</button>` : ""}
+          ${item.removable ? `<button type="button" class="scr-helper-filter-chip-remove" data-filter-remove="${escapeHtml(item.removeType)}" data-filter-key="${escapeHtml(item.removeKey || "")}" data-filter-value="${escapeHtml(item.removeValue || item.value)}" aria-label="Remove ${escapeHtml(item.value)}">×</button>` : ""}
         </span>
         ${closesGroup(item, index) ? `<span class="scr-helper-filter-paren" aria-hidden="true">)</span>` : ""}
       `).join("");
@@ -5892,13 +5898,13 @@ Health & Hospitality	DIRECT	NL	West	West
       removeStaffingRegionFilter(value);
       return;
     }
+    if (type === "gtmCriteria") {
+      removeGtmCriterionFilter(value);
+      return;
+    }
 
     if (type === "select" && controls[key]) {
       controls[key].value = "";
-      if (key === "gtmIndustry") {
-        controls.industrySubgroup.value = "";
-        updateIndustrySubgroupFilterOptions();
-      }
     } else if (type === "checkbox" && controls[key]) {
       controls[key].checked = false;
     } else if (type === "text" && controls[key]) {
@@ -5925,8 +5931,10 @@ Health & Hospitality	DIRECT	NL	West	West
   function getFilterState(controls = getControls()) {
     return {
       industry: controls.industry ? controls.industry.value : "",
-      gtmIndustry: controls.gtmIndustry ? controls.gtmIndustry.value : "",
-      industrySubgroup: controls.industrySubgroup ? controls.industrySubgroup.value : "",
+      gtmCriteria: controls.gtmCriteria ? selectedGtmCriteria().map(criterion => ({
+        industry: criterion.industry,
+        subgroup: criterion.subgroup
+      })) : [],
       salesRegion: controls.salesRegion ? controls.salesRegion.value : "",
       salesVertical: controls.salesVertical ? controls.salesVertical.value : "",
       peopleFilters: selectedPeopleFilterMap(),
@@ -7319,6 +7327,113 @@ Health & Hospitality	DIRECT	NL	West	West
     return control ? staffingRegionValuesFromString(control.value) : [];
   }
 
+  function normalizeGtmCriterion(value) {
+    const record = value && typeof value === "object" ? value : {};
+    const industry = normalizeSpaces(record.industry || record.gtmIndustry || "");
+    const subgroup = normalizeSpaces(record.subgroup || record.industrySubgroup || record.gtmIndustrySubgroup || "");
+    if (!industry) return null;
+    return {
+      industry,
+      industryKey: normalizeKey(industry),
+      subgroup,
+      subgroupKey: normalizeKey(subgroup)
+    };
+  }
+
+  function gtmCriteriaValuesFromString(value) {
+    const raw = normalizeSpaces(value);
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return uniqueGtmCriteria(parsed.map(normalizeGtmCriterion).filter(Boolean));
+      }
+    } catch (error) {
+      // Older saved states did not store multi-select GTM criteria.
+    }
+    return [];
+  }
+
+  function gtmCriterionKey(criterion) {
+    const normalized = normalizeGtmCriterion(criterion);
+    return normalized ? `${normalized.industryKey}|${normalized.subgroupKey}` : "";
+  }
+
+  function gtmCriterionLabel(criterion) {
+    const normalized = normalizeGtmCriterion(criterion);
+    if (!normalized) return "";
+    return normalized.subgroup ? `${normalized.industry} - ${normalized.subgroup}` : normalized.industry;
+  }
+
+  function uniqueGtmCriteria(criteria) {
+    const seen = new Set();
+    const next = [];
+    (criteria || []).forEach(criterion => {
+      const normalized = normalizeGtmCriterion(criterion);
+      const key = gtmCriterionKey(normalized);
+      if (!normalized || !key || seen.has(key)) return;
+      seen.add(key);
+      next.push(normalized);
+    });
+    return next.sort((left, right) => gtmCriterionLabel(left).localeCompare(gtmCriterionLabel(right)));
+  }
+
+  function selectedGtmCriteria() {
+    const control = document.getElementById("scr-helper-gtm-criteria-values");
+    return control ? gtmCriteriaValuesFromString(control.value) : [];
+  }
+
+  function renderGtmCriteriaFilters(criteria) {
+    const control = document.getElementById("scr-helper-gtm-criteria-values");
+    const values = uniqueGtmCriteria(Array.isArray(criteria) ? criteria : []);
+    if (control) {
+      control.value = values.length
+        ? JSON.stringify(values.map(criterion => ({
+          industry: criterion.industry,
+          subgroup: criterion.subgroup
+        })))
+        : "";
+    }
+  }
+
+  function addGtmCriterionFilter() {
+    const industrySelect = document.getElementById("scr-helper-gtm-industry-filter");
+    const subgroupSelect = document.getElementById("scr-helper-industry-subgroup-filter");
+    const industry = normalizeSpaces(industrySelect && industrySelect.value);
+    const subgroup = normalizeSpaces(subgroupSelect && subgroupSelect.value);
+    if (!industry) return;
+
+    renderGtmCriteriaFilters(selectedGtmCriteria().concat([{ industry, subgroup }]));
+    if (industrySelect) industrySelect.value = "";
+    if (subgroupSelect) subgroupSelect.value = "";
+    updateIndustrySubgroupFilterOptions();
+    updateGtmAddFilterButtonState();
+    saveHelperState();
+    updateFilterSummary();
+    renderResults();
+  }
+
+  function removeGtmCriterionFilter(value = "") {
+    const key = normalizeSpaces(value);
+    const normalizedKey = normalizeKey(key);
+    const nextCriteria = selectedGtmCriteria().filter(criterion => (
+      gtmCriterionKey(criterion) !== key && normalizeKey(gtmCriterionLabel(criterion)) !== normalizedKey
+    ));
+    renderGtmCriteriaFilters(nextCriteria);
+    saveHelperState();
+    updateFilterSummary();
+    renderResults();
+  }
+
+  function rowMatchesGtmCriteria(row, criteria) {
+    const active = uniqueGtmCriteria(criteria);
+    if (!active.length || isUnmappedReviewRow(row)) return true;
+    return active.some(criterion => (
+      row.gtmIndustryKey === criterion.industryKey
+      && (!criterion.subgroupKey || row.gtmIndustrySubgroupKey === criterion.subgroupKey)
+    ));
+  }
+
   function closestStaffingRegionOption(value) {
     const text = normalizeSpaces(value);
     if (!text) return "";
@@ -7517,6 +7632,17 @@ Health & Hospitality	DIRECT	NL	West	West
     return true;
   }
 
+  function legacyGtmCriteriaFromFilters(filters = {}) {
+    if (Array.isArray(filters.gtmCriteria)) return filters.gtmCriteria;
+    if (filters.gtmIndustry) {
+      return [{
+        industry: filters.gtmIndustry,
+        subgroup: filters.industrySubgroup || ""
+      }];
+    }
+    return [];
+  }
+
   function restoreStoredFilters(options = {}) {
     const filters = helperState.filters || {};
     const controls = getControls();
@@ -7539,9 +7665,10 @@ Health & Hospitality	DIRECT	NL	West	West
     }
 
     if (options.includeDynamic) {
-      const restoredGtmIndustry = setSelectValue(controls.gtmIndustry, filters.gtmIndustry);
-      if (restoredGtmIndustry || !filters.gtmIndustry) updateIndustrySubgroupFilterOptions();
-      setSelectValue(controls.industrySubgroup, filters.industrySubgroup);
+      renderGtmCriteriaFilters(legacyGtmCriteriaFromFilters(filters));
+      if (controls.gtmIndustry) controls.gtmIndustry.value = "";
+      updateIndustrySubgroupFilterOptions();
+      if (controls.industrySubgroup) controls.industrySubgroup.value = "";
       setSelectValue(controls.salesVertical, filters.salesVertical);
       PEOPLE_FILTERS.forEach(filter => {
         const savedValues = filters.peopleFilters && filters.peopleFilters[filter.key];
@@ -7723,7 +7850,7 @@ Health & Hospitality	DIRECT	NL	West	West
 
     const selected = control.value;
     const options = uniqueSorted(searchRows.map(row => row.gtmIndustry));
-    control.innerHTML = optionHtml(options, "All FY27 GTM industries");
+    control.innerHTML = optionHtml(options, "Choose GTM industry");
     if (selected && options.some(option => normalizeKey(option) === normalizeKey(selected))) {
       control.value = selected;
     }
@@ -7781,10 +7908,22 @@ Health & Hospitality	DIRECT	NL	West	West
         ? searchRows.filter(row => row.gtmIndustryKey === selectedGtmIndustryKey)
         : searchRows;
     const options = uniqueSorted(sourceRows.map(row => row.gtmIndustrySubgroup));
-    control.innerHTML = optionHtml(options, "All FY27 GTM subgroups", gtmSubgroupOptionLabel);
+    control.innerHTML = optionHtml(options, "Optional subgroup", gtmSubgroupOptionLabel);
     if (selected && options.some(option => normalizeKey(option) === normalizeKey(selected))) {
       control.value = selected;
     }
+    updateGtmAddFilterButtonState();
+  }
+
+  function updateGtmAddFilterButtonState() {
+    const button = document.getElementById("scr-helper-add-gtm-filter");
+    const industrySelect = document.getElementById("scr-helper-gtm-industry-filter");
+    if (!button) return;
+    const hasIndustry = Boolean(normalizeSpaces(industrySelect && industrySelect.value));
+    button.disabled = !hasIndustry;
+    button.title = hasIndustry
+      ? "Add selected GTM industry criteria to the active filters"
+      : "Choose a FY27 GTM Industry first";
   }
 
   function applyRequestPresentation(rows) {
@@ -8998,14 +9137,18 @@ Health & Hospitality	DIRECT	NL	West	West
               <select id="scr-helper-amo-direct-filter">${optionHtml(amoDirectOptions, "All requests")}</select>
             </label>
           </div>
-          <label>
-            <span>FY27 GTM Industry</span>
-            <select id="scr-helper-gtm-industry-filter">${optionHtml([], "All FY27 GTM industries")}</select>
-          </label>
-          <label>
-            <span>FY27 GTM Industry Subgroup</span>
-            <select id="scr-helper-industry-subgroup-filter">${optionHtml([], "All FY27 GTM subgroups")}</select>
-          </label>
+          <div class="scr-helper-gtm-filter-row">
+            <label>
+              <span>FY27 GTM Industry</span>
+              <select id="scr-helper-gtm-industry-filter">${optionHtml([], "Choose GTM industry")}</select>
+            </label>
+            <label>
+              <span>FY27 GTM Industry Subgroup</span>
+              <select id="scr-helper-industry-subgroup-filter">${optionHtml([], "Optional subgroup")}</select>
+            </label>
+            <input id="scr-helper-gtm-criteria-values" type="hidden" value="">
+            <button type="button" id="scr-helper-add-gtm-filter" class="scr-helper-add-filter-button" title="Choose a FY27 GTM Industry first" disabled>Add to Filter</button>
+          </div>
           <label>
             <span>Sales Region</span>
             <select id="scr-helper-sales-region-filter">${optionHtml(salesRegionOptions, "All sales regions")}</select>
@@ -9092,10 +9235,10 @@ Health & Hospitality	DIRECT	NL	West	West
     controls.gtmIndustry.addEventListener("change", () => {
       controls.industrySubgroup.value = "";
       updateIndustrySubgroupFilterOptions();
-      saveHelperState();
-      renderResults();
     });
-    [controls.industrySubgroup, controls.salesRegion, controls.salesVertical, controls.amoDirect, controls.productsScmOwnerMe, controls.assignedToMe, controls.unmappedOnly, controls.slaHotlist].forEach(control => {
+    const addGtmButton = document.getElementById("scr-helper-add-gtm-filter");
+    if (addGtmButton) addGtmButton.addEventListener("click", addGtmCriterionFilter);
+    [controls.salesRegion, controls.salesVertical, controls.amoDirect, controls.productsScmOwnerMe, controls.assignedToMe, controls.unmappedOnly, controls.slaHotlist].forEach(control => {
       if (control) control.addEventListener("change", handleFilterChange);
     });
     if (controls.staffingRegion) {
@@ -9895,6 +10038,7 @@ Health & Hospitality	DIRECT	NL	West	West
       }
 
       #${HELPER_ID} .scr-helper-routing-filter-row,
+      #${HELPER_ID} .scr-helper-gtm-filter-row,
       #${HELPER_ID} .scr-helper-checkbox-filter-row,
       #${HELPER_ID} .scr-helper-products-scm-filter-row,
       #${HELPER_ID} .scr-helper-people-filter-row {
@@ -9902,6 +10046,35 @@ Health & Hospitality	DIRECT	NL	West	West
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 8px;
+      }
+
+      #${HELPER_ID} .scr-helper-gtm-filter-row {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+        align-items: end;
+      }
+
+      #${HELPER_ID} .scr-helper-add-filter-button {
+        min-height: 30px;
+        border: 1px solid var(--ns-ui-primary);
+        border-radius: 4px;
+        padding: 5px 10px;
+        background: var(--ns-ui-primary);
+        color: #ffffff;
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: 800;
+        white-space: nowrap;
+      }
+
+      #${HELPER_ID} .scr-helper-add-filter-button:hover {
+        background: #24495a;
+      }
+
+      #${HELPER_ID} .scr-helper-add-filter-button:disabled {
+        border-color: var(--rw-slate-50);
+        background: var(--rw-slate-50);
+        color: var(--rw-slate-100);
+        cursor: not-allowed;
       }
 
       #${HELPER_ID} .scr-helper-products-scm-filter-row {
@@ -10743,6 +10916,7 @@ Health & Hospitality	DIRECT	NL	West	West
 
         #${HELPER_ID} .scr-helper-filters,
         #${HELPER_ID} .scr-helper-routing-filter-row,
+        #${HELPER_ID} .scr-helper-gtm-filter-row,
         #${HELPER_ID} .scr-helper-checkbox-filter-row,
         #${HELPER_ID} .scr-helper-products-scm-filter-row,
         #${HELPER_ID} .scr-helper-people-filter-row,
