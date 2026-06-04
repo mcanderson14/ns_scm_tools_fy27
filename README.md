@@ -2,7 +2,7 @@
 
 Static browser tool for converting FY27 queue mapping Excel workbooks into JSON mapping files.
 
-Current tool version: `27.0.6`.
+Current tool version: `27.0.7`.
 
 The tool currently supports these outputs:
 
@@ -62,7 +62,7 @@ Recommended columns:
 - `Name` or `Manager`
 - `Email`
 - `Role` or `Title`
-- `SC Industry Group`, `Sales Vertical`, or `Groups`
+- `SC Industry Group`, `SC Industry`, `Sales Vertical`, or `Groups`
 - `Can Own`
 - `Can View`
 - `Active`
@@ -74,6 +74,8 @@ The generated JSON uses schema `ns-scm-tools.authorized-managers.v1` and include
 - `canViewManagers`: active managers/directors allowed to view SCM queue controls.
 - `groupLookup`: assignable managers by SC Industry Group.
 - `review`: incomplete, duplicate, or missing-group rows to inspect before uploading.
+
+Multiple group-like columns are merged. For example, `SC Industry` and `Sales Vertical` can both be present. `PBCS` is normalized to `EPM`.
 
 If `Can Own` is missing, the tool defaults directors, AVPs, VPs, leaders, and executives to `false`; other roles default to `true`. `Can View` defaults to `true`. Missing groups are included in review because they should not become assignable until a group is supplied.
 

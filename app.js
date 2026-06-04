@@ -5,7 +5,7 @@
   const PRODUCTS_SCM_SCHEMA = "ns-scm-tools.scm-relationships.v3";
   const AUTHORIZED_MANAGERS_SCHEMA = "ns-scm-tools.authorized-managers.v1";
   const GTM_SC_INDUSTRY_SCHEMA = "ns-scm-tools.gtm-sc-industry.v1";
-  const TOOL_VERSION = "27.0.6";
+  const TOOL_VERSION = "27.0.7";
   const TOOL_NAME = "FY27 Queue Mapping JSON Maker";
   const CONFIG_STORAGE_KEY = "ns-scm-tools-region-map-industry-config-v1";
   const EMOJI_CONFIG_STORAGE_KEY = "ns-scm-tools-emoji-config-v1";
@@ -21,7 +21,7 @@
   const SOURCE_DESCRIPTIONS = {
     [REGION_MAPPING_TYPE]: "Use an Excel workbook where row 1 contains SC industry groups, row 2 contains Direct/AMO, and column A contains state/province codes.",
     [PRODUCTS_SCM_MAPPING_TYPE]: "Use an Excel workbook with columns for Sales Region, AMO/Direct, Regional Director or RSM, SCM owner, and optional SCM Director. SCM ownership applies across SC Industry Groups.",
-    [AUTHORIZED_MANAGERS_MAPPING_TYPE]: "Use an Excel export from NetSuite saved search 1319617. Expected columns include Manager/Name, Email, Role, SC Industry Group(s), Can Own, Can View, and Active.",
+    [AUTHORIZED_MANAGERS_MAPPING_TYPE]: "Use an Excel export from NetSuite saved search 1319617. Expected columns include Manager/Name, Email, Role, SC Industry/Group, Sales Vertical, Can Own, Can View, and Active.",
     [GTM_SC_INDUSTRY_MAPPING_TYPE]: "Use an Excel workbook with columns for SC Industry Group, GTM Industry, and GTM Industry Subgroup. Optional emoji columns can override default display icons."
   };
   const PRODUCTS_SCM_HEADER_ALIASES = {
@@ -35,7 +35,7 @@
     name: ["name", "manager", "scm", "scmanager", "solutionconsultingmanager", "authorizedmanager", "employee", "employeename", "owner", "queueowner"],
     email: ["email", "emailaddress", "workemail", "employeeemail"],
     role: ["role", "title", "jobtitle", "managerrole", "type"],
-    groups: ["scindustrygroup", "scindustrygroups", "industrygroup", "industrygroups", "industryfamily", "industryfamilies", "groups", "scgroups", "queuegroups", "salesvertical", "salesverticals", "vertical", "verticals"],
+    groups: ["scindustry", "scindustries", "scindustrygroup", "scindustrygroups", "industrygroup", "industrygroups", "industryfamily", "industryfamilies", "groups", "scgroups", "queuegroups", "salesvertical", "salesverticals", "vertical", "verticals"],
     canOwn: ["canown", "ownereligible", "assignable", "canbeassigned", "assignowner", "ownscr", "queueowner"],
     canView: ["canview", "viewer", "viewqueue", "canviewqueue", "queueviewer", "view"],
     active: ["active", "isinactive", "inactive", "status"]
@@ -74,6 +74,7 @@
     "Consumer Services / NFP": "Consumer Services",
     "EPM": "EPM",
     "Enterprise Performance Management": "EPM",
+    "PBCS": "EPM",
     "TCOE": "Tech COE",
     "Tech COE": "Tech COE",
     "Technology COE": "Tech COE",
@@ -626,7 +627,7 @@
       const name = cleanPersonName(row[header.indexes.name]);
       const email = cleanEmail(row[header.indexes.email]);
       const role = cleanCell(row[header.indexes.role]);
-      const groups = parseGroupList(row[header.indexes.groups]);
+      const groups = parseGroupList(header.indexes.groups.map(index => row[index]));
       const active = parseBooleanCell(row[header.indexes.active], true, { inactiveMeansFalse: true });
       const canOwn = parseBooleanCell(row[header.indexes.canOwn], defaultCanOwnForRole(role));
       const canView = parseBooleanCell(row[header.indexes.canView], true);
@@ -962,6 +963,21 @@
     }));
   }
 
+  function findProductsHeaderIndexes(normalizedHeaders, aliases, options = {}) {
+    const excluded = new Set((options.exclude || []).filter(index => index >= 0));
+    const indexes = [];
+    normalizedHeaders.forEach((header, index) => {
+      if (excluded.has(index) || !header) return;
+      const exact = aliases.includes(header);
+      const loose = !options.exactOnly && aliases.some(alias => {
+        if (alias.length <= 4) return header === alias;
+        return header.includes(alias) || alias.includes(header);
+      });
+      if (exact || loose) indexes.push(index);
+    });
+    return indexes;
+  }
+
   function productsHeaderCellInfo(row, index) {
     return {
       column: index >= 0 ? indexToColumnName(index) : "",
@@ -1030,7 +1046,7 @@
         name: findProductsHeaderIndex(normalizedHeaders, AUTHORIZED_MANAGER_HEADER_ALIASES.name),
         email: findProductsHeaderIndex(normalizedHeaders, AUTHORIZED_MANAGER_HEADER_ALIASES.email),
         role: findProductsHeaderIndex(normalizedHeaders, AUTHORIZED_MANAGER_HEADER_ALIASES.role),
-        groups: findProductsHeaderIndex(normalizedHeaders, AUTHORIZED_MANAGER_HEADER_ALIASES.groups),
+        groups: findProductsHeaderIndexes(normalizedHeaders, AUTHORIZED_MANAGER_HEADER_ALIASES.groups),
         canOwn: findProductsHeaderIndex(normalizedHeaders, AUTHORIZED_MANAGER_HEADER_ALIASES.canOwn),
         canView: findProductsHeaderIndex(normalizedHeaders, AUTHORIZED_MANAGER_HEADER_ALIASES.canView),
         active: findProductsHeaderIndex(normalizedHeaders, AUTHORIZED_MANAGER_HEADER_ALIASES.active)
@@ -1039,7 +1055,7 @@
       const score = requiredCount * 10
         + (indexes.email >= 0 ? 2 : 0)
         + (indexes.role >= 0 ? 2 : 0)
-        + (indexes.groups >= 0 ? 3 : 0)
+        + (indexes.groups.length ? 3 : 0)
         + (indexes.canOwn >= 0 ? 1 : 0)
         + (indexes.canView >= 0 ? 1 : 0)
         + (indexes.active >= 0 ? 1 : 0);
@@ -1055,7 +1071,9 @@
       indexes: winner.indexes,
       detectedHeaders: Object.fromEntries(Object.entries(winner.indexes).map(([key, index]) => [
         key,
-        productsHeaderCellInfo(winner.row, index)
+        Array.isArray(index)
+          ? index.map(item => productsHeaderCellInfo(winner.row, item))
+          : productsHeaderCellInfo(winner.row, index)
       ]))
     };
   }
@@ -1156,6 +1174,9 @@
   }
 
   function parseGroupList(value) {
+    if (Array.isArray(value)) {
+      return uniqueSorted(value.flatMap(parseGroupList));
+    }
     const text = cleanCell(value);
     if (!text) return [];
     return uniqueSorted(
