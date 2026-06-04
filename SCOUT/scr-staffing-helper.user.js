@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.0.15
+// @version      27.0.16
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.0.15
+   SCOUT — SC Operations Utility Tool  27.0.16
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.0.15';
+  const SCRIPT_VERSION = '27.0.16';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -4868,6 +4868,50 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     } catch (e) { /* best effort */ }
   }
 
+  function releaseActiveNetSuiteFieldFocus() {
+    const dateFieldIds = [
+      SCR_FIELD_DATE_NEEDED,
+      SCR_FIELD_DATE_SC_NEEDED,
+      ...SCR_FIELD_MEETING_DATE_CANDIDATES,
+    ].filter(Boolean);
+
+    try {
+      getAccessibleDocuments().forEach(doc => {
+        try {
+          const active = doc.activeElement;
+          if (active && active !== doc.body && typeof active.blur === 'function') {
+            dispatchFieldEvents(active);
+            active.blur();
+          }
+        } catch (e) { /* keep releasing other frames */ }
+      });
+    } catch (e) { /* best effort */ }
+
+    dateFieldIds.forEach(fieldId => {
+      try {
+        findFieldControls(fieldId).forEach(el => {
+          dispatchFieldEvents(el);
+          if (el && typeof el.blur === 'function') el.blur();
+        });
+      } catch (e) { /* best effort */ }
+    });
+
+    try {
+      const body = document.body;
+      if (body && typeof body.focus === 'function') {
+        if (!body.hasAttribute('tabindex')) body.setAttribute('tabindex', '-1');
+        body.focus({ preventScroll: true });
+      }
+    } catch (e) { /* body focus is optional */ }
+  }
+
+  function scheduleNetSuiteFieldFocusRelease() {
+    releaseActiveNetSuiteFieldFocus();
+    [150, 700].forEach(delay => {
+      setTimeout(releaseActiveNetSuiteFieldFocus, delay);
+    });
+  }
+
   function setFieldValueWithSyncSourcing(fieldId, value) {
     let wrote = false;
     try {
@@ -5020,6 +5064,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   }
 
   function saveNetSuiteForm() {
+    releaseActiveNetSuiteFieldFocus();
     const selectors = [
       '#submitter',
       '#btn_multibutton_submitter',
@@ -5033,6 +5078,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       for (const selector of selectors) {
         const btn = doc.querySelector(selector);
         if (btn) {
+          releaseActiveNetSuiteFieldFocus();
           btn.click();
           return true;
         }
@@ -5543,6 +5589,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     setStaffingPopupNotes(notes);
     appendEngagementNotesTemplate(empName);
     syncProductIdsToForm(productIds, true, { submitRecord: true });
+    scheduleNetSuiteFieldFocusRelease();
   }
 
   function applyAmoStaffing(scId, scName, empName, hasLeadOnOpp, notes, deliverableOverride, productIds, assignAsLead, requestDetailsNote) {
@@ -5562,6 +5609,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     appendEngagementNotesTemplate(empName);
     if (deliverable && isValidAmoDeliverableName(deliverable)) syncDeliverableToForm(deliverable);
     syncProductIdsToForm(productIds, true, { submitRecord: true });
+    scheduleNetSuiteFieldFocusRelease();
     return deliverable;
   }
 
@@ -5570,6 +5618,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     setAssignee(meId);
     setScoutHashtag();
     setStaffingPopupNotes(notes);
+    scheduleNetSuiteFieldFocusRelease();
   }
 
   function applyCancelRequest(empName, notes) {
@@ -5580,6 +5629,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     setStaffingPopupNotes(notes);
     try { nlapiSetFieldValue('custrecord_screq_engmnt_status', 5, true); } catch (_) {}
     nlapiSetFieldValue('custrecord_screq_assigned_lead', 'F', true);
+    scheduleNetSuiteFieldFocusRelease();
   }
 
   function resumePendingStaffAction() {
@@ -5621,7 +5671,8 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       showToast(`✔ Applied ${actionLabel}; saving record…`, 'success', 5000);
       setTimeout(function () {
         triggerNetSuiteFieldEvents(SCR_FIELD_ASSIGNEE);
-        saveNetSuiteForm();
+        releaseActiveNetSuiteFieldFocus();
+        setTimeout(saveNetSuiteForm, 250);
       }, PENDING_STAFFING_SAVE_DELAY_MS);
     } catch (e) {
       console.error('[Staffing Helper] Pending staffing action failed:', e);
