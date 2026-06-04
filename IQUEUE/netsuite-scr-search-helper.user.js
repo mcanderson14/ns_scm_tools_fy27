@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.6
+// @version      27.0.7
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -41,7 +41,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.6";
+  const HELPER_VERSION = "27.0.7";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -220,6 +220,7 @@
     "Consumer Services": "Consumer Services",
     "Enterprise Performance Management": "EPM",
     "EPM": "EPM",
+    "PBCS": "EPM",
     "Tech COE": "Tech COE",
     "Technology COE": "Tech COE",
     "TCOE": "Tech COE",
@@ -3175,7 +3176,7 @@ Health & Hospitality	DIRECT	NL	West	West
     name: ["manager", "name", "scm", "scmanager", "salesconsultantmanager", "authorizedmanager"],
     email: ["email", "emailaddress", "workemail", "oracleemailaddress", "oracleemail"],
     role: ["role", "title", "jobtitle"],
-    groups: ["scindustrygroup", "scindustrygroups", "scstaffingindustry", "scstaffingindustries", "industrygroup", "industrygroups", "salesvertical", "salesverticals", "vertical", "verticals", "group", "groups"],
+    groups: ["scindustry", "scindustries", "scindustrygroup", "scindustrygroups", "scstaffingindustry", "scstaffingindustries", "industrygroup", "industrygroups", "salesvertical", "salesverticals", "vertical", "verticals", "group", "groups"],
     canOwn: ["canown", "owner", "canownscr", "canbescmowner"],
     canView: ["canview", "viewer", "canviewqueue", "canviewscmqueue"],
     active: ["active", "inactive", "status", "enabled"]
@@ -3187,7 +3188,10 @@ Health & Hospitality	DIRECT	NL	West	West
     if (aliases.includes(normalized)) return true;
     if (key === "name") return normalized.includes("manager") && !normalized.includes("email");
     if (key === "groups") return (normalized.includes("industry") && normalized.includes("group"))
+      || normalized === "scindustry"
+      || normalized === "scindustries"
       || (normalized.includes("staffing") && normalized.includes("industry"))
+      || normalized.includes("salesvertical")
       || normalized === "vertical"
       || normalized === "verticals";
     if (key === "canOwn") return normalized.includes("can") && normalized.includes("own");
@@ -3204,6 +3208,18 @@ Health & Hospitality	DIRECT	NL	West	West
     return headers.findIndex(header => authorizedManagerHeaderMatches(header, key));
   }
 
+  function authorizedManagerHeaderIndexes(headers, key) {
+    return headers
+      .map((header, index) => authorizedManagerHeaderMatches(header, key) ? index : -1)
+      .filter(index => index >= 0);
+  }
+
+  function normalizeAuthorizedManagerGroup(value) {
+    const text = normalizeSpaces(value);
+    if (!text) return "";
+    return canonicalScIndustryGroupAlias(text) || text;
+  }
+
   function cleanIndustryGroupList(value) {
     if (Array.isArray(value)) {
       return uniqueSorted(value.flatMap(cleanIndustryGroupList));
@@ -3213,6 +3229,7 @@ Health & Hospitality	DIRECT	NL	West	West
     return uniqueSorted(text
       .split(/[\n,;|]+/)
       .map(normalizeSpaces)
+      .map(normalizeAuthorizedManagerGroup)
       .filter(Boolean));
   }
 
@@ -3272,7 +3289,7 @@ Health & Hospitality	DIRECT	NL	West	West
       name: authorizedManagerHeaderIndex(headers, "name"),
       email: authorizedManagerHeaderIndex(headers, "email"),
       role: authorizedManagerHeaderIndex(headers, "role"),
-      groups: authorizedManagerHeaderIndex(headers, "groups"),
+      groups: authorizedManagerHeaderIndexes(headers, "groups"),
       canOwn: authorizedManagerHeaderIndex(headers, "canOwn"),
       canView: authorizedManagerHeaderIndex(headers, "canView"),
       active: authorizedManagerHeaderIndex(headers, "active")
@@ -3288,10 +3305,14 @@ Health & Hospitality	DIRECT	NL	West	West
         if (index < 0 || index >= cells.length) return "";
         return normalizeSpaces(cells[index].rawText || cells[index].text);
       };
+      const getAll = key => (Array.isArray(indexes[key]) ? indexes[key] : [indexes[key]])
+        .filter(index => index >= 0 && index < cells.length)
+        .map(index => normalizeSpaces(cells[index].rawText || cells[index].text))
+        .filter(Boolean);
       const name = cleanPersonName(get("name"));
       if (!name || /^(?:name|manager)$/i.test(name)) return;
       const role = get("role");
-      const groups = indexes.groups >= 0 ? cleanIndustryGroupList(get("groups")) : [];
+      const groups = cleanIndustryGroupList(getAll("groups"));
       const active = parseBooleanValue(get("active"), true, { inactiveMeansFalse: true });
       const canOwn = parseBooleanValue(get("canOwn"), defaultCanOwnForManagerRole(role));
       const canView = parseBooleanValue(get("canView"), true);
@@ -3340,7 +3361,18 @@ Health & Hospitality	DIRECT	NL	West	West
     const rows = Array.isArray(data && data.authorizedManagers) ? data.authorizedManagers : [];
     return rows.map(record => {
       const name = cleanPersonName(record.name || record.manager || record.displayName || "");
-      const groups = cleanIndustryGroupList(record.groups || record.scIndustryGroups || record.industryGroups || "");
+      const groups = cleanIndustryGroupList([
+        record.groups,
+        record.scIndustryGroups,
+        record.scIndustry,
+        record.scIndustries,
+        record.scStaffingIndustry,
+        record.industryGroups,
+        record.salesVertical,
+        record.salesVerticals,
+        record.vertical,
+        record.verticals
+      ]);
       const groupKeys = Array.isArray(record.groupKeys)
         ? record.groupKeys.map(normalizeKey).filter(Boolean)
         : groups.map(normalizeKey);
