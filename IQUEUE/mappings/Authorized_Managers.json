@@ -1,0 +1,1828 @@
+{
+  "schema": "ns-scm-tools.authorized-managers.v1",
+  "generator": {
+    "name": "FY27 Queue Mapping JSON Maker",
+    "version": "27.0.5"
+  },
+  "generatedAt": "2026-06-04T02:35:37.140Z",
+  "source": {
+    "fileName": "FY27IQUEUESCMRosterActiveResults443.xls",
+    "sheetName": "FYIQUEUESCMRosterActiveResults",
+    "searchUrl": "https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl?searchid=1319617",
+    "headerRow": 1,
+    "firstDataRow": 2,
+    "detectedHeaders": {
+      "name": {
+        "column": "B",
+        "label": "SC Manager Name"
+      },
+      "email": {
+        "column": "F",
+        "label": "Oracle Email"
+      },
+      "role": {
+        "column": "E",
+        "label": "Title"
+      },
+      "groups": {
+        "column": "G",
+        "label": "SC Industry"
+      },
+      "canOwn": {
+        "column": "",
+        "label": ""
+      },
+      "canView": {
+        "column": "",
+        "label": ""
+      },
+      "active": {
+        "column": "",
+        "label": ""
+      }
+    }
+  },
+  "counts": {
+    "managers": 45,
+    "activeManagers": 45,
+    "canOwn": 30,
+    "canView": 45,
+    "industryGroups": 11,
+    "incompleteRows": 0,
+    "duplicateManagers": 0,
+    "missingGroups": 0
+  },
+  "industryGroups": [
+    "Business Services",
+    "Construction & Energy",
+    "Consumer Services",
+    "EPM",
+    "General Business",
+    "Health & Hospitality",
+    "Horizontal",
+    "OpenAir",
+    "Products",
+    "Software",
+    "TCOE"
+  ],
+  "authorizedManagers": [
+    {
+      "sourceRows": [
+        2
+      ],
+      "name": "Anderson, Dennis",
+      "nameKey": "andersondennis",
+      "email": "dennis.g.anderson@oracle.com",
+      "role": "Sales Consulting Manager - EPM",
+      "groups": [
+        "EPM"
+      ],
+      "groupKeys": [
+        "epm"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        3
+      ],
+      "name": "Anderson, Michael C",
+      "nameKey": "andersonmichaelc",
+      "email": "michael.c.anderson@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "Products"
+      ],
+      "groupKeys": [
+        "products"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        4
+      ],
+      "name": "Ax, Bryan J",
+      "nameKey": "axbryanj",
+      "email": "bryan.ax@oracle.com",
+      "role": "Sales Consulting Director",
+      "groups": [
+        "Products"
+      ],
+      "groupKeys": [
+        "products"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        5
+      ],
+      "name": "Bandstra, Daniel",
+      "nameKey": "bandstradaniel",
+      "email": "daniel.bandstra@oracle.com",
+      "role": "Senior Director, Industry Solution Consulting",
+      "groups": [
+        "Horizontal"
+      ],
+      "groupKeys": [
+        "horizontal"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        6
+      ],
+      "name": "Baum, Karlin",
+      "nameKey": "baumkarlin",
+      "email": "karly.baum@oracle.com",
+      "role": "Sales Consulting Manager",
+      "groups": [
+        "Business Services"
+      ],
+      "groupKeys": [
+        "businessservices"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        7
+      ],
+      "name": "Belle Isle, Matthew J",
+      "nameKey": "belleislematthewj",
+      "email": "matthew.belle.isle@oracle.com",
+      "role": "Senior Sales Consulting Manager",
+      "groups": [
+        "Construction & Energy"
+      ],
+      "groupKeys": [
+        "constructionandenergy"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        8
+      ],
+      "name": "Bradford, Alexandra J",
+      "nameKey": "bradfordalexandraj",
+      "email": "alex.bradford@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "Software"
+      ],
+      "groupKeys": [
+        "software"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        9
+      ],
+      "name": "Bradley, Luke",
+      "nameKey": "bradleyluke",
+      "email": "luke.bradley@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "Horizontal"
+      ],
+      "groupKeys": [
+        "horizontal"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        10
+      ],
+      "name": "Casey, Lauren E",
+      "nameKey": "caseylaurene",
+      "email": "lauren.casey@oracle.com",
+      "role": "Director, Sales Consulting",
+      "groups": [
+        "Construction & Energy"
+      ],
+      "groupKeys": [
+        "constructionandenergy"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        11
+      ],
+      "name": "Cecchini, Corey",
+      "nameKey": "cecchinicorey",
+      "email": "corey.cecchini@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "EPM"
+      ],
+      "groupKeys": [
+        "epm"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        12
+      ],
+      "name": "Chapman, Trey",
+      "nameKey": "chapmantrey",
+      "email": "trey.chapman@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "EPM"
+      ],
+      "groupKeys": [
+        "epm"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        13
+      ],
+      "name": "Chelmow, Benjamin",
+      "nameKey": "chelmowbenjamin",
+      "email": "benjamin.chelmow@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "Business Services"
+      ],
+      "groupKeys": [
+        "businessservices"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        14
+      ],
+      "name": "Cillo, Daniel",
+      "nameKey": "cillodaniel",
+      "email": "daniel.cillo@oracle.com",
+      "role": "Sales Consulting Manager",
+      "groups": [
+        "Products"
+      ],
+      "groupKeys": [
+        "products"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        15
+      ],
+      "name": "Eberhardt, Karl",
+      "nameKey": "eberhardtkarl",
+      "email": "karl.eberhardt@oracle.com",
+      "role": "Senior Director, Presales Operations",
+      "groups": [
+        "Horizontal"
+      ],
+      "groupKeys": [
+        "horizontal"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        16
+      ],
+      "name": "Friedman, Joe",
+      "nameKey": "friedmanjoe",
+      "email": "joe.friedman@oracle.com",
+      "role": "Sr. Director, AI Innovation",
+      "groups": [
+        "OpenAir"
+      ],
+      "groupKeys": [
+        "openair"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        17
+      ],
+      "name": "Garrison, Allison I",
+      "nameKey": "garrisonallisoni",
+      "email": "allison.garrison@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "Consumer Services"
+      ],
+      "groupKeys": [
+        "consumerservices"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        18
+      ],
+      "name": "Gorajek, Carrie",
+      "nameKey": "gorajekcarrie",
+      "email": "carrie.gorajek@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "Products"
+      ],
+      "groupKeys": [
+        "products"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        19
+      ],
+      "name": "Hassett, Drew",
+      "nameKey": "hassettdrew",
+      "email": "drew.hassett@oracle.com",
+      "role": "Sales Consulting Director",
+      "groups": [
+        "Business Services"
+      ],
+      "groupKeys": [
+        "businessservices"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        20
+      ],
+      "name": "Hatch, Ryan A",
+      "nameKey": "hatchryana",
+      "email": "ryan.hatch@oracle.com",
+      "role": "Senior Sales Consulting Manager",
+      "groups": [
+        "Products"
+      ],
+      "groupKeys": [
+        "products"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        21
+      ],
+      "name": "Heyne, Robert",
+      "nameKey": "heynerobert",
+      "email": "bob.heyne@oracle.com",
+      "role": "Sales Consulting Manager",
+      "groups": [
+        "Construction & Energy"
+      ],
+      "groupKeys": [
+        "constructionandenergy"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        22
+      ],
+      "name": "Hidding, Michael",
+      "nameKey": "hiddingmichael",
+      "email": "michael.hidding@oracle.com",
+      "role": "Director, Sales Consulting",
+      "groups": [
+        "Products"
+      ],
+      "groupKeys": [
+        "products"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        23
+      ],
+      "name": "Horan, Timothy",
+      "nameKey": "horantimothy",
+      "email": "tim.horan@oracle.com",
+      "role": "Sales Consulting Director",
+      "groups": [
+        "EPM"
+      ],
+      "groupKeys": [
+        "epm"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        24
+      ],
+      "name": "Hudema, Raul",
+      "nameKey": "hudemaraul",
+      "email": "raul.hudema@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "Health & Hospitality"
+      ],
+      "groupKeys": [
+        "healthandhospitality"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        25
+      ],
+      "name": "Killeen, John",
+      "nameKey": "killeenjohn",
+      "email": "patrick.killeen@oracle.com",
+      "role": "Sales Consulting Manager",
+      "groups": [
+        "Products"
+      ],
+      "groupKeys": [
+        "products"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        26
+      ],
+      "name": "Kim, Todd",
+      "nameKey": "kimtodd",
+      "email": "todd.kim@oracle.com",
+      "role": "Pre-Sales Solution Consulting Manager",
+      "groups": [
+        "Business Services"
+      ],
+      "groupKeys": [
+        "businessservices"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        27
+      ],
+      "name": "Kuderka, Robert J",
+      "nameKey": "kuderkarobertj",
+      "email": "robert.kuderka@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "Consumer Services"
+      ],
+      "groupKeys": [
+        "consumerservices"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        28
+      ],
+      "name": "Lau, Danielle",
+      "nameKey": "laudanielle",
+      "email": "danielle.lau@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "Health & Hospitality"
+      ],
+      "groupKeys": [
+        "healthandhospitality"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        29
+      ],
+      "name": "Luna, Jessie",
+      "nameKey": "lunajessie",
+      "email": "j.luna@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "Health & Hospitality"
+      ],
+      "groupKeys": [
+        "healthandhospitality"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        30
+      ],
+      "name": "Ma, Jaclyn",
+      "nameKey": "majaclyn",
+      "email": "jaclyn.ma@oracle.com",
+      "role": "Sales Consulting Manager",
+      "groups": [
+        "Software"
+      ],
+      "groupKeys": [
+        "software"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        31
+      ],
+      "name": "Malone, Moira",
+      "nameKey": "malonemoira",
+      "email": "moira.malone@oracle.com",
+      "role": "Sales Consulting Manager",
+      "groups": [
+        "Construction & Energy"
+      ],
+      "groupKeys": [
+        "constructionandenergy"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        32
+      ],
+      "name": "Monahan, Matthew G",
+      "nameKey": "monahanmatthewg",
+      "email": "matthew.monahan@oracle.com",
+      "role": "Sales Consulting Director",
+      "groups": [
+        "Health & Hospitality"
+      ],
+      "groupKeys": [
+        "healthandhospitality"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        33
+      ],
+      "name": "Morrissey, Ryan",
+      "nameKey": "morrisseyryan",
+      "email": "ryan.morrissey@oracle.com",
+      "role": "Director, Sales Consulting",
+      "groups": [
+        "Horizontal"
+      ],
+      "groupKeys": [
+        "horizontal"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        34
+      ],
+      "name": "Mumford, Tyler J",
+      "nameKey": "mumfordtylerj",
+      "email": "tyler.mumford@oracle.com",
+      "role": "Sales Consulting Manager",
+      "groups": [
+        "Business Services"
+      ],
+      "groupKeys": [
+        "businessservices"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        35
+      ],
+      "name": "O'Brien, Charles",
+      "nameKey": "obriencharles",
+      "email": "charles.obrien@oracle.com",
+      "role": "Director, Sales Consulting",
+      "groups": [
+        "Software"
+      ],
+      "groupKeys": [
+        "software"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        36
+      ],
+      "name": "Ransom, Rob",
+      "nameKey": "ransomrob",
+      "email": "rob.ransom@oracle.com",
+      "role": "Senior Director, Pre-Sales Solution Consulting",
+      "groups": [
+        "Horizontal"
+      ],
+      "groupKeys": [
+        "horizontal"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        37
+      ],
+      "name": "Recht, Frank R",
+      "nameKey": "rechtfrankr",
+      "email": "frank.recht@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "Products"
+      ],
+      "groupKeys": [
+        "products"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        38
+      ],
+      "name": "Rousseau, Elena",
+      "nameKey": "rousseauelena",
+      "email": "ellie.page@oracle.com",
+      "role": "Sales Consulting Manager",
+      "groups": [
+        "Health & Hospitality"
+      ],
+      "groupKeys": [
+        "healthandhospitality"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        39
+      ],
+      "name": "Sankar, Saran",
+      "nameKey": "sankarsaran",
+      "email": "saran.sankar@oracle.com",
+      "role": "Director, Technology Center of Excellence",
+      "groups": [
+        "TCOE"
+      ],
+      "groupKeys": [
+        "tcoe"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        40
+      ],
+      "name": "Schafer, Nicholas",
+      "nameKey": "schafernicholas",
+      "email": "nick.schafer@oracle.com",
+      "role": "Sales Consulting Manager",
+      "groups": [
+        "Consumer Services"
+      ],
+      "groupKeys": [
+        "consumerservices"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        41
+      ],
+      "name": "Schwandt, Brad",
+      "nameKey": "schwandtbrad",
+      "email": "brad.schwandt@oracle.com",
+      "role": "Sales Consulting Manager",
+      "groups": [
+        "Construction & Energy"
+      ],
+      "groupKeys": [
+        "constructionandenergy"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        42
+      ],
+      "name": "Simon, Meagan",
+      "nameKey": "simonmeagan",
+      "email": "meagan.wheeler@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "General Business"
+      ],
+      "groupKeys": [
+        "generalbusiness"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        43
+      ],
+      "name": "Sunshine, Aaron F",
+      "nameKey": "sunshineaaronf",
+      "email": "aaron.sunshine@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "Products"
+      ],
+      "groupKeys": [
+        "products"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        44
+      ],
+      "name": "Underdahl, Jeffrey",
+      "nameKey": "underdahljeffrey",
+      "email": "jeff.underdahl@oracle.com",
+      "role": "Senior Director, Pre-Sales Solution Consulting",
+      "groups": [
+        "Products"
+      ],
+      "groupKeys": [
+        "products"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        45
+      ],
+      "name": "VanHousen, Rebecca A",
+      "nameKey": "vanhousenrebeccaa",
+      "email": "rebecca.vanhousen@oracle.com",
+      "role": "Director, Sales Consulting",
+      "groups": [
+        "Consumer Services"
+      ],
+      "groupKeys": [
+        "consumerservices"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        46
+      ],
+      "name": "Yazbeck, David",
+      "nameKey": "yazbeckdavid",
+      "email": "david.yazbeck@oracle.com",
+      "role": "Sale Consulting Manager",
+      "groups": [
+        "Products"
+      ],
+      "groupKeys": [
+        "products"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    }
+  ],
+  "canOwnManagers": [
+    "Anderson, Dennis",
+    "Anderson, Michael C",
+    "Baum, Karlin",
+    "Belle Isle, Matthew J",
+    "Bradford, Alexandra J",
+    "Bradley, Luke",
+    "Cecchini, Corey",
+    "Chapman, Trey",
+    "Chelmow, Benjamin",
+    "Cillo, Daniel",
+    "Garrison, Allison I",
+    "Gorajek, Carrie",
+    "Hatch, Ryan A",
+    "Heyne, Robert",
+    "Hudema, Raul",
+    "Killeen, John",
+    "Kim, Todd",
+    "Kuderka, Robert J",
+    "Lau, Danielle",
+    "Luna, Jessie",
+    "Ma, Jaclyn",
+    "Malone, Moira",
+    "Mumford, Tyler J",
+    "Recht, Frank R",
+    "Rousseau, Elena",
+    "Schafer, Nicholas",
+    "Schwandt, Brad",
+    "Simon, Meagan",
+    "Sunshine, Aaron F",
+    "Yazbeck, David"
+  ],
+  "canViewManagers": [
+    "Anderson, Dennis",
+    "Anderson, Michael C",
+    "Ax, Bryan J",
+    "Bandstra, Daniel",
+    "Baum, Karlin",
+    "Belle Isle, Matthew J",
+    "Bradford, Alexandra J",
+    "Bradley, Luke",
+    "Casey, Lauren E",
+    "Cecchini, Corey",
+    "Chapman, Trey",
+    "Chelmow, Benjamin",
+    "Cillo, Daniel",
+    "Eberhardt, Karl",
+    "Friedman, Joe",
+    "Garrison, Allison I",
+    "Gorajek, Carrie",
+    "Hassett, Drew",
+    "Hatch, Ryan A",
+    "Heyne, Robert",
+    "Hidding, Michael",
+    "Horan, Timothy",
+    "Hudema, Raul",
+    "Killeen, John",
+    "Kim, Todd",
+    "Kuderka, Robert J",
+    "Lau, Danielle",
+    "Luna, Jessie",
+    "Ma, Jaclyn",
+    "Malone, Moira",
+    "Monahan, Matthew G",
+    "Morrissey, Ryan",
+    "Mumford, Tyler J",
+    "O'Brien, Charles",
+    "Ransom, Rob",
+    "Recht, Frank R",
+    "Rousseau, Elena",
+    "Sankar, Saran",
+    "Schafer, Nicholas",
+    "Schwandt, Brad",
+    "Simon, Meagan",
+    "Sunshine, Aaron F",
+    "Underdahl, Jeffrey",
+    "VanHousen, Rebecca A",
+    "Yazbeck, David"
+  ],
+  "managerLookup": {
+    "andersondennis": {
+      "sourceRows": [
+        2
+      ],
+      "name": "Anderson, Dennis",
+      "nameKey": "andersondennis",
+      "email": "dennis.g.anderson@oracle.com",
+      "role": "Sales Consulting Manager - EPM",
+      "groups": [
+        "EPM"
+      ],
+      "groupKeys": [
+        "epm"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "andersonmichaelc": {
+      "sourceRows": [
+        3
+      ],
+      "name": "Anderson, Michael C",
+      "nameKey": "andersonmichaelc",
+      "email": "michael.c.anderson@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "Products"
+      ],
+      "groupKeys": [
+        "products"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "axbryanj": {
+      "sourceRows": [
+        4
+      ],
+      "name": "Ax, Bryan J",
+      "nameKey": "axbryanj",
+      "email": "bryan.ax@oracle.com",
+      "role": "Sales Consulting Director",
+      "groups": [
+        "Products"
+      ],
+      "groupKeys": [
+        "products"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    "bandstradaniel": {
+      "sourceRows": [
+        5
+      ],
+      "name": "Bandstra, Daniel",
+      "nameKey": "bandstradaniel",
+      "email": "daniel.bandstra@oracle.com",
+      "role": "Senior Director, Industry Solution Consulting",
+      "groups": [
+        "Horizontal"
+      ],
+      "groupKeys": [
+        "horizontal"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    "baumkarlin": {
+      "sourceRows": [
+        6
+      ],
+      "name": "Baum, Karlin",
+      "nameKey": "baumkarlin",
+      "email": "karly.baum@oracle.com",
+      "role": "Sales Consulting Manager",
+      "groups": [
+        "Business Services"
+      ],
+      "groupKeys": [
+        "businessservices"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "belleislematthewj": {
+      "sourceRows": [
+        7
+      ],
+      "name": "Belle Isle, Matthew J",
+      "nameKey": "belleislematthewj",
+      "email": "matthew.belle.isle@oracle.com",
+      "role": "Senior Sales Consulting Manager",
+      "groups": [
+        "Construction & Energy"
+      ],
+      "groupKeys": [
+        "constructionandenergy"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "bradfordalexandraj": {
+      "sourceRows": [
+        8
+      ],
+      "name": "Bradford, Alexandra J",
+      "nameKey": "bradfordalexandraj",
+      "email": "alex.bradford@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "Software"
+      ],
+      "groupKeys": [
+        "software"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "bradleyluke": {
+      "sourceRows": [
+        9
+      ],
+      "name": "Bradley, Luke",
+      "nameKey": "bradleyluke",
+      "email": "luke.bradley@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "Horizontal"
+      ],
+      "groupKeys": [
+        "horizontal"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "caseylaurene": {
+      "sourceRows": [
+        10
+      ],
+      "name": "Casey, Lauren E",
+      "nameKey": "caseylaurene",
+      "email": "lauren.casey@oracle.com",
+      "role": "Director, Sales Consulting",
+      "groups": [
+        "Construction & Energy"
+      ],
+      "groupKeys": [
+        "constructionandenergy"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    "cecchinicorey": {
+      "sourceRows": [
+        11
+      ],
+      "name": "Cecchini, Corey",
+      "nameKey": "cecchinicorey",
+      "email": "corey.cecchini@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "EPM"
+      ],
+      "groupKeys": [
+        "epm"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "chapmantrey": {
+      "sourceRows": [
+        12
+      ],
+      "name": "Chapman, Trey",
+      "nameKey": "chapmantrey",
+      "email": "trey.chapman@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "EPM"
+      ],
+      "groupKeys": [
+        "epm"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "chelmowbenjamin": {
+      "sourceRows": [
+        13
+      ],
+      "name": "Chelmow, Benjamin",
+      "nameKey": "chelmowbenjamin",
+      "email": "benjamin.chelmow@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "Business Services"
+      ],
+      "groupKeys": [
+        "businessservices"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "cillodaniel": {
+      "sourceRows": [
+        14
+      ],
+      "name": "Cillo, Daniel",
+      "nameKey": "cillodaniel",
+      "email": "daniel.cillo@oracle.com",
+      "role": "Sales Consulting Manager",
+      "groups": [
+        "Products"
+      ],
+      "groupKeys": [
+        "products"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "eberhardtkarl": {
+      "sourceRows": [
+        15
+      ],
+      "name": "Eberhardt, Karl",
+      "nameKey": "eberhardtkarl",
+      "email": "karl.eberhardt@oracle.com",
+      "role": "Senior Director, Presales Operations",
+      "groups": [
+        "Horizontal"
+      ],
+      "groupKeys": [
+        "horizontal"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    "friedmanjoe": {
+      "sourceRows": [
+        16
+      ],
+      "name": "Friedman, Joe",
+      "nameKey": "friedmanjoe",
+      "email": "joe.friedman@oracle.com",
+      "role": "Sr. Director, AI Innovation",
+      "groups": [
+        "OpenAir"
+      ],
+      "groupKeys": [
+        "openair"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    "garrisonallisoni": {
+      "sourceRows": [
+        17
+      ],
+      "name": "Garrison, Allison I",
+      "nameKey": "garrisonallisoni",
+      "email": "allison.garrison@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "Consumer Services"
+      ],
+      "groupKeys": [
+        "consumerservices"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "gorajekcarrie": {
+      "sourceRows": [
+        18
+      ],
+      "name": "Gorajek, Carrie",
+      "nameKey": "gorajekcarrie",
+      "email": "carrie.gorajek@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "Products"
+      ],
+      "groupKeys": [
+        "products"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "hassettdrew": {
+      "sourceRows": [
+        19
+      ],
+      "name": "Hassett, Drew",
+      "nameKey": "hassettdrew",
+      "email": "drew.hassett@oracle.com",
+      "role": "Sales Consulting Director",
+      "groups": [
+        "Business Services"
+      ],
+      "groupKeys": [
+        "businessservices"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    "hatchryana": {
+      "sourceRows": [
+        20
+      ],
+      "name": "Hatch, Ryan A",
+      "nameKey": "hatchryana",
+      "email": "ryan.hatch@oracle.com",
+      "role": "Senior Sales Consulting Manager",
+      "groups": [
+        "Products"
+      ],
+      "groupKeys": [
+        "products"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "heynerobert": {
+      "sourceRows": [
+        21
+      ],
+      "name": "Heyne, Robert",
+      "nameKey": "heynerobert",
+      "email": "bob.heyne@oracle.com",
+      "role": "Sales Consulting Manager",
+      "groups": [
+        "Construction & Energy"
+      ],
+      "groupKeys": [
+        "constructionandenergy"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "hiddingmichael": {
+      "sourceRows": [
+        22
+      ],
+      "name": "Hidding, Michael",
+      "nameKey": "hiddingmichael",
+      "email": "michael.hidding@oracle.com",
+      "role": "Director, Sales Consulting",
+      "groups": [
+        "Products"
+      ],
+      "groupKeys": [
+        "products"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    "horantimothy": {
+      "sourceRows": [
+        23
+      ],
+      "name": "Horan, Timothy",
+      "nameKey": "horantimothy",
+      "email": "tim.horan@oracle.com",
+      "role": "Sales Consulting Director",
+      "groups": [
+        "EPM"
+      ],
+      "groupKeys": [
+        "epm"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    "hudemaraul": {
+      "sourceRows": [
+        24
+      ],
+      "name": "Hudema, Raul",
+      "nameKey": "hudemaraul",
+      "email": "raul.hudema@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "Health & Hospitality"
+      ],
+      "groupKeys": [
+        "healthandhospitality"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "killeenjohn": {
+      "sourceRows": [
+        25
+      ],
+      "name": "Killeen, John",
+      "nameKey": "killeenjohn",
+      "email": "patrick.killeen@oracle.com",
+      "role": "Sales Consulting Manager",
+      "groups": [
+        "Products"
+      ],
+      "groupKeys": [
+        "products"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "kimtodd": {
+      "sourceRows": [
+        26
+      ],
+      "name": "Kim, Todd",
+      "nameKey": "kimtodd",
+      "email": "todd.kim@oracle.com",
+      "role": "Pre-Sales Solution Consulting Manager",
+      "groups": [
+        "Business Services"
+      ],
+      "groupKeys": [
+        "businessservices"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "kuderkarobertj": {
+      "sourceRows": [
+        27
+      ],
+      "name": "Kuderka, Robert J",
+      "nameKey": "kuderkarobertj",
+      "email": "robert.kuderka@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "Consumer Services"
+      ],
+      "groupKeys": [
+        "consumerservices"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "laudanielle": {
+      "sourceRows": [
+        28
+      ],
+      "name": "Lau, Danielle",
+      "nameKey": "laudanielle",
+      "email": "danielle.lau@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "Health & Hospitality"
+      ],
+      "groupKeys": [
+        "healthandhospitality"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "lunajessie": {
+      "sourceRows": [
+        29
+      ],
+      "name": "Luna, Jessie",
+      "nameKey": "lunajessie",
+      "email": "j.luna@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "Health & Hospitality"
+      ],
+      "groupKeys": [
+        "healthandhospitality"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "majaclyn": {
+      "sourceRows": [
+        30
+      ],
+      "name": "Ma, Jaclyn",
+      "nameKey": "majaclyn",
+      "email": "jaclyn.ma@oracle.com",
+      "role": "Sales Consulting Manager",
+      "groups": [
+        "Software"
+      ],
+      "groupKeys": [
+        "software"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "malonemoira": {
+      "sourceRows": [
+        31
+      ],
+      "name": "Malone, Moira",
+      "nameKey": "malonemoira",
+      "email": "moira.malone@oracle.com",
+      "role": "Sales Consulting Manager",
+      "groups": [
+        "Construction & Energy"
+      ],
+      "groupKeys": [
+        "constructionandenergy"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "monahanmatthewg": {
+      "sourceRows": [
+        32
+      ],
+      "name": "Monahan, Matthew G",
+      "nameKey": "monahanmatthewg",
+      "email": "matthew.monahan@oracle.com",
+      "role": "Sales Consulting Director",
+      "groups": [
+        "Health & Hospitality"
+      ],
+      "groupKeys": [
+        "healthandhospitality"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    "morrisseyryan": {
+      "sourceRows": [
+        33
+      ],
+      "name": "Morrissey, Ryan",
+      "nameKey": "morrisseyryan",
+      "email": "ryan.morrissey@oracle.com",
+      "role": "Director, Sales Consulting",
+      "groups": [
+        "Horizontal"
+      ],
+      "groupKeys": [
+        "horizontal"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    "mumfordtylerj": {
+      "sourceRows": [
+        34
+      ],
+      "name": "Mumford, Tyler J",
+      "nameKey": "mumfordtylerj",
+      "email": "tyler.mumford@oracle.com",
+      "role": "Sales Consulting Manager",
+      "groups": [
+        "Business Services"
+      ],
+      "groupKeys": [
+        "businessservices"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "obriencharles": {
+      "sourceRows": [
+        35
+      ],
+      "name": "O'Brien, Charles",
+      "nameKey": "obriencharles",
+      "email": "charles.obrien@oracle.com",
+      "role": "Director, Sales Consulting",
+      "groups": [
+        "Software"
+      ],
+      "groupKeys": [
+        "software"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    "ransomrob": {
+      "sourceRows": [
+        36
+      ],
+      "name": "Ransom, Rob",
+      "nameKey": "ransomrob",
+      "email": "rob.ransom@oracle.com",
+      "role": "Senior Director, Pre-Sales Solution Consulting",
+      "groups": [
+        "Horizontal"
+      ],
+      "groupKeys": [
+        "horizontal"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    "rechtfrankr": {
+      "sourceRows": [
+        37
+      ],
+      "name": "Recht, Frank R",
+      "nameKey": "rechtfrankr",
+      "email": "frank.recht@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "Products"
+      ],
+      "groupKeys": [
+        "products"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "rousseauelena": {
+      "sourceRows": [
+        38
+      ],
+      "name": "Rousseau, Elena",
+      "nameKey": "rousseauelena",
+      "email": "ellie.page@oracle.com",
+      "role": "Sales Consulting Manager",
+      "groups": [
+        "Health & Hospitality"
+      ],
+      "groupKeys": [
+        "healthandhospitality"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "sankarsaran": {
+      "sourceRows": [
+        39
+      ],
+      "name": "Sankar, Saran",
+      "nameKey": "sankarsaran",
+      "email": "saran.sankar@oracle.com",
+      "role": "Director, Technology Center of Excellence",
+      "groups": [
+        "TCOE"
+      ],
+      "groupKeys": [
+        "tcoe"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    "schafernicholas": {
+      "sourceRows": [
+        40
+      ],
+      "name": "Schafer, Nicholas",
+      "nameKey": "schafernicholas",
+      "email": "nick.schafer@oracle.com",
+      "role": "Sales Consulting Manager",
+      "groups": [
+        "Consumer Services"
+      ],
+      "groupKeys": [
+        "consumerservices"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "schwandtbrad": {
+      "sourceRows": [
+        41
+      ],
+      "name": "Schwandt, Brad",
+      "nameKey": "schwandtbrad",
+      "email": "brad.schwandt@oracle.com",
+      "role": "Sales Consulting Manager",
+      "groups": [
+        "Construction & Energy"
+      ],
+      "groupKeys": [
+        "constructionandenergy"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "simonmeagan": {
+      "sourceRows": [
+        42
+      ],
+      "name": "Simon, Meagan",
+      "nameKey": "simonmeagan",
+      "email": "meagan.wheeler@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "General Business"
+      ],
+      "groupKeys": [
+        "generalbusiness"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "sunshineaaronf": {
+      "sourceRows": [
+        43
+      ],
+      "name": "Sunshine, Aaron F",
+      "nameKey": "sunshineaaronf",
+      "email": "aaron.sunshine@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "Products"
+      ],
+      "groupKeys": [
+        "products"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "underdahljeffrey": {
+      "sourceRows": [
+        44
+      ],
+      "name": "Underdahl, Jeffrey",
+      "nameKey": "underdahljeffrey",
+      "email": "jeff.underdahl@oracle.com",
+      "role": "Senior Director, Pre-Sales Solution Consulting",
+      "groups": [
+        "Products"
+      ],
+      "groupKeys": [
+        "products"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    "vanhousenrebeccaa": {
+      "sourceRows": [
+        45
+      ],
+      "name": "VanHousen, Rebecca A",
+      "nameKey": "vanhousenrebeccaa",
+      "email": "rebecca.vanhousen@oracle.com",
+      "role": "Director, Sales Consulting",
+      "groups": [
+        "Consumer Services"
+      ],
+      "groupKeys": [
+        "consumerservices"
+      ],
+      "canOwn": false,
+      "canView": true,
+      "active": true
+    },
+    "yazbeckdavid": {
+      "sourceRows": [
+        46
+      ],
+      "name": "Yazbeck, David",
+      "nameKey": "yazbeckdavid",
+      "email": "david.yazbeck@oracle.com",
+      "role": "Sale Consulting Manager",
+      "groups": [
+        "Products"
+      ],
+      "groupKeys": [
+        "products"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    }
+  },
+  "groupLookup": {
+    "businessservices": [
+      "Baum, Karlin",
+      "Chelmow, Benjamin",
+      "Kim, Todd",
+      "Mumford, Tyler J"
+    ],
+    "constructionandenergy": [
+      "Belle Isle, Matthew J",
+      "Heyne, Robert",
+      "Malone, Moira",
+      "Schwandt, Brad"
+    ],
+    "consumerservices": [
+      "Garrison, Allison I",
+      "Kuderka, Robert J",
+      "Schafer, Nicholas"
+    ],
+    "epm": [
+      "Anderson, Dennis",
+      "Cecchini, Corey",
+      "Chapman, Trey"
+    ],
+    "generalbusiness": [
+      "Simon, Meagan"
+    ],
+    "healthandhospitality": [
+      "Hudema, Raul",
+      "Lau, Danielle",
+      "Luna, Jessie",
+      "Rousseau, Elena"
+    ],
+    "horizontal": [
+      "Bradley, Luke"
+    ],
+    "openair": [],
+    "products": [
+      "Anderson, Michael C",
+      "Cillo, Daniel",
+      "Gorajek, Carrie",
+      "Hatch, Ryan A",
+      "Killeen, John",
+      "Recht, Frank R",
+      "Sunshine, Aaron F",
+      "Yazbeck, David"
+    ],
+    "software": [
+      "Bradford, Alexandra J",
+      "Ma, Jaclyn"
+    ],
+    "tcoe": []
+  },
+  "review": {
+    "incompleteRows": [],
+    "duplicateRows": [],
+    "missingGroups": []
+  }
+}
