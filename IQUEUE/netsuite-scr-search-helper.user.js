@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.7
+// @version      27.0.10
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -41,7 +41,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.7";
+  const HELPER_VERSION = "27.0.10";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -55,20 +55,21 @@
   const GRAPH_TOKEN_STATUS_STALE_MS = 26 * 60 * 60 * 1000;
   const GRAPH_TOKEN_EXPIRING_SOON_MS = 2 * 60 * 60 * 1000;
   const HELPER_STATE_STORAGE_KEY = "fy27-unified-sc-staffing-queue-assistant-state-v1";
+  const GITHUB_MAPPING_BASE_URL = "https://raw.githubusercontent.com/mcanderson14/ns_scm_tools_fy27/main/IQUEUE/mappings";
   const EXTERNAL_MAPPING_FILE_NAME = "SC_Industry_State_Region_Mapping.json";
   const EXTERNAL_MAPPING_FILE_ID = "482253421";
   const EXTERNAL_MAPPING_FILE_URL = "https://nlcorp.app.netsuite.com/app/common/media/482253421?folder=482253421";
-  const EXTERNAL_MAPPING_CACHE_KEY = "fy27-unified-sc-staffing-queue-assistant-region-mapping-v1";
+  const EXTERNAL_MAPPING_CACHE_KEY = "fy27-unified-sc-staffing-queue-assistant-region-mapping-v2";
   const EXTERNAL_MAPPING_REFRESH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
   const GTM_SC_INDUSTRY_MAPPING_FILE_NAME = "GTM_to_SC_Industry_Mapping.json";
   const GTM_SC_INDUSTRY_MAPPING_FILE_ID = "483377127";
   const GTM_SC_INDUSTRY_MAPPING_FOLDER_URL = "https://nlcorp.app.netsuite.com/app/common/media/482833928?folder=482833928&ifrmcntnr=T";
-  const GTM_SC_INDUSTRY_MAPPING_CACHE_KEY = "iqueue-gtm-sc-industry-mapping-v1";
+  const GTM_SC_INDUSTRY_MAPPING_CACHE_KEY = "iqueue-gtm-sc-industry-mapping-v2";
   const GTM_SC_INDUSTRY_MAPPING_REFRESH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
   const PRODUCTS_SCM_MAPPING_FILE_NAME = "Products_SCM_Relationship_Mapping.json";
   const PRODUCTS_SCM_MAPPING_FILE_ID = "482833928";
   const PRODUCTS_SCM_MAPPING_FILE_URL = "https://nlcorp.app.netsuite.com/app/common/media/482833928?folder=482833928&ifrmcntnr=T";
-  const PRODUCTS_SCM_MAPPING_CACHE_KEY = "iqueue-products-scm-relationship-mapping-v1";
+  const PRODUCTS_SCM_MAPPING_CACHE_KEY = "iqueue-products-scm-relationship-mapping-v2";
   const PRODUCTS_SCM_MAPPING_REFRESH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
   const PRODUCTS_SCM_OWNER_TAG_PREFIX = "#scm-owner-";
   const AUTHORIZED_MANAGERS_FILE_NAME = "Authorized_Managers.json";
@@ -81,7 +82,7 @@
     AUTHORIZED_MANAGERS_SEARCH_URL,
     "https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl?searchid=1319617"
   ];
-  const AUTHORIZED_MANAGERS_CACHE_KEY = "iqueue-authorized-managers-v1";
+  const AUTHORIZED_MANAGERS_CACHE_KEY = "iqueue-authorized-managers-v2";
   const AUTHORIZED_MANAGERS_REFRESH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
   const LOGO_LARGE_URL = "https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/IQ_large_logo.png";
   const LOGO_SMALL_URL = "https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/IQ_small_logo.png";
@@ -1519,6 +1520,14 @@ Health & Hospitality	DIRECT	NL	West	West
       || normalizeKey(normalizeAmoDirect(row.amoDirect)) === normalizeKey(TECH_COE_REQUEST_TYPE);
   }
 
+  function isTechCoeTarget(target) {
+    return normalizeKey(target && target.family) === normalizeKey(TECH_COE_INDUSTRY_GROUP);
+  }
+
+  function rowRequestTypeIsTechCoe(row) {
+    return normalizeKey(normalizeAmoDirect(row && row.amoDirect)) === normalizeKey(TECH_COE_REQUEST_TYPE);
+  }
+
   function isOtherUnmappedIndustry(value) {
     const key = normalizeKey(value);
     return key === "other" || key === "unmapped" || key === "otherunmapped";
@@ -2494,9 +2503,21 @@ Health & Hospitality	DIRECT	NL	West	West
     });
   }
 
+  function githubMappingUrl(fileName) {
+    return `${GITHUB_MAPPING_BASE_URL}/${encodeURIComponent(fileName)}`;
+  }
+
+  function mappingJsonSourceLabel(url, fileName) {
+    const labelName = Array.isArray(fileName) ? fileName[0] : fileName;
+    return String(url || "").includes("raw.githubusercontent.com")
+      ? `GitHub ${labelName}`
+      : `File Cabinet ${labelName}`;
+  }
+
   function externalMappingUrlCandidates() {
     const origin = window.location.origin || "https://nlcorp.app.netsuite.com";
     return orderedUnique([
+      githubMappingUrl(EXTERNAL_MAPPING_FILE_NAME),
       EXTERNAL_MAPPING_FILE_URL,
       `${origin}/core/media/media.nl?id=${encodeURIComponent(EXTERNAL_MAPPING_FILE_ID)}&c=NLCORP&_xt=.json`,
       `${origin}/core/media/media.nl?id=${encodeURIComponent(EXTERNAL_MAPPING_FILE_ID)}&_xt=.json`,
@@ -2507,6 +2528,7 @@ Health & Hospitality	DIRECT	NL	West	West
   function productsScmMappingUrlCandidates() {
     const origin = window.location.origin || "https://nlcorp.app.netsuite.com";
     return orderedUnique([
+      githubMappingUrl(PRODUCTS_SCM_MAPPING_FILE_NAME),
       PRODUCTS_SCM_MAPPING_FILE_URL,
       `${origin}/core/media/media.nl?id=${encodeURIComponent(PRODUCTS_SCM_MAPPING_FILE_ID)}&c=NLCORP&_xt=.json`,
       `${origin}/core/media/media.nl?id=${encodeURIComponent(PRODUCTS_SCM_MAPPING_FILE_ID)}&_xt=.json`,
@@ -2524,6 +2546,7 @@ Health & Hospitality	DIRECT	NL	West	West
         ]
       : [];
     return orderedUnique([
+      githubMappingUrl(GTM_SC_INDUSTRY_MAPPING_FILE_NAME),
       GTM_SC_INDUSTRY_MAPPING_FOLDER_URL,
       ...fileIdUrls
     ].filter(Boolean));
@@ -2539,6 +2562,7 @@ Health & Hospitality	DIRECT	NL	West	West
         ]
       : [];
     return orderedUnique([
+      ...AUTHORIZED_MANAGERS_FILE_NAMES.map(githubMappingUrl),
       AUTHORIZED_MANAGERS_FOLDER_URL,
       ...fileIdUrls
     ].filter(Boolean));
@@ -2711,6 +2735,18 @@ Health & Hospitality	DIRECT	NL	West	West
   async function fetchExternalMappingData() {
     const errors = [];
 
+    for (const url of externalMappingUrlCandidates()) {
+      try {
+        const data = await fetchMappingJsonFromUrl(url);
+        return {
+          data,
+          label: mappingJsonSourceLabel(url, EXTERNAL_MAPPING_FILE_NAME)
+        };
+      } catch (error) {
+        errors.push(error.message || String(error));
+      }
+    }
+
     try {
       const data = await loadExternalMappingWithSuiteScript();
       return {
@@ -2719,18 +2755,6 @@ Health & Hospitality	DIRECT	NL	West	West
       };
     } catch (error) {
       errors.push(`N/file: ${error.message || error}`);
-    }
-
-    for (const url of externalMappingUrlCandidates()) {
-      try {
-        const data = await fetchMappingJsonFromUrl(url);
-        return {
-          data,
-          label: `File Cabinet ${EXTERNAL_MAPPING_FILE_NAME}`
-        };
-      } catch (error) {
-        errors.push(error.message || String(error));
-      }
     }
 
     throw new Error(errors.join(" | "));
@@ -2964,6 +2988,18 @@ Health & Hospitality	DIRECT	NL	West	West
   async function fetchProductsScmMappingData() {
     const errors = [];
 
+    for (const url of productsScmMappingUrlCandidates()) {
+      try {
+        const data = await fetchMappingJsonFromUrl(url, new Set(), PRODUCTS_SCM_MAPPING_FILE_NAME, PRODUCTS_SCM_MAPPING_FILE_ID);
+        return {
+          data,
+          label: mappingJsonSourceLabel(url, PRODUCTS_SCM_MAPPING_FILE_NAME)
+        };
+      } catch (error) {
+        errors.push(error.message || String(error));
+      }
+    }
+
     try {
       const data = await loadProductsScmMappingWithSuiteScript();
       return {
@@ -2972,18 +3008,6 @@ Health & Hospitality	DIRECT	NL	West	West
       };
     } catch (error) {
       errors.push(`N/file: ${error.message || error}`);
-    }
-
-    for (const url of productsScmMappingUrlCandidates()) {
-      try {
-        const data = await fetchMappingJsonFromUrl(url, new Set(), PRODUCTS_SCM_MAPPING_FILE_NAME, PRODUCTS_SCM_MAPPING_FILE_ID);
-        return {
-          data,
-          label: `File Cabinet ${PRODUCTS_SCM_MAPPING_FILE_NAME}`
-        };
-      } catch (error) {
-        errors.push(error.message || String(error));
-      }
     }
 
     throw new Error(errors.join(" | "));
@@ -3122,6 +3146,18 @@ Health & Hospitality	DIRECT	NL	West	West
   async function fetchGtmScIndustryMappingData() {
     const errors = [];
 
+    for (const url of gtmScIndustryMappingUrlCandidates()) {
+      try {
+        const data = await fetchMappingJsonFromUrl(url, new Set(), GTM_SC_INDUSTRY_MAPPING_FILE_NAME, GTM_SC_INDUSTRY_MAPPING_FILE_ID);
+        return {
+          data,
+          label: mappingJsonSourceLabel(url, GTM_SC_INDUSTRY_MAPPING_FILE_NAME)
+        };
+      } catch (error) {
+        errors.push(error.message || String(error));
+      }
+    }
+
     try {
       const data = await loadGtmScIndustryMappingWithSuiteScript();
       return {
@@ -3130,18 +3166,6 @@ Health & Hospitality	DIRECT	NL	West	West
       };
     } catch (error) {
       errors.push(`N/file: ${error.message || error}`);
-    }
-
-    for (const url of gtmScIndustryMappingUrlCandidates()) {
-      try {
-        const data = await fetchMappingJsonFromUrl(url, new Set(), GTM_SC_INDUSTRY_MAPPING_FILE_NAME, GTM_SC_INDUSTRY_MAPPING_FILE_ID);
-        return {
-          data,
-          label: `File Cabinet ${GTM_SC_INDUSTRY_MAPPING_FILE_NAME}`
-        };
-      } catch (error) {
-        errors.push(error.message || String(error));
-      }
     }
 
     throw new Error(errors.join(" | "));
@@ -3587,6 +3611,18 @@ Health & Hospitality	DIRECT	NL	West	West
   async function fetchAuthorizedManagersData() {
     const errors = [];
 
+    for (const url of authorizedManagersUrlCandidates()) {
+      try {
+        const data = await fetchMappingJsonFromUrl(url, new Set(), AUTHORIZED_MANAGERS_FILE_NAMES, AUTHORIZED_MANAGERS_FILE_ID);
+        return {
+          data,
+          label: mappingJsonSourceLabel(url, AUTHORIZED_MANAGERS_FILE_NAME)
+        };
+      } catch (error) {
+        errors.push(error.message || String(error));
+      }
+    }
+
     for (const searchUrl of AUTHORIZED_MANAGERS_SEARCH_URLS) {
       try {
         const data = await fetchAuthorizedManagersFromSavedSearch(searchUrl);
@@ -3607,18 +3643,6 @@ Health & Hospitality	DIRECT	NL	West	West
       };
     } catch (error) {
       errors.push(`N/file: ${error.message || error}`);
-    }
-
-    for (const url of authorizedManagersUrlCandidates()) {
-      try {
-        const data = await fetchMappingJsonFromUrl(url, new Set(), AUTHORIZED_MANAGERS_FILE_NAMES, AUTHORIZED_MANAGERS_FILE_ID);
-        return {
-          data,
-          label: `File Cabinet ${AUTHORIZED_MANAGERS_FILE_NAME}`
-        };
-      } catch (error) {
-        errors.push(error.message || String(error));
-      }
     }
 
     throw new Error(errors.join(" | "));
@@ -8923,6 +8947,17 @@ Health & Hospitality	DIRECT	NL	West	West
     if (!row || !tag) return;
 
     const target = CROSS_INDUSTRY_TARGETS.find(item => item.tag === tag);
+    if (isTechCoeTarget(target) && !rowRequestTypeIsTechCoe(row)) {
+      const actualType = requestTypeLabel(row.amoDirect) || normalizeSpaces(row.amoDirect) || "Not found";
+      row.routingNotice = {
+        message: `Tech COE route not saved. Request Type must be ${TECH_COE_REQUEST_TYPE}; current Request Type is ${actualType}. Open Staff SCR and update the request type first.`,
+        state: "error",
+        links: editUrlForRow(row) ? [{ label: "Staff SCR", href: editUrlForRow(row) }] : []
+      };
+      setStaffingNotesStatus(card, `Request Type must be ${TECH_COE_REQUEST_TYPE} before Tech COE routing.`, "error");
+      renderResults();
+      return;
+    }
     const assignment = await showCrossIndustryAssignmentDialog(row, target);
     if (!assignment) return;
 
@@ -10023,7 +10058,13 @@ Health & Hospitality	DIRECT	NL	West	West
       }
 
       #${HELPER_ID}.scr-helper-filters-collapsed .scr-helper-filters {
-        display: none;
+        display: grid;
+        grid-template-columns: 1fr;
+        padding-top: 0;
+      }
+
+      #${HELPER_ID}.scr-helper-filters-collapsed .scr-helper-filters > :not(.scr-helper-text-filter) {
+        display: none !important;
       }
 
       #${HELPER_ID} .scr-helper-filters {
