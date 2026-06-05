@@ -5186,6 +5186,25 @@ Health & Hospitality	DIRECT	NL	West	West
     return date ? date.getTime() : Number.MAX_SAFE_INTEGER;
   }
 
+  function rowSubmittedAgeHours(row) {
+    if (!row) return null;
+    const scrAgeHours = parseScrAgeHours(row.scrAge);
+    if (scrAgeHours !== null) return scrAgeHours;
+    return submittedDateAgeHours(row.submittedDate);
+  }
+
+  function compareSubmittedOldestFirst(left, right) {
+    const submittedOrder = submittedDateSortValue(left) - submittedDateSortValue(right);
+    if (submittedOrder) return submittedOrder;
+
+    const leftAge = rowSubmittedAgeHours(left);
+    const rightAge = rowSubmittedAgeHours(right);
+    if (leftAge !== null && rightAge !== null && leftAge !== rightAge) return rightAge - leftAge;
+    if (leftAge !== null && rightAge === null) return -1;
+    if (leftAge === null && rightAge !== null) return 1;
+    return 0;
+  }
+
   function getSlaInfo(scrAge, submittedDate) {
     const scrAgeHours = parseScrAgeHours(scrAge);
     const submittedHours = submittedDateAgeHours(submittedDate);
@@ -7856,7 +7875,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const visibleRows = searchRows
       .filter(row => rowMatchesFilters(row, controls))
       .sort((left, right) => {
-        const submittedOrder = submittedDateSortValue(left) - submittedDateSortValue(right);
+        const submittedOrder = compareSubmittedOldestFirst(left, right);
         if (!controls.slaHotlist || !controls.slaHotlist.checked) return submittedOrder;
         const leftSla = rowSlaInfo(left);
         const rightSla = rowSlaInfo(right);
