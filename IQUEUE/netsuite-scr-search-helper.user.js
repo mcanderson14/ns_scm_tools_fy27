@@ -63,7 +63,7 @@
   const EXTERNAL_MAPPING_REFRESH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
   const GTM_SC_INDUSTRY_MAPPING_FILE_NAME = "GTM_to_SC_Industry_Mapping.json";
   const GTM_SC_INDUSTRY_MAPPING_FILE_ID = "483377127";
-  const GTM_SC_INDUSTRY_MAPPING_FOLDER_URL = "https://nlcorp.app.netsuite.com/app/common/media/482833928?folder=482833928&ifrmcntnr=T";
+  const GTM_SC_INDUSTRY_MAPPING_FOLDER_URL = "https://nlcorp.app.netsuite.com/app/common/media/483377127?folder=483377127&ifrmcntnr=T";
   const GTM_SC_INDUSTRY_MAPPING_CACHE_KEY = "iqueue-gtm-sc-industry-mapping-v3";
   const GTM_SC_INDUSTRY_MAPPING_REFRESH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
   const PRODUCTS_SCM_MAPPING_FILE_NAME = "Products_SCM_Relationship_Mapping.json";
@@ -227,6 +227,8 @@
     "TCOE": "Tech COE",
     "Health and Hospitality": "Health & Hospitality",
     "Health & Hospitality": "Health & Hospitality",
+    "Life Science": "Life Science",
+    "Life Sciences": "Life Science",
     "Products": "Products",
     "Software": "Software"
   }).map(([alias, canonical]) => [normalizeKey(alias), canonical]));
@@ -2605,9 +2607,9 @@ Health & Hospitality	DIRECT	NL	West	West
         ]
       : [];
     return orderedUnique([
-      githubMappingUrl(GTM_SC_INDUSTRY_MAPPING_FILE_NAME),
       GTM_SC_INDUSTRY_MAPPING_FOLDER_URL,
-      ...fileIdUrls
+      ...fileIdUrls,
+      githubMappingUrl(GTM_SC_INDUSTRY_MAPPING_FILE_NAME)
     ].filter(Boolean));
   }
 
@@ -4302,8 +4304,9 @@ Health & Hospitality	DIRECT	NL	West	West
     const text = normalizeSpaces(value);
     if (!text) return "";
 
-    if (/\btechnology\s*coe\b|\btech\s*coe\b|\btcoe\b/i.test(text)
-      || /\brequest\s*type\s*:\s*technology\s*coe\b/i.test(text)) {
+    if (options.allowTechCoe !== false
+      && (/\btechnology\s*coe\b|\btech\s*coe\b|\btcoe\b/i.test(text)
+      || /\brequest\s*type\s*:\s*technology\s*coe\b/i.test(text))) {
       return TECH_COE_REQUEST_TYPE;
     }
 
@@ -4335,7 +4338,7 @@ Health & Hospitality	DIRECT	NL	West	West
     }
 
     for (const field of fields) {
-      const parsed = extractAmoDirectFromText(field.value);
+      const parsed = extractAmoDirectFromText(field.value, { allowTechCoe: false });
       if (isKnownRequestType(parsed)) return parsed;
     }
 
@@ -4414,6 +4417,7 @@ Health & Hospitality	DIRECT	NL	West	West
       const salesVertical = getConciseFieldValue(fields, [
         /sales.*vertical/, /\bvertical\b/
       ], [/cross/], labeledValuePatterns.salesVertical);
+      const submittedDate = getSubmittedDateValue(fields);
       const amoDirect = inferAmoDirect(getByIndex(paddedCells, indexes, "amoDirect"), fields);
       const override = lookupOverride(industryFamily, state, amoDirect);
       const link = getScrLink(row);
@@ -4438,6 +4442,7 @@ Health & Hospitality	DIRECT	NL	West	West
           industryLeader,
           crossVertical,
           scrAge,
+          submittedDate,
           salesVertical,
           amoDirect,
           scrDisplayId,
@@ -4471,6 +4476,7 @@ Health & Hospitality	DIRECT	NL	West	West
         industryLeader,
         crossVertical,
         scrAge,
+        submittedDate,
         salesVertical,
         mappedSalesRegion: override ? override.salesRegion : "",
         staffingRegion: override ? override.staffingRegion : "",
@@ -5169,6 +5175,17 @@ Health & Hospitality	DIRECT	NL	West	West
     return Number.isFinite(age) && age >= 0 ? age : null;
   }
 
+  function getSubmittedDateValue(fields) {
+    return getDateValue(fields, [
+      /date.*submitted/, /submitted.*date/, /created.*date/, /^created\b/, /datecreated/
+    ], [], labeledValuePatterns.submittedDate);
+  }
+
+  function submittedDateSortValue(row) {
+    const date = parseDateValue(row && row.submittedDate);
+    return date ? date.getTime() : Number.MAX_SAFE_INTEGER;
+  }
+
   function getSlaInfo(scrAge, submittedDate) {
     const scrAgeHours = parseScrAgeHours(scrAge);
     const submittedHours = submittedDateAgeHours(submittedDate);
@@ -5182,9 +5199,7 @@ Health & Hospitality	DIRECT	NL	West	West
   function rowSlaInfo(row) {
     if (!row) return { hours: null, passed: false };
     const fields = row.fields || [];
-    const submittedDate = getDateValue(fields, [
-      /date.*submitted/, /submitted.*date/, /created.*date/, /^created\b/, /datecreated/
-    ], [], labeledValuePatterns.submittedDate);
+    const submittedDate = row.submittedDate || getSubmittedDateValue(fields);
     return getSlaInfo(row.scrAge, submittedDate);
   }
 
@@ -5524,9 +5539,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const industrySubgroup = row.gtmIndustrySubgroup || row.industrySubgroup || getConciseFieldValue(fields, [
       /industry.*subgroup/, /industrysubgroup/, /industry.*sub\s*industry/, /industry.*vertical/
     ], [], labeledValuePatterns.subIndustry);
-    const submittedDate = getDateValue(fields, [
-      /date.*submitted/, /submitted.*date/, /created.*date/, /^created\b/, /datecreated/
-    ], [], labeledValuePatterns.submittedDate);
+    const submittedDate = row.submittedDate || getSubmittedDateValue(fields);
     const scrAge = row.scrAge || getRawFieldValue(allFields, "scrAge");
     const dateNeeded = getDateNeededValue(allFields, fields);
     const slaInfo = getSlaInfo(scrAge, submittedDate);
@@ -7843,11 +7856,12 @@ Health & Hospitality	DIRECT	NL	West	West
     const visibleRows = searchRows
       .filter(row => rowMatchesFilters(row, controls))
       .sort((left, right) => {
-        if (!controls.slaHotlist || !controls.slaHotlist.checked) return 0;
+        const submittedOrder = submittedDateSortValue(left) - submittedDateSortValue(right);
+        if (!controls.slaHotlist || !controls.slaHotlist.checked) return submittedOrder;
         const leftSla = rowSlaInfo(left);
         const rightSla = rowSlaInfo(right);
         if (leftSla.passed !== rightSla.passed) return leftSla.passed ? -1 : 1;
-        return (rightSla.hours || 0) - (leftSla.hours || 0);
+        return submittedOrder || ((rightSla.hours || 0) - (leftSla.hours || 0));
       });
     list.innerHTML = visibleRows.length
       ? visibleRows.map(renderRow).join("")
