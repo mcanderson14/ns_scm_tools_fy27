@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.0.17
+// @version      27.0.19
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.0.17
+   SCOUT — SC Operations Utility Tool  27.0.19
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.0.17';
+  const SCRIPT_VERSION = '27.0.19';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -95,6 +95,8 @@
       calendarIntegrationEnabled: false,
       gptAssistEnabled: false,
       debugModeEnabled: false,
+      previousScHistoryEnabled: false,
+      customerLicenseEnabled: false,
       earlyAdopterUpdatesEnabled: false,
       testingUpdateUrl: '',
       commentInitials: '',
@@ -120,6 +122,8 @@
     }
     merged.gptAssistEnabled = Boolean(merged.gptAssistEnabled);
     merged.debugModeEnabled = Boolean(merged.debugModeEnabled);
+    merged.previousScHistoryEnabled = Boolean(merged.previousScHistoryEnabled);
+    merged.customerLicenseEnabled = Boolean(merged.customerLicenseEnabled);
     merged.earlyAdopterUpdatesEnabled = Boolean(merged.earlyAdopterUpdatesEnabled);
     merged.testingUpdateUrl = String(merged.testingUpdateUrl || '').trim();
     merged.commentInitials = normalizeCommentInitials(merged.commentInitials);
@@ -139,6 +143,8 @@
     cfg.calendarIntegrationEnabled = Boolean(cfg.calendarIntegrationEnabled);
     cfg.gptAssistEnabled = Boolean(cfg.gptAssistEnabled);
     cfg.debugModeEnabled = Boolean(cfg.debugModeEnabled);
+    cfg.previousScHistoryEnabled = Boolean(cfg.previousScHistoryEnabled);
+    cfg.customerLicenseEnabled = Boolean(cfg.customerLicenseEnabled);
     cfg.earlyAdopterUpdatesEnabled = Boolean(cfg.earlyAdopterUpdatesEnabled);
     cfg.testingUpdateUrl = String(cfg.testingUpdateUrl || '').trim();
     cfg.commentInitials = normalizeCommentInitials(cfg.commentInitials);
@@ -195,6 +201,12 @@
   }
   function getDebugModeEnabled() {
     return Boolean(getLocalConfig().debugModeEnabled);
+  }
+  function getPreviousScHistoryEnabled() {
+    return Boolean(getLocalConfig().previousScHistoryEnabled);
+  }
+  function getCustomerLicenseEnabled() {
+    return Boolean(getLocalConfig().customerLicenseEnabled);
   }
   function getEarlyAdopterUpdatesEnabled() {
     return Boolean(getLocalConfig().earlyAdopterUpdatesEnabled);
@@ -396,8 +408,9 @@ Good luck with ${sc}!
   let GPT_ASSIST_DRAFT = null;
   let _quickAssignRequestSeq = 0;
   let _productSelectionSyncing = false;
-  let _previousHistoryCollapsed = false;
+  let _previousHistoryCollapsed = true;
   let _customerLicenseCollapsed = true;
+  let CURRENT_PREVIOUS_HISTORY_LOADER = null;
   let CURRENT_CUSTOMER_LOCATION = { city: '', state: '', country: '' };
   const CUSTOMER_LICENSE_CACHE = {};
 
@@ -4293,6 +4306,24 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               Shows History Debug and License Debug details for troubleshooting NetSuite parsing.
             </div>
           </div>
+          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#222">
+              <input type="checkbox" id="sc-prev-history-setting-toggle" style="width:14px;height:14px">
+              <span>Enable Previous SC History</span>
+            </label>
+            <div style="font-size:10px;color:var(--sc-text-muted);margin-top:4px;margin-left:22px">
+              Shows the Previous SC History panel. NetSuite is not queried until the panel is clicked.
+            </div>
+          </div>
+          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#222">
+              <input type="checkbox" id="sc-customer-license-setting-toggle" style="width:14px;height:14px">
+              <span>Enable Customer License Lookup</span>
+            </label>
+            <div style="font-size:10px;color:var(--sc-text-muted);margin-top:4px;margin-left:22px">
+              Shows the AMO Customer License panel. NetSuite is not queried until the panel is clicked.
+            </div>
+          </div>
           <div class="sc-field" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#222">
               <input type="checkbox" id="sc-early-adopter-toggle" style="width:14px;height:14px">
@@ -4890,33 +4921,34 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     } catch (e) { /* best effort */ }
   }
 
-  function releaseActiveNetSuiteFieldFocus() {
-    const dateFieldIds = [
+  function isDateFieldControl(el) {
+    if (!el) return false;
+    const fieldIds = [
       SCR_FIELD_DATE_NEEDED,
       SCR_FIELD_DATE_SC_NEEDED,
       ...SCR_FIELD_MEETING_DATE_CANDIDATES,
     ].filter(Boolean);
+    const haystack = [
+      el.id,
+      el.name,
+      el.getAttribute && el.getAttribute('data-fieldid'),
+      el.getAttribute && el.getAttribute('aria-labelledby'),
+    ].filter(Boolean).join(' ').toLowerCase();
+    return fieldIds.some(fieldId => haystack.includes(String(fieldId).toLowerCase()));
+  }
 
+  function releaseActiveNetSuiteFieldFocus() {
     try {
       getAccessibleDocuments().forEach(doc => {
         try {
           const active = doc.activeElement;
           if (active && active !== doc.body && typeof active.blur === 'function') {
-            dispatchFieldEvents(active);
+            if (!isDateFieldControl(active)) dispatchFieldEvents(active);
             active.blur();
           }
         } catch (e) { /* keep releasing other frames */ }
       });
     } catch (e) { /* best effort */ }
-
-    dateFieldIds.forEach(fieldId => {
-      try {
-        findFieldControls(fieldId).forEach(el => {
-          dispatchFieldEvents(el);
-          if (el && typeof el.blur === 'function') el.blur();
-        });
-      } catch (e) { /* best effort */ }
-    });
 
     try {
       const body = document.body;
@@ -7625,6 +7657,8 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const calToggle = document.getElementById('sc-cal-integration-toggle');
     const gptToggle = document.getElementById('sc-gpt-assist-toggle');
     const debugToggle = document.getElementById('sc-debug-mode-toggle');
+    const previousHistoryToggle = document.getElementById('sc-prev-history-setting-toggle');
+    const customerLicenseToggle = document.getElementById('sc-customer-license-setting-toggle');
     const earlyAdopterToggle = document.getElementById('sc-early-adopter-toggle');
     const testingUpdateUrl = document.getElementById('sc-testing-update-url-input');
     const commentInitials = document.getElementById('sc-comment-initials-input');
@@ -7635,6 +7669,8 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     if (calToggle) calToggle.checked = getCalIntegrationEnabled();
     if (gptToggle) gptToggle.checked = getGptAssistEnabled();
     if (debugToggle) debugToggle.checked = getDebugModeEnabled();
+    if (previousHistoryToggle) previousHistoryToggle.checked = getPreviousScHistoryEnabled();
+    if (customerLicenseToggle) customerLicenseToggle.checked = getCustomerLicenseEnabled();
     if (earlyAdopterToggle) earlyAdopterToggle.checked = getEarlyAdopterUpdatesEnabled();
     if (testingUpdateUrl) testingUpdateUrl.value = getTestingUpdateUrl();
     if (commentInitials) commentInitials.value = getCommentInitialsOverride();
@@ -7648,6 +7684,8 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const calToggle = document.getElementById('sc-cal-integration-toggle');
     const gptToggle = document.getElementById('sc-gpt-assist-toggle');
     const debugToggle = document.getElementById('sc-debug-mode-toggle');
+    const previousHistoryToggle = document.getElementById('sc-prev-history-setting-toggle');
+    const customerLicenseToggle = document.getElementById('sc-customer-license-setting-toggle');
     const earlyAdopterToggle = document.getElementById('sc-early-adopter-toggle');
     const testingUpdateUrl = document.getElementById('sc-testing-update-url-input');
     const commentInitials = document.getElementById('sc-comment-initials-input');
@@ -7659,6 +7697,8 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       calendarIntegrationEnabled: calToggle ? calToggle.checked : getCalIntegrationEnabled(),
       gptAssistEnabled: gptToggle ? gptToggle.checked : getGptAssistEnabled(),
       debugModeEnabled: debugToggle ? debugToggle.checked : getDebugModeEnabled(),
+      previousScHistoryEnabled: previousHistoryToggle ? previousHistoryToggle.checked : getPreviousScHistoryEnabled(),
+      customerLicenseEnabled: customerLicenseToggle ? customerLicenseToggle.checked : getCustomerLicenseEnabled(),
       earlyAdopterUpdatesEnabled: earlyAdopterToggle ? earlyAdopterToggle.checked : getEarlyAdopterUpdatesEnabled(),
       testingUpdateUrl: testingUpdateUrl ? testingUpdateUrl.value.trim() : getTestingUpdateUrl(),
       commentInitials: commentInitials ? commentInitials.value : getCommentInitialsOverride(),
@@ -10513,62 +10553,66 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       return '<span class="sc-prev-history-terminal">SCOUT&gt;&nbsp;' + escHtml(text) + '</span>';
     }
 
-    const historyRows = ctx.previousHistoryRows || [];
-    const historyGroups = groupPreviousHistoryRows(historyRows).slice(0, 8);
-    const historyTotalCount = getHistoryTotalCount(historyRows);
-    const historyStatus = ctx.previousHistoryStatus || 'Loading previous SC history...';
-    const historyIsLoading = /loading|checking|background|still/i.test(historyStatus);
-    html += '<div class="sc-prev-history-panel' + (_previousHistoryCollapsed ? ' collapsed' : '') + '">';
-    html += '<div class="sc-prev-history-head">' +
-            '<button type="button" class="sc-prev-history-toggle" aria-expanded="' + (_previousHistoryCollapsed ? 'false' : 'true') + '">' +
-            '<span class="sc-prev-history-chevron">' + (_previousHistoryCollapsed ? '▶' : '▼') + '</span>' +
-            '<span class="sc-prev-history-title">Previous SC History</span></button>' +
-            '<span class="sc-prev-history-status">' + renderHistoryStatus(historyTotalCount ? `${historyTotalCount} previous SCR${historyTotalCount === 1 ? '' : 's'} found` : historyStatus) + '</span></div>';
-    html += '<div class="sc-prev-history-body">';
-    if (historyGroups.length) {
-      html += '<table class="sc-prev-history-table"><thead><tr>' +
-              '<th style="width:10%">A/D</th><th style="width:27%">SC</th><th style="width:13%">SCRs</th><th style="width:25%">Products</th><th>Latest Opp</th>' +
-              '</tr></thead><tbody>';
-      historyGroups.forEach(function (group, index) {
-        const requestType = group.requestType;
-        const typeClass = requestType === 'AMO' ? 'amo' : (requestType === 'Direct' ? 'direct' : 'unknown');
-        const latestItem = group.items[0] || {};
-        const groupId = `sc-prev-history-${index}`;
-        const productSummary = getHistoryProductSummary(group.items);
-        const groupCount = getHistoryGroupCount(group);
-        const hasDetailRows = group.items.some(function (item) { return !item.summaryOnly; });
-        const latestMeta = latestItem.summaryOnly ? '' : '<span class="sc-prev-history-meta">most recent SCR ' + escHtml(latestItem.scrId || '') + '</span>';
-        const countHtml = hasDetailRows
-          ? '<button type="button" class="sc-prev-history-count-btn" data-history-detail="' + escAttr(groupId) + '" data-history-count="' + groupCount + '">' + escHtml(`${groupCount}>`) + '</button>'
-          : '<span class="sc-prev-history-count-value">' + escHtml(String(groupCount)) + '</span>';
-        html += '<tr><td><span class="sc-prev-history-type sc-prev-history-type-' + typeClass + '">' +
-                escHtml(requestType || '?') + '</span></td>' +
-                '<td>' + escHtml(group.assignee && group.assignee.name ? group.assignee.name : '') +
-                latestMeta + '</td>' +
-                '<td>' + countHtml + '</td>' +
-                '<td><span class="sc-prev-history-products-summary">' + escHtml(productSummary) + '</span></td>' +
-                '<td>' + escHtml(latestItem.oppId || '') + '</td></tr>';
-        if (hasDetailRows) {
-          html += '<tr class="sc-prev-history-detail-row" data-history-row="' + escAttr(groupId) + '"><td class="sc-prev-history-detail-cell" colspan="5">' +
-                  '<div class="sc-prev-history-detail-list">';
-          group.items.filter(function (item) { return !item.summaryOnly; }).forEach(function (item) {
-            html += '<div class="sc-prev-history-detail-item">' +
-                    '<span class="sc-prev-history-detail-scr">SCR ' + escHtml(item.scrId || '?') + '</span>' +
-                    '<span>' + escHtml(getHistoryItemProducts(item) || '--') + '</span>' +
-                    '<span>' + escHtml(item.oppId || '') + '</span>' +
-                    '</div>';
-          });
-          html += '</div></td></tr>';
-        }
-      });
-      html += '</tbody></table>';
-    } else if (!historyIsLoading) {
-      html += '<div class="sc-prev-history-empty">NO ROWS RETURNED</div>';
+    if (ctx.previousHistoryEnabled) {
+      const historyRows = ctx.previousHistoryRows || [];
+      const historyGroups = groupPreviousHistoryRows(historyRows).slice(0, 8);
+      const historyTotalCount = getHistoryTotalCount(historyRows);
+      const historyStatus = ctx.previousHistoryStatus || (ctx.previousHistoryRequested ? 'Loading previous SC history...' : 'click to query previous SCRs');
+      const historyIsLoading = /loading|checking|background|still/i.test(historyStatus);
+      html += '<div class="sc-prev-history-panel' + (_previousHistoryCollapsed ? ' collapsed' : '') + '">';
+      html += '<div class="sc-prev-history-head">' +
+              '<button type="button" class="sc-prev-history-toggle" aria-expanded="' + (_previousHistoryCollapsed ? 'false' : 'true') + '">' +
+              '<span class="sc-prev-history-chevron">' + (_previousHistoryCollapsed ? '▶' : '▼') + '</span>' +
+              '<span class="sc-prev-history-title">Previous SC History</span></button>' +
+              '<span class="sc-prev-history-status">' + renderHistoryStatus(historyTotalCount ? `${historyTotalCount} previous SCR${historyTotalCount === 1 ? '' : 's'} found` : historyStatus) + '</span></div>';
+      html += '<div class="sc-prev-history-body">';
+      if (historyGroups.length) {
+        html += '<table class="sc-prev-history-table"><thead><tr>' +
+                '<th style="width:10%">A/D</th><th style="width:27%">SC</th><th style="width:13%">SCRs</th><th style="width:25%">Products</th><th>Latest Opp</th>' +
+                '</tr></thead><tbody>';
+        historyGroups.forEach(function (group, index) {
+          const requestType = group.requestType;
+          const typeClass = requestType === 'AMO' ? 'amo' : (requestType === 'Direct' ? 'direct' : 'unknown');
+          const latestItem = group.items[0] || {};
+          const groupId = `sc-prev-history-${index}`;
+          const productSummary = getHistoryProductSummary(group.items);
+          const groupCount = getHistoryGroupCount(group);
+          const hasDetailRows = group.items.some(function (item) { return !item.summaryOnly; });
+          const latestMeta = latestItem.summaryOnly ? '' : '<span class="sc-prev-history-meta">most recent SCR ' + escHtml(latestItem.scrId || '') + '</span>';
+          const countHtml = hasDetailRows
+            ? '<button type="button" class="sc-prev-history-count-btn" data-history-detail="' + escAttr(groupId) + '" data-history-count="' + groupCount + '">' + escHtml(`${groupCount}>`) + '</button>'
+            : '<span class="sc-prev-history-count-value">' + escHtml(String(groupCount)) + '</span>';
+          html += '<tr><td><span class="sc-prev-history-type sc-prev-history-type-' + typeClass + '">' +
+                  escHtml(requestType || '?') + '</span></td>' +
+                  '<td>' + escHtml(group.assignee && group.assignee.name ? group.assignee.name : '') +
+                  latestMeta + '</td>' +
+                  '<td>' + countHtml + '</td>' +
+                  '<td><span class="sc-prev-history-products-summary">' + escHtml(productSummary) + '</span></td>' +
+                  '<td>' + escHtml(latestItem.oppId || '') + '</td></tr>';
+          if (hasDetailRows) {
+            html += '<tr class="sc-prev-history-detail-row" data-history-row="' + escAttr(groupId) + '"><td class="sc-prev-history-detail-cell" colspan="5">' +
+                    '<div class="sc-prev-history-detail-list">';
+            group.items.filter(function (item) { return !item.summaryOnly; }).forEach(function (item) {
+              html += '<div class="sc-prev-history-detail-item">' +
+                      '<span class="sc-prev-history-detail-scr">SCR ' + escHtml(item.scrId || '?') + '</span>' +
+                      '<span>' + escHtml(getHistoryItemProducts(item) || '--') + '</span>' +
+                      '<span>' + escHtml(item.oppId || '') + '</span>' +
+                      '</div>';
+            });
+            html += '</div></td></tr>';
+          }
+        });
+        html += '</tbody></table>';
+      } else if (!ctx.previousHistoryRequested) {
+        html += '<div class="sc-prev-history-empty">SCOUT&gt; CLICK PREVIOUS SC HISTORY TO QUERY NETSUITE</div>';
+      } else if (!historyIsLoading) {
+        html += '<div class="sc-prev-history-empty">NO ROWS RETURNED</div>';
+      }
+      html += '</div>';
+      html += '</div>';
     }
-    html += '</div>';
-    html += '</div>';
 
-    if (ctx.isAmoRequest) {
+    if (ctx.isAmoRequest && ctx.customerLicenseEnabled) {
       const customerLicenseSearchText = ctx.companySearchText || ctx.companyId || '';
       html += '<div class="sc-customer-license-panel' + (_customerLicenseCollapsed ? ' collapsed' : '') + '">' +
               '<div class="sc-customer-license-head">' +
@@ -10589,7 +10633,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               '</span></div>';
     }
 
-    if (ctx.historyDebug && getDebugModeEnabled()) {
+    if (ctx.previousHistoryEnabled && ctx.historyDebug && getDebugModeEnabled()) {
       const dbg = ctx.historyDebug;
       const openAttr = (!ctx.prevSCsOnDeal?.length && !ctx.prevSCs?.length) ? ' open' : '';
       const sampleRows = (dbg.mergedSamples || []).slice(0, 6);
@@ -10694,7 +10738,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       html += '</div></details>';
     }
 
-    const hasAnyContext = location || ctx.industryFamily || (ctx.historyDebug && getDebugModeEnabled()) || (ctx.prevSCs && ctx.prevSCs.length) ||
+    const hasAnyContext = location || ctx.industryFamily || (ctx.previousHistoryEnabled && ctx.historyDebug && getDebugModeEnabled()) || (ctx.prevSCs && ctx.prevSCs.length) ||
                           (ctx.prevAmoSCs && ctx.prevAmoSCs.length) || (ctx.prevDirectSCs && ctx.prevDirectSCs.length) ||
                           (ctx.prevSCsOnDeal && ctx.prevSCsOnDeal.length) || ctx.leadScName;
     if (!hasAnyContext) {
@@ -10707,12 +10751,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const historyToggle = body.querySelector('.sc-prev-history-toggle');
     if (historyToggle) {
       historyToggle.addEventListener('click', function () {
-        _previousHistoryCollapsed = !_previousHistoryCollapsed;
+        const shouldStartHistory = !ctx.previousHistoryRequested && typeof CURRENT_PREVIOUS_HISTORY_LOADER === 'function';
+        _previousHistoryCollapsed = shouldStartHistory ? false : !_previousHistoryCollapsed;
         const panel = this.closest('.sc-prev-history-panel');
         const chevron = this.querySelector('.sc-prev-history-chevron');
         if (panel) panel.classList.toggle('collapsed', _previousHistoryCollapsed);
         if (chevron) chevron.textContent = _previousHistoryCollapsed ? '▶' : '▼';
         this.setAttribute('aria-expanded', _previousHistoryCollapsed ? 'false' : 'true');
+        if (shouldStartHistory) CURRENT_PREVIOUS_HISTORY_LOADER();
       });
     }
 
@@ -10727,7 +10773,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         this.setAttribute('aria-expanded', _customerLicenseCollapsed ? 'false' : 'true');
         if (!_customerLicenseCollapsed) loadCustomerLicensesIntoPanel(this.dataset.licenseSearch || '');
       });
-      if (!_customerLicenseCollapsed) loadCustomerLicensesIntoPanel(licenseToggle.dataset.licenseSearch || '');
     }
 
     // Wire expand buttons
@@ -11973,6 +12018,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const body = document.getElementById('sc-context-body');
     if (!body) return;
     body.innerHTML = '<div class="sc-status loading">Loading context…</div>';
+    CURRENT_PREVIOUS_HISTORY_LOADER = null;
 
     // Reset requested SC wrapper while we reload
     const reqWrapper = document.getElementById('sc-requested-sc-wrapper');
@@ -12032,7 +12078,21 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       if (!companyId) {
         historyDebug.errors.push('No company ID found on current SCR.');
         CURRENT_CUSTOMER_LOCATION = { city: '', state: '', country: '' };
-        renderStaffingContext(body, { companyId, companySearchText, isAmoRequest, onsite, requestedSC, prevSCs: [], prevSCsOnDeal: [], leadScName, historyDebug });
+        renderStaffingContext(body, {
+          companyId,
+          companySearchText,
+          isAmoRequest,
+          onsite,
+          requestedSC,
+          prevSCs: [],
+          prevSCsOnDeal: [],
+          leadScName,
+          historyDebug,
+          previousHistoryEnabled: getPreviousScHistoryEnabled(),
+          previousHistoryRequested: false,
+          previousHistoryStatus: 'skipped: no company',
+          customerLicenseEnabled: getCustomerLicenseEnabled(),
+        });
         if (requestedSC) loadRequestedSCCard(requestedSC, empName || '');
         return;
       }
@@ -12084,10 +12144,12 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       CURRENT_CUSTOMER_LOCATION = { city, state, country };
 
       let customerScrHistory = [];
+      let previousHistoryRequested = false;
+      let previousHistoryStarted = false;
       const filterCurrentScr = function (item) {
         return !currentScrId || String(item.scrId) !== String(currentScrId);
       };
-      historyDebug.savedSearchStatus = companySearchText ? 'loading in background' : 'skipped: no company search text';
+      historyDebug.savedSearchStatus = companySearchText ? 'click to query previous SCRs' : 'skipped: no company search text';
 
       function renderHistoryContext() {
         const summaryHistory = customerScrHistory.filter(function (item) { return item && item.summaryOnly; });
@@ -12103,7 +12165,9 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         historyDebug.summaryRows = summaryHistory.length;
         historyDebug.detailRows = detailHistory.length;
         historyDebug.mergedSamples = sortedCustomerScrHistory.slice(0, 8);
-        let previousHistoryStatus = historyDebug.savedSearchStatus || 'Loading previous SC history...';
+        let previousHistoryStatus = previousHistoryRequested
+          ? (historyDebug.savedSearchStatus || 'Loading previous SC history...')
+          : (historyDebug.savedSearchStatus || 'click to query previous SCRs');
         if (sortedCustomerScrHistory.length) {
           previousHistoryStatus = `${historyTotalCount} previous SCR${historyTotalCount === 1 ? '' : 's'} found`;
           if (/loading/i.test(historyDebug.savedSearchStatus || '')) {
@@ -12159,42 +12223,54 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           historyDebug,
           previousHistoryRows: sortedCustomerScrHistory,
           previousHistoryStatus,
+          previousHistoryEnabled: getPreviousScHistoryEnabled(),
+          previousHistoryRequested,
+          customerLicenseEnabled: getCustomerLicenseEnabled(),
         });
       }
 
-      renderHistoryContext();
-      runAfterNetSuitePageSettles(function () {
-        try {
-          customerScrHistory = getCustomerScrHistory(companyId, historyDebug)
-            .filter(filterCurrentScr);
-        } catch (e) {
-          historyDebug.errors.push(`SCR history lookup: ${e.message || e}`);
-        }
-        try {
-          customerScrHistory = mergeCustomerScrHistory(
-            customerScrHistory,
-            parseVisibleCustomerScrHistory(historyDebug).filter(filterCurrentScr));
-        } catch (e) {
-          historyDebug.errors.push(`Visible history lookup: ${e.message || e}`);
-        }
+      function startPreviousHistoryLookup() {
+        if (!getPreviousScHistoryEnabled() || previousHistoryStarted) return;
+        previousHistoryStarted = true;
+        previousHistoryRequested = true;
+        historyDebug.savedSearchStatus = companySearchText ? 'loading in background' : 'skipped: no company search text';
         renderHistoryContext();
-
-        const savedSearchPromise = loadPreviousScHistoryFromSavedSearch(companySearchText, historyDebug, renderHistoryContext);
-        renderHistoryContext();
-        savedSearchPromise.then(function (savedSearchHistory) {
-          if (savedSearchHistory && savedSearchHistory.length) {
-            const filteredSavedHistory = savedSearchHistory.filter(filterCurrentScr);
-            // Once NetSuite's saved search returns, treat it as authoritative.
-            // Visible-page parsing is only a quick interim/fallback and can pick up unrelated form tables.
-            customerScrHistory = filteredSavedHistory;
+        runAfterNetSuitePageSettles(function () {
+          try {
+            customerScrHistory = getCustomerScrHistory(companyId, historyDebug)
+              .filter(filterCurrentScr);
+          } catch (e) {
+            historyDebug.errors.push(`SCR history lookup: ${e.message || e}`);
+          }
+          try {
+            customerScrHistory = mergeCustomerScrHistory(
+              customerScrHistory,
+              parseVisibleCustomerScrHistory(historyDebug).filter(filterCurrentScr));
+          } catch (e) {
+            historyDebug.errors.push(`Visible history lookup: ${e.message || e}`);
           }
           renderHistoryContext();
-        }).catch(function (e) {
-          historyDebug.savedSearchStatus = `saved search error: ${e.message || e}`;
-          historyDebug.errors.push(`Saved search ${PREVIOUS_SC_HISTORY_SEARCH_ID}: ${e.message || e}`);
+
+          const savedSearchPromise = loadPreviousScHistoryFromSavedSearch(companySearchText, historyDebug, renderHistoryContext);
           renderHistoryContext();
+          savedSearchPromise.then(function (savedSearchHistory) {
+            if (savedSearchHistory && savedSearchHistory.length) {
+              const filteredSavedHistory = savedSearchHistory.filter(filterCurrentScr);
+              // Once NetSuite's saved search returns, treat it as authoritative.
+              // Visible-page parsing is only a quick interim/fallback and can pick up unrelated form tables.
+              customerScrHistory = filteredSavedHistory;
+            }
+            renderHistoryContext();
+          }).catch(function (e) {
+            historyDebug.savedSearchStatus = `saved search error: ${e.message || e}`;
+            historyDebug.errors.push(`Saved search ${PREVIOUS_SC_HISTORY_SEARCH_ID}: ${e.message || e}`);
+            renderHistoryContext();
+          });
         });
-      });
+      }
+
+      CURRENT_PREVIOUS_HISTORY_LOADER = startPreviousHistoryLookup;
+      renderHistoryContext();
       if (requestedSC) loadRequestedSCCard(requestedSC, empName || '');
 
     } catch (e) {
@@ -12937,6 +13013,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       saveSettingsFromForm();
       myTeamLoaded = true;
       loadMyTeam(empIds, empName);
+      loadStaffingContext(empName);
       confirmEl.classList.add('show');
       setTimeout(() => confirmEl.classList.remove('show'), 2500);
     });
@@ -12962,6 +13039,20 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     if (debugToggle) {
       debugToggle.addEventListener('change', function () {
         saveLocalConfig({ debugModeEnabled: this.checked });
+        loadStaffingContext(empName);
+      });
+    }
+    const previousHistoryToggle = document.getElementById('sc-prev-history-setting-toggle');
+    if (previousHistoryToggle) {
+      previousHistoryToggle.addEventListener('change', function () {
+        saveLocalConfig({ previousScHistoryEnabled: this.checked });
+        loadStaffingContext(empName);
+      });
+    }
+    const customerLicenseToggle = document.getElementById('sc-customer-license-setting-toggle');
+    if (customerLicenseToggle) {
+      customerLicenseToggle.addEventListener('change', function () {
+        saveLocalConfig({ customerLicenseEnabled: this.checked });
         loadStaffingContext(empName);
       });
     }
