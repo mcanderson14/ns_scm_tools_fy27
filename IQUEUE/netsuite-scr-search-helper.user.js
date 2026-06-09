@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.13
+// @version      27.0.14
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -41,7 +41,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.13";
+  const HELPER_VERSION = "27.0.14";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -7035,15 +7035,16 @@ Health & Hospitality	DIRECT	NL	West	West
       : fullBody;
     const outlookUrl = `https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(email)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(compactBody)}`;
     const mailtoUrl = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(compactBody)}`;
-    openEditUrlWithGm(outlookUrl);
+    const autoOpened = openEmailDraftUrl({ outlookUrl, mailtoUrl });
     return {
       email,
       mode: "draft",
+      autoOpened,
       reason: reason || "Microsoft Graph email send is unavailable.",
       subject,
       links: [
-        { label: "Open Outlook draft", href: outlookUrl },
-        { label: "Mailto fallback", href: mailtoUrl }
+        { label: "Open Outlook web compose", href: outlookUrl },
+        { label: "Open email compose", href: mailtoUrl }
       ]
     };
   }
@@ -7312,6 +7313,7 @@ Health & Hospitality	DIRECT	NL	West	West
       body: compactBody,
       mailtoUrl,
       outlookUrl,
+      autoOpened: "",
       links: [
         { label: labels.outlook || "Open Outlook web compose", href: outlookUrl },
         { label: labels.mailto || "Mailto fallback", href: mailtoUrl }
@@ -7329,7 +7331,7 @@ Health & Hospitality	DIRECT	NL	West	West
         outlook: "Open Outlook web compose"
       }
     );
-    openEditUrlWithGm(draft.outlookUrl);
+    draft.autoOpened = openEmailDraftUrl(draft);
     return draft;
   }
 
@@ -8289,6 +8291,15 @@ Health & Hospitality	DIRECT	NL	West	West
 
   function openEditUrlWithGm(url) {
     if (!url) return;
+    if (/^mailto:/i.test(url)) {
+      const link = document.createElement("a");
+      link.href = url;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      return;
+    }
     try {
       if (typeof GM_openInTab === "function") {
         GM_openInTab(url, { active: true, insert: true, setParent: true });
@@ -8298,6 +8309,19 @@ Health & Hospitality	DIRECT	NL	West	West
       console.warn("SCR helper GM_openInTab failed", error);
     }
     window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  function browserLooksLikeFirefox() {
+    const userAgent = typeof navigator !== "undefined" ? navigator.userAgent || "" : "";
+    return /\bfirefox\//i.test(userAgent);
+  }
+
+  function openEmailDraftUrl(draft) {
+    if (!draft) return "";
+    const useMailto = browserLooksLikeFirefox() && draft.mailtoUrl;
+    const url = useMailto ? draft.mailtoUrl : draft.outlookUrl;
+    openEditUrlWithGm(url);
+    return useMailto ? "mailto" : "outlook";
   }
 
   function getPageWindow() {
@@ -9064,8 +9088,11 @@ Health & Hospitality	DIRECT	NL	West	West
     try {
       const recipient = await resolveSalesRepEmail(row);
       const draft = openRequesterInfoDraft(row, recipient);
+      const openedText = draft.autoOpened === "mailto"
+        ? "email compose opened using the Firefox fallback"
+        : "Outlook compose opened";
       row.routingNotice = {
-        message: `Info request email opened for ${draft.email}. Review and send it. If it did not appear, use the links below.`,
+        message: `Info request ${openedText} for ${draft.email}. Review and send it. If it did not appear, use the links below.`,
         state: "success",
         links: draft.links || []
       };
@@ -9168,8 +9195,11 @@ Health & Hospitality	DIRECT	NL	West	West
         try {
           setStaffingNotesStatus(card, "⏳ Route saved. Opening owner notification draft...", "working");
           const notice = await sendOwnerRouteEmail(row, assignment.ownerName, target, routeNoteLine);
+          const openedText = notice.autoOpened === "mailto"
+            ? "email compose opened using the Firefox fallback"
+            : "Outlook compose opened";
           row.routingNotice = {
-            message: `Route saved${routeNoteLine ? "; redirect note added" : ""}; Outlook compose opened for ${notice.email}. Review and send it. If it did not appear, use the links below.`,
+            message: `Route saved${routeNoteLine ? "; redirect note added" : ""}; ${openedText} for ${notice.email}. Review and send it. If it did not appear, use the links below.`,
             state: "success",
             links: notice.links || []
           };
