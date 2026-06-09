@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.0.20
+// @version      27.0.21
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.0.20
+   SCOUT — SC Operations Utility Tool  27.0.21
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.0.20';
+  const SCRIPT_VERSION = '27.0.21';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -4937,6 +4937,28 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     return fieldIds.some(fieldId => haystack.includes(String(fieldId).toLowerCase()));
   }
 
+  function getActiveDateFieldControl() {
+    let activeDate = null;
+    try {
+      getAccessibleDocuments().some(doc => {
+        try {
+          const active = doc.activeElement;
+          if (active && active !== doc.body && isDateFieldControl(active)) {
+            activeDate = active;
+            return true;
+          }
+        } catch (e) { /* keep scanning frames */ }
+        return false;
+      });
+    } catch (e) { /* best effort */ }
+    return activeDate;
+  }
+
+  function describeFieldControl(el) {
+    if (!el) return 'unknown field';
+    return [el.id, el.name].filter(Boolean).join(' / ') || el.tagName || 'unknown field';
+  }
+
   function releaseActiveNetSuiteFieldFocus() {
     let dateFieldWasActive = false;
     try {
@@ -5125,6 +5147,13 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   }
 
   function saveNetSuiteForm() {
+    const activeDateBeforeRelease = getActiveDateFieldControl();
+    if (activeDateBeforeRelease) {
+      const fieldName = describeFieldControl(activeDateBeforeRelease);
+      console.warn('[Staffing Helper] Auto-save paused because a NetSuite date field is active:', fieldName);
+      showToast(`SCOUT paused auto-save: finish the active date field (${fieldName}) and click Save manually.`, 'error', 9000);
+      return false;
+    }
     releaseActiveNetSuiteFieldFocus();
     const selectors = [
       '#submitter',
@@ -5139,6 +5168,13 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       for (const selector of selectors) {
         const btn = doc.querySelector(selector);
         if (btn) {
+          const activeDateBeforeClick = getActiveDateFieldControl();
+          if (activeDateBeforeClick) {
+            const fieldName = describeFieldControl(activeDateBeforeClick);
+            console.warn('[Staffing Helper] Auto-save paused because a NetSuite date field became active:', fieldName);
+            showToast(`SCOUT paused auto-save: finish the active date field (${fieldName}) and click Save manually.`, 'error', 9000);
+            return false;
+          }
           releaseActiveNetSuiteFieldFocus();
           btn.click();
           return true;
