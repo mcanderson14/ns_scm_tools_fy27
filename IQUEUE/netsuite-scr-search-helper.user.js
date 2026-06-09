@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.24
+// @version      27.0.25
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -42,7 +42,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.24";
+  const HELPER_VERSION = "27.0.25";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -2460,6 +2460,16 @@ Health & Hospitality	DIRECT	NL	West	West
     return [];
   }
 
+  function flattenMappingRecords(values) {
+    return arrayOrObjectValues(values).flatMap(value => (
+      Array.isArray(value)
+        ? value
+        : value && typeof value === "object"
+          ? [value]
+          : []
+    ));
+  }
+
   function parseGtmIndustryMappingRows(data) {
     const sourceRows = Array.isArray(data)
       ? data
@@ -2469,11 +2479,15 @@ Health & Hospitality	DIRECT	NL	West	West
           ? arrayOrObjectValues(data.mappings)
           : arrayOrObjectValues(data.industryMappings).length
             ? arrayOrObjectValues(data.industryMappings)
-            : [];
+            : flattenMappingRecords(data.lookup).length
+              ? flattenMappingRecords(data.lookup)
+              : flattenMappingRecords(data.subgroupLookup).length
+                ? flattenMappingRecords(data.subgroupLookup)
+                : flattenMappingRecords(data.industryLookup);
 
     return sourceRows.map(row => {
-      const industryFamily = Array.isArray(row)
-        ? data.groups[row[0]] || ""
+      const scIndustryGroup = Array.isArray(row)
+        ? (data.groups || [])[row[0]] || ""
         : mappingObjectValue(row, [
             "scIndustryGroup",
             "SC Industry Group",
@@ -2485,8 +2499,9 @@ Health & Hospitality	DIRECT	NL	West	West
             "Industry Group",
             "scGroup"
           ]);
+      const industryFamily = findCanonicalIndustry(scIndustryGroup) || normalizeSpaces(scIndustryGroup);
       const gtmIndustry = Array.isArray(row)
-        ? data.industries[row[1]] || ""
+        ? (data.industries || [])[row[1]] || ""
         : mappingObjectValue(row, [
             "gtmIndustry",
             "GTM Industry",
@@ -2495,7 +2510,7 @@ Health & Hospitality	DIRECT	NL	West	West
             "Industry"
           ]);
       const gtmIndustrySubgroup = Array.isArray(row)
-        ? data.subgroups[row[2]] || ""
+        ? (data.subgroups || [])[row[2]] || ""
         : mappingObjectValue(row, [
             "gtmIndustrySubgroup",
             "GTM Industry Subgroup",
@@ -2509,12 +2524,16 @@ Health & Hospitality	DIRECT	NL	West	West
       return {
         industryFamily,
         industryKey: normalizeKey(industryFamily),
+        scIndustryGroup: industryFamily,
+        scIndustryGroupKey: normalizeKey(industryFamily),
+        sourceScIndustryGroup: normalizeSpaces(scIndustryGroup),
+        sourceScIndustryGroupKey: normalizeKey(scIndustryGroup),
         gtmIndustry,
         gtmIndustryKey: normalizeKey(gtmIndustry),
         gtmIndustrySubgroup,
         gtmIndustrySubgroupKey: normalizeKey(gtmIndustrySubgroup)
       };
-    }).filter(row => row.industryFamily && row.gtmIndustry && row.gtmIndustrySubgroup);
+    }).filter(row => row.industryFamily && (row.gtmIndustry || row.gtmIndustrySubgroup));
   }
 
   function initializeGtmIndustryMappingState(rows, metadata = {}) {
