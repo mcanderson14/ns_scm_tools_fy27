@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.25
+// @version      27.0.26
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -42,7 +42,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.25";
+  const HELPER_VERSION = "27.0.26";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -1272,6 +1272,7 @@ Health & Hospitality	DIRECT	NL	West	West
   let currentUserRosterCache;
   const rosterAssigneeLookupCache = new Map();
   const salesRepEmailLookupCache = new Map();
+  const employeeEmailLookupCache = new Map();
   let refreshSequence = 0;
   let helperState = readHelperState();
   if (!Object.prototype.hasOwnProperty.call(helperState, "maximized")) helperState.maximized = true;
@@ -7341,7 +7342,7 @@ Health & Hospitality	DIRECT	NL	West	West
     return null;
   }
 
-  function lookupEmployeeEmailWithRequire(pageWindow, names, employeeId) {
+  function lookupEmployeeEmailWithRequire(pageWindow, names, employeeId, label = "employee") {
     return new Promise((resolve, reject) => {
       let settled = false;
       let timer;
@@ -7351,7 +7352,7 @@ Health & Hospitality	DIRECT	NL	West	West
         clearTimeout(timer);
         callback(result);
       };
-      timer = setTimeout(finish(reject), 8000, new Error("Timed out resolving Sales Rep email."));
+      timer = setTimeout(finish(reject), 8000, new Error(`Timed out resolving ${label} email.`));
 
       try {
         pageWindow.require(["N/search"], search => {
@@ -7401,11 +7402,66 @@ Health & Hospitality	DIRECT	NL	West	West
     });
   }
 
+  async function resolveEmployeeEmailByName(name, options = {}) {
+    const label = options.label || "employee";
+    const employeeName = cleanPersonName(name);
+    if (!employeeName) {
+      if (options.optional) return null;
+      throw new Error(`No ${label} was returned on this SCR row.`);
+    }
+
+    const employeeId = options.employeeId || "";
+    const cacheKey = employeeId
+      ? `id:${employeeId}`
+      : `name:${personNameKeys(employeeName).sort().join("|") || normalizeKey(employeeName)}`;
+    const roleCacheKey = `${normalizeKey(label)}:${cacheKey}`;
+    if (employeeEmailLookupCache.has(roleCacheKey)) return employeeEmailLookupCache.get(roleCacheKey);
+
+    const names = [employeeName];
+    const pageWindow = getPageWindow();
+    let match = null;
+    if (pageWindow && (typeof pageWindow.nlapiLookupField === "function" || typeof pageWindow.nlapiSearchRecord === "function")) {
+      try {
+        match = lookupEmployeeEmailWithNlapi(pageWindow, names, employeeId);
+      } catch (error) {
+        console.warn(`IQUEUE nlapi ${label} email lookup failed`, error);
+      }
+    }
+    if (!match && pageWindow && typeof pageWindow.require === "function") {
+      try {
+        match = await lookupEmployeeEmailWithRequire(pageWindow, names, employeeId, label);
+      } catch (error) {
+        console.warn(`IQUEUE N/search ${label} email lookup failed`, error);
+      }
+    }
+    if (!match) {
+      const inferred = inferOracleEmailFromName(employeeName);
+      match = inferred
+        ? employeeLookupRow("", employeeName, inferred, "oracle email fallback")
+        : {
+          id: "",
+          name: employeeName,
+          email: employeeName,
+          source: "Outlook name resolution"
+        };
+    }
+    if (!match || !match.email) {
+      if (options.optional) return null;
+      throw new Error(`No ${label} recipient was available for ${employeeName}.`);
+    }
+
+    const resolved = {
+      name: match.name || employeeName,
+      email: match.email,
+      source: match.source || "employee"
+    };
+    employeeEmailLookupCache.set(roleCacheKey, resolved);
+    return resolved;
+  }
+
   async function resolveSalesRepEmail(row) {
     const summary = buildRowSummary(row);
     const salesRepName = cleanPersonName(summary.salesRep);
-    if (!salesRepName) throw new Error("No Sales Rep was returned on this SCR row.");
-
     const fields = row && (row.allFields || row.fields) || [];
     const salesRepField = findSalesRepField(fields);
     const employeeId = salesRepEmployeeIdFromField(salesRepField, salesRepName);
@@ -7414,43 +7470,21 @@ Health & Hospitality	DIRECT	NL	West	West
       : `name:${personNameKeys(salesRepName).sort().join("|") || normalizeKey(salesRepName)}`;
     if (salesRepEmailLookupCache.has(cacheKey)) return salesRepEmailLookupCache.get(cacheKey);
 
-    const names = [salesRepName];
-    const pageWindow = getPageWindow();
-    let match = null;
-    if (pageWindow && (typeof pageWindow.nlapiLookupField === "function" || typeof pageWindow.nlapiSearchRecord === "function")) {
-      try {
-        match = lookupEmployeeEmailWithNlapi(pageWindow, names, employeeId);
-      } catch (error) {
-        console.warn("IQUEUE nlapi employee email lookup failed", error);
-      }
-    }
-    if (!match && pageWindow && typeof pageWindow.require === "function") {
-      try {
-        match = await lookupEmployeeEmailWithRequire(pageWindow, names, employeeId);
-      } catch (error) {
-        console.warn("IQUEUE N/search employee email lookup failed", error);
-      }
-    }
-    if (!match) {
-      const inferred = inferOracleEmailFromName(salesRepName);
-      match = inferred
-        ? employeeLookupRow("", salesRepName, inferred, "oracle email fallback")
-        : {
-          id: "",
-          name: salesRepName,
-          email: salesRepName,
-          source: "Outlook name resolution"
-        };
-    }
-    if (!match || !match.email) throw new Error(`No Sales Rep recipient was available for ${salesRepName}.`);
-
-    const resolved = {
-      name: match.name || salesRepName,
-      email: match.email,
-      source: match.source || "employee"
-    };
+    const resolved = await resolveEmployeeEmailByName(salesRepName, {
+      label: "Sales Rep",
+      employeeId
+    });
     salesRepEmailLookupCache.set(cacheKey, resolved);
     return resolved;
+  }
+
+  async function resolveSalesDirectorEmail(row) {
+    const summary = buildRowSummary(row);
+    const directorName = cleanPersonName(summary.salesDirector);
+    return resolveEmployeeEmailByName(directorName, {
+      label: "Regional Director",
+      optional: true
+    });
   }
 
   function requestInfoQueueLabel(row) {
@@ -7497,14 +7531,36 @@ Health & Hospitality	DIRECT	NL	West	West
     return lines.filter(line => line !== "").join("\r\n");
   }
 
-  function buildEmailComposeDraft(email, subject, body, labels = {}) {
+  function normalizedEmailList(values) {
+    return (Array.isArray(values) ? values : [values])
+      .map(value => normalizeSpaces(value))
+      .filter(Boolean);
+  }
+
+  function buildEmailComposeDraft(email, subject, body, options = {}) {
+    const labels = options.labels || {};
+    const toEmails = normalizedEmailList(email);
+    const ccEmails = normalizedEmailList(options.cc)
+      .filter(ccEmail => !toEmails.some(toEmail => normalizeKey(toEmail) === normalizeKey(ccEmail)));
     const compactBody = body.length > 1400
       ? `${body.slice(0, 1350)}\r\n\r\n[Details trimmed for draft length. Open the SCR for full context.]`
       : body;
-    const outlookUrl = `https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(email)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(compactBody)}`;
-    const mailtoUrl = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(compactBody)}`;
+    const outlookParams = [
+      `to=${encodeURIComponent(toEmails.join(";"))}`,
+      ccEmails.length ? `cc=${encodeURIComponent(ccEmails.join(";"))}` : "",
+      `subject=${encodeURIComponent(subject)}`,
+      `body=${encodeURIComponent(compactBody)}`
+    ].filter(Boolean).join("&");
+    const mailtoParams = [
+      ccEmails.length ? `cc=${encodeURIComponent(ccEmails.join(","))}` : "",
+      `subject=${encodeURIComponent(subject)}`,
+      `body=${encodeURIComponent(compactBody)}`
+    ].filter(Boolean).join("&");
+    const outlookUrl = `https://outlook.office.com/mail/deeplink/compose?${outlookParams}`;
+    const mailtoUrl = `mailto:${encodeURIComponent(toEmails.join(","))}?${mailtoParams}`;
     return {
-      email,
+      email: toEmails.join(", "),
+      cc: ccEmails,
       subject,
       body: compactBody,
       mailtoUrl,
@@ -7517,14 +7573,17 @@ Health & Hospitality	DIRECT	NL	West	West
     };
   }
 
-  function openRequesterInfoDraft(row, recipient) {
+  function openRequesterInfoDraft(row, recipient, ccRecipients = []) {
     const draft = buildEmailComposeDraft(
       recipient.email,
       requesterInfoMailSubject(row),
       requesterInfoMailText(row),
       {
-        mailto: "Open email compose",
-        outlook: "Open Outlook web compose"
+        cc: ccRecipients,
+        labels: {
+          mailto: "Open email compose",
+          outlook: "Open Outlook web compose"
+        }
       }
     );
     draft.autoOpened = openEmailDraftUrl(draft);
@@ -9386,12 +9445,14 @@ Health & Hospitality	DIRECT	NL	West	West
 
     try {
       const recipient = await resolveSalesRepEmail(row);
-      const draft = openRequesterInfoDraft(row, recipient);
+      setStaffingNotesStatus(card, "⏳ Resolving Regional Director email...", "working");
+      const ccRecipient = await resolveSalesDirectorEmail(row);
+      const draft = openRequesterInfoDraft(row, recipient, ccRecipient ? [ccRecipient.email] : []);
       const openedText = draft.autoOpened === "mailto"
         ? "email compose opened using the Firefox fallback"
         : "Outlook compose opened";
       row.routingNotice = {
-        message: `Info request ${openedText} for ${draft.email}. Review and send it. If it did not appear, use the links below.`,
+        message: `Info request ${openedText} for ${draft.email}${draft.cc && draft.cc.length ? `, cc ${draft.cc.join(", ")}` : ""}. Review and send it. If it did not appear, use the links below.`,
         state: "success",
         links: draft.links || []
       };
