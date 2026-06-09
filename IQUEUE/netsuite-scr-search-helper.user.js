@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.18
+// @version      27.0.20
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -11,6 +11,7 @@
 // @match        https://mcanderson14.github.io/ns_scm_tools_fy27/calendar-refresh.html*
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        GM_setClipboard
 // @grant        GM_openInTab
 // @grant        GM_xmlhttpRequest
 // @grant        GM.xmlHttpRequest
@@ -41,7 +42,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.18";
+  const HELPER_VERSION = "27.0.20";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -1557,7 +1558,9 @@ Health & Hospitality	DIRECT	NL	West	West
   function rowMatchesEpmQueue(row) {
     if (!row) return false;
     const epmKey = normalizeKey(EPM_INDUSTRY_GROUP);
-    return crossIndustryFamilyKeysForRow(row).includes(epmKey) || row.industryKey === epmKey;
+    return crossIndustryFamilyKeysForRow(row).includes(epmKey)
+      || row.industryKey === epmKey
+      || normalizeKey(normalizeAmoDirect(row.amoDirect)) === normalizeKey(NSPB_REQUEST_TYPE);
   }
 
   function rowMatchesTechCoeQueue(row) {
@@ -1834,6 +1837,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const info = getCrossIndustryInfoForRow(row);
     if (info.targets.length) return info.targets.map(target => findCanonicalIndustry(target.family) || target.family);
     if (rowMatchesTechCoeQueue(row)) return [TECH_COE_INDUSTRY_GROUP];
+    if (rowMatchesEpmQueue(row)) return [EPM_INDUSTRY_GROUP];
     return [row && row.industryFamily].filter(Boolean);
   }
 
@@ -5418,6 +5422,23 @@ Health & Hospitality	DIRECT	NL	West	West
     }
   }
 
+  function renderCopyLinkControl(row) {
+    const viewUrl = viewUrlForRow(row);
+    const disabled = viewUrl ? "" : "disabled";
+    const title = viewUrl
+      ? "Copy SCR view link"
+      : "No SCR link was returned on this row.";
+    return `
+      <button
+        type="button"
+        class="scr-helper-copy-link"
+        data-view-url="${escapeHtml(viewUrl)}"
+        title="${escapeHtml(title)}"
+        ${disabled}
+      >Copy link</button>
+    `;
+  }
+
   function renderStaffScrControl(row, requestColor) {
     const editUrl = editUrlForRow(row);
     const style = requestColor && editUrl ? `style="background-color: ${escapeHtml(requestColor)};"` : "";
@@ -5975,7 +5996,7 @@ Health & Hospitality	DIRECT	NL	West	West
         <div class="scr-helper-card-head">
           <div>
             <div class="scr-helper-card-title" ${requestColor ? `style="color: ${escapeHtml(requestColor)};"` : ""}>
-              ${titleScrPrefix ? `<strong class="scr-helper-title-scr">${escapeHtml(titleScrPrefix)}</strong><span class="scr-helper-title-separator">|</span>` : ""}
+              ${titleScrPrefix ? `<span class="scr-helper-title-scr-group"><strong class="scr-helper-title-scr">${escapeHtml(titleScrPrefix)}</strong>${renderCopyLinkControl(row)}</span><span class="scr-helper-title-separator">|</span>` : ""}
               <span>${escapeHtml(titleOpportunity)}</span>
               ${titleCompany ? `<span class="scr-helper-title-separator">|</span><strong>${escapeHtml(titleCompany)}</strong>` : ""}
             </div>
@@ -8756,6 +8777,75 @@ Health & Hospitality	DIRECT	NL	West	West
     if (card) card.classList.toggle("is-working", state === "working");
   }
 
+  async function copyTextToClipboard(text) {
+    const value = String(text || "");
+    if (!value) throw new Error("No text was available to copy.");
+
+    if (typeof GM_setClipboard === "function") {
+      GM_setClipboard(value, "text");
+      return;
+    }
+
+    let clipboardError = null;
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      try {
+        await navigator.clipboard.writeText(value);
+        return;
+      } catch (error) {
+        clipboardError = error;
+      }
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = value;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-9999px";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+
+    try {
+      if (!document.execCommand("copy")) {
+        throw clipboardError || new Error("Copy command was blocked.");
+      }
+    } finally {
+      textarea.remove();
+    }
+  }
+
+  async function handleCopyScrLink(button) {
+    const card = button && button.closest(".scr-helper-card");
+    const row = searchRows.find(item => item.id === (card && card.dataset.rowId));
+    const viewUrl = button.dataset.viewUrl || viewUrlForRow(row);
+    const originalText = button.textContent;
+    const originalTitle = button.title;
+    if (!viewUrl) return;
+
+    button.disabled = true;
+    try {
+      await copyTextToClipboard(viewUrl);
+      button.textContent = "Copied";
+      button.title = "SCR link copied";
+      window.setTimeout(() => {
+        button.textContent = originalText || "Copy link";
+        button.title = originalTitle || "Copy SCR view link";
+        button.disabled = false;
+      }, 1600);
+    } catch (error) {
+      console.warn("IQUEUE could not copy SCR link", error);
+      button.textContent = "Copy failed";
+      button.title = "Clipboard blocked; copy the link from the prompt.";
+      window.prompt("Copy this SCR link:", viewUrl);
+      window.setTimeout(() => {
+        button.textContent = originalText || "Copy link";
+        button.title = originalTitle || "Copy SCR view link";
+        button.disabled = false;
+      }, 2200);
+    }
+  }
+
   function updateRowSearchText(row) {
     const allTextParts = row.fields.map(item => `${item.label} ${item.value}`)
       .concat([
@@ -9734,6 +9824,12 @@ Health & Hospitality	DIRECT	NL	West	West
         return;
       }
 
+      const copyLinkButton = closestElement(event.target, ".scr-helper-copy-link");
+      if (copyLinkButton) {
+        handleCopyScrLink(copyLinkButton);
+        return;
+      }
+
       const ownershipButton = closestElement(event.target, ".scr-helper-take-ownership");
       if (ownershipButton) {
         handleTakeOwnership(ownershipButton);
@@ -10708,6 +10804,35 @@ Health & Hospitality	DIRECT	NL	West	West
 
       #${HELPER_ID} .scr-helper-card-title strong {
         font-size: 14px;
+      }
+
+      #${HELPER_ID} .scr-helper-title-scr-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex: 0 0 auto;
+      }
+
+      #${HELPER_ID} .scr-helper-copy-link {
+        border: 1px solid currentColor;
+        border-radius: 4px;
+        padding: 2px 6px;
+        background: #ffffff;
+        color: inherit;
+        cursor: pointer;
+        font-size: 10px;
+        font-weight: 700;
+        line-height: 1.2;
+        white-space: nowrap;
+      }
+
+      #${HELPER_ID} .scr-helper-copy-link:hover {
+        background: var(--scr-industry-bg, #ffffff);
+      }
+
+      #${HELPER_ID} .scr-helper-copy-link:disabled {
+        opacity: 0.58;
+        cursor: not-allowed;
       }
 
       #${HELPER_ID} .scr-helper-card-badges {
