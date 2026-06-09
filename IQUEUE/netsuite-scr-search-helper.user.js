@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.11
+// @version      27.0.13
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -41,7 +41,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.11";
+  const HELPER_VERSION = "27.0.13";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -5181,16 +5181,36 @@ Health & Hospitality	DIRECT	NL	West	West
     ], [], labeledValuePatterns.submittedDate);
   }
 
+  function rowFields(row) {
+    return row && (row.allFields || row.fields) || [];
+  }
+
+  function rowScrAgeValue(row) {
+    if (!row) return "";
+    const fields = rowFields(row);
+    return row.scrAge
+      || getRawFieldValue(fields, "scrAge")
+      || getConciseFieldValue(fields, [/scr.*age/, /request.*age/], [], labeledValuePatterns.scrAge);
+  }
+
+  function rowSubmittedDateValue(row) {
+    if (!row) return "";
+    const scrAge = rowScrAgeValue(row);
+    return row.submittedDate
+      || getSubmittedDateValue(rowFields(row))
+      || extractDateValue(scrAge);
+  }
+
   function submittedDateSortValue(row) {
-    const date = parseDateValue(row && row.submittedDate);
+    const date = parseDateValue(rowSubmittedDateValue(row));
     return date ? date.getTime() : Number.MAX_SAFE_INTEGER;
   }
 
   function rowSubmittedAgeHours(row) {
     if (!row) return null;
-    const scrAgeHours = parseScrAgeHours(row.scrAge);
+    const scrAgeHours = parseScrAgeHours(rowScrAgeValue(row));
     if (scrAgeHours !== null) return scrAgeHours;
-    return submittedDateAgeHours(row.submittedDate);
+    return submittedDateAgeHours(rowSubmittedDateValue(row));
   }
 
   function compareSubmittedOldestFirst(left, right) {
@@ -6929,7 +6949,7 @@ Health & Hospitality	DIRECT	NL	West	West
     });
   }
 
-  function graphMailHtmlForOwnerRoute(row, ownerName, target) {
+  function graphMailHtmlForOwnerRoute(row, ownerName, target, routeNoteLine = "") {
     const summary = buildRowSummary(row);
     const scrLabel = formatScrTitlePrefix(row.scrDisplayId) || row.title || "SC Request";
     const opportunity = summary.opportunityDisplay || "Missing Opportunity";
@@ -6940,6 +6960,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const rows = [
       ["SCM Owner", ownerName],
       ["Routed By", routedBy],
+      ["Redirect Note", routeNoteLine],
       ["SC Staffing Industry", targetFamily],
       ["Request Type", requestTypeLabel(row.amoDirect)],
       ["Date Needed", summary.dateNeeded],
@@ -6981,7 +7002,7 @@ Health & Hospitality	DIRECT	NL	West	West
     return normalizeSpaces(`IQUEUE: ${targetFamily} SCR routed to you - ${scrLabel}${opportunity ? ` | ${opportunity}` : ""}${company ? ` | ${company}` : ""}`).slice(0, 240);
   }
 
-  function ownerRouteMailText(row, ownerName, target) {
+  function ownerRouteMailText(row, ownerName, target, routeNoteLine = "") {
     const summary = buildRowSummary(row);
     const scrLabel = formatScrTitlePrefix(row.scrDisplayId) || row.title || "SC Request";
     const routedBy = getCurrentUserName() || "IQUEUE user";
@@ -6993,6 +7014,7 @@ Health & Hospitality	DIRECT	NL	West	West
       `${scrLabel}${summary.opportunityDisplay ? ` | ${summary.opportunityDisplay}` : ""}${summary.companyDisplay ? ` | ${summary.companyDisplay}` : ""}`,
       "",
       `SCM Owner: ${ownerName}`,
+      routeNoteLine ? `Redirect Note: ${routeNoteLine}` : "",
       `SC Staffing Industry: ${targetFamily}`,
       `Request Type: ${requestTypeLabel(row.amoDirect) || "Unknown"}`,
       `Date Needed: ${summary.dateNeeded || "Unknown"}`,
@@ -7005,9 +7027,9 @@ Health & Hospitality	DIRECT	NL	West	West
     return lines.filter(line => line !== "").join("\r\n");
   }
 
-  function openOwnerRouteEmailDraft(row, ownerName, target, email, reason = "") {
+  function openOwnerRouteEmailDraft(row, ownerName, target, email, reason = "", routeNoteLine = "") {
     const subject = graphMailSubjectForOwnerRoute(row, target);
-    const fullBody = ownerRouteMailText(row, ownerName, target);
+    const fullBody = ownerRouteMailText(row, ownerName, target, routeNoteLine);
     const compactBody = fullBody.length > 1200
       ? `${fullBody.slice(0, 1150)}\r\n\r\n[Details trimmed for draft length. Open the SCR for full context.]`
       : fullBody;
@@ -7026,10 +7048,10 @@ Health & Hospitality	DIRECT	NL	West	West
     };
   }
 
-  async function sendOwnerRouteEmail(row, ownerName, target) {
+  async function sendOwnerRouteEmail(row, ownerName, target, routeNoteLine = "") {
     const email = authorizedManagerEmailForName(ownerName);
     if (!email) throw new Error(`No email address found for ${ownerName} in Authorized Managers.`);
-    return openOwnerRouteEmailDraft(row, ownerName, target, email, "Owner notifications use Outlook drafts.");
+    return openOwnerRouteEmailDraft(row, ownerName, target, email, "Owner notifications use Outlook drafts.", routeNoteLine);
   }
 
   function findSalesRepField(fields) {
@@ -8763,6 +8785,10 @@ Health & Hospitality	DIRECT	NL	West	West
             <input class="scr-helper-owner-modal-input" type="search" placeholder="Start typing a manager name" autocomplete="off" value="${escapeHtml(defaultOwner)}">
           </label>
           <div class="scr-helper-owner-modal-list" role="listbox"></div>
+          <label class="scr-helper-owner-modal-field">
+            <span>Redirect note</span>
+            <textarea class="scr-helper-owner-note-input" placeholder="Why is this cross-industry redirect happening?"></textarea>
+          </label>
           <label class="scr-helper-owner-notify">
             <input class="scr-helper-owner-notify-input" type="checkbox" disabled>
             <span>Open email notification draft for SCM owner</span>
@@ -8778,6 +8804,7 @@ Health & Hospitality	DIRECT	NL	West	West
       document.body.appendChild(backdrop);
 
       const input = backdrop.querySelector(".scr-helper-owner-modal-input");
+      const noteInput = backdrop.querySelector(".scr-helper-owner-note-input");
       const list = backdrop.querySelector(".scr-helper-owner-modal-list");
       const message = backdrop.querySelector(".scr-helper-owner-modal-message");
       const save = backdrop.querySelector(".scr-helper-owner-save");
@@ -8846,6 +8873,10 @@ Health & Hospitality	DIRECT	NL	West	West
         return Boolean(notifyInput && notifyInput.checked);
       }
 
+      function redirectNote() {
+        return normalizeSpaces(noteInput && noteInput.value);
+      }
+
       function saveSelection() {
         const value = normalizeSpaces(input.value);
         if (!value) {
@@ -8859,11 +8890,11 @@ Health & Hospitality	DIRECT	NL	West	West
           input.focus();
           return;
         }
-        close({ ownerName, notifyOwner: notifyOwner() });
+        close({ ownerName, notifyOwner: notifyOwner(), redirectNote: redirectNote() });
       }
 
       function routeSelectionWithoutAssignment() {
-        close({ ownerName: "", notifyOwner: false });
+        close({ ownerName: "", notifyOwner: false, redirectNote: redirectNote() });
       }
 
       input.addEventListener("input", () => {
@@ -8932,6 +8963,44 @@ Health & Hospitality	DIRECT	NL	West	West
     const defaultNote = `Ownership taken by ${ownerName || "current user"} on ${dateText}.`;
     const value = window.prompt("Staffing notes are blank. Add an ownership note?", defaultNote);
     return value === null ? "" : normalizeMultiline(value);
+  }
+
+  function formatShortNumericDate(date = new Date()) {
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${month}/${day}/${date.getFullYear()}`;
+  }
+
+  function initialsFromPersonName(value) {
+    const name = cleanPersonName(value);
+    if (!name) return "";
+    if (name.includes(",")) {
+      const parts = name.split(",");
+      const lastName = normalizeSpaces(parts[0]).split(/\s+/).find(Boolean) || "";
+      const firstName = normalizeSpaces(parts.slice(1).join(" ")).split(/\s+/).find(Boolean) || "";
+      return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+    }
+
+    const words = name.split(/\s+/).filter(Boolean);
+    if (words.length >= 2) return `${words[0].charAt(0)}${words[words.length - 1].charAt(0)}`.toUpperCase();
+    return name.slice(0, 2).toUpperCase();
+  }
+
+  function currentUserInitials() {
+    return initialsFromPersonName(getCurrentUserName()) || "IQ";
+  }
+
+  function formatCrossIndustryRouteNote(noteText) {
+    const text = normalizeSpaces(noteText);
+    return text ? `${formatShortNumericDate()} [${currentUserInitials()}]: ${text}` : "";
+  }
+
+  function prependStaffingNoteLine(currentNotes, noteLine) {
+    const current = normalizeMultiline(currentNotes);
+    const line = normalizeSpaces(noteLine);
+    if (!line) return current;
+    if (current === line || current.startsWith(`${line}\n`)) return current;
+    return current ? `${line}\n\n${current}` : line;
   }
 
   async function handleTakeOwnership(button) {
@@ -9058,12 +9127,22 @@ Health & Hospitality	DIRECT	NL	West	West
     }
     const assignment = await showCrossIndustryAssignmentDialog(row, target);
     if (!assignment) return;
+    const routeNoteLine = formatCrossIndustryRouteNote(assignment.redirectNote);
 
     const buttons = card ? Array.from(card.querySelectorAll(".scr-helper-xvr-button")) : [];
     buttons.forEach(item => { item.disabled = true; });
     setStaffingNotesStatus(card, `⏳ Saving route to ${target && target.family || "industry"}...`, "working");
 
     try {
+      if (routeNoteLine) {
+        setStaffingNotesStatus(card, "⏳ Saving redirect note...", "working");
+        const currentNotes = await lookupSingleField(row, STAFFING_NOTES_FIELD_ID) || row.staffingNotes || "";
+        const nextNotes = prependStaffingNoteLine(currentNotes, routeNoteLine);
+        await submitStaffingNotes(row, nextNotes);
+        updateRowStaffingNotes(row, nextNotes);
+      }
+
+      setStaffingNotesStatus(card, `⏳ Saving route to ${target && target.family || "industry"}...`, "working");
       const currentHashtags = row.hashtags || await lookupSingleField(row, HASHTAGS_FIELD_ID);
       const nextValue = valueWithCrossIndustryTag(currentHashtags, tag, target && target.markerTag, assignment.ownerName || "");
       await submitHashtags(row, nextValue);
@@ -9075,22 +9154,22 @@ Health & Hospitality	DIRECT	NL	West	West
       updateRowHashtags(row, nextValue);
       if (!assignment.ownerName) {
         row.routingNotice = {
-          message: `Route saved to ${target && target.family || "industry"} queue.`,
+          message: `Route saved to ${target && target.family || "industry"} queue${routeNoteLine ? "; redirect note added." : "."}`,
           state: "success",
           links: []
         };
       } else if (assignment.notifyOwner === false) {
         row.routingNotice = {
-          message: "Route saved; SCM email notification skipped.",
+          message: `Route saved${routeNoteLine ? "; redirect note added" : ""}; SCM email notification skipped.`,
           state: "success",
           links: []
         };
       } else if (assignment.ownerName) {
         try {
           setStaffingNotesStatus(card, "⏳ Route saved. Opening owner notification draft...", "working");
-          const notice = await sendOwnerRouteEmail(row, assignment.ownerName, target);
+          const notice = await sendOwnerRouteEmail(row, assignment.ownerName, target, routeNoteLine);
           row.routingNotice = {
-            message: `Route saved; Outlook compose opened for ${notice.email}. Review and send it. If it did not appear, use the links below.`,
+            message: `Route saved${routeNoteLine ? "; redirect note added" : ""}; Outlook compose opened for ${notice.email}. Review and send it. If it did not appear, use the links below.`,
             state: "success",
             links: notice.links || []
           };
@@ -9106,9 +9185,9 @@ Health & Hospitality	DIRECT	NL	West	West
       updateIndustrySubgroupFilterOptions();
       renderResults();
     } catch (error) {
-      console.warn("SCR helper failed to save cross-industry hashtag", error);
+      console.warn("SCR helper failed to save cross-industry route", error);
       buttons.forEach(item => { item.disabled = !row.internalId; });
-      setStaffingNotesStatus(card, "Could not save from this page. Staff SCR is still available.", "error");
+      setStaffingNotesStatus(card, "Could not save route from this page. Staff SCR is still available.", "error");
     }
   }
 
@@ -10857,16 +10936,27 @@ Health & Hospitality	DIRECT	NL	West	West
         font-weight: 700;
       }
 
-      .scr-helper-owner-modal-input {
+      .scr-helper-owner-modal-input,
+      .scr-helper-owner-note-input {
         min-height: 34px;
         border: 1px solid var(--rw-slate-50);
         border-radius: 4px;
         padding: 7px 9px;
         color: var(--rw-slate-150);
         font-size: 13px;
+        box-sizing: border-box;
+        width: 100%;
       }
 
-      .scr-helper-owner-modal-input:focus {
+      .scr-helper-owner-note-input {
+        min-height: 82px;
+        resize: vertical;
+        line-height: 1.35;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      .scr-helper-owner-modal-input:focus,
+      .scr-helper-owner-note-input:focus {
         border-color: var(--ns-ui-primary);
         outline: 2px solid var(--ns-ui-primary-soft);
       }
