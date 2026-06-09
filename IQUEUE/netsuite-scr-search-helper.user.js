@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.22
+// @version      27.0.23
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -42,7 +42,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.22";
+  const HELPER_VERSION = "27.0.23";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -63,6 +63,7 @@
   const EXTERNAL_MAPPING_CACHE_KEY = "fy27-unified-sc-staffing-queue-assistant-region-mapping-v3";
   const EXTERNAL_MAPPING_REFRESH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
   const GTM_SC_INDUSTRY_MAPPING_FILE_NAME = "GTM_to_SC_Industry_Mapping.json";
+  const GTM_SC_INDUSTRY_MAPPING_GITHUB_URL = "https://raw.githubusercontent.com/mcanderson14/ns_scm_tools_fy27/refs/heads/main/IQUEUE/mappings/GTM_to_SC_Industry_Mapping.json";
   const GTM_SC_INDUSTRY_MAPPING_FILE_ID = "483377127";
   const GTM_SC_INDUSTRY_MAPPING_FOLDER_URL = "https://nlcorp.app.netsuite.com/app/common/media/483377127?folder=483377127&ifrmcntnr=T";
   const GTM_SC_INDUSTRY_MAPPING_CACHE_KEY = "iqueue-gtm-sc-industry-mapping-v3";
@@ -2442,17 +2443,62 @@ Health & Hospitality	DIRECT	NL	West	West
     }).filter(row => row.industryFamily && row.amoDirect && row.state && row.staffingRegion);
   }
 
+  function mappingObjectValue(record, aliases) {
+    if (!record || typeof record !== "object" || Array.isArray(record)) return "";
+    for (const alias of aliases) {
+      if (Object.prototype.hasOwnProperty.call(record, alias)) return record[alias];
+    }
+
+    const normalizedAliases = new Set(aliases.map(normalizeHeader));
+    const matchedKey = Object.keys(record).find(key => normalizedAliases.has(normalizeHeader(key)));
+    return matchedKey ? record[matchedKey] : "";
+  }
+
   function parseGtmIndustryMappingRows(data) {
-    return (data.rows || []).map(row => {
+    const sourceRows = Array.isArray(data)
+      ? data
+      : Array.isArray(data.rows)
+        ? data.rows
+        : Array.isArray(data.mappings)
+          ? data.mappings
+          : Array.isArray(data.industryMappings)
+            ? data.industryMappings
+            : [];
+
+    return sourceRows.map(row => {
       const industryFamily = Array.isArray(row)
         ? data.groups[row[0]] || ""
-        : row.scIndustryGroup || row.industryFamily || row.industryGroup || row.scGroup || "";
+        : mappingObjectValue(row, [
+            "scIndustryGroup",
+            "SC Industry Group",
+            "SC Industry",
+            "SC Group",
+            "industryFamily",
+            "Industry Family",
+            "industryGroup",
+            "Industry Group",
+            "scGroup"
+          ]);
       const gtmIndustry = Array.isArray(row)
         ? data.industries[row[1]] || ""
-        : row.gtmIndustry || row.industry || "";
+        : mappingObjectValue(row, [
+            "gtmIndustry",
+            "GTM Industry",
+            "FY27 GTM Industry",
+            "industry",
+            "Industry"
+          ]);
       const gtmIndustrySubgroup = Array.isArray(row)
         ? data.subgroups[row[2]] || ""
-        : row.gtmIndustrySubgroup || row.industrySubgroup || row.subgroup || "";
+        : mappingObjectValue(row, [
+            "gtmIndustrySubgroup",
+            "GTM Industry Subgroup",
+            "FY27 GTM Industry Subgroup",
+            "industrySubgroup",
+            "Industry Subgroup",
+            "subgroup",
+            "Subgroup"
+          ]);
 
       return {
         industryFamily,
@@ -2657,7 +2703,7 @@ Health & Hospitality	DIRECT	NL	West	West
         ]
       : [];
     return orderedUnique([
-      githubMappingUrl(GTM_SC_INDUSTRY_MAPPING_FILE_NAME),
+      GTM_SC_INDUSTRY_MAPPING_GITHUB_URL,
       ...fileIdUrls,
       GTM_SC_INDUSTRY_MAPPING_FOLDER_URL
     ].filter(Boolean));
@@ -3231,16 +3277,21 @@ Health & Hospitality	DIRECT	NL	West	West
       try {
         pageWindow.require(["N/file", "N/search"], (file, search) => {
           try {
-            let fileId = GTM_SC_INDUSTRY_MAPPING_FILE_ID;
-            if (!fileId) {
+            let fileId = "";
+            try {
+              const baseName = GTM_SC_INDUSTRY_MAPPING_FILE_NAME.replace(/\.json$/i, "");
               const results = search.create({
                 type: "file",
-                filters: [["name", "is", GTM_SC_INDUSTRY_MAPPING_FILE_NAME]],
+                filters: [["name", "contains", baseName]],
                 columns: ["internalid", "name"]
-              }).run().getRange({ start: 0, end: 1 }) || [];
-              const result = results[0];
+              }).run().getRange({ start: 0, end: 20 }) || [];
+              const exactName = normalizeSpaces(GTM_SC_INDUSTRY_MAPPING_FILE_NAME).toLowerCase();
+              const result = results.find(item => normalizeSpaces(item.getValue({ name: "name" })).toLowerCase() === exactName) || results[0];
               fileId = result && (result.getValue({ name: "internalid" }) || result.id);
+            } catch (searchError) {
+              console.warn("IQUEUE could not search NetSuite File Cabinet for GTM mapping JSON", searchError);
             }
+            if (!fileId) fileId = GTM_SC_INDUSTRY_MAPPING_FILE_ID;
             if (!fileId) throw new Error(`${GTM_SC_INDUSTRY_MAPPING_FILE_NAME} was not found in the NetSuite File Cabinet.`);
             const mappingFile = file.load({ id: fileId });
             finish(resolve)(parseMappingJsonText(mappingFile.getContents()));
@@ -3256,8 +3307,35 @@ Health & Hospitality	DIRECT	NL	West	West
 
   async function fetchGtmScIndustryMappingData() {
     const errors = [];
+    const githubUrl = GTM_SC_INDUSTRY_MAPPING_GITHUB_URL;
 
-    for (const url of gtmScIndustryMappingUrlCandidates()) {
+    try {
+      const data = await fetchMappingJsonFromUrl(githubUrl, new Set(), GTM_SC_INDUSTRY_MAPPING_FILE_NAME, GTM_SC_INDUSTRY_MAPPING_FILE_ID);
+      if (!parseGtmIndustryMappingRows(data).length) {
+        throw new Error(`${githubUrl}: GTM mapping JSON did not produce any usable rows.`);
+      }
+      return {
+        data,
+        label: mappingJsonSourceLabel(githubUrl, GTM_SC_INDUSTRY_MAPPING_FILE_NAME)
+      };
+    } catch (error) {
+      errors.push(error.message || String(error));
+    }
+
+    try {
+      const data = await loadGtmScIndustryMappingWithSuiteScript();
+      if (!parseGtmIndustryMappingRows(data).length) {
+        throw new Error(`N/file ${GTM_SC_INDUSTRY_MAPPING_FILE_NAME}: GTM mapping JSON did not produce any usable rows.`);
+      }
+      return {
+        data,
+        label: `N/file ${GTM_SC_INDUSTRY_MAPPING_FILE_NAME}`
+      };
+    } catch (error) {
+      errors.push(`N/file: ${error.message || error}`);
+    }
+
+    for (const url of gtmScIndustryMappingUrlCandidates().filter(url => url !== githubUrl)) {
       try {
         const data = await fetchMappingJsonFromUrl(url, new Set(), GTM_SC_INDUSTRY_MAPPING_FILE_NAME, GTM_SC_INDUSTRY_MAPPING_FILE_ID);
         if (!parseGtmIndustryMappingRows(data).length) {
@@ -3270,16 +3348,6 @@ Health & Hospitality	DIRECT	NL	West	West
       } catch (error) {
         errors.push(error.message || String(error));
       }
-    }
-
-    try {
-      const data = await loadGtmScIndustryMappingWithSuiteScript();
-      return {
-        data,
-        label: `N/file ${GTM_SC_INDUSTRY_MAPPING_FILE_NAME}`
-      };
-    } catch (error) {
-      errors.push(`N/file: ${error.message || error}`);
     }
 
     throw new Error(errors.join(" | "));
