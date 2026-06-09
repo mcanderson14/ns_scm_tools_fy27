@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.17
+// @version      27.0.18
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -41,7 +41,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.17";
+  const HELPER_VERSION = "27.0.18";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -89,6 +89,7 @@
   const UNMAPPED_FILTER_LABEL = "Other/Unmapped";
   const EPM_INDUSTRY_GROUP = "EPM";
   const EPM_REQUESTED_TAG = "#epm-requested-sc";
+  const NSPB_REQUEST_TYPE = "NSPB";
   const TECH_COE_INDUSTRY_GROUP = "Tech COE";
   const TECH_COE_REQUEST_TYPE = "Technology COE";
   const TECH_COE_REQUESTED_TAG = "#tcoe-requested-sc";
@@ -1368,7 +1369,7 @@ Health & Hospitality	DIRECT	NL	West	West
     mappingRows = rows || [];
     industryOptions = uniqueSorted(mappingRows.map(row => row.industryFamily).concat(ADDITIONAL_INDUSTRY_GROUPS));
     industryFilterOptions = uniqueSorted(industryOptions.concat([UNMAPPED_FILTER_LABEL]));
-    amoDirectOptions = uniqueSorted(mappingRows.map(row => row.amoDirect).concat([TECH_COE_REQUEST_TYPE]));
+    amoDirectOptions = uniqueSorted(mappingRows.map(row => row.amoDirect).concat([NSPB_REQUEST_TYPE, TECH_COE_REQUEST_TYPE]));
     salesRegionOptions = uniqueSorted(mappingRows.map(row => row.salesRegion));
     staffingRegionOptions = uniqueSorted(
       mappingRows
@@ -1427,6 +1428,7 @@ Health & Hospitality	DIRECT	NL	West	West
   function normalizeAmoDirect(value) {
     const text = normalizeSpaces(value);
     if (/\btechnology\s*coe\b|\btech\s*coe\b|\btcoe\b/i.test(text)) return TECH_COE_REQUEST_TYPE;
+    if (/\bnspb\b|\bnet\s*suite\s*planning\s*(?:and|&)?\s*budgeting\b/i.test(text)) return NSPB_REQUEST_TYPE;
     if (/\bamo\b/i.test(text)) return "AMO";
     if (/\bdirect\b/i.test(text) || /\bdir\b/i.test(text) || /DIRDirect/i.test(text)) return "Direct";
     return text;
@@ -1434,7 +1436,10 @@ Health & Hospitality	DIRECT	NL	West	West
 
   function isKnownRequestType(value) {
     const normalized = normalizeAmoDirect(value);
-    return normalized === "AMO" || normalized === "Direct" || normalized === TECH_COE_REQUEST_TYPE;
+    return normalized === "AMO"
+      || normalized === "Direct"
+      || normalized === NSPB_REQUEST_TYPE
+      || normalized === TECH_COE_REQUEST_TYPE;
   }
 
   function fieldValueLooksFalse(value) {
@@ -1459,7 +1464,7 @@ Health & Hospitality	DIRECT	NL	West	West
       || key === "checked"
       || key === "1"
       || key === "x"
-      || /check|tick|selected|technologycoe|techcoe|tcoe/i.test(key);
+      || /check|tick|selected|nspb|technologycoe|techcoe|tcoe/i.test(key);
   }
 
   function fieldHasAffirmativeRequestTypeValue(field) {
@@ -4351,6 +4356,10 @@ Health & Hospitality	DIRECT	NL	West	West
       return TECH_COE_REQUEST_TYPE;
     }
 
+    if (/\bnspb\b|\bnet\s*suite\s*planning\s*(?:and|&)?\s*budgeting\b/i.test(text)) {
+      return NSPB_REQUEST_TYPE;
+    }
+
     if (/\bsolution\s+consultant\s*-\s*amo\b/i.test(text)
       || /\btype\s*:\s*solution\s+consultant\s*-\s*amo\b/i.test(text)
       || /\bamo\s+sc\s+request\b/i.test(text)) {
@@ -4372,7 +4381,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const explicit = extractAmoDirectFromText(explicitValue, { allowLoose: true });
     if (isKnownRequestType(explicit)) return explicit;
 
-    const likelyFields = fields.filter(field => /amo|direct|technology\s*coe|tech\s*coe|\btcoe\b|request\s*type|sales motion|sales channel/i.test(field.label));
+    const likelyFields = fields.filter(field => /amo|direct|nspb|technology\s*coe|tech\s*coe|\btcoe\b|request\s*type|sales motion|sales channel/i.test(field.label));
     for (const field of likelyFields) {
       if (fieldHasAffirmativeRequestTypeValue(field)) {
         const labelParsed = extractAmoDirectFromText(field.label, { allowLoose: true });
@@ -5364,6 +5373,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const normalized = normalizeAmoDirect(amoDirect);
     if (normalized === "AMO") return "Solution Consultant - AMO";
     if (normalized === "Direct") return "Solution Consultant - Direct";
+    if (normalized === NSPB_REQUEST_TYPE) return NSPB_REQUEST_TYPE;
     if (normalized === TECH_COE_REQUEST_TYPE) return TECH_COE_REQUEST_TYPE;
     return "";
   }
@@ -5372,6 +5382,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const normalized = normalizeAmoDirect(amoDirect);
     if (normalized === "AMO") return "amo";
     if (normalized === "Direct") return "direct";
+    if (normalized === NSPB_REQUEST_TYPE) return "nspb";
     if (normalized === TECH_COE_REQUEST_TYPE) return "techcoe";
     return "";
   }
@@ -5379,6 +5390,7 @@ Health & Hospitality	DIRECT	NL	West	West
   function requestTypeColor(requestKey) {
     if (requestKey === "amo") return REDWOOD_COLORS.oracleRed;
     if (requestKey === "direct") return REDWOOD_COLORS.netsuiteOcean;
+    if (requestKey === "nspb") return REDWOOD_COLORS.tigerPurple;
     if (requestKey === "techcoe") return REDWOOD_COLORS.sky120;
     return "";
   }
