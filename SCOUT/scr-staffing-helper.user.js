@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.0.19
+// @version      27.0.20
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.0.19
+   SCOUT — SC Operations Utility Tool  27.0.20
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.0.19';
+  const SCRIPT_VERSION = '27.0.20';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -4938,17 +4938,24 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   }
 
   function releaseActiveNetSuiteFieldFocus() {
+    let dateFieldWasActive = false;
     try {
       getAccessibleDocuments().forEach(doc => {
         try {
           const active = doc.activeElement;
           if (active && active !== doc.body && typeof active.blur === 'function') {
-            if (!isDateFieldControl(active)) dispatchFieldEvents(active);
+            if (isDateFieldControl(active)) {
+              dateFieldWasActive = true;
+              return;
+            }
+            dispatchFieldEvents(active);
             active.blur();
           }
         } catch (e) { /* keep releasing other frames */ }
       });
     } catch (e) { /* best effort */ }
+
+    if (dateFieldWasActive) return;
 
     try {
       const body = document.body;
