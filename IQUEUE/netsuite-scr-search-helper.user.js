@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.16
+// @version      27.0.17
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -41,7 +41,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.16";
+  const HELPER_VERSION = "27.0.17";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -1435,6 +1435,47 @@ Health & Hospitality	DIRECT	NL	West	West
   function isKnownRequestType(value) {
     const normalized = normalizeAmoDirect(value);
     return normalized === "AMO" || normalized === "Direct" || normalized === TECH_COE_REQUEST_TYPE;
+  }
+
+  function fieldValueLooksFalse(value) {
+    const key = normalizeKey(value);
+    return key === "f"
+      || key === "false"
+      || key === "no"
+      || key === "n"
+      || key === "unchecked"
+      || key === "0"
+      || key.includes("unchecked")
+      || key.includes("checkboxoff");
+  }
+
+  function fieldValueLooksTrue(value) {
+    const key = normalizeKey(value);
+    if (!key || fieldValueLooksFalse(value)) return false;
+    return key === "t"
+      || key === "true"
+      || key === "yes"
+      || key === "y"
+      || key === "checked"
+      || key === "1"
+      || key === "x"
+      || /check|tick|selected|technologycoe|techcoe|tcoe/i.test(key);
+  }
+
+  function fieldHasAffirmativeRequestTypeValue(field) {
+    const visibleText = [
+      field && field.value,
+      field && field.rawValue
+    ].map(normalizeSpaces).filter(Boolean).join(" ");
+    if (visibleText) {
+      if (fieldValueLooksFalse(visibleText)) return false;
+      if (fieldValueLooksTrue(visibleText)) return true;
+      return !/^\s*[-–—]\s*$/.test(visibleText);
+    }
+
+    const rawHtml = normalizeSpaces(field && field.rawHtml);
+    if (!rawHtml || fieldValueLooksFalse(rawHtml)) return false;
+    return fieldValueLooksTrue(rawHtml);
   }
 
   function escapeRegExp(value) {
@@ -4333,7 +4374,12 @@ Health & Hospitality	DIRECT	NL	West	West
 
     const likelyFields = fields.filter(field => /amo|direct|technology\s*coe|tech\s*coe|\btcoe\b|request\s*type|sales motion|sales channel/i.test(field.label));
     for (const field of likelyFields) {
-      const parsed = extractAmoDirectFromText(field.value, { allowLoose: true });
+      if (fieldHasAffirmativeRequestTypeValue(field)) {
+        const labelParsed = extractAmoDirectFromText(field.label, { allowLoose: true });
+        if (isKnownRequestType(labelParsed)) return labelParsed;
+      }
+
+      const parsed = extractAmoDirectFromText(`${field.value} ${field.rawValue}`, { allowLoose: true });
       if (isKnownRequestType(parsed)) return parsed;
     }
 
