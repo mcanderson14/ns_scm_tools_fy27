@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.15
+// @version      27.0.16
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -41,7 +41,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.15";
+  const HELPER_VERSION = "27.0.16";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -8291,11 +8291,32 @@ Health & Hospitality	DIRECT	NL	West	West
   }
 
   function openMailtoUrlInNewWindow(url) {
+    let opened = null;
     try {
-      const opened = window.open(url, "_blank", "noopener,noreferrer");
-      if (opened) return;
+      opened = window.open("about:blank", "_blank");
+      if (opened) {
+        try {
+          opened.opener = null;
+          opened.document.title = "Opening email compose";
+          opened.document.body.innerHTML = `
+            <p style="font-family: Arial, sans-serif; color: #3C4545;">
+              Opening email compose...
+            </p>
+          `;
+        } catch (error) {
+          // Some browser privacy settings prevent writing to the child tab; location handoff still usually works.
+        }
+        window.setTimeout(() => {
+          try {
+            opened.location.href = url;
+          } catch (error) {
+            console.warn("SCR helper child-window mailto handoff failed", error);
+          }
+        }, 0);
+        return;
+      }
     } catch (error) {
-      console.warn("SCR helper window.open mailto failed", error);
+      console.warn("SCR helper blank-window mailto open failed", error);
     }
 
     const link = document.createElement("a");
@@ -9648,6 +9669,13 @@ Health & Hospitality	DIRECT	NL	West	West
     document.getElementById("scr-helper-maximize").addEventListener("click", togglePortletMaximized);
     document.getElementById("scr-helper-refresh").addEventListener("click", reloadPageWithHelperState);
     document.getElementById("scr-helper-results").addEventListener("click", event => {
+      const mailtoLink = closestElement(event.target, ".scr-helper-notice-link[href^='mailto:']");
+      if (mailtoLink) {
+        event.preventDefault();
+        openMailtoUrlInNewWindow(mailtoLink.href);
+        return;
+      }
+
       const ownershipButton = closestElement(event.target, ".scr-helper-take-ownership");
       if (ownershipButton) {
         handleTakeOwnership(ownershipButton);
