@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.20
+// @version      27.0.21
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -42,7 +42,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.20";
+  const HELPER_VERSION = "27.0.21";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -5996,9 +5996,10 @@ Health & Hospitality	DIRECT	NL	West	West
         <div class="scr-helper-card-head">
           <div>
             <div class="scr-helper-card-title" ${requestColor ? `style="color: ${escapeHtml(requestColor)};"` : ""}>
-              ${titleScrPrefix ? `<span class="scr-helper-title-scr-group"><strong class="scr-helper-title-scr">${escapeHtml(titleScrPrefix)}</strong>${renderCopyLinkControl(row)}</span><span class="scr-helper-title-separator">|</span>` : ""}
+              ${titleScrPrefix ? `<strong class="scr-helper-title-scr">${escapeHtml(titleScrPrefix)}</strong><span class="scr-helper-title-separator">|</span>` : ""}
               <span>${escapeHtml(titleOpportunity)}</span>
               ${titleCompany ? `<span class="scr-helper-title-separator">|</span><strong>${escapeHtml(titleCompany)}</strong>` : ""}
+              ${renderCopyLinkControl(row)}
             </div>
             ${titleBadges ? `<div class="scr-helper-card-badges">${titleBadges}</div>` : ""}
           </div>
@@ -10806,32 +10807,27 @@ Health & Hospitality	DIRECT	NL	West	West
         font-size: 14px;
       }
 
-      #${HELPER_ID} .scr-helper-title-scr-group {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        flex: 0 0 auto;
-      }
-
       #${HELPER_ID} .scr-helper-copy-link {
-        border: 1px solid currentColor;
+        border: 1px solid var(--scr-tiger-purple);
         border-radius: 4px;
-        padding: 2px 6px;
-        background: #ffffff;
-        color: inherit;
+        padding: 3px 7px;
+        background: var(--scr-tiger-purple);
+        color: #ffffff;
         cursor: pointer;
-        font-size: 10px;
+        font-size: 11px;
         font-weight: 700;
         line-height: 1.2;
         white-space: nowrap;
       }
 
       #${HELPER_ID} .scr-helper-copy-link:hover {
-        background: var(--scr-industry-bg, #ffffff);
+        border-color: #4c2aa4;
+        background: #4c2aa4;
+        color: #ffffff;
       }
 
       #${HELPER_ID} .scr-helper-copy-link:disabled {
-        opacity: 0.58;
+        opacity: 0.78;
         cursor: not-allowed;
       }
 
