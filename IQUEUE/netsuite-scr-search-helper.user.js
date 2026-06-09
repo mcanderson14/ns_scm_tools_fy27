@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.26
+// @version      27.0.27
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -42,7 +42,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.26";
+  const HELPER_VERSION = "27.0.27";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -2474,17 +2474,19 @@ Health & Hospitality	DIRECT	NL	West	West
   function parseGtmIndustryMappingRows(data) {
     const sourceRows = Array.isArray(data)
       ? data
-      : Array.isArray(data.rows)
+      : data && Array.isArray(data.rows)
         ? data.rows
-        : arrayOrObjectValues(data.mappings).length
+        : data && arrayOrObjectValues(data.mappings).length
           ? arrayOrObjectValues(data.mappings)
-          : arrayOrObjectValues(data.industryMappings).length
+          : data && arrayOrObjectValues(data.industryMappings).length
             ? arrayOrObjectValues(data.industryMappings)
-            : flattenMappingRecords(data.lookup).length
+            : data && flattenMappingRecords(data.lookup).length
               ? flattenMappingRecords(data.lookup)
-              : flattenMappingRecords(data.subgroupLookup).length
+              : data && flattenMappingRecords(data.subgroupLookup).length
                 ? flattenMappingRecords(data.subgroupLookup)
-                : flattenMappingRecords(data.industryLookup);
+                : data
+                  ? flattenMappingRecords(data.industryLookup)
+                  : [];
 
     return sourceRows.map(row => {
       const scIndustryGroup = Array.isArray(row)
@@ -2535,6 +2537,34 @@ Health & Hospitality	DIRECT	NL	West	West
         gtmIndustrySubgroupKey: normalizeKey(gtmIndustrySubgroup)
       };
     }).filter(row => row.industryFamily && (row.gtmIndustry || row.gtmIndustrySubgroup));
+  }
+
+  function mappingJsonShapeSummary(data) {
+    if (Array.isArray(data)) return ` (${data.length.toLocaleString()} top-level rows array)`;
+    if (!data || typeof data !== "object") return "";
+
+    const parts = [];
+    if (data.schema) parts.push(`schema ${data.schema}`);
+    if (data.generator && data.generator.name) {
+      parts.push(`generator ${data.generator.name}${data.generator.version ? ` ${data.generator.version}` : ""}`);
+    }
+    if (data.counts && data.counts.rows !== undefined) {
+      parts.push(`${Number(data.counts.rows).toLocaleString()} counted rows`);
+    }
+    if (Array.isArray(data.rows)) parts.push(`${data.rows.length.toLocaleString()} rows array`);
+    if (Array.isArray(data.mappings)) parts.push(`${data.mappings.length.toLocaleString()} mappings array`);
+    const keys = Object.keys(data).slice(0, 8).join(", ");
+    if (keys) parts.push(`keys: ${keys}`);
+    return parts.length ? ` (${parts.join("; ")})` : "";
+  }
+
+  function parseRequiredGtmIndustryMappingRows(data, sourceLabel = "") {
+    const rows = parseGtmIndustryMappingRows(data);
+    if (!rows.length) {
+      const prefix = sourceLabel ? `${sourceLabel}: ` : "";
+      throw new Error(`${prefix}GTM mapping JSON did not produce any usable GTM-to-SC rows${mappingJsonShapeSummary(data)}.`);
+    }
+    return rows;
   }
 
   function initializeGtmIndustryMappingState(rows, metadata = {}) {
@@ -2968,6 +2998,84 @@ Health & Hospitality	DIRECT	NL	West	West
     return urlMatch ? `${label}: ${urlMatch[1]}` : `${label}: ${text}`;
   }
 
+  function mappingHealthTone(metadata) {
+    if (!metadata) return "neutral";
+    if (metadata.error || metadata.source === "embedded" || /fallback/i.test(metadata.label || "")) return "warn";
+    if (metadata.source === "not-loaded") return "neutral";
+    return "good";
+  }
+
+  function mappingHealthLabel(metadata) {
+    const tone = mappingHealthTone(metadata);
+    if (tone === "good") return metadata && metadata.source === "cache" ? "Cached" : "Loaded";
+    if (tone === "warn") return metadata && metadata.error ? "Fallback" : "Fallback";
+    return "Not loaded";
+  }
+
+  function mappingHealthItems() {
+    return [
+      {
+        name: "Region Mapping",
+        metadata: mappingMetadata,
+        metrics: [
+          mappingMetadata.rowCount ? `${mappingMetadata.rowCount.toLocaleString()} rows` : "",
+          mappingMetadata.schema && mappingMetadata.schema !== "embedded" ? mappingMetadata.schema : ""
+        ]
+      },
+      {
+        name: "GTM Mapping",
+        metadata: gtmScIndustryMappingMetadata,
+        metrics: [
+          gtmScIndustryMappingMetadata.rowCount ? `${gtmScIndustryMappingMetadata.rowCount.toLocaleString()} rows` : "",
+          gtmScIndustryMappingMetadata.schema && gtmScIndustryMappingMetadata.schema !== "embedded" ? gtmScIndustryMappingMetadata.schema : ""
+        ]
+      },
+      {
+        name: "SCM Relationships",
+        metadata: productsScmMetadata,
+        metrics: [
+          productsScmMetadata.rowCount ? `${productsScmMetadata.rowCount.toLocaleString()} rels` : "",
+          productsScmMetadata.authorizedDirectorCount ? `${productsScmMetadata.authorizedDirectorCount.toLocaleString()} director viewers` : "",
+          productsScmMetadata.authorizedViewerCount ? `${productsScmMetadata.authorizedViewerCount.toLocaleString()} extra viewers` : ""
+        ]
+      },
+      {
+        name: "Authorized Managers",
+        metadata: authorizedManagersMetadata,
+        metrics: [
+          authorizedManagersMetadata.rowCount ? `${authorizedManagersMetadata.rowCount.toLocaleString()} managers` : "",
+          authorizedManagersMetadata.canOwnCount ? `${authorizedManagersMetadata.canOwnCount.toLocaleString()} can own` : ""
+        ]
+      }
+    ];
+  }
+
+  function renderMappingHealthPanel() {
+    return mappingHealthItems().map(item => {
+      const metadata = item.metadata || {};
+      const tone = mappingHealthTone(metadata);
+      const detailParts = [metadata.label || "Not loaded"]
+        .concat(item.metrics || [])
+        .concat(metadata.stale ? ["cached"] : [])
+        .filter(Boolean);
+      return `
+        <div class="scr-helper-mapping-health-item is-${escapeHtml(tone)}">
+          <div class="scr-helper-mapping-health-head">
+            <span>${escapeHtml(item.name)}</span>
+            <span class="scr-helper-mapping-health-pill">${escapeHtml(mappingHealthLabel(metadata))}</span>
+          </div>
+          <div class="scr-helper-mapping-health-detail">${escapeHtml(detailParts.join(" · "))}</div>
+          ${metadata.error ? `<div class="scr-helper-mapping-health-error" title="${escapeHtml(metadata.error)}">${escapeHtml(shortMappingError(metadata.error))}</div>` : ""}
+        </div>
+      `;
+    }).join("");
+  }
+
+  function refreshMappingHealthPanel() {
+    const panel = document.getElementById("scr-helper-mapping-health-panel");
+    if (panel) panel.innerHTML = renderMappingHealthPanel();
+  }
+
   function mappingStatusText() {
     const parts = [`Mapping: ${mappingMetadata.label}`];
     if (mappingMetadata.rowCount) parts.push(`${mappingMetadata.rowCount.toLocaleString()} rows`);
@@ -3246,8 +3354,7 @@ Health & Hospitality	DIRECT	NL	West	West
   }
 
   function applyGtmScIndustryMappingData(data, options = {}) {
-    const rows = parseGtmIndustryMappingRows(data);
-    if (!rows.length) throw new Error("GTM mapping JSON did not produce any usable rows.");
+    const rows = parseRequiredGtmIndustryMappingRows(data, "GTM mapping JSON");
 
     initializeGtmIndustryMappingState(rows, {
       source: options.fromCache ? "cache" : "file-cabinet",
@@ -3359,9 +3466,7 @@ Health & Hospitality	DIRECT	NL	West	West
 
     try {
       const data = await fetchMappingJsonFromUrl(githubUrl, new Set(), GTM_SC_INDUSTRY_MAPPING_FILE_NAME, GTM_SC_INDUSTRY_MAPPING_FILE_ID);
-      if (!parseGtmIndustryMappingRows(data).length) {
-        throw new Error(`${githubUrl}: GTM mapping JSON did not produce any usable rows.`);
-      }
+      parseRequiredGtmIndustryMappingRows(data, githubUrl);
       return {
         data,
         label: mappingJsonSourceLabel(githubUrl, GTM_SC_INDUSTRY_MAPPING_FILE_NAME)
@@ -3372,9 +3477,7 @@ Health & Hospitality	DIRECT	NL	West	West
 
     try {
       const data = await loadGtmScIndustryMappingWithSuiteScript();
-      if (!parseGtmIndustryMappingRows(data).length) {
-        throw new Error(`N/file ${GTM_SC_INDUSTRY_MAPPING_FILE_NAME}: GTM mapping JSON did not produce any usable rows.`);
-      }
+      parseRequiredGtmIndustryMappingRows(data, `N/file ${GTM_SC_INDUSTRY_MAPPING_FILE_NAME}`);
       return {
         data,
         label: `N/file ${GTM_SC_INDUSTRY_MAPPING_FILE_NAME}`
@@ -3386,9 +3489,7 @@ Health & Hospitality	DIRECT	NL	West	West
     for (const url of gtmScIndustryMappingUrlCandidates().filter(url => url !== githubUrl)) {
       try {
         const data = await fetchMappingJsonFromUrl(url, new Set(), GTM_SC_INDUSTRY_MAPPING_FILE_NAME, GTM_SC_INDUSTRY_MAPPING_FILE_ID);
-        if (!parseGtmIndustryMappingRows(data).length) {
-          throw new Error(`${url}: GTM mapping JSON did not produce any usable rows.`);
-        }
+        parseRequiredGtmIndustryMappingRows(data, url);
         return {
           data,
           label: mappingJsonSourceLabel(url, GTM_SC_INDUSTRY_MAPPING_FILE_NAME)
@@ -8179,6 +8280,7 @@ Health & Hospitality	DIRECT	NL	West	West
       ? "; SCM owner view"
       : "";
     status.textContent = `${visibleRows.length} of ${loadedText} shown${unmappedCount ? `; ${unmappedCount} unmapped` : ""}${slaText}${assignedText}${productsOwnerText}. ${mappingStatusText()}.`;
+    refreshMappingHealthPanel();
     list.querySelectorAll(".scr-helper-edit").forEach(button => {
       button.textContent = "Staff SCR";
     });
@@ -9742,6 +9844,10 @@ Health & Hospitality	DIRECT	NL	West	West
               Hide
             </span>
           </label>
+          <div class="scr-helper-options-heading">Mapping JSON Status</div>
+          <div id="scr-helper-mapping-health-panel" class="scr-helper-mapping-health-panel" aria-label="Mapping JSON status">
+            ${renderMappingHealthPanel()}
+          </div>
           <button type="button" id="scr-helper-refresh-mapping" class="scr-helper-options-button">Refresh Mapping JSONs</button>
           <button type="button" id="scr-helper-check-update" class="scr-helper-options-button">Check for IQUEUE Update</button>
         </div>
@@ -10347,7 +10453,7 @@ Health & Hospitality	DIRECT	NL	West	West
         top: calc(100% - 2px);
         right: 12px;
         z-index: 2;
-        width: min(260px, calc(100vw - 54px));
+        width: min(420px, calc(100vw - 54px));
         border: 1px solid var(--rw-slate-50);
         border-radius: 6px;
         padding: 10px;
@@ -10362,6 +10468,86 @@ Health & Hospitality	DIRECT	NL	West	West
 
       #${HELPER_ID} .scr-helper-options-row {
         gap: 7px;
+      }
+
+      #${HELPER_ID} .scr-helper-options-heading {
+        margin-top: 10px;
+        padding-top: 9px;
+        border-top: 1px solid rgba(194, 212, 212, 0.8);
+        color: var(--rw-slate-150);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-health-panel {
+        display: grid;
+        gap: 6px;
+        margin-top: 7px;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-health-item {
+        border: 1px solid var(--rw-slate-50);
+        border-left: 5px solid var(--rw-slate-100);
+        border-radius: 6px;
+        padding: 7px 8px;
+        background: #ffffff;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-health-item.is-good {
+        border-left-color: var(--rw-pine-100);
+        background: #f4faf6;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-health-item.is-warn {
+        border-left-color: var(--rw-brand-yellow);
+        background: #fff8e6;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-health-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        color: var(--rw-slate-150);
+        font-size: 12px;
+        font-weight: 800;
+        line-height: 1.2;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-health-pill {
+        flex: 0 0 auto;
+        border-radius: 999px;
+        padding: 2px 7px;
+        background: var(--rw-slate-50);
+        color: var(--rw-slate-150);
+        font-size: 10px;
+        font-weight: 800;
+        line-height: 1.2;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-health-item.is-good .scr-helper-mapping-health-pill {
+        background: #dcefe4;
+        color: #1f6f45;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-health-item.is-warn .scr-helper-mapping-health-pill {
+        background: #ffe7a6;
+        color: #7a4a00;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-health-detail,
+      #${HELPER_ID} .scr-helper-mapping-health-error {
+        margin-top: 4px;
+        color: var(--rw-slate-100);
+        font-size: 11px;
+        line-height: 1.3;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-health-error {
+        color: #7a4a00;
+        font-weight: 700;
       }
 
       #${HELPER_ID} .scr-helper-options-button {
