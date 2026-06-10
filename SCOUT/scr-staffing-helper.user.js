@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.0.21
+// @version      27.0.22
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.0.21
+   SCOUT — SC Operations Utility Tool  27.0.22
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.0.21';
+  const SCRIPT_VERSION = '27.0.22';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -4741,7 +4741,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
             </div>
           </div>
 
-          <!-- Filters (no vertical/cross-vert routing for AMO) -->
+          <!-- Filters -->
           <div class="sc-card sc-collapsible-card collapsed sc-filter-card" id="sc-amo-filters-card">
             <div class="sc-card-title" id="sc-amo-filters-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Filters</span>
@@ -4751,12 +4751,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               <div class="sc-filters-grid">
 
                 <div class="sc-field">
-                  <label class="sc-label">Sales Vertical</label>
-                  <select id="sc-amo-filter-vertical" multiple size="4">
-                    <option value="Products">Products</option>
-                    <option value="High Tech">High Tech</option>
-                    <option value="Emerging">Emerging</option>
-                    <option value="General Business">General Business</option>
+                  <label class="sc-label">SC Industry</label>
+                  <select id="sc-amo-filter-vertical" multiple size="6">
+                    <option value="73">Health &amp; Hospitality</option>
+                    <option value="58">Products</option>
+                    <option value="72">Construction &amp; Energy</option>
+                    <option value="71">Consumer Service</option>
+                    <option value="70">Business Services</option>
+                    <option value="14">Software</option>
                   </select>
                   <div class="sc-field-hint">Ctrl+click for multiple.</div>
                 </div>
@@ -9175,7 +9177,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const filterOpts = {
       myTeam:   false,
       limitToMyTeam: getCheckboxValue('sc-amo-filter-myteam'),
-      vertical: [],   // AMO sales vertical is filtered by display text after search.
+      vertical: [],   // AMO SC Industry is filtered by display text after search.
       verticalText: getMultiSelectTexts('sc-amo-filter-vertical'),
       tier:     [],
       region:   getMultiSelectValues('sc-amo-filter-region'),
