@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.31
+// @version      27.0.32
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -42,7 +42,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.31";
+  const HELPER_VERSION = "27.0.32";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -1131,6 +1131,12 @@ Health & Hospitality	DIRECT	NL	West	West
       "screquestage",
       "requestage",
       "age"
+    ],
+    projectedAcv: [
+      "acvcommit",
+      "projectedacv",
+      "projectedacvcommit",
+      "acv"
     ],
     amoDirect: [
       "amovsdirect",
@@ -4142,6 +4148,12 @@ Health & Hospitality	DIRECT	NL	West	West
         || normalized.includes("requestage");
     }
 
+    if (key === "projectedAcv") {
+      return normalized.includes("acvcommit")
+        || normalized.includes("projectedacv")
+        || normalized === "acv";
+    }
+
     if (key === "amoDirect") {
       return normalized.includes("amodirect")
         || normalized.includes("directamo")
@@ -4725,6 +4737,9 @@ Health & Hospitality	DIRECT	NL	West	West
       const scrAge = getByIndex(paddedCells, indexes, "scrAge") || getConciseFieldValue(fields, [
         /scr.*age/, /request.*age/
       ], [], labeledValuePatterns.scrAge);
+      const projectedAcv = getByIndex(paddedCells, indexes, "projectedAcv") || getConciseFieldValue(fields, [
+        /acv.*commit/, /projected.*acv/, /\bacv\b/
+      ], [], labeledValuePatterns.projectedAcv);
       const salesVertical = getConciseFieldValue(fields, [
         /sales.*vertical/, /\bvertical\b/
       ], [/cross/], labeledValuePatterns.salesVertical);
@@ -4753,6 +4768,7 @@ Health & Hospitality	DIRECT	NL	West	West
           industryLeader,
           crossVertical,
           scrAge,
+          projectedAcv,
           submittedDate,
           salesVertical,
           amoDirect,
@@ -4787,6 +4803,7 @@ Health & Hospitality	DIRECT	NL	West	West
         industryLeader,
         crossVertical,
         scrAge,
+        projectedAcv,
         submittedDate,
         salesVertical,
         mappedSalesRegion: override ? override.salesRegion : "",
@@ -5024,7 +5041,8 @@ Health & Hospitality	DIRECT	NL	West	West
     subIndustry: [/Sub[\s-]*Industry/i, /Industry\s*Subgroup/i, /Subgroup/i],
     naics: [/NAICS/i],
     expectedCloseDate: [/Exp\s*Close/i, /Expected\s*Close(?:\s*Date)?/i, /Close\s*Date/i],
-    projectArr: [/Project\s*ARR/i, /ARR/i],
+    projectArr: [/Project(?:ed)?\s*ARR/i, /ARR/i],
+    projectedAcv: [/ACV\s*Commit/i, /Projected\s*ACV/i, /\bACV\b/i],
     salesRepYearsLive: [/Sales\s*Rep\s*Yrs\s*Live/i],
     salesRep: [/Sales\s*Rep/i],
     salesRepManager: [/Sales\s*(?:Mgr|Manager)/i],
@@ -5151,7 +5169,7 @@ Health & Hospitality	DIRECT	NL	West	West
   function cleanOpportunityName(value) {
     let text = cleanExtractedValue(value);
     text = text.replace(/^[^\w#]+/u, "");
-    text = text.replace(/\s*(Exp\s*Close|Expected\s*Close|ARR|Sales\s*Rep|Regional\s*Director|Regional\s*Dir|Sales\s*Director|Sales\s*Dir|Sales\s*Mgr|Sales\s*Manager|Regional\s*VP|RVP|Industry\s*Leader|Sales\s*Tier|Sales\s*Region|Sales\s*Vertical|Advisory\s*Firm)\s*:.*$/i, "");
+    text = text.replace(/\s*(Exp\s*Close|Expected\s*Close|ARR|ACV\s*Commit|Projected\s*ACV|ACV|Sales\s*Rep|Regional\s*Director|Regional\s*Dir|Sales\s*Director|Sales\s*Dir|Sales\s*Mgr|Sales\s*Manager|Regional\s*VP|RVP|Industry\s*Leader|Sales\s*Tier|Sales\s*Region|Sales\s*Vertical|Advisory\s*Firm)\s*:.*$/i, "");
     text = text.replace(/\s*(SC\s*Pool|Pri|Flag|CompeteLoc|Loc|T|Trv)\s*:.*$/i, "");
     text = text.replace(/\s*\|.*$/g, "");
     return normalizeSpaces(text);
@@ -5165,7 +5183,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const text = normalizeSpaces(value);
     if (!text || looksLikeOpportunityMetadata(text)) return "";
 
-    const numbered = text.match(/#\d+\s+.*?(?=\s*(?:Exp\s*Close|Expected\s*Close|ARR|Sales\s*Rep|Regional\s*Director|Regional\s*Dir|Sales\s*Director|Sales\s*Dir|Sales\s*Mgr|Sales\s*Manager|Regional\s*VP|RVP|Industry\s*Leader|Sales\s*Tier|Sales\s*Region|Sales\s*Vertical|Advisory\s*Firm)\s*:|$)/i);
+    const numbered = text.match(/#\d+\s+.*?(?=\s*(?:Exp\s*Close|Expected\s*Close|ARR|ACV\s*Commit|Projected\s*ACV|ACV|Sales\s*Rep|Regional\s*Director|Regional\s*Dir|Sales\s*Director|Sales\s*Dir|Sales\s*Mgr|Sales\s*Manager|Regional\s*VP|RVP|Industry\s*Leader|Sales\s*Tier|Sales\s*Region|Sales\s*Vertical|Advisory\s*Firm)\s*:|$)/i);
     if (numbered) return cleanOpportunityName(numbered[0]);
 
     if (/opportunity/i.test(text)) return cleanOpportunityName(text);
@@ -5953,6 +5971,9 @@ Health & Hospitality	DIRECT	NL	West	West
     const projectArr = getConciseFieldValue(fields, [
       /project.*arr/, /\barr\b/, /annual.*recurring/
     ], [], labeledValuePatterns.projectArr);
+    const projectedAcv = row.projectedAcv || getConciseFieldValue(fields, [
+      /acv.*commit/, /projected.*acv/, /\bacv\b/
+    ], [], labeledValuePatterns.projectedAcv);
     const salesRep = getConciseFieldValue(fields, [
       /sales\s*rep$/, /salesrep$/, /opp.*sales.*rep/, /sales.*representative/
     ], [/manager/, /yrs.*live/], labeledValuePatterns.salesRep);
@@ -6024,6 +6045,7 @@ Health & Hospitality	DIRECT	NL	West	West
       opportunityDisplay,
       expectedCloseDate,
       projectArr,
+      projectedAcv,
       salesRep,
       salesDirector,
       regionalVp,
@@ -6232,7 +6254,8 @@ Health & Hospitality	DIRECT	NL	West	West
       renderSummaryColumn("Opportunity", [
         renderSummaryItem("Opportunity Record", "", { html: opportunityHtml }),
         renderSummaryItem("Expected Close Date", summary.expectedCloseDate),
-        renderSummaryItem("Project ARR", summary.projectArr),
+        renderSummaryItem("Projected ARR", summary.projectArr),
+        renderSummaryItem("Projected ACV", summary.projectedAcv),
         renderSummaryItem("Sales Rep", summary.salesRep),
         renderSummaryItem("Regional Director", summary.salesDirector),
         renderSummaryItem("Regional VP", summary.regionalVp),
