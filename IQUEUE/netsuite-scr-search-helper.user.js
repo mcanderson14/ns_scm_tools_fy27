@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.33
+// @version      27.0.34
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -42,7 +42,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.33";
+  const HELPER_VERSION = "27.0.34";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -56,14 +56,14 @@
   const GRAPH_TOKEN_STATUS_STALE_MS = 26 * 60 * 60 * 1000;
   const GRAPH_TOKEN_EXPIRING_SOON_MS = 2 * 60 * 60 * 1000;
   const HELPER_STATE_STORAGE_KEY = "fy27-unified-sc-staffing-queue-assistant-state-v1";
-  const GITHUB_MAPPING_BASE_URL = "https://raw.githubusercontent.com/mcanderson14/ns_scm_tools_fy27/main/IQUEUE/mappings";
+  const GITHUB_MAPPING_BASE_URL = "https://raw.githubusercontent.com/mcanderson14/ns_scm_tools_fy27/refs/heads/main/IQUEUE/mappings";
   const EXTERNAL_MAPPING_FILE_NAME = "SC_Industry_State_Region_Mapping.json";
   const EXTERNAL_MAPPING_FILE_ID = "482253421";
   const EXTERNAL_MAPPING_FILE_URL = "https://nlcorp.app.netsuite.com/app/common/media/482253421?folder=482253421";
   const EXTERNAL_MAPPING_CACHE_KEY = "fy27-unified-sc-staffing-queue-assistant-region-mapping-v3";
   const EXTERNAL_MAPPING_REFRESH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
   const GTM_SC_INDUSTRY_MAPPING_FILE_NAME = "GTM_to_SC_Industry_Mapping.json";
-  const GTM_SC_INDUSTRY_MAPPING_GITHUB_URL = "https://raw.githubusercontent.com/mcanderson14/ns_scm_tools_fy27/refs/heads/main/IQUEUE/mappings/GTM_to_SC_Industry_Mapping.json";
+  const GTM_SC_INDUSTRY_MAPPING_GITHUB_URL = `${GITHUB_MAPPING_BASE_URL}/GTM_to_SC_Industry_Mapping.json`;
   const GTM_SC_INDUSTRY_MAPPING_FILE_ID = "483377127";
   const GTM_SC_INDUSTRY_MAPPING_FOLDER_URL = "https://nlcorp.app.netsuite.com/app/common/media/483377127?folder=483377127&ifrmcntnr=T";
   const GTM_SC_INDUSTRY_MAPPING_CACHE_KEY = "iqueue-gtm-sc-industry-mapping-v3";
@@ -2786,56 +2786,26 @@ Health & Hospitality	DIRECT	NL	West	West
   }
 
   function externalMappingUrlCandidates() {
-    const origin = window.location.origin || "https://nlcorp.app.netsuite.com";
     return orderedUnique([
-      githubMappingUrl(EXTERNAL_MAPPING_FILE_NAME),
-      EXTERNAL_MAPPING_FILE_URL,
-      `${origin}/core/media/media.nl?id=${encodeURIComponent(EXTERNAL_MAPPING_FILE_ID)}&c=NLCORP&_xt=.json`,
-      `${origin}/core/media/media.nl?id=${encodeURIComponent(EXTERNAL_MAPPING_FILE_ID)}&_xt=.json`,
-      `${origin}/app/common/media/mediaitem.nl?id=${encodeURIComponent(EXTERNAL_MAPPING_FILE_ID)}`
+      githubMappingUrl(EXTERNAL_MAPPING_FILE_NAME)
     ]);
   }
 
   function productsScmMappingUrlCandidates() {
-    const origin = window.location.origin || "https://nlcorp.app.netsuite.com";
     return orderedUnique([
-      githubMappingUrl(PRODUCTS_SCM_MAPPING_FILE_NAME),
-      PRODUCTS_SCM_MAPPING_FILE_URL,
-      `${origin}/core/media/media.nl?id=${encodeURIComponent(PRODUCTS_SCM_MAPPING_FILE_ID)}&c=NLCORP&_xt=.json`,
-      `${origin}/core/media/media.nl?id=${encodeURIComponent(PRODUCTS_SCM_MAPPING_FILE_ID)}&_xt=.json`,
-      `${origin}/app/common/media/mediaitem.nl?id=${encodeURIComponent(PRODUCTS_SCM_MAPPING_FILE_ID)}`
+      githubMappingUrl(PRODUCTS_SCM_MAPPING_FILE_NAME)
     ]);
   }
 
   function gtmScIndustryMappingUrlCandidates() {
-    const origin = window.location.origin || "https://nlcorp.app.netsuite.com";
-    const fileIdUrls = GTM_SC_INDUSTRY_MAPPING_FILE_ID
-      ? [
-          `${origin}/core/media/media.nl?id=${encodeURIComponent(GTM_SC_INDUSTRY_MAPPING_FILE_ID)}&c=NLCORP&_xt=.json`,
-          `${origin}/core/media/media.nl?id=${encodeURIComponent(GTM_SC_INDUSTRY_MAPPING_FILE_ID)}&_xt=.json`,
-          `${origin}/app/common/media/mediaitem.nl?id=${encodeURIComponent(GTM_SC_INDUSTRY_MAPPING_FILE_ID)}`
-        ]
-      : [];
     return orderedUnique([
-      GTM_SC_INDUSTRY_MAPPING_GITHUB_URL,
-      ...fileIdUrls,
-      GTM_SC_INDUSTRY_MAPPING_FOLDER_URL
+      GTM_SC_INDUSTRY_MAPPING_GITHUB_URL
     ].filter(Boolean));
   }
 
   function authorizedManagersUrlCandidates() {
-    const origin = window.location.origin || "https://nlcorp.app.netsuite.com";
-    const fileIdUrls = AUTHORIZED_MANAGERS_FILE_ID
-      ? [
-          `${origin}/core/media/media.nl?id=${encodeURIComponent(AUTHORIZED_MANAGERS_FILE_ID)}&c=NLCORP&_xt=.json`,
-          `${origin}/core/media/media.nl?id=${encodeURIComponent(AUTHORIZED_MANAGERS_FILE_ID)}&_xt=.json`,
-          `${origin}/app/common/media/mediaitem.nl?id=${encodeURIComponent(AUTHORIZED_MANAGERS_FILE_ID)}`
-        ]
-      : [];
     return orderedUnique([
-      ...AUTHORIZED_MANAGERS_FILE_NAMES.map(githubMappingUrl),
-      AUTHORIZED_MANAGERS_FOLDER_URL,
-      ...fileIdUrls
+      ...AUTHORIZED_MANAGERS_FILE_NAMES.map(githubMappingUrl)
     ].filter(Boolean));
   }
 
@@ -3015,16 +2985,6 @@ Health & Hospitality	DIRECT	NL	West	West
       }
     }
 
-    try {
-      const data = await loadExternalMappingWithSuiteScript();
-      return {
-        data,
-        label: `N/file ${EXTERNAL_MAPPING_FILE_NAME}`
-      };
-    } catch (error) {
-      errors.push(`N/file: ${error.message || error}`);
-    }
-
     throw new Error(errors.join(" | "));
   }
 
@@ -3147,7 +3107,7 @@ Health & Hospitality	DIRECT	NL	West	West
     if (!force && !shouldFetchExternalMapping()) return;
 
     const status = document.getElementById("scr-helper-status");
-    if (status) status.textContent = `Loading ${EXTERNAL_MAPPING_FILE_NAME} from NetSuite File Cabinet.`;
+    if (status) status.textContent = `Loading ${EXTERNAL_MAPPING_FILE_NAME} from GitHub.`;
 
     try {
       const result = await fetchExternalMappingData();
@@ -3356,16 +3316,6 @@ Health & Hospitality	DIRECT	NL	West	West
       }
     }
 
-    try {
-      const data = await loadProductsScmMappingWithSuiteScript();
-      return {
-        data,
-        label: `N/file ${PRODUCTS_SCM_MAPPING_FILE_NAME}`
-      };
-    } catch (error) {
-      errors.push(`N/file: ${error.message || error}`);
-    }
-
     throw new Error(errors.join(" | "));
   }
 
@@ -3516,17 +3466,6 @@ Health & Hospitality	DIRECT	NL	West	West
       };
     } catch (error) {
       errors.push(mappingLoadErrorSummary(error, "GitHub raw GTM mapping"));
-    }
-
-    try {
-      const data = await loadGtmScIndustryMappingWithSuiteScript();
-      parseRequiredGtmIndustryMappingRows(data, `N/file ${GTM_SC_INDUSTRY_MAPPING_FILE_NAME}`);
-      return {
-        data,
-        label: `N/file ${GTM_SC_INDUSTRY_MAPPING_FILE_NAME}`
-      };
-    } catch (error) {
-      errors.push(mappingLoadErrorSummary(error, "NetSuite N/file GTM mapping"));
     }
 
     for (const url of gtmScIndustryMappingUrlCandidates().filter(url => url !== githubUrl)) {
@@ -3998,28 +3937,6 @@ Health & Hospitality	DIRECT	NL	West	West
       } catch (error) {
         errors.push(error.message || String(error));
       }
-    }
-
-    for (const searchUrl of AUTHORIZED_MANAGERS_SEARCH_URLS) {
-      try {
-        const data = await fetchAuthorizedManagersFromSavedSearch(searchUrl);
-        return {
-          data,
-          label: `Saved Search ${AUTHORIZED_MANAGERS_SEARCH_ID}`
-        };
-      } catch (error) {
-        errors.push(`Saved Search ${AUTHORIZED_MANAGERS_SEARCH_ID}: ${error.message || error}`);
-      }
-    }
-
-    try {
-      const data = await loadAuthorizedManagersWithSuiteScript();
-      return {
-        data,
-        label: `N/file ${AUTHORIZED_MANAGERS_FILE_NAME}`
-      };
-    } catch (error) {
-      errors.push(`N/file: ${error.message || error}`);
     }
 
     throw new Error(errors.join(" | "));
@@ -11952,10 +11869,10 @@ Health & Hospitality	DIRECT	NL	West	West
   }
 
   function loadStartupBackgroundData() {
-    loadExternalMapping();
-    loadGtmScIndustryMapping();
-    loadProductsScmMapping();
-    loadAuthorizedManagers();
+    loadExternalMapping({ force: true });
+    loadGtmScIndustryMapping({ force: true });
+    loadProductsScmMapping({ force: true });
+    loadAuthorizedManagers({ force: true });
   }
 
   function helperShellIsPresent() {
