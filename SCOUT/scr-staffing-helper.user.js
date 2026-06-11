@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.0.22
+// @version      27.0.23
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.0.22
+   SCOUT — SC Operations Utility Tool  27.0.23
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.0.22';
+  const SCRIPT_VERSION = '27.0.23';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -395,6 +395,8 @@ Good luck with ${sc}!
   const SEARCH_PAGE_SIZE = 10;
   const STAFFING_PENDING_KEY = 'sc_staffing_helper_pending_action_v1';
   const PENDING_STAFFING_SAVE_DELAY_MS = 1800;
+  const NETSUITE_FORM_INIT_TIMEOUT_MS = 20000;
+  const NETSUITE_FORM_INIT_POLL_MS = 250;
   const SEARCH_RESULT_CACHE = {};
   const RECENT_LOAD_CACHE = new Map();
   const RECENT_LOAD_CACHE_TTL_MS = 2 * 60 * 1000;
@@ -5142,6 +5144,55 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     return Boolean(document.getElementById('submitter') || document.querySelector('input[type="submit"][value="Save"], button[name="submitter"]'));
   }
 
+  function isNetSuiteFormInitialized() {
+    try {
+      const ns = unsafeWindow.NS || window.NS;
+      const form = ns && ns.form;
+      if (!form || typeof form.isInited !== 'function') return true;
+      return form.isInited() === true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function waitForNetSuiteFormInitialized(actionLabel) {
+    const label = actionLabel || 'SCOUT action';
+    if (isNetSuiteFormInitialized()) return Promise.resolve(true);
+    showToast(`Waiting on NetSuite form to initialize before ${label}...`, 'info', 7000);
+    const startedAt = Date.now();
+    return new Promise(resolve => {
+      const poll = function () {
+        if (isNetSuiteFormInitialized()) {
+          resolve(true);
+          return;
+        }
+        if (Date.now() - startedAt >= NETSUITE_FORM_INIT_TIMEOUT_MS) {
+          console.warn('[SCOUT] NetSuite form did not initialize before SCOUT action:', label, {
+            url: window.location.href,
+            elapsedMs: Date.now() - startedAt,
+          });
+          showToast(`SCOUT stopped: NetSuite form is still initializing. Refresh the SCR and try ${label} again.`, 'error', 12000);
+          resolve(false);
+          return;
+        }
+        setTimeout(poll, NETSUITE_FORM_INIT_POLL_MS);
+      };
+      setTimeout(poll, NETSUITE_FORM_INIT_POLL_MS);
+    });
+  }
+
+  function runWhenNetSuiteFormInitialized(actionLabel, callback) {
+    waitForNetSuiteFormInitialized(actionLabel).then(ok => {
+      if (!ok) return;
+      try {
+        callback();
+      } catch (e) {
+        console.error('[SCOUT] Action failed after NetSuite form initialized:', actionLabel, e);
+        showToast(`Could not complete ${actionLabel}. Check console for details.`, 'error', 8000);
+      }
+    });
+  }
+
   function goToEditMode() {
     const url = new URL(window.location.href);
     url.searchParams.set('e', 'T');
@@ -5751,7 +5802,12 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     }
     if (!isScrEditMode()) return;
 
-    try {
+    const actionLabel = pending.type === 'onhold'
+      ? 'on hold changes'
+      : pending.type === 'cancel'
+        ? 'cancellation changes'
+        : `staffing changes for ${pending.scName}`;
+    runWhenNetSuiteFormInitialized(actionLabel, function () {
       if (pending.type === 'amo') {
         applyAmoStaffing(pending.scId, pending.scName, pending.empName, pending.hasLeadOnOpp, pending.notes, pending.deliverable, pending.productIds, pending.assignAsLead !== false, pending.requestDetailsNote);
       } else if (pending.type === 'onhold') {
@@ -5762,21 +5818,13 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         applyDirectStaffing(pending.scId, pending.scName, pending.empName, pending.hasLeadOnOpp, pending.notes, pending.productIds, pending.assignAsLead !== false, pending.requestDetailsNote);
       }
       sessionStorage.removeItem(STAFFING_PENDING_KEY);
-      const actionLabel = pending.type === 'onhold'
-        ? 'on hold changes'
-        : pending.type === 'cancel'
-          ? 'cancellation changes'
-          : `staffing changes for ${pending.scName}`;
       showToast(`✔ Applied ${actionLabel}; saving record…`, 'success', 5000);
       setTimeout(function () {
         triggerNetSuiteFieldEvents(SCR_FIELD_ASSIGNEE);
         releaseActiveNetSuiteFieldFocus();
         setTimeout(saveNetSuiteForm, 250);
       }, PENDING_STAFFING_SAVE_DELAY_MS);
-    } catch (e) {
-      console.error('[Staffing Helper] Pending staffing action failed:', e);
-      showToast('Could not apply pending SCOUT action. Check console for details.', 'error', 8000);
-    }
+    });
   }
 
   /**
@@ -5793,8 +5841,10 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         storePendingStaffAction({ type: 'direct', scId, scName, empName, hasLeadOnOpp, notes, requestDetailsNote, assignAsLead, productIds: getProductsForStaffing('sc-products', 'sc-product-skills') });
         return;
       }
-      applyDirectStaffing(scId, scName, empName, hasLeadOnOpp, notes, getProductsForStaffing('sc-products', 'sc-product-skills'), assignAsLead, requestDetailsNote);
-      showToast(`✔ Staffed: ${scName} as ${assignmentLabel} — save the record to confirm.`, 'success', 6000);
+      runWhenNetSuiteFormInitialized(`staffing ${scName}`, function () {
+        applyDirectStaffing(scId, scName, empName, hasLeadOnOpp, notes, getProductsForStaffing('sc-products', 'sc-product-skills'), assignAsLead, requestDetailsNote);
+        showToast(`✔ Staffed: ${scName} as ${assignmentLabel} — save the record to confirm.`, 'success', 6000);
+      });
     }, { showLeadToggle: true, showRequestDetailsBox: true });
   }
 
@@ -5845,9 +5895,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           storePendingStaffAction({ type: 'amo', scId, scName, empName, hasLeadOnOpp, notes, requestDetailsNote, deliverable, assignAsLead, productIds: getProductsForStaffing('sc-amo-products', 'sc-amo-product-skills') });
           return;
         }
-        applyAmoStaffing(scId, scName, empName, hasLeadOnOpp, notes, deliverable, getProductsForStaffing('sc-amo-products', 'sc-amo-product-skills'), assignAsLead, requestDetailsNote);
-        const label = deliverable ? ` (${deliverable})` : '';
-        showToast(`✔ Staffed: ${scName}${label} as ${assignmentLabel} — save the record to confirm.`, 'success', 6000);
+        runWhenNetSuiteFormInitialized(`staffing ${scName}`, function () {
+          applyAmoStaffing(scId, scName, empName, hasLeadOnOpp, notes, deliverable, getProductsForStaffing('sc-amo-products', 'sc-amo-product-skills'), assignAsLead, requestDetailsNote);
+          const label = deliverable ? ` (${deliverable})` : '';
+          showToast(`✔ Staffed: ${scName}${label} as ${assignmentLabel} — save the record to confirm.`, 'success', 6000);
+        });
       };
       if (!deliverable) {
         showAmoBlankDeliverableWarning(continueStaffing);
@@ -5899,8 +5951,10 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         storePendingStaffAction({ type: 'onhold', meId, notes });
         return;
       }
-      applyOnHold(meId, notes);
-      showToast('✔ Status set to On Hold — save the record to confirm.', 'info');
+      runWhenNetSuiteFormInitialized('placing the request on hold', function () {
+        applyOnHold(meId, notes);
+        showToast('✔ Status set to On Hold — save the record to confirm.', 'info');
+      });
     });
   }
 
@@ -5912,8 +5966,10 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         storePendingStaffAction({ type: 'cancel', empName, notes });
         return;
       }
-      applyCancelRequest(empName, notes);
-      showToast('✔ Request cancelled — save the record to confirm.', 'error', 6000);
+      runWhenNetSuiteFormInitialized('cancelling the request', function () {
+        applyCancelRequest(empName, notes);
+        showToast('✔ Request cancelled — save the record to confirm.', 'error', 6000);
+      });
     });
   }
 
