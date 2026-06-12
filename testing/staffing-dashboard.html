@@ -1236,7 +1236,7 @@
     <div class="header-inner">
       <div class="brand-row">
         <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
-        <span class="version-pill">v27.0.16</span>
+        <span class="version-pill">v27.0.17</span>
       </div>
       <div class="header-actions">
         <div class="refresh-panel">
@@ -11330,6 +11330,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     function renderAll() {
       configureDateWindow();
       renderRefreshState();
+      updateStaffingLoadRefreshButton();
       const windowConfig = getWindow();
       const rows = getAvailabilityRows(windowConfig);
       renderMetrics(rows);
@@ -11347,6 +11348,50 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const status = document.getElementById("cacheStatusLabel");
       if (label && title) label.textContent = title;
       if (status && detail) status.textContent = detail;
+    }
+
+    function updateStaffingLoadRefreshButton() {
+      const button = document.getElementById("staffingLoadRefreshButton");
+      if (!button) return;
+      const report = getStoredStaffingLoadReport();
+      const fresh = isStoredStaffingLoadFresh(report);
+      button.classList.toggle("is-stale", !fresh);
+      button.title = report?.rows?.length
+        ? `${report.rows.length} workload row${report.rows.length === 1 ? "" : "s"} cached; refreshed ${report.refreshedAt ? formatRefreshTimestamp(new Date(report.refreshedAt)) : "unknown time"}${fresh ? "" : " (stale)"}`
+        : `Refresh workload data from NetSuite saved search ${STAFFING_LOAD_NETSUITE_SEARCH_ID}`;
+    }
+
+    async function handleStaffingLoadRefreshClick() {
+      const button = document.getElementById("staffingLoadRefreshButton");
+      if (!button) return;
+      const originalText = button.textContent;
+      button.disabled = true;
+      button.textContent = "Refreshing...";
+      setDashboardRefreshStatus("Refreshing staffing data...", `NetSuite saved search ${STAFFING_LOAD_NETSUITE_SEARCH_ID}`);
+      try {
+        const report = await refreshStaffingLoadFromNetSuiteCache({ force: true });
+        if (report?.rows?.length) {
+          setDashboardRefreshStatus(
+            "Staffing data refreshed",
+            `${report.rows.length} workload row${report.rows.length === 1 ? "" : "s"} from ${report.source || "NetSuite saved search"}; refreshed ${report.refreshedAt ? formatRefreshTimestamp(new Date(report.refreshedAt)) : "now"}`
+          );
+        } else if (typeof window.refreshScoutStaffingLoadFromNetSuite !== "function") {
+          setDashboardRefreshStatus(
+            "Staffing data bridge missing",
+            "Install or enable the SCOUT Staffing Load Cache Bridge Tampermonkey script, then reload this dashboard."
+          );
+        } else {
+          setDashboardRefreshStatus("Staffing data not refreshed", "No workload rows were returned.");
+        }
+        renderAll();
+      } catch (error) {
+        setDashboardRefreshStatus("Staffing data refresh failed", error.message);
+        renderDebugConsole();
+      } finally {
+        button.disabled = false;
+        button.textContent = originalText || "Refresh Staffing Data";
+        updateStaffingLoadRefreshButton();
+      }
     }
 
     async function handleManualRefresh() {
@@ -11874,6 +11919,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     }
 
     function wireEvents() {
+      document.getElementById("staffingLoadRefreshButton")?.addEventListener("click", handleStaffingLoadRefreshClick);
       document.getElementById("refreshButton").addEventListener("click", handleManualRefresh);
       document.getElementById("openRefreshConsoleButton")?.addEventListener("click", openRefreshConsole);
       window.addEventListener("scout-staffing-load-cache-updated", handleStaffingLoadCacheUpdated);
