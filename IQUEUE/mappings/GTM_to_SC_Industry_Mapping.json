@@ -4,11 +4,11 @@
     "name": "FY27 Queue Mapping JSON Maker",
     "version": "27.0.9"
   },
-  "generatedAt": "2026-06-10T23:12:55.224Z",
+  "generatedAt": "2026-06-12T01:57:26.978Z",
   "outputFileName": "GTM_to_SC_Industry_Mapping.json",
   "source": {
-    "fileName": "FY27-GTMtoSCStaffing_Mapping.xlsx",
-    "sheetName": "FYIndustrysResults",
+    "fileName": "FY27GTMIndustrytoSCIndustryMapping-IQUEUE.xlsx",
+    "sheetName": "Industry Breakdown",
     "headerRow": 1,
     "firstDataRow": 2,
     "detectedHeaders": {
@@ -35,13 +35,13 @@
     }
   },
   "counts": {
-    "rows": 41,
+    "rows": 49,
     "scIndustryGroups": 6,
     "gtmIndustries": 16,
-    "gtmIndustrySubgroups": 41,
+    "gtmIndustrySubgroups": 43,
     "incompleteRows": 0,
     "duplicateMappings": 0,
-    "missingEmojiMappings": 0
+    "missingEmojiMappings": 1
   },
   "scIndustryGroups": [
     "Business Services",
@@ -52,20 +52,20 @@
     "Software"
   ],
   "gtmIndustries": [
-    "Agencies",
+    "Advertising, Media & Publishing",
     "Business Services",
     "Construction & Energy",
-    "Consulting & IT Services",
+    "Consulting",
     "Consumer Goods",
     "Consumer Services",
     "Financial Services",
     "Food & Beverage",
-    "Government",
     "Health",
     "Hospitality",
     "Industrial & Equipment",
     "Life Sciences",
     "Nonprofits & Organizations",
+    "Public Sector",
     "Software",
     "Transportation"
   ],
@@ -73,11 +73,11 @@
     "Advisory Services",
     "Agencies",
     "Agriculture, Livestock, Crops",
-    "CG - Manufacturing - Discrete",
-    "CG - Manufacturing - Process",
     "CG - Retail",
     "CG - Wholesale & Distribution",
-    "Charity Foundations",
+    "CG Manufacturing - Discrete",
+    "CG Manufacturing - Process",
+    "Charitable Foundations",
     "Construction & Engineering",
     "Consumer & Commercial Financial Services",
     "Cultural & Arts",
@@ -96,9 +96,11 @@
     "Infrastructure & Utilities",
     "Investment Banks & Private Equity",
     "Management Consulting",
+    "Media & Publishing",
     "MedTech",
     "Membership Organizations",
     "Multimedia & Internet Software",
+    "No Sub-Industry",
     "Operational Support Services",
     "Other Health Services",
     "Outpatient Clinics",
@@ -125,11 +127,11 @@
       "Advisory Services": "🧭",
       "Agencies": "📣",
       "Agriculture, Livestock, Crops": "🌾",
-      "CG - Manufacturing - Discrete": "🔩",
-      "CG - Manufacturing - Process": "⚗️",
       "CG - Retail": "🛒",
       "CG - Wholesale & Distribution": "🏷️",
-      "Charity Foundations": "🤝",
+      "CG Manufacturing - Discrete": "🔩",
+      "CG Manufacturing - Process": "⚗️",
+      "Charitable Foundations": "🎗️",
       "Construction & Engineering": "🏗️",
       "Consumer & Commercial Financial Services": "🏦",
       "Cultural & Arts": "🎭",
@@ -148,9 +150,11 @@
       "Infrastructure & Utilities": "🔌",
       "Investment Banks & Private Equity": "💹",
       "Management Consulting": "📊",
+      "Media & Publishing": "📰",
       "MedTech": "🦾",
       "Membership Organizations": "👥",
       "Multimedia & Internet Software": "🌐",
+      "No Sub-Industry": "",
       "Operational Support Services": "⚙️",
       "Other Health Services": "🩺",
       "Outpatient Clinics": "🩹",
@@ -172,8 +176,8 @@
       "scIndustryGroupKey": "businessservices",
       "sourceScIndustryGroup": "Business Services",
       "sourceScIndustryGroupKey": "businessservices",
-      "gtmIndustry": "Agencies",
-      "gtmIndustryKey": "agencies",
+      "gtmIndustry": "Advertising, Media & Publishing",
+      "gtmIndustryKey": "advertisingmediaandpublishing",
       "gtmIndustrySubgroup": "Agencies",
       "gtmIndustrySubgroupKey": "agencies",
       "scIndustryGroupEmoji": "💼",
@@ -181,6 +185,19 @@
     },
     {
       "sourceRow": 3,
+      "scIndustryGroup": "Business Services",
+      "scIndustryGroupKey": "businessservices",
+      "sourceScIndustryGroup": "Business Services",
+      "sourceScIndustryGroupKey": "businessservices",
+      "gtmIndustry": "Advertising, Media & Publishing",
+      "gtmIndustryKey": "advertisingmediaandpublishing",
+      "gtmIndustrySubgroup": "Media & Publishing",
+      "gtmIndustrySubgroupKey": "mediaandpublishing",
+      "scIndustryGroupEmoji": "💼",
+      "gtmIndustrySubgroupEmoji": "📰"
+    },
+    {
+      "sourceRow": 4,
       "scIndustryGroup": "Business Services",
       "scIndustryGroupKey": "businessservices",
       "sourceScIndustryGroup": "Business Services",
@@ -193,7 +210,7 @@
       "gtmIndustrySubgroupEmoji": "🧭"
     },
     {
-      "sourceRow": 4,
+      "sourceRow": 6,
       "scIndustryGroup": "Business Services",
       "scIndustryGroupKey": "businessservices",
       "sourceScIndustryGroup": "Business Services",
@@ -204,6 +221,19 @@
       "gtmIndustrySubgroupKey": "facilitiesmanagement",
       "scIndustryGroupEmoji": "💼",
       "gtmIndustrySubgroupEmoji": "🏢"
+    },
+    {
+      "sourceRow": 7,
+      "scIndustryGroup": "Business Services",
+      "scIndustryGroupKey": "businessservices",
+      "sourceScIndustryGroup": "Business Services",
+      "sourceScIndustryGroupKey": "businessservices",
+      "gtmIndustry": "Business Services",
+      "gtmIndustryKey": "businessservices",
+      "gtmIndustrySubgroup": "No Sub-Industry",
+      "gtmIndustrySubgroupKey": "nosubindustry",
+      "scIndustryGroupEmoji": "💼",
+      "gtmIndustrySubgroupEmoji": ""
     },
     {
       "sourceRow": 5,
@@ -219,59 +249,20 @@
       "gtmIndustrySubgroupEmoji": "⚙️"
     },
     {
-      "sourceRow": 10,
+      "sourceRow": 8,
       "scIndustryGroup": "Business Services",
       "scIndustryGroupKey": "businessservices",
       "sourceScIndustryGroup": "Business Services",
       "sourceScIndustryGroupKey": "businessservices",
-      "gtmIndustry": "Consulting & IT Services",
-      "gtmIndustryKey": "consultinganditservices",
-      "gtmIndustrySubgroup": "Custom Software & IT Services",
-      "gtmIndustrySubgroupKey": "customsoftwareanditservices",
-      "scIndustryGroupEmoji": "💼",
-      "gtmIndustrySubgroupEmoji": "🧩"
-    },
-    {
-      "sourceRow": 9,
-      "scIndustryGroup": "Business Services",
-      "scIndustryGroupKey": "businessservices",
-      "sourceScIndustryGroup": "Business Services",
-      "sourceScIndustryGroupKey": "businessservices",
-      "gtmIndustry": "Consulting & IT Services",
-      "gtmIndustryKey": "consultinganditservices",
+      "gtmIndustry": "Consulting",
+      "gtmIndustryKey": "consulting",
       "gtmIndustrySubgroup": "Management Consulting",
       "gtmIndustrySubgroupKey": "managementconsulting",
       "scIndustryGroupEmoji": "💼",
       "gtmIndustrySubgroupEmoji": "📊"
     },
     {
-      "sourceRow": 23,
-      "scIndustryGroup": "Business Services",
-      "scIndustryGroupKey": "businessservices",
-      "sourceScIndustryGroup": "Business Services",
-      "sourceScIndustryGroupKey": "businessservices",
-      "gtmIndustry": "Government",
-      "gtmIndustryKey": "government",
-      "gtmIndustrySubgroup": "Public Sector",
-      "gtmIndustrySubgroupKey": "publicsector",
-      "scIndustryGroupEmoji": "💼",
-      "gtmIndustrySubgroupEmoji": "🏛️"
-    },
-    {
-      "sourceRow": 24,
-      "scIndustryGroup": "Business Services",
-      "scIndustryGroupKey": "businessservices",
-      "sourceScIndustryGroup": "Business Services",
-      "sourceScIndustryGroupKey": "businessservices",
-      "gtmIndustry": "Government",
-      "gtmIndustryKey": "government",
-      "gtmIndustrySubgroup": "State & Local Governments",
-      "gtmIndustrySubgroupKey": "stateandlocalgovernments",
-      "scIndustryGroupEmoji": "💼",
-      "gtmIndustrySubgroupEmoji": "🏙️"
-    },
-    {
-      "sourceRow": 41,
+      "sourceRow": 10,
       "scIndustryGroup": "Business Services",
       "scIndustryGroupKey": "businessservices",
       "sourceScIndustryGroup": "Business Services",
@@ -284,7 +275,20 @@
       "gtmIndustrySubgroupEmoji": "🚚"
     },
     {
-      "sourceRow": 42,
+      "sourceRow": 11,
+      "scIndustryGroup": "Business Services",
+      "scIndustryGroupKey": "businessservices",
+      "sourceScIndustryGroup": "Business Services",
+      "sourceScIndustryGroupKey": "businessservices",
+      "gtmIndustry": "Transportation",
+      "gtmIndustryKey": "transportation",
+      "gtmIndustrySubgroup": "No Sub-Industry",
+      "gtmIndustrySubgroupKey": "nosubindustry",
+      "scIndustryGroupEmoji": "💼",
+      "gtmIndustrySubgroupEmoji": ""
+    },
+    {
+      "sourceRow": 9,
       "scIndustryGroup": "Business Services",
       "scIndustryGroupKey": "businessservices",
       "sourceScIndustryGroup": "Business Services",
@@ -297,7 +301,7 @@
       "gtmIndustrySubgroupEmoji": "🚌"
     },
     {
-      "sourceRow": 8,
+      "sourceRow": 13,
       "scIndustryGroup": "Construction & Energy",
       "scIndustryGroupKey": "constructionandenergy",
       "sourceScIndustryGroup": "Construction & Energy",
@@ -310,7 +314,7 @@
       "gtmIndustrySubgroupEmoji": "🏗️"
     },
     {
-      "sourceRow": 6,
+      "sourceRow": 12,
       "scIndustryGroup": "Construction & Energy",
       "scIndustryGroupKey": "constructionandenergy",
       "sourceScIndustryGroup": "Construction & Energy",
@@ -323,7 +327,7 @@
       "gtmIndustrySubgroupEmoji": "⚡"
     },
     {
-      "sourceRow": 7,
+      "sourceRow": 14,
       "scIndustryGroup": "Construction & Energy",
       "scIndustryGroupKey": "constructionandenergy",
       "sourceScIndustryGroup": "Construction & Energy",
@@ -336,7 +340,20 @@
       "gtmIndustrySubgroupEmoji": "🔌"
     },
     {
-      "sourceRow": 15,
+      "sourceRow": 17,
+      "scIndustryGroup": "Consumer Services",
+      "scIndustryGroupKey": "consumerservices",
+      "sourceScIndustryGroup": "Consumer Services",
+      "sourceScIndustryGroupKey": "consumerservices",
+      "gtmIndustry": "Consumer Services",
+      "gtmIndustryKey": "consumerservices",
+      "gtmIndustrySubgroup": "No Sub-Industry",
+      "gtmIndustrySubgroupKey": "nosubindustry",
+      "scIndustryGroupEmoji": "🛍️",
+      "gtmIndustrySubgroupEmoji": ""
+    },
+    {
+      "sourceRow": 16,
       "scIndustryGroup": "Consumer Services",
       "scIndustryGroupKey": "consumerservices",
       "sourceScIndustryGroup": "Consumer Services",
@@ -349,7 +366,7 @@
       "gtmIndustrySubgroupEmoji": "💇"
     },
     {
-      "sourceRow": 16,
+      "sourceRow": 18,
       "scIndustryGroup": "Consumer Services",
       "scIndustryGroupKey": "consumerservices",
       "sourceScIndustryGroup": "Consumer Services",
@@ -362,7 +379,7 @@
       "gtmIndustrySubgroupEmoji": "🏘️"
     },
     {
-      "sourceRow": 17,
+      "sourceRow": 15,
       "scIndustryGroup": "Consumer Services",
       "scIndustryGroupKey": "consumerservices",
       "sourceScIndustryGroup": "Consumer Services",
@@ -388,7 +405,7 @@
       "gtmIndustrySubgroupEmoji": "🏦"
     },
     {
-      "sourceRow": 18,
+      "sourceRow": 20,
       "scIndustryGroup": "Consumer Services",
       "scIndustryGroupKey": "consumerservices",
       "sourceScIndustryGroup": "Consumer Services",
@@ -401,20 +418,33 @@
       "gtmIndustrySubgroupEmoji": "💹"
     },
     {
-      "sourceRow": 34,
+      "sourceRow": 21,
+      "scIndustryGroup": "Consumer Services",
+      "scIndustryGroupKey": "consumerservices",
+      "sourceScIndustryGroup": "Consumer Services",
+      "sourceScIndustryGroupKey": "consumerservices",
+      "gtmIndustry": "Financial Services",
+      "gtmIndustryKey": "financialservices",
+      "gtmIndustrySubgroup": "No Sub-Industry",
+      "gtmIndustrySubgroupKey": "nosubindustry",
+      "scIndustryGroupEmoji": "🛍️",
+      "gtmIndustrySubgroupEmoji": ""
+    },
+    {
+      "sourceRow": 22,
       "scIndustryGroup": "Consumer Services",
       "scIndustryGroupKey": "consumerservices",
       "sourceScIndustryGroup": "Consumer Services",
       "sourceScIndustryGroupKey": "consumerservices",
       "gtmIndustry": "Nonprofits & Organizations",
       "gtmIndustryKey": "nonprofitsandorganizations",
-      "gtmIndustrySubgroup": "Charity Foundations",
-      "gtmIndustrySubgroupKey": "charityfoundations",
+      "gtmIndustrySubgroup": "Charitable Foundations",
+      "gtmIndustrySubgroupKey": "charitablefoundations",
       "scIndustryGroupEmoji": "🛍️",
-      "gtmIndustrySubgroupEmoji": "🤝"
+      "gtmIndustrySubgroupEmoji": "🎗️"
     },
     {
-      "sourceRow": 35,
+      "sourceRow": 24,
       "scIndustryGroup": "Consumer Services",
       "scIndustryGroupKey": "consumerservices",
       "sourceScIndustryGroup": "Consumer Services",
@@ -427,7 +457,7 @@
       "gtmIndustrySubgroupEmoji": "🎭"
     },
     {
-      "sourceRow": 36,
+      "sourceRow": 23,
       "scIndustryGroup": "Consumer Services",
       "scIndustryGroupKey": "consumerservices",
       "sourceScIndustryGroup": "Consumer Services",
@@ -440,7 +470,7 @@
       "gtmIndustrySubgroupEmoji": "🎓"
     },
     {
-      "sourceRow": 37,
+      "sourceRow": 25,
       "scIndustryGroup": "Consumer Services",
       "scIndustryGroupKey": "consumerservices",
       "sourceScIndustryGroup": "Consumer Services",
@@ -454,6 +484,19 @@
     },
     {
       "sourceRow": 26,
+      "scIndustryGroup": "Consumer Services",
+      "scIndustryGroupKey": "consumerservices",
+      "sourceScIndustryGroup": "Consumer Services",
+      "sourceScIndustryGroupKey": "consumerservices",
+      "gtmIndustry": "Nonprofits & Organizations",
+      "gtmIndustryKey": "nonprofitsandorganizations",
+      "gtmIndustrySubgroup": "No Sub-Industry",
+      "gtmIndustrySubgroupKey": "nosubindustry",
+      "scIndustryGroupEmoji": "🛍️",
+      "gtmIndustrySubgroupEmoji": ""
+    },
+    {
+      "sourceRow": 29,
       "scIndustryGroup": "Health & Hospitality",
       "scIndustryGroupKey": "healthandhospitality",
       "sourceScIndustryGroup": "Health & Hospitality",
@@ -466,7 +509,7 @@
       "gtmIndustrySubgroupEmoji": "🏥"
     },
     {
-      "sourceRow": 25,
+      "sourceRow": 27,
       "scIndustryGroup": "Health & Hospitality",
       "scIndustryGroupKey": "healthandhospitality",
       "sourceScIndustryGroup": "Health & Hospitality",
@@ -479,7 +522,7 @@
       "gtmIndustrySubgroupEmoji": "🩺"
     },
     {
-      "sourceRow": 27,
+      "sourceRow": 28,
       "scIndustryGroup": "Health & Hospitality",
       "scIndustryGroupKey": "healthandhospitality",
       "sourceScIndustryGroup": "Health & Hospitality",
@@ -492,7 +535,7 @@
       "gtmIndustrySubgroupEmoji": "🩹"
     },
     {
-      "sourceRow": 29,
+      "sourceRow": 30,
       "scIndustryGroup": "Health & Hospitality",
       "scIndustryGroupKey": "healthandhospitality",
       "sourceScIndustryGroup": "Health & Hospitality",
@@ -505,7 +548,20 @@
       "gtmIndustrySubgroupEmoji": "🍽️"
     },
     {
-      "sourceRow": 28,
+      "sourceRow": 32,
+      "scIndustryGroup": "Health & Hospitality",
+      "scIndustryGroupKey": "healthandhospitality",
+      "sourceScIndustryGroup": "Health & Hospitality",
+      "sourceScIndustryGroupKey": "healthandhospitality",
+      "gtmIndustry": "Hospitality",
+      "gtmIndustryKey": "hospitality",
+      "gtmIndustrySubgroup": "No Sub-Industry",
+      "gtmIndustrySubgroupKey": "nosubindustry",
+      "scIndustryGroupEmoji": "🏨",
+      "gtmIndustrySubgroupEmoji": ""
+    },
+    {
+      "sourceRow": 31,
       "scIndustryGroup": "Health & Hospitality",
       "scIndustryGroupKey": "healthandhospitality",
       "sourceScIndustryGroup": "Health & Hospitality",
@@ -518,7 +574,7 @@
       "gtmIndustrySubgroupEmoji": "🏟️"
     },
     {
-      "sourceRow": 33,
+      "sourceRow": 34,
       "scIndustryGroup": "Health & Hospitality",
       "scIndustryGroupKey": "healthandhospitality",
       "sourceScIndustryGroup": "Health & Hospitality",
@@ -531,7 +587,7 @@
       "gtmIndustrySubgroupEmoji": "🦾"
     },
     {
-      "sourceRow": 32,
+      "sourceRow": 33,
       "scIndustryGroup": "Health & Hospitality",
       "scIndustryGroupKey": "healthandhospitality",
       "sourceScIndustryGroup": "Health & Hospitality",
@@ -544,33 +600,33 @@
       "gtmIndustrySubgroupEmoji": "🧪"
     },
     {
-      "sourceRow": 11,
-      "scIndustryGroup": "Products",
-      "scIndustryGroupKey": "products",
-      "sourceScIndustryGroup": "Products",
-      "sourceScIndustryGroupKey": "products",
-      "gtmIndustry": "Consumer Goods",
-      "gtmIndustryKey": "consumergoods",
-      "gtmIndustrySubgroup": "CG - Manufacturing - Discrete",
-      "gtmIndustrySubgroupKey": "cgmanufacturingdiscrete",
-      "scIndustryGroupEmoji": "📦",
-      "gtmIndustrySubgroupEmoji": "🔩"
+      "sourceRow": 35,
+      "scIndustryGroup": "Health & Hospitality",
+      "scIndustryGroupKey": "healthandhospitality",
+      "sourceScIndustryGroup": "Health & Hospitality",
+      "sourceScIndustryGroupKey": "healthandhospitality",
+      "gtmIndustry": "Public Sector",
+      "gtmIndustryKey": "publicsector",
+      "gtmIndustrySubgroup": "Public Sector",
+      "gtmIndustrySubgroupKey": "publicsector",
+      "scIndustryGroupEmoji": "🏨",
+      "gtmIndustrySubgroupEmoji": "🏛️"
     },
     {
-      "sourceRow": 14,
-      "scIndustryGroup": "Products",
-      "scIndustryGroupKey": "products",
-      "sourceScIndustryGroup": "Products",
-      "sourceScIndustryGroupKey": "products",
-      "gtmIndustry": "Consumer Goods",
-      "gtmIndustryKey": "consumergoods",
-      "gtmIndustrySubgroup": "CG - Manufacturing - Process",
-      "gtmIndustrySubgroupKey": "cgmanufacturingprocess",
-      "scIndustryGroupEmoji": "📦",
-      "gtmIndustrySubgroupEmoji": "⚗️"
+      "sourceRow": 36,
+      "scIndustryGroup": "Health & Hospitality",
+      "scIndustryGroupKey": "healthandhospitality",
+      "sourceScIndustryGroup": "Health & Hospitality",
+      "sourceScIndustryGroupKey": "healthandhospitality",
+      "gtmIndustry": "Public Sector",
+      "gtmIndustryKey": "publicsector",
+      "gtmIndustrySubgroup": "State & Local Governments",
+      "gtmIndustrySubgroupKey": "stateandlocalgovernments",
+      "scIndustryGroupEmoji": "🏨",
+      "gtmIndustrySubgroupEmoji": "🏙️"
     },
     {
-      "sourceRow": 13,
+      "sourceRow": 39,
       "scIndustryGroup": "Products",
       "scIndustryGroupKey": "products",
       "sourceScIndustryGroup": "Products",
@@ -583,7 +639,7 @@
       "gtmIndustrySubgroupEmoji": "🛒"
     },
     {
-      "sourceRow": 12,
+      "sourceRow": 40,
       "scIndustryGroup": "Products",
       "scIndustryGroupKey": "products",
       "sourceScIndustryGroup": "Products",
@@ -596,7 +652,33 @@
       "gtmIndustrySubgroupEmoji": "🏷️"
     },
     {
-      "sourceRow": 20,
+      "sourceRow": 38,
+      "scIndustryGroup": "Products",
+      "scIndustryGroupKey": "products",
+      "sourceScIndustryGroup": "Products",
+      "sourceScIndustryGroupKey": "products",
+      "gtmIndustry": "Consumer Goods",
+      "gtmIndustryKey": "consumergoods",
+      "gtmIndustrySubgroup": "CG Manufacturing - Discrete",
+      "gtmIndustrySubgroupKey": "cgmanufacturingdiscrete",
+      "scIndustryGroupEmoji": "📦",
+      "gtmIndustrySubgroupEmoji": "🔩"
+    },
+    {
+      "sourceRow": 37,
+      "scIndustryGroup": "Products",
+      "scIndustryGroupKey": "products",
+      "sourceScIndustryGroup": "Products",
+      "sourceScIndustryGroupKey": "products",
+      "gtmIndustry": "Consumer Goods",
+      "gtmIndustryKey": "consumergoods",
+      "gtmIndustrySubgroup": "CG Manufacturing - Process",
+      "gtmIndustrySubgroupKey": "cgmanufacturingprocess",
+      "scIndustryGroupEmoji": "📦",
+      "gtmIndustrySubgroupEmoji": "⚗️"
+    },
+    {
+      "sourceRow": 41,
       "scIndustryGroup": "Products",
       "scIndustryGroupKey": "products",
       "sourceScIndustryGroup": "Products",
@@ -609,7 +691,7 @@
       "gtmIndustrySubgroupEmoji": "🌾"
     },
     {
-      "sourceRow": 22,
+      "sourceRow": 42,
       "scIndustryGroup": "Products",
       "scIndustryGroupKey": "products",
       "sourceScIndustryGroup": "Products",
@@ -622,7 +704,7 @@
       "gtmIndustrySubgroupEmoji": "🥫"
     },
     {
-      "sourceRow": 21,
+      "sourceRow": 43,
       "scIndustryGroup": "Products",
       "scIndustryGroupKey": "products",
       "sourceScIndustryGroup": "Products",
@@ -635,7 +717,7 @@
       "gtmIndustrySubgroupEmoji": "🥤"
     },
     {
-      "sourceRow": 31,
+      "sourceRow": 44,
       "scIndustryGroup": "Products",
       "scIndustryGroupKey": "products",
       "sourceScIndustryGroup": "Products",
@@ -648,7 +730,7 @@
       "gtmIndustrySubgroupEmoji": "🏭"
     },
     {
-      "sourceRow": 30,
+      "sourceRow": 45,
       "scIndustryGroup": "Products",
       "scIndustryGroupKey": "products",
       "sourceScIndustryGroup": "Products",
@@ -661,7 +743,20 @@
       "gtmIndustrySubgroupEmoji": "🛢️"
     },
     {
-      "sourceRow": 40,
+      "sourceRow": 46,
+      "scIndustryGroup": "Software",
+      "scIndustryGroupKey": "software",
+      "sourceScIndustryGroup": "Software",
+      "sourceScIndustryGroupKey": "software",
+      "gtmIndustry": "Software",
+      "gtmIndustryKey": "software",
+      "gtmIndustrySubgroup": "Custom Software & IT Services",
+      "gtmIndustrySubgroupKey": "customsoftwareanditservices",
+      "scIndustryGroupEmoji": "💻",
+      "gtmIndustrySubgroupEmoji": "🧩"
+    },
+    {
+      "sourceRow": 48,
       "scIndustryGroup": "Software",
       "scIndustryGroupKey": "software",
       "sourceScIndustryGroup": "Software",
@@ -674,7 +769,7 @@
       "gtmIndustrySubgroupEmoji": "🧮"
     },
     {
-      "sourceRow": 39,
+      "sourceRow": 49,
       "scIndustryGroup": "Software",
       "scIndustryGroupKey": "software",
       "sourceScIndustryGroup": "Software",
@@ -687,7 +782,7 @@
       "gtmIndustrySubgroupEmoji": "🖥️"
     },
     {
-      "sourceRow": 38,
+      "sourceRow": 47,
       "scIndustryGroup": "Software",
       "scIndustryGroupKey": "software",
       "sourceScIndustryGroup": "Software",
@@ -698,24 +793,50 @@
       "gtmIndustrySubgroupKey": "multimediaandinternetsoftware",
       "scIndustryGroupEmoji": "💻",
       "gtmIndustrySubgroupEmoji": "🌐"
+    },
+    {
+      "sourceRow": 50,
+      "scIndustryGroup": "Software",
+      "scIndustryGroupKey": "software",
+      "sourceScIndustryGroup": "Software",
+      "sourceScIndustryGroupKey": "software",
+      "gtmIndustry": "Software",
+      "gtmIndustryKey": "software",
+      "gtmIndustrySubgroup": "No Sub-Industry",
+      "gtmIndustrySubgroupKey": "nosubindustry",
+      "scIndustryGroupEmoji": "💻",
+      "gtmIndustrySubgroupEmoji": ""
     }
   ],
   "lookup": {
-    "agencies|agencies": {
+    "advertisingmediaandpublishing|agencies": {
       "sourceRow": 2,
       "scIndustryGroup": "Business Services",
       "scIndustryGroupKey": "businessservices",
       "sourceScIndustryGroup": "Business Services",
       "sourceScIndustryGroupKey": "businessservices",
-      "gtmIndustry": "Agencies",
-      "gtmIndustryKey": "agencies",
+      "gtmIndustry": "Advertising, Media & Publishing",
+      "gtmIndustryKey": "advertisingmediaandpublishing",
       "gtmIndustrySubgroup": "Agencies",
       "gtmIndustrySubgroupKey": "agencies",
       "scIndustryGroupEmoji": "💼",
       "gtmIndustrySubgroupEmoji": "📣"
     },
-    "businessservices|advisoryservices": {
+    "advertisingmediaandpublishing|mediaandpublishing": {
       "sourceRow": 3,
+      "scIndustryGroup": "Business Services",
+      "scIndustryGroupKey": "businessservices",
+      "sourceScIndustryGroup": "Business Services",
+      "sourceScIndustryGroupKey": "businessservices",
+      "gtmIndustry": "Advertising, Media & Publishing",
+      "gtmIndustryKey": "advertisingmediaandpublishing",
+      "gtmIndustrySubgroup": "Media & Publishing",
+      "gtmIndustrySubgroupKey": "mediaandpublishing",
+      "scIndustryGroupEmoji": "💼",
+      "gtmIndustrySubgroupEmoji": "📰"
+    },
+    "businessservices|advisoryservices": {
+      "sourceRow": 4,
       "scIndustryGroup": "Business Services",
       "scIndustryGroupKey": "businessservices",
       "sourceScIndustryGroup": "Business Services",
@@ -726,19 +847,6 @@
       "gtmIndustrySubgroupKey": "advisoryservices",
       "scIndustryGroupEmoji": "💼",
       "gtmIndustrySubgroupEmoji": "🧭"
-    },
-    "businessservices|facilitiesmanagement": {
-      "sourceRow": 4,
-      "scIndustryGroup": "Business Services",
-      "scIndustryGroupKey": "businessservices",
-      "sourceScIndustryGroup": "Business Services",
-      "sourceScIndustryGroupKey": "businessservices",
-      "gtmIndustry": "Business Services",
-      "gtmIndustryKey": "businessservices",
-      "gtmIndustrySubgroup": "Facilities Management",
-      "gtmIndustrySubgroupKey": "facilitiesmanagement",
-      "scIndustryGroupEmoji": "💼",
-      "gtmIndustrySubgroupEmoji": "🏢"
     },
     "businessservices|operationalsupportservices": {
       "sourceRow": 5,
@@ -753,8 +861,86 @@
       "scIndustryGroupEmoji": "💼",
       "gtmIndustrySubgroupEmoji": "⚙️"
     },
-    "constructionandenergy|energyandnaturalresource": {
+    "businessservices|facilitiesmanagement": {
       "sourceRow": 6,
+      "scIndustryGroup": "Business Services",
+      "scIndustryGroupKey": "businessservices",
+      "sourceScIndustryGroup": "Business Services",
+      "sourceScIndustryGroupKey": "businessservices",
+      "gtmIndustry": "Business Services",
+      "gtmIndustryKey": "businessservices",
+      "gtmIndustrySubgroup": "Facilities Management",
+      "gtmIndustrySubgroupKey": "facilitiesmanagement",
+      "scIndustryGroupEmoji": "💼",
+      "gtmIndustrySubgroupEmoji": "🏢"
+    },
+    "businessservices|nosubindustry": {
+      "sourceRow": 7,
+      "scIndustryGroup": "Business Services",
+      "scIndustryGroupKey": "businessservices",
+      "sourceScIndustryGroup": "Business Services",
+      "sourceScIndustryGroupKey": "businessservices",
+      "gtmIndustry": "Business Services",
+      "gtmIndustryKey": "businessservices",
+      "gtmIndustrySubgroup": "No Sub-Industry",
+      "gtmIndustrySubgroupKey": "nosubindustry",
+      "scIndustryGroupEmoji": "💼",
+      "gtmIndustrySubgroupEmoji": ""
+    },
+    "consulting|managementconsulting": {
+      "sourceRow": 8,
+      "scIndustryGroup": "Business Services",
+      "scIndustryGroupKey": "businessservices",
+      "sourceScIndustryGroup": "Business Services",
+      "sourceScIndustryGroupKey": "businessservices",
+      "gtmIndustry": "Consulting",
+      "gtmIndustryKey": "consulting",
+      "gtmIndustrySubgroup": "Management Consulting",
+      "gtmIndustrySubgroupKey": "managementconsulting",
+      "scIndustryGroupEmoji": "💼",
+      "gtmIndustrySubgroupEmoji": "📊"
+    },
+    "transportation|passengertransportation": {
+      "sourceRow": 9,
+      "scIndustryGroup": "Business Services",
+      "scIndustryGroupKey": "businessservices",
+      "sourceScIndustryGroup": "Business Services",
+      "sourceScIndustryGroupKey": "businessservices",
+      "gtmIndustry": "Transportation",
+      "gtmIndustryKey": "transportation",
+      "gtmIndustrySubgroup": "Passenger Transportation",
+      "gtmIndustrySubgroupKey": "passengertransportation",
+      "scIndustryGroupEmoji": "💼",
+      "gtmIndustrySubgroupEmoji": "🚌"
+    },
+    "transportation|freightandlogistics": {
+      "sourceRow": 10,
+      "scIndustryGroup": "Business Services",
+      "scIndustryGroupKey": "businessservices",
+      "sourceScIndustryGroup": "Business Services",
+      "sourceScIndustryGroupKey": "businessservices",
+      "gtmIndustry": "Transportation",
+      "gtmIndustryKey": "transportation",
+      "gtmIndustrySubgroup": "Freight & Logistics",
+      "gtmIndustrySubgroupKey": "freightandlogistics",
+      "scIndustryGroupEmoji": "💼",
+      "gtmIndustrySubgroupEmoji": "🚚"
+    },
+    "transportation|nosubindustry": {
+      "sourceRow": 11,
+      "scIndustryGroup": "Business Services",
+      "scIndustryGroupKey": "businessservices",
+      "sourceScIndustryGroup": "Business Services",
+      "sourceScIndustryGroupKey": "businessservices",
+      "gtmIndustry": "Transportation",
+      "gtmIndustryKey": "transportation",
+      "gtmIndustrySubgroup": "No Sub-Industry",
+      "gtmIndustrySubgroupKey": "nosubindustry",
+      "scIndustryGroupEmoji": "💼",
+      "gtmIndustrySubgroupEmoji": ""
+    },
+    "constructionandenergy|energyandnaturalresource": {
+      "sourceRow": 12,
       "scIndustryGroup": "Construction & Energy",
       "scIndustryGroupKey": "constructionandenergy",
       "sourceScIndustryGroup": "Construction & Energy",
@@ -766,21 +952,8 @@
       "scIndustryGroupEmoji": "🚧",
       "gtmIndustrySubgroupEmoji": "⚡"
     },
-    "constructionandenergy|infrastructureandutilities": {
-      "sourceRow": 7,
-      "scIndustryGroup": "Construction & Energy",
-      "scIndustryGroupKey": "constructionandenergy",
-      "sourceScIndustryGroup": "Construction & Energy",
-      "sourceScIndustryGroupKey": "constructionandenergy",
-      "gtmIndustry": "Construction & Energy",
-      "gtmIndustryKey": "constructionandenergy",
-      "gtmIndustrySubgroup": "Infrastructure & Utilities",
-      "gtmIndustrySubgroupKey": "infrastructureandutilities",
-      "scIndustryGroupEmoji": "🚧",
-      "gtmIndustrySubgroupEmoji": "🔌"
-    },
     "constructionandenergy|constructionandengineering": {
-      "sourceRow": 8,
+      "sourceRow": 13,
       "scIndustryGroup": "Construction & Energy",
       "scIndustryGroupKey": "constructionandenergy",
       "sourceScIndustryGroup": "Construction & Energy",
@@ -792,112 +965,21 @@
       "scIndustryGroupEmoji": "🚧",
       "gtmIndustrySubgroupEmoji": "🏗️"
     },
-    "consultinganditservices|managementconsulting": {
-      "sourceRow": 9,
-      "scIndustryGroup": "Business Services",
-      "scIndustryGroupKey": "businessservices",
-      "sourceScIndustryGroup": "Business Services",
-      "sourceScIndustryGroupKey": "businessservices",
-      "gtmIndustry": "Consulting & IT Services",
-      "gtmIndustryKey": "consultinganditservices",
-      "gtmIndustrySubgroup": "Management Consulting",
-      "gtmIndustrySubgroupKey": "managementconsulting",
-      "scIndustryGroupEmoji": "💼",
-      "gtmIndustrySubgroupEmoji": "📊"
-    },
-    "consultinganditservices|customsoftwareanditservices": {
-      "sourceRow": 10,
-      "scIndustryGroup": "Business Services",
-      "scIndustryGroupKey": "businessservices",
-      "sourceScIndustryGroup": "Business Services",
-      "sourceScIndustryGroupKey": "businessservices",
-      "gtmIndustry": "Consulting & IT Services",
-      "gtmIndustryKey": "consultinganditservices",
-      "gtmIndustrySubgroup": "Custom Software & IT Services",
-      "gtmIndustrySubgroupKey": "customsoftwareanditservices",
-      "scIndustryGroupEmoji": "💼",
-      "gtmIndustrySubgroupEmoji": "🧩"
-    },
-    "consumergoods|cgmanufacturingdiscrete": {
-      "sourceRow": 11,
-      "scIndustryGroup": "Products",
-      "scIndustryGroupKey": "products",
-      "sourceScIndustryGroup": "Products",
-      "sourceScIndustryGroupKey": "products",
-      "gtmIndustry": "Consumer Goods",
-      "gtmIndustryKey": "consumergoods",
-      "gtmIndustrySubgroup": "CG - Manufacturing - Discrete",
-      "gtmIndustrySubgroupKey": "cgmanufacturingdiscrete",
-      "scIndustryGroupEmoji": "📦",
-      "gtmIndustrySubgroupEmoji": "🔩"
-    },
-    "consumergoods|cgwholesaleanddistribution": {
-      "sourceRow": 12,
-      "scIndustryGroup": "Products",
-      "scIndustryGroupKey": "products",
-      "sourceScIndustryGroup": "Products",
-      "sourceScIndustryGroupKey": "products",
-      "gtmIndustry": "Consumer Goods",
-      "gtmIndustryKey": "consumergoods",
-      "gtmIndustrySubgroup": "CG - Wholesale & Distribution",
-      "gtmIndustrySubgroupKey": "cgwholesaleanddistribution",
-      "scIndustryGroupEmoji": "📦",
-      "gtmIndustrySubgroupEmoji": "🏷️"
-    },
-    "consumergoods|cgretail": {
-      "sourceRow": 13,
-      "scIndustryGroup": "Products",
-      "scIndustryGroupKey": "products",
-      "sourceScIndustryGroup": "Products",
-      "sourceScIndustryGroupKey": "products",
-      "gtmIndustry": "Consumer Goods",
-      "gtmIndustryKey": "consumergoods",
-      "gtmIndustrySubgroup": "CG - Retail",
-      "gtmIndustrySubgroupKey": "cgretail",
-      "scIndustryGroupEmoji": "📦",
-      "gtmIndustrySubgroupEmoji": "🛒"
-    },
-    "consumergoods|cgmanufacturingprocess": {
+    "constructionandenergy|infrastructureandutilities": {
       "sourceRow": 14,
-      "scIndustryGroup": "Products",
-      "scIndustryGroupKey": "products",
-      "sourceScIndustryGroup": "Products",
-      "sourceScIndustryGroupKey": "products",
-      "gtmIndustry": "Consumer Goods",
-      "gtmIndustryKey": "consumergoods",
-      "gtmIndustrySubgroup": "CG - Manufacturing - Process",
-      "gtmIndustrySubgroupKey": "cgmanufacturingprocess",
-      "scIndustryGroupEmoji": "📦",
-      "gtmIndustrySubgroupEmoji": "⚗️"
-    },
-    "consumerservices|personalcareservices": {
-      "sourceRow": 15,
-      "scIndustryGroup": "Consumer Services",
-      "scIndustryGroupKey": "consumerservices",
-      "sourceScIndustryGroup": "Consumer Services",
-      "sourceScIndustryGroupKey": "consumerservices",
-      "gtmIndustry": "Consumer Services",
-      "gtmIndustryKey": "consumerservices",
-      "gtmIndustrySubgroup": "Personal Care Services",
-      "gtmIndustrySubgroupKey": "personalcareservices",
-      "scIndustryGroupEmoji": "🛍️",
-      "gtmIndustrySubgroupEmoji": "💇"
-    },
-    "consumerservices|realestate": {
-      "sourceRow": 16,
-      "scIndustryGroup": "Consumer Services",
-      "scIndustryGroupKey": "consumerservices",
-      "sourceScIndustryGroup": "Consumer Services",
-      "sourceScIndustryGroupKey": "consumerservices",
-      "gtmIndustry": "Consumer Services",
-      "gtmIndustryKey": "consumerservices",
-      "gtmIndustrySubgroup": "Real Estate",
-      "gtmIndustrySubgroupKey": "realestate",
-      "scIndustryGroupEmoji": "🛍️",
-      "gtmIndustrySubgroupEmoji": "🏘️"
+      "scIndustryGroup": "Construction & Energy",
+      "scIndustryGroupKey": "constructionandenergy",
+      "sourceScIndustryGroup": "Construction & Energy",
+      "sourceScIndustryGroupKey": "constructionandenergy",
+      "gtmIndustry": "Construction & Energy",
+      "gtmIndustryKey": "constructionandenergy",
+      "gtmIndustrySubgroup": "Infrastructure & Utilities",
+      "gtmIndustrySubgroupKey": "infrastructureandutilities",
+      "scIndustryGroupEmoji": "🚧",
+      "gtmIndustrySubgroupEmoji": "🔌"
     },
     "consumerservices|specialtyservicesandrepair": {
-      "sourceRow": 17,
+      "sourceRow": 15,
       "scIndustryGroup": "Consumer Services",
       "scIndustryGroupKey": "consumerservices",
       "sourceScIndustryGroup": "Consumer Services",
@@ -909,18 +991,44 @@
       "scIndustryGroupEmoji": "🛍️",
       "gtmIndustrySubgroupEmoji": "🧰"
     },
-    "financialservices|investmentbanksandprivateequity": {
+    "consumerservices|personalcareservices": {
+      "sourceRow": 16,
+      "scIndustryGroup": "Consumer Services",
+      "scIndustryGroupKey": "consumerservices",
+      "sourceScIndustryGroup": "Consumer Services",
+      "sourceScIndustryGroupKey": "consumerservices",
+      "gtmIndustry": "Consumer Services",
+      "gtmIndustryKey": "consumerservices",
+      "gtmIndustrySubgroup": "Personal Care Services",
+      "gtmIndustrySubgroupKey": "personalcareservices",
+      "scIndustryGroupEmoji": "🛍️",
+      "gtmIndustrySubgroupEmoji": "💇"
+    },
+    "consumerservices|nosubindustry": {
+      "sourceRow": 17,
+      "scIndustryGroup": "Consumer Services",
+      "scIndustryGroupKey": "consumerservices",
+      "sourceScIndustryGroup": "Consumer Services",
+      "sourceScIndustryGroupKey": "consumerservices",
+      "gtmIndustry": "Consumer Services",
+      "gtmIndustryKey": "consumerservices",
+      "gtmIndustrySubgroup": "No Sub-Industry",
+      "gtmIndustrySubgroupKey": "nosubindustry",
+      "scIndustryGroupEmoji": "🛍️",
+      "gtmIndustrySubgroupEmoji": ""
+    },
+    "consumerservices|realestate": {
       "sourceRow": 18,
       "scIndustryGroup": "Consumer Services",
       "scIndustryGroupKey": "consumerservices",
       "sourceScIndustryGroup": "Consumer Services",
       "sourceScIndustryGroupKey": "consumerservices",
-      "gtmIndustry": "Financial Services",
-      "gtmIndustryKey": "financialservices",
-      "gtmIndustrySubgroup": "Investment Banks & Private Equity",
-      "gtmIndustrySubgroupKey": "investmentbanksandprivateequity",
+      "gtmIndustry": "Consumer Services",
+      "gtmIndustryKey": "consumerservices",
+      "gtmIndustrySubgroup": "Real Estate",
+      "gtmIndustrySubgroupKey": "realestate",
       "scIndustryGroupEmoji": "🛍️",
-      "gtmIndustrySubgroupEmoji": "💹"
+      "gtmIndustrySubgroupEmoji": "🏘️"
     },
     "financialservices|consumerandcommercialfinancialservices": {
       "sourceRow": 19,
@@ -935,73 +1043,99 @@
       "scIndustryGroupEmoji": "🛍️",
       "gtmIndustrySubgroupEmoji": "🏦"
     },
-    "foodandbeverage|agriculturelivestockcrops": {
+    "financialservices|investmentbanksandprivateequity": {
       "sourceRow": 20,
-      "scIndustryGroup": "Products",
-      "scIndustryGroupKey": "products",
-      "sourceScIndustryGroup": "Products",
-      "sourceScIndustryGroupKey": "products",
-      "gtmIndustry": "Food & Beverage",
-      "gtmIndustryKey": "foodandbeverage",
-      "gtmIndustrySubgroup": "Agriculture, Livestock, Crops",
-      "gtmIndustrySubgroupKey": "agriculturelivestockcrops",
-      "scIndustryGroupEmoji": "📦",
-      "gtmIndustrySubgroupEmoji": "🌾"
+      "scIndustryGroup": "Consumer Services",
+      "scIndustryGroupKey": "consumerservices",
+      "sourceScIndustryGroup": "Consumer Services",
+      "sourceScIndustryGroupKey": "consumerservices",
+      "gtmIndustry": "Financial Services",
+      "gtmIndustryKey": "financialservices",
+      "gtmIndustrySubgroup": "Investment Banks & Private Equity",
+      "gtmIndustrySubgroupKey": "investmentbanksandprivateequity",
+      "scIndustryGroupEmoji": "🛍️",
+      "gtmIndustrySubgroupEmoji": "💹"
     },
-    "foodandbeverage|packagedfoodandbeverage": {
+    "financialservices|nosubindustry": {
       "sourceRow": 21,
-      "scIndustryGroup": "Products",
-      "scIndustryGroupKey": "products",
-      "sourceScIndustryGroup": "Products",
-      "sourceScIndustryGroupKey": "products",
-      "gtmIndustry": "Food & Beverage",
-      "gtmIndustryKey": "foodandbeverage",
-      "gtmIndustrySubgroup": "Packaged Food & Beverage",
-      "gtmIndustrySubgroupKey": "packagedfoodandbeverage",
-      "scIndustryGroupEmoji": "📦",
-      "gtmIndustrySubgroupEmoji": "🥤"
+      "scIndustryGroup": "Consumer Services",
+      "scIndustryGroupKey": "consumerservices",
+      "sourceScIndustryGroup": "Consumer Services",
+      "sourceScIndustryGroupKey": "consumerservices",
+      "gtmIndustry": "Financial Services",
+      "gtmIndustryKey": "financialservices",
+      "gtmIndustrySubgroup": "No Sub-Industry",
+      "gtmIndustrySubgroupKey": "nosubindustry",
+      "scIndustryGroupEmoji": "🛍️",
+      "gtmIndustrySubgroupEmoji": ""
     },
-    "foodandbeverage|foodmanufacturingandprocessing": {
+    "nonprofitsandorganizations|charitablefoundations": {
       "sourceRow": 22,
-      "scIndustryGroup": "Products",
-      "scIndustryGroupKey": "products",
-      "sourceScIndustryGroup": "Products",
-      "sourceScIndustryGroupKey": "products",
-      "gtmIndustry": "Food & Beverage",
-      "gtmIndustryKey": "foodandbeverage",
-      "gtmIndustrySubgroup": "Food Manufacturing & Processing",
-      "gtmIndustrySubgroupKey": "foodmanufacturingandprocessing",
-      "scIndustryGroupEmoji": "📦",
-      "gtmIndustrySubgroupEmoji": "🥫"
+      "scIndustryGroup": "Consumer Services",
+      "scIndustryGroupKey": "consumerservices",
+      "sourceScIndustryGroup": "Consumer Services",
+      "sourceScIndustryGroupKey": "consumerservices",
+      "gtmIndustry": "Nonprofits & Organizations",
+      "gtmIndustryKey": "nonprofitsandorganizations",
+      "gtmIndustrySubgroup": "Charitable Foundations",
+      "gtmIndustrySubgroupKey": "charitablefoundations",
+      "scIndustryGroupEmoji": "🛍️",
+      "gtmIndustrySubgroupEmoji": "🎗️"
     },
-    "government|publicsector": {
+    "nonprofitsandorganizations|educationalinstitutions": {
       "sourceRow": 23,
-      "scIndustryGroup": "Business Services",
-      "scIndustryGroupKey": "businessservices",
-      "sourceScIndustryGroup": "Business Services",
-      "sourceScIndustryGroupKey": "businessservices",
-      "gtmIndustry": "Government",
-      "gtmIndustryKey": "government",
-      "gtmIndustrySubgroup": "Public Sector",
-      "gtmIndustrySubgroupKey": "publicsector",
-      "scIndustryGroupEmoji": "💼",
-      "gtmIndustrySubgroupEmoji": "🏛️"
+      "scIndustryGroup": "Consumer Services",
+      "scIndustryGroupKey": "consumerservices",
+      "sourceScIndustryGroup": "Consumer Services",
+      "sourceScIndustryGroupKey": "consumerservices",
+      "gtmIndustry": "Nonprofits & Organizations",
+      "gtmIndustryKey": "nonprofitsandorganizations",
+      "gtmIndustrySubgroup": "Educational Institutions",
+      "gtmIndustrySubgroupKey": "educationalinstitutions",
+      "scIndustryGroupEmoji": "🛍️",
+      "gtmIndustrySubgroupEmoji": "🎓"
     },
-    "government|stateandlocalgovernments": {
+    "nonprofitsandorganizations|culturalandarts": {
       "sourceRow": 24,
-      "scIndustryGroup": "Business Services",
-      "scIndustryGroupKey": "businessservices",
-      "sourceScIndustryGroup": "Business Services",
-      "sourceScIndustryGroupKey": "businessservices",
-      "gtmIndustry": "Government",
-      "gtmIndustryKey": "government",
-      "gtmIndustrySubgroup": "State & Local Governments",
-      "gtmIndustrySubgroupKey": "stateandlocalgovernments",
-      "scIndustryGroupEmoji": "💼",
-      "gtmIndustrySubgroupEmoji": "🏙️"
+      "scIndustryGroup": "Consumer Services",
+      "scIndustryGroupKey": "consumerservices",
+      "sourceScIndustryGroup": "Consumer Services",
+      "sourceScIndustryGroupKey": "consumerservices",
+      "gtmIndustry": "Nonprofits & Organizations",
+      "gtmIndustryKey": "nonprofitsandorganizations",
+      "gtmIndustrySubgroup": "Cultural & Arts",
+      "gtmIndustrySubgroupKey": "culturalandarts",
+      "scIndustryGroupEmoji": "🛍️",
+      "gtmIndustrySubgroupEmoji": "🎭"
+    },
+    "nonprofitsandorganizations|membershiporganizations": {
+      "sourceRow": 25,
+      "scIndustryGroup": "Consumer Services",
+      "scIndustryGroupKey": "consumerservices",
+      "sourceScIndustryGroup": "Consumer Services",
+      "sourceScIndustryGroupKey": "consumerservices",
+      "gtmIndustry": "Nonprofits & Organizations",
+      "gtmIndustryKey": "nonprofitsandorganizations",
+      "gtmIndustrySubgroup": "Membership Organizations",
+      "gtmIndustrySubgroupKey": "membershiporganizations",
+      "scIndustryGroupEmoji": "🛍️",
+      "gtmIndustrySubgroupEmoji": "👥"
+    },
+    "nonprofitsandorganizations|nosubindustry": {
+      "sourceRow": 26,
+      "scIndustryGroup": "Consumer Services",
+      "scIndustryGroupKey": "consumerservices",
+      "sourceScIndustryGroup": "Consumer Services",
+      "sourceScIndustryGroupKey": "consumerservices",
+      "gtmIndustry": "Nonprofits & Organizations",
+      "gtmIndustryKey": "nonprofitsandorganizations",
+      "gtmIndustrySubgroup": "No Sub-Industry",
+      "gtmIndustrySubgroupKey": "nosubindustry",
+      "scIndustryGroupEmoji": "🛍️",
+      "gtmIndustrySubgroupEmoji": ""
     },
     "health|otherhealthservices": {
-      "sourceRow": 25,
+      "sourceRow": 27,
       "scIndustryGroup": "Health & Hospitality",
       "scIndustryGroupKey": "healthandhospitality",
       "sourceScIndustryGroup": "Health & Hospitality",
@@ -1013,21 +1147,8 @@
       "scIndustryGroupEmoji": "🏨",
       "gtmIndustrySubgroupEmoji": "🩺"
     },
-    "health|hospitals": {
-      "sourceRow": 26,
-      "scIndustryGroup": "Health & Hospitality",
-      "scIndustryGroupKey": "healthandhospitality",
-      "sourceScIndustryGroup": "Health & Hospitality",
-      "sourceScIndustryGroupKey": "healthandhospitality",
-      "gtmIndustry": "Health",
-      "gtmIndustryKey": "health",
-      "gtmIndustrySubgroup": "Hospitals",
-      "gtmIndustrySubgroupKey": "hospitals",
-      "scIndustryGroupEmoji": "🏨",
-      "gtmIndustrySubgroupEmoji": "🏥"
-    },
     "health|outpatientclinics": {
-      "sourceRow": 27,
+      "sourceRow": 28,
       "scIndustryGroup": "Health & Hospitality",
       "scIndustryGroupKey": "healthandhospitality",
       "sourceScIndustryGroup": "Health & Hospitality",
@@ -1039,21 +1160,21 @@
       "scIndustryGroupEmoji": "🏨",
       "gtmIndustrySubgroupEmoji": "🩹"
     },
-    "hospitality|sportsteamsandentertainment": {
-      "sourceRow": 28,
+    "health|hospitals": {
+      "sourceRow": 29,
       "scIndustryGroup": "Health & Hospitality",
       "scIndustryGroupKey": "healthandhospitality",
       "sourceScIndustryGroup": "Health & Hospitality",
       "sourceScIndustryGroupKey": "healthandhospitality",
-      "gtmIndustry": "Hospitality",
-      "gtmIndustryKey": "hospitality",
-      "gtmIndustrySubgroup": "Sports Teams & Entertainment",
-      "gtmIndustrySubgroupKey": "sportsteamsandentertainment",
+      "gtmIndustry": "Health",
+      "gtmIndustryKey": "health",
+      "gtmIndustrySubgroup": "Hospitals",
+      "gtmIndustrySubgroupKey": "hospitals",
       "scIndustryGroupEmoji": "🏨",
-      "gtmIndustrySubgroupEmoji": "🏟️"
+      "gtmIndustrySubgroupEmoji": "🏥"
     },
     "hospitality|foodserviceandaccommodation": {
-      "sourceRow": 29,
+      "sourceRow": 30,
       "scIndustryGroup": "Health & Hospitality",
       "scIndustryGroupKey": "healthandhospitality",
       "sourceScIndustryGroup": "Health & Hospitality",
@@ -1065,34 +1186,34 @@
       "scIndustryGroupEmoji": "🏨",
       "gtmIndustrySubgroupEmoji": "🍽️"
     },
-    "industrialandequipment|industrialandequipmentprocessmanufacturing": {
-      "sourceRow": 30,
-      "scIndustryGroup": "Products",
-      "scIndustryGroupKey": "products",
-      "sourceScIndustryGroup": "Products",
-      "sourceScIndustryGroupKey": "products",
-      "gtmIndustry": "Industrial & Equipment",
-      "gtmIndustryKey": "industrialandequipment",
-      "gtmIndustrySubgroup": "Industrial & Equipment Process Manufacturing",
-      "gtmIndustrySubgroupKey": "industrialandequipmentprocessmanufacturing",
-      "scIndustryGroupEmoji": "📦",
-      "gtmIndustrySubgroupEmoji": "🛢️"
-    },
-    "industrialandequipment|industrialandequipmentdiscretemanufacturing": {
+    "hospitality|sportsteamsandentertainment": {
       "sourceRow": 31,
-      "scIndustryGroup": "Products",
-      "scIndustryGroupKey": "products",
-      "sourceScIndustryGroup": "Products",
-      "sourceScIndustryGroupKey": "products",
-      "gtmIndustry": "Industrial & Equipment",
-      "gtmIndustryKey": "industrialandequipment",
-      "gtmIndustrySubgroup": "Industrial & Equipment Discrete Manufacturing",
-      "gtmIndustrySubgroupKey": "industrialandequipmentdiscretemanufacturing",
-      "scIndustryGroupEmoji": "📦",
-      "gtmIndustrySubgroupEmoji": "🏭"
+      "scIndustryGroup": "Health & Hospitality",
+      "scIndustryGroupKey": "healthandhospitality",
+      "sourceScIndustryGroup": "Health & Hospitality",
+      "sourceScIndustryGroupKey": "healthandhospitality",
+      "gtmIndustry": "Hospitality",
+      "gtmIndustryKey": "hospitality",
+      "gtmIndustrySubgroup": "Sports Teams & Entertainment",
+      "gtmIndustrySubgroupKey": "sportsteamsandentertainment",
+      "scIndustryGroupEmoji": "🏨",
+      "gtmIndustrySubgroupEmoji": "🏟️"
+    },
+    "hospitality|nosubindustry": {
+      "sourceRow": 32,
+      "scIndustryGroup": "Health & Hospitality",
+      "scIndustryGroupKey": "healthandhospitality",
+      "sourceScIndustryGroup": "Health & Hospitality",
+      "sourceScIndustryGroupKey": "healthandhospitality",
+      "gtmIndustry": "Hospitality",
+      "gtmIndustryKey": "hospitality",
+      "gtmIndustrySubgroup": "No Sub-Industry",
+      "gtmIndustrySubgroupKey": "nosubindustry",
+      "scIndustryGroupEmoji": "🏨",
+      "gtmIndustrySubgroupEmoji": ""
     },
     "lifesciences|researchandpharma": {
-      "sourceRow": 32,
+      "sourceRow": 33,
       "scIndustryGroup": "Health & Hospitality",
       "scIndustryGroupKey": "healthandhospitality",
       "sourceScIndustryGroup": "Health & Hospitality",
@@ -1105,7 +1226,7 @@
       "gtmIndustrySubgroupEmoji": "🧪"
     },
     "lifesciences|medtech": {
-      "sourceRow": 33,
+      "sourceRow": 34,
       "scIndustryGroup": "Health & Hospitality",
       "scIndustryGroupKey": "healthandhospitality",
       "sourceScIndustryGroup": "Health & Hospitality",
@@ -1117,60 +1238,164 @@
       "scIndustryGroupEmoji": "🏨",
       "gtmIndustrySubgroupEmoji": "🦾"
     },
-    "nonprofitsandorganizations|charityfoundations": {
-      "sourceRow": 34,
-      "scIndustryGroup": "Consumer Services",
-      "scIndustryGroupKey": "consumerservices",
-      "sourceScIndustryGroup": "Consumer Services",
-      "sourceScIndustryGroupKey": "consumerservices",
-      "gtmIndustry": "Nonprofits & Organizations",
-      "gtmIndustryKey": "nonprofitsandorganizations",
-      "gtmIndustrySubgroup": "Charity Foundations",
-      "gtmIndustrySubgroupKey": "charityfoundations",
-      "scIndustryGroupEmoji": "🛍️",
-      "gtmIndustrySubgroupEmoji": "🤝"
-    },
-    "nonprofitsandorganizations|culturalandarts": {
+    "publicsector|publicsector": {
       "sourceRow": 35,
-      "scIndustryGroup": "Consumer Services",
-      "scIndustryGroupKey": "consumerservices",
-      "sourceScIndustryGroup": "Consumer Services",
-      "sourceScIndustryGroupKey": "consumerservices",
-      "gtmIndustry": "Nonprofits & Organizations",
-      "gtmIndustryKey": "nonprofitsandorganizations",
-      "gtmIndustrySubgroup": "Cultural & Arts",
-      "gtmIndustrySubgroupKey": "culturalandarts",
-      "scIndustryGroupEmoji": "🛍️",
-      "gtmIndustrySubgroupEmoji": "🎭"
+      "scIndustryGroup": "Health & Hospitality",
+      "scIndustryGroupKey": "healthandhospitality",
+      "sourceScIndustryGroup": "Health & Hospitality",
+      "sourceScIndustryGroupKey": "healthandhospitality",
+      "gtmIndustry": "Public Sector",
+      "gtmIndustryKey": "publicsector",
+      "gtmIndustrySubgroup": "Public Sector",
+      "gtmIndustrySubgroupKey": "publicsector",
+      "scIndustryGroupEmoji": "🏨",
+      "gtmIndustrySubgroupEmoji": "🏛️"
     },
-    "nonprofitsandorganizations|educationalinstitutions": {
+    "publicsector|stateandlocalgovernments": {
       "sourceRow": 36,
-      "scIndustryGroup": "Consumer Services",
-      "scIndustryGroupKey": "consumerservices",
-      "sourceScIndustryGroup": "Consumer Services",
-      "sourceScIndustryGroupKey": "consumerservices",
-      "gtmIndustry": "Nonprofits & Organizations",
-      "gtmIndustryKey": "nonprofitsandorganizations",
-      "gtmIndustrySubgroup": "Educational Institutions",
-      "gtmIndustrySubgroupKey": "educationalinstitutions",
-      "scIndustryGroupEmoji": "🛍️",
-      "gtmIndustrySubgroupEmoji": "🎓"
+      "scIndustryGroup": "Health & Hospitality",
+      "scIndustryGroupKey": "healthandhospitality",
+      "sourceScIndustryGroup": "Health & Hospitality",
+      "sourceScIndustryGroupKey": "healthandhospitality",
+      "gtmIndustry": "Public Sector",
+      "gtmIndustryKey": "publicsector",
+      "gtmIndustrySubgroup": "State & Local Governments",
+      "gtmIndustrySubgroupKey": "stateandlocalgovernments",
+      "scIndustryGroupEmoji": "🏨",
+      "gtmIndustrySubgroupEmoji": "🏙️"
     },
-    "nonprofitsandorganizations|membershiporganizations": {
+    "consumergoods|cgmanufacturingprocess": {
       "sourceRow": 37,
-      "scIndustryGroup": "Consumer Services",
-      "scIndustryGroupKey": "consumerservices",
-      "sourceScIndustryGroup": "Consumer Services",
-      "sourceScIndustryGroupKey": "consumerservices",
-      "gtmIndustry": "Nonprofits & Organizations",
-      "gtmIndustryKey": "nonprofitsandorganizations",
-      "gtmIndustrySubgroup": "Membership Organizations",
-      "gtmIndustrySubgroupKey": "membershiporganizations",
-      "scIndustryGroupEmoji": "🛍️",
-      "gtmIndustrySubgroupEmoji": "👥"
+      "scIndustryGroup": "Products",
+      "scIndustryGroupKey": "products",
+      "sourceScIndustryGroup": "Products",
+      "sourceScIndustryGroupKey": "products",
+      "gtmIndustry": "Consumer Goods",
+      "gtmIndustryKey": "consumergoods",
+      "gtmIndustrySubgroup": "CG Manufacturing - Process",
+      "gtmIndustrySubgroupKey": "cgmanufacturingprocess",
+      "scIndustryGroupEmoji": "📦",
+      "gtmIndustrySubgroupEmoji": "⚗️"
+    },
+    "consumergoods|cgmanufacturingdiscrete": {
+      "sourceRow": 38,
+      "scIndustryGroup": "Products",
+      "scIndustryGroupKey": "products",
+      "sourceScIndustryGroup": "Products",
+      "sourceScIndustryGroupKey": "products",
+      "gtmIndustry": "Consumer Goods",
+      "gtmIndustryKey": "consumergoods",
+      "gtmIndustrySubgroup": "CG Manufacturing - Discrete",
+      "gtmIndustrySubgroupKey": "cgmanufacturingdiscrete",
+      "scIndustryGroupEmoji": "📦",
+      "gtmIndustrySubgroupEmoji": "🔩"
+    },
+    "consumergoods|cgretail": {
+      "sourceRow": 39,
+      "scIndustryGroup": "Products",
+      "scIndustryGroupKey": "products",
+      "sourceScIndustryGroup": "Products",
+      "sourceScIndustryGroupKey": "products",
+      "gtmIndustry": "Consumer Goods",
+      "gtmIndustryKey": "consumergoods",
+      "gtmIndustrySubgroup": "CG - Retail",
+      "gtmIndustrySubgroupKey": "cgretail",
+      "scIndustryGroupEmoji": "📦",
+      "gtmIndustrySubgroupEmoji": "🛒"
+    },
+    "consumergoods|cgwholesaleanddistribution": {
+      "sourceRow": 40,
+      "scIndustryGroup": "Products",
+      "scIndustryGroupKey": "products",
+      "sourceScIndustryGroup": "Products",
+      "sourceScIndustryGroupKey": "products",
+      "gtmIndustry": "Consumer Goods",
+      "gtmIndustryKey": "consumergoods",
+      "gtmIndustrySubgroup": "CG - Wholesale & Distribution",
+      "gtmIndustrySubgroupKey": "cgwholesaleanddistribution",
+      "scIndustryGroupEmoji": "📦",
+      "gtmIndustrySubgroupEmoji": "🏷️"
+    },
+    "foodandbeverage|agriculturelivestockcrops": {
+      "sourceRow": 41,
+      "scIndustryGroup": "Products",
+      "scIndustryGroupKey": "products",
+      "sourceScIndustryGroup": "Products",
+      "sourceScIndustryGroupKey": "products",
+      "gtmIndustry": "Food & Beverage",
+      "gtmIndustryKey": "foodandbeverage",
+      "gtmIndustrySubgroup": "Agriculture, Livestock, Crops",
+      "gtmIndustrySubgroupKey": "agriculturelivestockcrops",
+      "scIndustryGroupEmoji": "📦",
+      "gtmIndustrySubgroupEmoji": "🌾"
+    },
+    "foodandbeverage|foodmanufacturingandprocessing": {
+      "sourceRow": 42,
+      "scIndustryGroup": "Products",
+      "scIndustryGroupKey": "products",
+      "sourceScIndustryGroup": "Products",
+      "sourceScIndustryGroupKey": "products",
+      "gtmIndustry": "Food & Beverage",
+      "gtmIndustryKey": "foodandbeverage",
+      "gtmIndustrySubgroup": "Food Manufacturing & Processing",
+      "gtmIndustrySubgroupKey": "foodmanufacturingandprocessing",
+      "scIndustryGroupEmoji": "📦",
+      "gtmIndustrySubgroupEmoji": "🥫"
+    },
+    "foodandbeverage|packagedfoodandbeverage": {
+      "sourceRow": 43,
+      "scIndustryGroup": "Products",
+      "scIndustryGroupKey": "products",
+      "sourceScIndustryGroup": "Products",
+      "sourceScIndustryGroupKey": "products",
+      "gtmIndustry": "Food & Beverage",
+      "gtmIndustryKey": "foodandbeverage",
+      "gtmIndustrySubgroup": "Packaged Food & Beverage",
+      "gtmIndustrySubgroupKey": "packagedfoodandbeverage",
+      "scIndustryGroupEmoji": "📦",
+      "gtmIndustrySubgroupEmoji": "🥤"
+    },
+    "industrialandequipment|industrialandequipmentdiscretemanufacturing": {
+      "sourceRow": 44,
+      "scIndustryGroup": "Products",
+      "scIndustryGroupKey": "products",
+      "sourceScIndustryGroup": "Products",
+      "sourceScIndustryGroupKey": "products",
+      "gtmIndustry": "Industrial & Equipment",
+      "gtmIndustryKey": "industrialandequipment",
+      "gtmIndustrySubgroup": "Industrial & Equipment Discrete Manufacturing",
+      "gtmIndustrySubgroupKey": "industrialandequipmentdiscretemanufacturing",
+      "scIndustryGroupEmoji": "📦",
+      "gtmIndustrySubgroupEmoji": "🏭"
+    },
+    "industrialandequipment|industrialandequipmentprocessmanufacturing": {
+      "sourceRow": 45,
+      "scIndustryGroup": "Products",
+      "scIndustryGroupKey": "products",
+      "sourceScIndustryGroup": "Products",
+      "sourceScIndustryGroupKey": "products",
+      "gtmIndustry": "Industrial & Equipment",
+      "gtmIndustryKey": "industrialandequipment",
+      "gtmIndustrySubgroup": "Industrial & Equipment Process Manufacturing",
+      "gtmIndustrySubgroupKey": "industrialandequipmentprocessmanufacturing",
+      "scIndustryGroupEmoji": "📦",
+      "gtmIndustrySubgroupEmoji": "🛢️"
+    },
+    "software|customsoftwareanditservices": {
+      "sourceRow": 46,
+      "scIndustryGroup": "Software",
+      "scIndustryGroupKey": "software",
+      "sourceScIndustryGroup": "Software",
+      "sourceScIndustryGroupKey": "software",
+      "gtmIndustry": "Software",
+      "gtmIndustryKey": "software",
+      "gtmIndustrySubgroup": "Custom Software & IT Services",
+      "gtmIndustrySubgroupKey": "customsoftwareanditservices",
+      "scIndustryGroupEmoji": "💻",
+      "gtmIndustrySubgroupEmoji": "🧩"
     },
     "software|multimediaandinternetsoftware": {
-      "sourceRow": 38,
+      "sourceRow": 47,
       "scIndustryGroup": "Software",
       "scIndustryGroupKey": "software",
       "sourceScIndustryGroup": "Software",
@@ -1182,21 +1407,8 @@
       "scIndustryGroupEmoji": "💻",
       "gtmIndustrySubgroupEmoji": "🌐"
     },
-    "software|infrastructureandtechnicalsoftware": {
-      "sourceRow": 39,
-      "scIndustryGroup": "Software",
-      "scIndustryGroupKey": "software",
-      "sourceScIndustryGroup": "Software",
-      "sourceScIndustryGroupKey": "software",
-      "gtmIndustry": "Software",
-      "gtmIndustryKey": "software",
-      "gtmIndustrySubgroup": "Infrastructure & Technical Software",
-      "gtmIndustrySubgroupKey": "infrastructureandtechnicalsoftware",
-      "scIndustryGroupEmoji": "💻",
-      "gtmIndustrySubgroupEmoji": "🖥️"
-    },
     "software|enterprisebusinessapplications": {
-      "sourceRow": 40,
+      "sourceRow": 48,
       "scIndustryGroup": "Software",
       "scIndustryGroupKey": "software",
       "sourceScIndustryGroup": "Software",
@@ -1208,31 +1420,31 @@
       "scIndustryGroupEmoji": "💻",
       "gtmIndustrySubgroupEmoji": "🧮"
     },
-    "transportation|freightandlogistics": {
-      "sourceRow": 41,
-      "scIndustryGroup": "Business Services",
-      "scIndustryGroupKey": "businessservices",
-      "sourceScIndustryGroup": "Business Services",
-      "sourceScIndustryGroupKey": "businessservices",
-      "gtmIndustry": "Transportation",
-      "gtmIndustryKey": "transportation",
-      "gtmIndustrySubgroup": "Freight & Logistics",
-      "gtmIndustrySubgroupKey": "freightandlogistics",
-      "scIndustryGroupEmoji": "💼",
-      "gtmIndustrySubgroupEmoji": "🚚"
+    "software|infrastructureandtechnicalsoftware": {
+      "sourceRow": 49,
+      "scIndustryGroup": "Software",
+      "scIndustryGroupKey": "software",
+      "sourceScIndustryGroup": "Software",
+      "sourceScIndustryGroupKey": "software",
+      "gtmIndustry": "Software",
+      "gtmIndustryKey": "software",
+      "gtmIndustrySubgroup": "Infrastructure & Technical Software",
+      "gtmIndustrySubgroupKey": "infrastructureandtechnicalsoftware",
+      "scIndustryGroupEmoji": "💻",
+      "gtmIndustrySubgroupEmoji": "🖥️"
     },
-    "transportation|passengertransportation": {
-      "sourceRow": 42,
-      "scIndustryGroup": "Business Services",
-      "scIndustryGroupKey": "businessservices",
-      "sourceScIndustryGroup": "Business Services",
-      "sourceScIndustryGroupKey": "businessservices",
-      "gtmIndustry": "Transportation",
-      "gtmIndustryKey": "transportation",
-      "gtmIndustrySubgroup": "Passenger Transportation",
-      "gtmIndustrySubgroupKey": "passengertransportation",
-      "scIndustryGroupEmoji": "💼",
-      "gtmIndustrySubgroupEmoji": "🚌"
+    "software|nosubindustry": {
+      "sourceRow": 50,
+      "scIndustryGroup": "Software",
+      "scIndustryGroupKey": "software",
+      "sourceScIndustryGroup": "Software",
+      "sourceScIndustryGroupKey": "software",
+      "gtmIndustry": "Software",
+      "gtmIndustryKey": "software",
+      "gtmIndustrySubgroup": "No Sub-Industry",
+      "gtmIndustrySubgroupKey": "nosubindustry",
+      "scIndustryGroupEmoji": "💻",
+      "gtmIndustrySubgroupEmoji": ""
     }
   },
   "subgroupLookup": {
@@ -1243,17 +1455,32 @@
         "scIndustryGroupKey": "businessservices",
         "sourceScIndustryGroup": "Business Services",
         "sourceScIndustryGroupKey": "businessservices",
-        "gtmIndustry": "Agencies",
-        "gtmIndustryKey": "agencies",
+        "gtmIndustry": "Advertising, Media & Publishing",
+        "gtmIndustryKey": "advertisingmediaandpublishing",
         "gtmIndustrySubgroup": "Agencies",
         "gtmIndustrySubgroupKey": "agencies",
         "scIndustryGroupEmoji": "💼",
         "gtmIndustrySubgroupEmoji": "📣"
       }
     ],
-    "advisoryservices": [
+    "mediaandpublishing": [
       {
         "sourceRow": 3,
+        "scIndustryGroup": "Business Services",
+        "scIndustryGroupKey": "businessservices",
+        "sourceScIndustryGroup": "Business Services",
+        "sourceScIndustryGroupKey": "businessservices",
+        "gtmIndustry": "Advertising, Media & Publishing",
+        "gtmIndustryKey": "advertisingmediaandpublishing",
+        "gtmIndustrySubgroup": "Media & Publishing",
+        "gtmIndustrySubgroupKey": "mediaandpublishing",
+        "scIndustryGroupEmoji": "💼",
+        "gtmIndustrySubgroupEmoji": "📰"
+      }
+    ],
+    "advisoryservices": [
+      {
+        "sourceRow": 4,
         "scIndustryGroup": "Business Services",
         "scIndustryGroupKey": "businessservices",
         "sourceScIndustryGroup": "Business Services",
@@ -1264,21 +1491,6 @@
         "gtmIndustrySubgroupKey": "advisoryservices",
         "scIndustryGroupEmoji": "💼",
         "gtmIndustrySubgroupEmoji": "🧭"
-      }
-    ],
-    "facilitiesmanagement": [
-      {
-        "sourceRow": 4,
-        "scIndustryGroup": "Business Services",
-        "scIndustryGroupKey": "businessservices",
-        "sourceScIndustryGroup": "Business Services",
-        "sourceScIndustryGroupKey": "businessservices",
-        "gtmIndustry": "Business Services",
-        "gtmIndustryKey": "businessservices",
-        "gtmIndustrySubgroup": "Facilities Management",
-        "gtmIndustrySubgroupKey": "facilitiesmanagement",
-        "scIndustryGroupEmoji": "💼",
-        "gtmIndustrySubgroupEmoji": "🏢"
       }
     ],
     "operationalsupportservices": [
@@ -1296,9 +1508,162 @@
         "gtmIndustrySubgroupEmoji": "⚙️"
       }
     ],
-    "energyandnaturalresource": [
+    "facilitiesmanagement": [
       {
         "sourceRow": 6,
+        "scIndustryGroup": "Business Services",
+        "scIndustryGroupKey": "businessservices",
+        "sourceScIndustryGroup": "Business Services",
+        "sourceScIndustryGroupKey": "businessservices",
+        "gtmIndustry": "Business Services",
+        "gtmIndustryKey": "businessservices",
+        "gtmIndustrySubgroup": "Facilities Management",
+        "gtmIndustrySubgroupKey": "facilitiesmanagement",
+        "scIndustryGroupEmoji": "💼",
+        "gtmIndustrySubgroupEmoji": "🏢"
+      }
+    ],
+    "nosubindustry": [
+      {
+        "sourceRow": 7,
+        "scIndustryGroup": "Business Services",
+        "scIndustryGroupKey": "businessservices",
+        "sourceScIndustryGroup": "Business Services",
+        "sourceScIndustryGroupKey": "businessservices",
+        "gtmIndustry": "Business Services",
+        "gtmIndustryKey": "businessservices",
+        "gtmIndustrySubgroup": "No Sub-Industry",
+        "gtmIndustrySubgroupKey": "nosubindustry",
+        "scIndustryGroupEmoji": "💼",
+        "gtmIndustrySubgroupEmoji": ""
+      },
+      {
+        "sourceRow": 11,
+        "scIndustryGroup": "Business Services",
+        "scIndustryGroupKey": "businessservices",
+        "sourceScIndustryGroup": "Business Services",
+        "sourceScIndustryGroupKey": "businessservices",
+        "gtmIndustry": "Transportation",
+        "gtmIndustryKey": "transportation",
+        "gtmIndustrySubgroup": "No Sub-Industry",
+        "gtmIndustrySubgroupKey": "nosubindustry",
+        "scIndustryGroupEmoji": "💼",
+        "gtmIndustrySubgroupEmoji": ""
+      },
+      {
+        "sourceRow": 17,
+        "scIndustryGroup": "Consumer Services",
+        "scIndustryGroupKey": "consumerservices",
+        "sourceScIndustryGroup": "Consumer Services",
+        "sourceScIndustryGroupKey": "consumerservices",
+        "gtmIndustry": "Consumer Services",
+        "gtmIndustryKey": "consumerservices",
+        "gtmIndustrySubgroup": "No Sub-Industry",
+        "gtmIndustrySubgroupKey": "nosubindustry",
+        "scIndustryGroupEmoji": "🛍️",
+        "gtmIndustrySubgroupEmoji": ""
+      },
+      {
+        "sourceRow": 21,
+        "scIndustryGroup": "Consumer Services",
+        "scIndustryGroupKey": "consumerservices",
+        "sourceScIndustryGroup": "Consumer Services",
+        "sourceScIndustryGroupKey": "consumerservices",
+        "gtmIndustry": "Financial Services",
+        "gtmIndustryKey": "financialservices",
+        "gtmIndustrySubgroup": "No Sub-Industry",
+        "gtmIndustrySubgroupKey": "nosubindustry",
+        "scIndustryGroupEmoji": "🛍️",
+        "gtmIndustrySubgroupEmoji": ""
+      },
+      {
+        "sourceRow": 26,
+        "scIndustryGroup": "Consumer Services",
+        "scIndustryGroupKey": "consumerservices",
+        "sourceScIndustryGroup": "Consumer Services",
+        "sourceScIndustryGroupKey": "consumerservices",
+        "gtmIndustry": "Nonprofits & Organizations",
+        "gtmIndustryKey": "nonprofitsandorganizations",
+        "gtmIndustrySubgroup": "No Sub-Industry",
+        "gtmIndustrySubgroupKey": "nosubindustry",
+        "scIndustryGroupEmoji": "🛍️",
+        "gtmIndustrySubgroupEmoji": ""
+      },
+      {
+        "sourceRow": 32,
+        "scIndustryGroup": "Health & Hospitality",
+        "scIndustryGroupKey": "healthandhospitality",
+        "sourceScIndustryGroup": "Health & Hospitality",
+        "sourceScIndustryGroupKey": "healthandhospitality",
+        "gtmIndustry": "Hospitality",
+        "gtmIndustryKey": "hospitality",
+        "gtmIndustrySubgroup": "No Sub-Industry",
+        "gtmIndustrySubgroupKey": "nosubindustry",
+        "scIndustryGroupEmoji": "🏨",
+        "gtmIndustrySubgroupEmoji": ""
+      },
+      {
+        "sourceRow": 50,
+        "scIndustryGroup": "Software",
+        "scIndustryGroupKey": "software",
+        "sourceScIndustryGroup": "Software",
+        "sourceScIndustryGroupKey": "software",
+        "gtmIndustry": "Software",
+        "gtmIndustryKey": "software",
+        "gtmIndustrySubgroup": "No Sub-Industry",
+        "gtmIndustrySubgroupKey": "nosubindustry",
+        "scIndustryGroupEmoji": "💻",
+        "gtmIndustrySubgroupEmoji": ""
+      }
+    ],
+    "managementconsulting": [
+      {
+        "sourceRow": 8,
+        "scIndustryGroup": "Business Services",
+        "scIndustryGroupKey": "businessservices",
+        "sourceScIndustryGroup": "Business Services",
+        "sourceScIndustryGroupKey": "businessservices",
+        "gtmIndustry": "Consulting",
+        "gtmIndustryKey": "consulting",
+        "gtmIndustrySubgroup": "Management Consulting",
+        "gtmIndustrySubgroupKey": "managementconsulting",
+        "scIndustryGroupEmoji": "💼",
+        "gtmIndustrySubgroupEmoji": "📊"
+      }
+    ],
+    "passengertransportation": [
+      {
+        "sourceRow": 9,
+        "scIndustryGroup": "Business Services",
+        "scIndustryGroupKey": "businessservices",
+        "sourceScIndustryGroup": "Business Services",
+        "sourceScIndustryGroupKey": "businessservices",
+        "gtmIndustry": "Transportation",
+        "gtmIndustryKey": "transportation",
+        "gtmIndustrySubgroup": "Passenger Transportation",
+        "gtmIndustrySubgroupKey": "passengertransportation",
+        "scIndustryGroupEmoji": "💼",
+        "gtmIndustrySubgroupEmoji": "🚌"
+      }
+    ],
+    "freightandlogistics": [
+      {
+        "sourceRow": 10,
+        "scIndustryGroup": "Business Services",
+        "scIndustryGroupKey": "businessservices",
+        "sourceScIndustryGroup": "Business Services",
+        "sourceScIndustryGroupKey": "businessservices",
+        "gtmIndustry": "Transportation",
+        "gtmIndustryKey": "transportation",
+        "gtmIndustrySubgroup": "Freight & Logistics",
+        "gtmIndustrySubgroupKey": "freightandlogistics",
+        "scIndustryGroupEmoji": "💼",
+        "gtmIndustrySubgroupEmoji": "🚚"
+      }
+    ],
+    "energyandnaturalresource": [
+      {
+        "sourceRow": 12,
         "scIndustryGroup": "Construction & Energy",
         "scIndustryGroupKey": "constructionandenergy",
         "sourceScIndustryGroup": "Construction & Energy",
@@ -1311,24 +1676,9 @@
         "gtmIndustrySubgroupEmoji": "⚡"
       }
     ],
-    "infrastructureandutilities": [
-      {
-        "sourceRow": 7,
-        "scIndustryGroup": "Construction & Energy",
-        "scIndustryGroupKey": "constructionandenergy",
-        "sourceScIndustryGroup": "Construction & Energy",
-        "sourceScIndustryGroupKey": "constructionandenergy",
-        "gtmIndustry": "Construction & Energy",
-        "gtmIndustryKey": "constructionandenergy",
-        "gtmIndustrySubgroup": "Infrastructure & Utilities",
-        "gtmIndustrySubgroupKey": "infrastructureandutilities",
-        "scIndustryGroupEmoji": "🚧",
-        "gtmIndustrySubgroupEmoji": "🔌"
-      }
-    ],
     "constructionandengineering": [
       {
-        "sourceRow": 8,
+        "sourceRow": 13,
         "scIndustryGroup": "Construction & Energy",
         "scIndustryGroupKey": "constructionandenergy",
         "sourceScIndustryGroup": "Construction & Energy",
@@ -1341,99 +1691,39 @@
         "gtmIndustrySubgroupEmoji": "🏗️"
       }
     ],
-    "managementconsulting": [
-      {
-        "sourceRow": 9,
-        "scIndustryGroup": "Business Services",
-        "scIndustryGroupKey": "businessservices",
-        "sourceScIndustryGroup": "Business Services",
-        "sourceScIndustryGroupKey": "businessservices",
-        "gtmIndustry": "Consulting & IT Services",
-        "gtmIndustryKey": "consultinganditservices",
-        "gtmIndustrySubgroup": "Management Consulting",
-        "gtmIndustrySubgroupKey": "managementconsulting",
-        "scIndustryGroupEmoji": "💼",
-        "gtmIndustrySubgroupEmoji": "📊"
-      }
-    ],
-    "customsoftwareanditservices": [
-      {
-        "sourceRow": 10,
-        "scIndustryGroup": "Business Services",
-        "scIndustryGroupKey": "businessservices",
-        "sourceScIndustryGroup": "Business Services",
-        "sourceScIndustryGroupKey": "businessservices",
-        "gtmIndustry": "Consulting & IT Services",
-        "gtmIndustryKey": "consultinganditservices",
-        "gtmIndustrySubgroup": "Custom Software & IT Services",
-        "gtmIndustrySubgroupKey": "customsoftwareanditservices",
-        "scIndustryGroupEmoji": "💼",
-        "gtmIndustrySubgroupEmoji": "🧩"
-      }
-    ],
-    "cgmanufacturingdiscrete": [
-      {
-        "sourceRow": 11,
-        "scIndustryGroup": "Products",
-        "scIndustryGroupKey": "products",
-        "sourceScIndustryGroup": "Products",
-        "sourceScIndustryGroupKey": "products",
-        "gtmIndustry": "Consumer Goods",
-        "gtmIndustryKey": "consumergoods",
-        "gtmIndustrySubgroup": "CG - Manufacturing - Discrete",
-        "gtmIndustrySubgroupKey": "cgmanufacturingdiscrete",
-        "scIndustryGroupEmoji": "📦",
-        "gtmIndustrySubgroupEmoji": "🔩"
-      }
-    ],
-    "cgwholesaleanddistribution": [
-      {
-        "sourceRow": 12,
-        "scIndustryGroup": "Products",
-        "scIndustryGroupKey": "products",
-        "sourceScIndustryGroup": "Products",
-        "sourceScIndustryGroupKey": "products",
-        "gtmIndustry": "Consumer Goods",
-        "gtmIndustryKey": "consumergoods",
-        "gtmIndustrySubgroup": "CG - Wholesale & Distribution",
-        "gtmIndustrySubgroupKey": "cgwholesaleanddistribution",
-        "scIndustryGroupEmoji": "📦",
-        "gtmIndustrySubgroupEmoji": "🏷️"
-      }
-    ],
-    "cgretail": [
-      {
-        "sourceRow": 13,
-        "scIndustryGroup": "Products",
-        "scIndustryGroupKey": "products",
-        "sourceScIndustryGroup": "Products",
-        "sourceScIndustryGroupKey": "products",
-        "gtmIndustry": "Consumer Goods",
-        "gtmIndustryKey": "consumergoods",
-        "gtmIndustrySubgroup": "CG - Retail",
-        "gtmIndustrySubgroupKey": "cgretail",
-        "scIndustryGroupEmoji": "📦",
-        "gtmIndustrySubgroupEmoji": "🛒"
-      }
-    ],
-    "cgmanufacturingprocess": [
+    "infrastructureandutilities": [
       {
         "sourceRow": 14,
-        "scIndustryGroup": "Products",
-        "scIndustryGroupKey": "products",
-        "sourceScIndustryGroup": "Products",
-        "sourceScIndustryGroupKey": "products",
-        "gtmIndustry": "Consumer Goods",
-        "gtmIndustryKey": "consumergoods",
-        "gtmIndustrySubgroup": "CG - Manufacturing - Process",
-        "gtmIndustrySubgroupKey": "cgmanufacturingprocess",
-        "scIndustryGroupEmoji": "📦",
-        "gtmIndustrySubgroupEmoji": "⚗️"
+        "scIndustryGroup": "Construction & Energy",
+        "scIndustryGroupKey": "constructionandenergy",
+        "sourceScIndustryGroup": "Construction & Energy",
+        "sourceScIndustryGroupKey": "constructionandenergy",
+        "gtmIndustry": "Construction & Energy",
+        "gtmIndustryKey": "constructionandenergy",
+        "gtmIndustrySubgroup": "Infrastructure & Utilities",
+        "gtmIndustrySubgroupKey": "infrastructureandutilities",
+        "scIndustryGroupEmoji": "🚧",
+        "gtmIndustrySubgroupEmoji": "🔌"
+      }
+    ],
+    "specialtyservicesandrepair": [
+      {
+        "sourceRow": 15,
+        "scIndustryGroup": "Consumer Services",
+        "scIndustryGroupKey": "consumerservices",
+        "sourceScIndustryGroup": "Consumer Services",
+        "sourceScIndustryGroupKey": "consumerservices",
+        "gtmIndustry": "Consumer Services",
+        "gtmIndustryKey": "consumerservices",
+        "gtmIndustrySubgroup": "Specialty Services & Repair",
+        "gtmIndustrySubgroupKey": "specialtyservicesandrepair",
+        "scIndustryGroupEmoji": "🛍️",
+        "gtmIndustrySubgroupEmoji": "🧰"
       }
     ],
     "personalcareservices": [
       {
-        "sourceRow": 15,
+        "sourceRow": 16,
         "scIndustryGroup": "Consumer Services",
         "scIndustryGroupKey": "consumerservices",
         "sourceScIndustryGroup": "Consumer Services",
@@ -1448,7 +1738,7 @@
     ],
     "realestate": [
       {
-        "sourceRow": 16,
+        "sourceRow": 18,
         "scIndustryGroup": "Consumer Services",
         "scIndustryGroupKey": "consumerservices",
         "sourceScIndustryGroup": "Consumer Services",
@@ -1459,36 +1749,6 @@
         "gtmIndustrySubgroupKey": "realestate",
         "scIndustryGroupEmoji": "🛍️",
         "gtmIndustrySubgroupEmoji": "🏘️"
-      }
-    ],
-    "specialtyservicesandrepair": [
-      {
-        "sourceRow": 17,
-        "scIndustryGroup": "Consumer Services",
-        "scIndustryGroupKey": "consumerservices",
-        "sourceScIndustryGroup": "Consumer Services",
-        "sourceScIndustryGroupKey": "consumerservices",
-        "gtmIndustry": "Consumer Services",
-        "gtmIndustryKey": "consumerservices",
-        "gtmIndustrySubgroup": "Specialty Services & Repair",
-        "gtmIndustrySubgroupKey": "specialtyservicesandrepair",
-        "scIndustryGroupEmoji": "🛍️",
-        "gtmIndustrySubgroupEmoji": "🧰"
-      }
-    ],
-    "investmentbanksandprivateequity": [
-      {
-        "sourceRow": 18,
-        "scIndustryGroup": "Consumer Services",
-        "scIndustryGroupKey": "consumerservices",
-        "sourceScIndustryGroup": "Consumer Services",
-        "sourceScIndustryGroupKey": "consumerservices",
-        "gtmIndustry": "Financial Services",
-        "gtmIndustryKey": "financialservices",
-        "gtmIndustrySubgroup": "Investment Banks & Private Equity",
-        "gtmIndustrySubgroupKey": "investmentbanksandprivateequity",
-        "scIndustryGroupEmoji": "🛍️",
-        "gtmIndustrySubgroupEmoji": "💹"
       }
     ],
     "consumerandcommercialfinancialservices": [
@@ -1506,84 +1766,84 @@
         "gtmIndustrySubgroupEmoji": "🏦"
       }
     ],
-    "agriculturelivestockcrops": [
+    "investmentbanksandprivateequity": [
       {
         "sourceRow": 20,
-        "scIndustryGroup": "Products",
-        "scIndustryGroupKey": "products",
-        "sourceScIndustryGroup": "Products",
-        "sourceScIndustryGroupKey": "products",
-        "gtmIndustry": "Food & Beverage",
-        "gtmIndustryKey": "foodandbeverage",
-        "gtmIndustrySubgroup": "Agriculture, Livestock, Crops",
-        "gtmIndustrySubgroupKey": "agriculturelivestockcrops",
-        "scIndustryGroupEmoji": "📦",
-        "gtmIndustrySubgroupEmoji": "🌾"
+        "scIndustryGroup": "Consumer Services",
+        "scIndustryGroupKey": "consumerservices",
+        "sourceScIndustryGroup": "Consumer Services",
+        "sourceScIndustryGroupKey": "consumerservices",
+        "gtmIndustry": "Financial Services",
+        "gtmIndustryKey": "financialservices",
+        "gtmIndustrySubgroup": "Investment Banks & Private Equity",
+        "gtmIndustrySubgroupKey": "investmentbanksandprivateequity",
+        "scIndustryGroupEmoji": "🛍️",
+        "gtmIndustrySubgroupEmoji": "💹"
       }
     ],
-    "packagedfoodandbeverage": [
-      {
-        "sourceRow": 21,
-        "scIndustryGroup": "Products",
-        "scIndustryGroupKey": "products",
-        "sourceScIndustryGroup": "Products",
-        "sourceScIndustryGroupKey": "products",
-        "gtmIndustry": "Food & Beverage",
-        "gtmIndustryKey": "foodandbeverage",
-        "gtmIndustrySubgroup": "Packaged Food & Beverage",
-        "gtmIndustrySubgroupKey": "packagedfoodandbeverage",
-        "scIndustryGroupEmoji": "📦",
-        "gtmIndustrySubgroupEmoji": "🥤"
-      }
-    ],
-    "foodmanufacturingandprocessing": [
+    "charitablefoundations": [
       {
         "sourceRow": 22,
-        "scIndustryGroup": "Products",
-        "scIndustryGroupKey": "products",
-        "sourceScIndustryGroup": "Products",
-        "sourceScIndustryGroupKey": "products",
-        "gtmIndustry": "Food & Beverage",
-        "gtmIndustryKey": "foodandbeverage",
-        "gtmIndustrySubgroup": "Food Manufacturing & Processing",
-        "gtmIndustrySubgroupKey": "foodmanufacturingandprocessing",
-        "scIndustryGroupEmoji": "📦",
-        "gtmIndustrySubgroupEmoji": "🥫"
+        "scIndustryGroup": "Consumer Services",
+        "scIndustryGroupKey": "consumerservices",
+        "sourceScIndustryGroup": "Consumer Services",
+        "sourceScIndustryGroupKey": "consumerservices",
+        "gtmIndustry": "Nonprofits & Organizations",
+        "gtmIndustryKey": "nonprofitsandorganizations",
+        "gtmIndustrySubgroup": "Charitable Foundations",
+        "gtmIndustrySubgroupKey": "charitablefoundations",
+        "scIndustryGroupEmoji": "🛍️",
+        "gtmIndustrySubgroupEmoji": "🎗️"
       }
     ],
-    "publicsector": [
+    "educationalinstitutions": [
       {
         "sourceRow": 23,
-        "scIndustryGroup": "Business Services",
-        "scIndustryGroupKey": "businessservices",
-        "sourceScIndustryGroup": "Business Services",
-        "sourceScIndustryGroupKey": "businessservices",
-        "gtmIndustry": "Government",
-        "gtmIndustryKey": "government",
-        "gtmIndustrySubgroup": "Public Sector",
-        "gtmIndustrySubgroupKey": "publicsector",
-        "scIndustryGroupEmoji": "💼",
-        "gtmIndustrySubgroupEmoji": "🏛️"
+        "scIndustryGroup": "Consumer Services",
+        "scIndustryGroupKey": "consumerservices",
+        "sourceScIndustryGroup": "Consumer Services",
+        "sourceScIndustryGroupKey": "consumerservices",
+        "gtmIndustry": "Nonprofits & Organizations",
+        "gtmIndustryKey": "nonprofitsandorganizations",
+        "gtmIndustrySubgroup": "Educational Institutions",
+        "gtmIndustrySubgroupKey": "educationalinstitutions",
+        "scIndustryGroupEmoji": "🛍️",
+        "gtmIndustrySubgroupEmoji": "🎓"
       }
     ],
-    "stateandlocalgovernments": [
+    "culturalandarts": [
       {
         "sourceRow": 24,
-        "scIndustryGroup": "Business Services",
-        "scIndustryGroupKey": "businessservices",
-        "sourceScIndustryGroup": "Business Services",
-        "sourceScIndustryGroupKey": "businessservices",
-        "gtmIndustry": "Government",
-        "gtmIndustryKey": "government",
-        "gtmIndustrySubgroup": "State & Local Governments",
-        "gtmIndustrySubgroupKey": "stateandlocalgovernments",
-        "scIndustryGroupEmoji": "💼",
-        "gtmIndustrySubgroupEmoji": "🏙️"
+        "scIndustryGroup": "Consumer Services",
+        "scIndustryGroupKey": "consumerservices",
+        "sourceScIndustryGroup": "Consumer Services",
+        "sourceScIndustryGroupKey": "consumerservices",
+        "gtmIndustry": "Nonprofits & Organizations",
+        "gtmIndustryKey": "nonprofitsandorganizations",
+        "gtmIndustrySubgroup": "Cultural & Arts",
+        "gtmIndustrySubgroupKey": "culturalandarts",
+        "scIndustryGroupEmoji": "🛍️",
+        "gtmIndustrySubgroupEmoji": "🎭"
+      }
+    ],
+    "membershiporganizations": [
+      {
+        "sourceRow": 25,
+        "scIndustryGroup": "Consumer Services",
+        "scIndustryGroupKey": "consumerservices",
+        "sourceScIndustryGroup": "Consumer Services",
+        "sourceScIndustryGroupKey": "consumerservices",
+        "gtmIndustry": "Nonprofits & Organizations",
+        "gtmIndustryKey": "nonprofitsandorganizations",
+        "gtmIndustrySubgroup": "Membership Organizations",
+        "gtmIndustrySubgroupKey": "membershiporganizations",
+        "scIndustryGroupEmoji": "🛍️",
+        "gtmIndustrySubgroupEmoji": "👥"
       }
     ],
     "otherhealthservices": [
       {
-        "sourceRow": 25,
+        "sourceRow": 27,
         "scIndustryGroup": "Health & Hospitality",
         "scIndustryGroupKey": "healthandhospitality",
         "sourceScIndustryGroup": "Health & Hospitality",
@@ -1596,24 +1856,9 @@
         "gtmIndustrySubgroupEmoji": "🩺"
       }
     ],
-    "hospitals": [
-      {
-        "sourceRow": 26,
-        "scIndustryGroup": "Health & Hospitality",
-        "scIndustryGroupKey": "healthandhospitality",
-        "sourceScIndustryGroup": "Health & Hospitality",
-        "sourceScIndustryGroupKey": "healthandhospitality",
-        "gtmIndustry": "Health",
-        "gtmIndustryKey": "health",
-        "gtmIndustrySubgroup": "Hospitals",
-        "gtmIndustrySubgroupKey": "hospitals",
-        "scIndustryGroupEmoji": "🏨",
-        "gtmIndustrySubgroupEmoji": "🏥"
-      }
-    ],
     "outpatientclinics": [
       {
-        "sourceRow": 27,
+        "sourceRow": 28,
         "scIndustryGroup": "Health & Hospitality",
         "scIndustryGroupKey": "healthandhospitality",
         "sourceScIndustryGroup": "Health & Hospitality",
@@ -1626,24 +1871,24 @@
         "gtmIndustrySubgroupEmoji": "🩹"
       }
     ],
-    "sportsteamsandentertainment": [
+    "hospitals": [
       {
-        "sourceRow": 28,
+        "sourceRow": 29,
         "scIndustryGroup": "Health & Hospitality",
         "scIndustryGroupKey": "healthandhospitality",
         "sourceScIndustryGroup": "Health & Hospitality",
         "sourceScIndustryGroupKey": "healthandhospitality",
-        "gtmIndustry": "Hospitality",
-        "gtmIndustryKey": "hospitality",
-        "gtmIndustrySubgroup": "Sports Teams & Entertainment",
-        "gtmIndustrySubgroupKey": "sportsteamsandentertainment",
+        "gtmIndustry": "Health",
+        "gtmIndustryKey": "health",
+        "gtmIndustrySubgroup": "Hospitals",
+        "gtmIndustrySubgroupKey": "hospitals",
         "scIndustryGroupEmoji": "🏨",
-        "gtmIndustrySubgroupEmoji": "🏟️"
+        "gtmIndustrySubgroupEmoji": "🏥"
       }
     ],
     "foodserviceandaccommodation": [
       {
-        "sourceRow": 29,
+        "sourceRow": 30,
         "scIndustryGroup": "Health & Hospitality",
         "scIndustryGroupKey": "healthandhospitality",
         "sourceScIndustryGroup": "Health & Hospitality",
@@ -1656,39 +1901,24 @@
         "gtmIndustrySubgroupEmoji": "🍽️"
       }
     ],
-    "industrialandequipmentprocessmanufacturing": [
-      {
-        "sourceRow": 30,
-        "scIndustryGroup": "Products",
-        "scIndustryGroupKey": "products",
-        "sourceScIndustryGroup": "Products",
-        "sourceScIndustryGroupKey": "products",
-        "gtmIndustry": "Industrial & Equipment",
-        "gtmIndustryKey": "industrialandequipment",
-        "gtmIndustrySubgroup": "Industrial & Equipment Process Manufacturing",
-        "gtmIndustrySubgroupKey": "industrialandequipmentprocessmanufacturing",
-        "scIndustryGroupEmoji": "📦",
-        "gtmIndustrySubgroupEmoji": "🛢️"
-      }
-    ],
-    "industrialandequipmentdiscretemanufacturing": [
+    "sportsteamsandentertainment": [
       {
         "sourceRow": 31,
-        "scIndustryGroup": "Products",
-        "scIndustryGroupKey": "products",
-        "sourceScIndustryGroup": "Products",
-        "sourceScIndustryGroupKey": "products",
-        "gtmIndustry": "Industrial & Equipment",
-        "gtmIndustryKey": "industrialandequipment",
-        "gtmIndustrySubgroup": "Industrial & Equipment Discrete Manufacturing",
-        "gtmIndustrySubgroupKey": "industrialandequipmentdiscretemanufacturing",
-        "scIndustryGroupEmoji": "📦",
-        "gtmIndustrySubgroupEmoji": "🏭"
+        "scIndustryGroup": "Health & Hospitality",
+        "scIndustryGroupKey": "healthandhospitality",
+        "sourceScIndustryGroup": "Health & Hospitality",
+        "sourceScIndustryGroupKey": "healthandhospitality",
+        "gtmIndustry": "Hospitality",
+        "gtmIndustryKey": "hospitality",
+        "gtmIndustrySubgroup": "Sports Teams & Entertainment",
+        "gtmIndustrySubgroupKey": "sportsteamsandentertainment",
+        "scIndustryGroupEmoji": "🏨",
+        "gtmIndustrySubgroupEmoji": "🏟️"
       }
     ],
     "researchandpharma": [
       {
-        "sourceRow": 32,
+        "sourceRow": 33,
         "scIndustryGroup": "Health & Hospitality",
         "scIndustryGroupKey": "healthandhospitality",
         "sourceScIndustryGroup": "Health & Hospitality",
@@ -1703,7 +1933,7 @@
     ],
     "medtech": [
       {
-        "sourceRow": 33,
+        "sourceRow": 34,
         "scIndustryGroup": "Health & Hospitality",
         "scIndustryGroupKey": "healthandhospitality",
         "sourceScIndustryGroup": "Health & Hospitality",
@@ -1716,69 +1946,189 @@
         "gtmIndustrySubgroupEmoji": "🦾"
       }
     ],
-    "charityfoundations": [
-      {
-        "sourceRow": 34,
-        "scIndustryGroup": "Consumer Services",
-        "scIndustryGroupKey": "consumerservices",
-        "sourceScIndustryGroup": "Consumer Services",
-        "sourceScIndustryGroupKey": "consumerservices",
-        "gtmIndustry": "Nonprofits & Organizations",
-        "gtmIndustryKey": "nonprofitsandorganizations",
-        "gtmIndustrySubgroup": "Charity Foundations",
-        "gtmIndustrySubgroupKey": "charityfoundations",
-        "scIndustryGroupEmoji": "🛍️",
-        "gtmIndustrySubgroupEmoji": "🤝"
-      }
-    ],
-    "culturalandarts": [
+    "publicsector": [
       {
         "sourceRow": 35,
-        "scIndustryGroup": "Consumer Services",
-        "scIndustryGroupKey": "consumerservices",
-        "sourceScIndustryGroup": "Consumer Services",
-        "sourceScIndustryGroupKey": "consumerservices",
-        "gtmIndustry": "Nonprofits & Organizations",
-        "gtmIndustryKey": "nonprofitsandorganizations",
-        "gtmIndustrySubgroup": "Cultural & Arts",
-        "gtmIndustrySubgroupKey": "culturalandarts",
-        "scIndustryGroupEmoji": "🛍️",
-        "gtmIndustrySubgroupEmoji": "🎭"
+        "scIndustryGroup": "Health & Hospitality",
+        "scIndustryGroupKey": "healthandhospitality",
+        "sourceScIndustryGroup": "Health & Hospitality",
+        "sourceScIndustryGroupKey": "healthandhospitality",
+        "gtmIndustry": "Public Sector",
+        "gtmIndustryKey": "publicsector",
+        "gtmIndustrySubgroup": "Public Sector",
+        "gtmIndustrySubgroupKey": "publicsector",
+        "scIndustryGroupEmoji": "🏨",
+        "gtmIndustrySubgroupEmoji": "🏛️"
       }
     ],
-    "educationalinstitutions": [
+    "stateandlocalgovernments": [
       {
         "sourceRow": 36,
-        "scIndustryGroup": "Consumer Services",
-        "scIndustryGroupKey": "consumerservices",
-        "sourceScIndustryGroup": "Consumer Services",
-        "sourceScIndustryGroupKey": "consumerservices",
-        "gtmIndustry": "Nonprofits & Organizations",
-        "gtmIndustryKey": "nonprofitsandorganizations",
-        "gtmIndustrySubgroup": "Educational Institutions",
-        "gtmIndustrySubgroupKey": "educationalinstitutions",
-        "scIndustryGroupEmoji": "🛍️",
-        "gtmIndustrySubgroupEmoji": "🎓"
+        "scIndustryGroup": "Health & Hospitality",
+        "scIndustryGroupKey": "healthandhospitality",
+        "sourceScIndustryGroup": "Health & Hospitality",
+        "sourceScIndustryGroupKey": "healthandhospitality",
+        "gtmIndustry": "Public Sector",
+        "gtmIndustryKey": "publicsector",
+        "gtmIndustrySubgroup": "State & Local Governments",
+        "gtmIndustrySubgroupKey": "stateandlocalgovernments",
+        "scIndustryGroupEmoji": "🏨",
+        "gtmIndustrySubgroupEmoji": "🏙️"
       }
     ],
-    "membershiporganizations": [
+    "cgmanufacturingprocess": [
       {
         "sourceRow": 37,
-        "scIndustryGroup": "Consumer Services",
-        "scIndustryGroupKey": "consumerservices",
-        "sourceScIndustryGroup": "Consumer Services",
-        "sourceScIndustryGroupKey": "consumerservices",
-        "gtmIndustry": "Nonprofits & Organizations",
-        "gtmIndustryKey": "nonprofitsandorganizations",
-        "gtmIndustrySubgroup": "Membership Organizations",
-        "gtmIndustrySubgroupKey": "membershiporganizations",
-        "scIndustryGroupEmoji": "🛍️",
-        "gtmIndustrySubgroupEmoji": "👥"
+        "scIndustryGroup": "Products",
+        "scIndustryGroupKey": "products",
+        "sourceScIndustryGroup": "Products",
+        "sourceScIndustryGroupKey": "products",
+        "gtmIndustry": "Consumer Goods",
+        "gtmIndustryKey": "consumergoods",
+        "gtmIndustrySubgroup": "CG Manufacturing - Process",
+        "gtmIndustrySubgroupKey": "cgmanufacturingprocess",
+        "scIndustryGroupEmoji": "📦",
+        "gtmIndustrySubgroupEmoji": "⚗️"
+      }
+    ],
+    "cgmanufacturingdiscrete": [
+      {
+        "sourceRow": 38,
+        "scIndustryGroup": "Products",
+        "scIndustryGroupKey": "products",
+        "sourceScIndustryGroup": "Products",
+        "sourceScIndustryGroupKey": "products",
+        "gtmIndustry": "Consumer Goods",
+        "gtmIndustryKey": "consumergoods",
+        "gtmIndustrySubgroup": "CG Manufacturing - Discrete",
+        "gtmIndustrySubgroupKey": "cgmanufacturingdiscrete",
+        "scIndustryGroupEmoji": "📦",
+        "gtmIndustrySubgroupEmoji": "🔩"
+      }
+    ],
+    "cgretail": [
+      {
+        "sourceRow": 39,
+        "scIndustryGroup": "Products",
+        "scIndustryGroupKey": "products",
+        "sourceScIndustryGroup": "Products",
+        "sourceScIndustryGroupKey": "products",
+        "gtmIndustry": "Consumer Goods",
+        "gtmIndustryKey": "consumergoods",
+        "gtmIndustrySubgroup": "CG - Retail",
+        "gtmIndustrySubgroupKey": "cgretail",
+        "scIndustryGroupEmoji": "📦",
+        "gtmIndustrySubgroupEmoji": "🛒"
+      }
+    ],
+    "cgwholesaleanddistribution": [
+      {
+        "sourceRow": 40,
+        "scIndustryGroup": "Products",
+        "scIndustryGroupKey": "products",
+        "sourceScIndustryGroup": "Products",
+        "sourceScIndustryGroupKey": "products",
+        "gtmIndustry": "Consumer Goods",
+        "gtmIndustryKey": "consumergoods",
+        "gtmIndustrySubgroup": "CG - Wholesale & Distribution",
+        "gtmIndustrySubgroupKey": "cgwholesaleanddistribution",
+        "scIndustryGroupEmoji": "📦",
+        "gtmIndustrySubgroupEmoji": "🏷️"
+      }
+    ],
+    "agriculturelivestockcrops": [
+      {
+        "sourceRow": 41,
+        "scIndustryGroup": "Products",
+        "scIndustryGroupKey": "products",
+        "sourceScIndustryGroup": "Products",
+        "sourceScIndustryGroupKey": "products",
+        "gtmIndustry": "Food & Beverage",
+        "gtmIndustryKey": "foodandbeverage",
+        "gtmIndustrySubgroup": "Agriculture, Livestock, Crops",
+        "gtmIndustrySubgroupKey": "agriculturelivestockcrops",
+        "scIndustryGroupEmoji": "📦",
+        "gtmIndustrySubgroupEmoji": "🌾"
+      }
+    ],
+    "foodmanufacturingandprocessing": [
+      {
+        "sourceRow": 42,
+        "scIndustryGroup": "Products",
+        "scIndustryGroupKey": "products",
+        "sourceScIndustryGroup": "Products",
+        "sourceScIndustryGroupKey": "products",
+        "gtmIndustry": "Food & Beverage",
+        "gtmIndustryKey": "foodandbeverage",
+        "gtmIndustrySubgroup": "Food Manufacturing & Processing",
+        "gtmIndustrySubgroupKey": "foodmanufacturingandprocessing",
+        "scIndustryGroupEmoji": "📦",
+        "gtmIndustrySubgroupEmoji": "🥫"
+      }
+    ],
+    "packagedfoodandbeverage": [
+      {
+        "sourceRow": 43,
+        "scIndustryGroup": "Products",
+        "scIndustryGroupKey": "products",
+        "sourceScIndustryGroup": "Products",
+        "sourceScIndustryGroupKey": "products",
+        "gtmIndustry": "Food & Beverage",
+        "gtmIndustryKey": "foodandbeverage",
+        "gtmIndustrySubgroup": "Packaged Food & Beverage",
+        "gtmIndustrySubgroupKey": "packagedfoodandbeverage",
+        "scIndustryGroupEmoji": "📦",
+        "gtmIndustrySubgroupEmoji": "🥤"
+      }
+    ],
+    "industrialandequipmentdiscretemanufacturing": [
+      {
+        "sourceRow": 44,
+        "scIndustryGroup": "Products",
+        "scIndustryGroupKey": "products",
+        "sourceScIndustryGroup": "Products",
+        "sourceScIndustryGroupKey": "products",
+        "gtmIndustry": "Industrial & Equipment",
+        "gtmIndustryKey": "industrialandequipment",
+        "gtmIndustrySubgroup": "Industrial & Equipment Discrete Manufacturing",
+        "gtmIndustrySubgroupKey": "industrialandequipmentdiscretemanufacturing",
+        "scIndustryGroupEmoji": "📦",
+        "gtmIndustrySubgroupEmoji": "🏭"
+      }
+    ],
+    "industrialandequipmentprocessmanufacturing": [
+      {
+        "sourceRow": 45,
+        "scIndustryGroup": "Products",
+        "scIndustryGroupKey": "products",
+        "sourceScIndustryGroup": "Products",
+        "sourceScIndustryGroupKey": "products",
+        "gtmIndustry": "Industrial & Equipment",
+        "gtmIndustryKey": "industrialandequipment",
+        "gtmIndustrySubgroup": "Industrial & Equipment Process Manufacturing",
+        "gtmIndustrySubgroupKey": "industrialandequipmentprocessmanufacturing",
+        "scIndustryGroupEmoji": "📦",
+        "gtmIndustrySubgroupEmoji": "🛢️"
+      }
+    ],
+    "customsoftwareanditservices": [
+      {
+        "sourceRow": 46,
+        "scIndustryGroup": "Software",
+        "scIndustryGroupKey": "software",
+        "sourceScIndustryGroup": "Software",
+        "sourceScIndustryGroupKey": "software",
+        "gtmIndustry": "Software",
+        "gtmIndustryKey": "software",
+        "gtmIndustrySubgroup": "Custom Software & IT Services",
+        "gtmIndustrySubgroupKey": "customsoftwareanditservices",
+        "scIndustryGroupEmoji": "💻",
+        "gtmIndustrySubgroupEmoji": "🧩"
       }
     ],
     "multimediaandinternetsoftware": [
       {
-        "sourceRow": 38,
+        "sourceRow": 47,
         "scIndustryGroup": "Software",
         "scIndustryGroupKey": "software",
         "sourceScIndustryGroup": "Software",
@@ -1791,24 +2141,9 @@
         "gtmIndustrySubgroupEmoji": "🌐"
       }
     ],
-    "infrastructureandtechnicalsoftware": [
-      {
-        "sourceRow": 39,
-        "scIndustryGroup": "Software",
-        "scIndustryGroupKey": "software",
-        "sourceScIndustryGroup": "Software",
-        "sourceScIndustryGroupKey": "software",
-        "gtmIndustry": "Software",
-        "gtmIndustryKey": "software",
-        "gtmIndustrySubgroup": "Infrastructure & Technical Software",
-        "gtmIndustrySubgroupKey": "infrastructureandtechnicalsoftware",
-        "scIndustryGroupEmoji": "💻",
-        "gtmIndustrySubgroupEmoji": "🖥️"
-      }
-    ],
     "enterprisebusinessapplications": [
       {
-        "sourceRow": 40,
+        "sourceRow": 48,
         "scIndustryGroup": "Software",
         "scIndustryGroupKey": "software",
         "sourceScIndustryGroup": "Software",
@@ -1821,56 +2156,54 @@
         "gtmIndustrySubgroupEmoji": "🧮"
       }
     ],
-    "freightandlogistics": [
+    "infrastructureandtechnicalsoftware": [
       {
-        "sourceRow": 41,
-        "scIndustryGroup": "Business Services",
-        "scIndustryGroupKey": "businessservices",
-        "sourceScIndustryGroup": "Business Services",
-        "sourceScIndustryGroupKey": "businessservices",
-        "gtmIndustry": "Transportation",
-        "gtmIndustryKey": "transportation",
-        "gtmIndustrySubgroup": "Freight & Logistics",
-        "gtmIndustrySubgroupKey": "freightandlogistics",
-        "scIndustryGroupEmoji": "💼",
-        "gtmIndustrySubgroupEmoji": "🚚"
-      }
-    ],
-    "passengertransportation": [
-      {
-        "sourceRow": 42,
-        "scIndustryGroup": "Business Services",
-        "scIndustryGroupKey": "businessservices",
-        "sourceScIndustryGroup": "Business Services",
-        "sourceScIndustryGroupKey": "businessservices",
-        "gtmIndustry": "Transportation",
-        "gtmIndustryKey": "transportation",
-        "gtmIndustrySubgroup": "Passenger Transportation",
-        "gtmIndustrySubgroupKey": "passengertransportation",
-        "scIndustryGroupEmoji": "💼",
-        "gtmIndustrySubgroupEmoji": "🚌"
+        "sourceRow": 49,
+        "scIndustryGroup": "Software",
+        "scIndustryGroupKey": "software",
+        "sourceScIndustryGroup": "Software",
+        "sourceScIndustryGroupKey": "software",
+        "gtmIndustry": "Software",
+        "gtmIndustryKey": "software",
+        "gtmIndustrySubgroup": "Infrastructure & Technical Software",
+        "gtmIndustrySubgroupKey": "infrastructureandtechnicalsoftware",
+        "scIndustryGroupEmoji": "💻",
+        "gtmIndustrySubgroupEmoji": "🖥️"
       }
     ]
   },
   "industryLookup": {
-    "agencies": [
+    "advertisingmediaandpublishing": [
       {
         "sourceRow": 2,
         "scIndustryGroup": "Business Services",
         "scIndustryGroupKey": "businessservices",
         "sourceScIndustryGroup": "Business Services",
         "sourceScIndustryGroupKey": "businessservices",
-        "gtmIndustry": "Agencies",
-        "gtmIndustryKey": "agencies",
+        "gtmIndustry": "Advertising, Media & Publishing",
+        "gtmIndustryKey": "advertisingmediaandpublishing",
         "gtmIndustrySubgroup": "Agencies",
         "gtmIndustrySubgroupKey": "agencies",
         "scIndustryGroupEmoji": "💼",
         "gtmIndustrySubgroupEmoji": "📣"
+      },
+      {
+        "sourceRow": 3,
+        "scIndustryGroup": "Business Services",
+        "scIndustryGroupKey": "businessservices",
+        "sourceScIndustryGroup": "Business Services",
+        "sourceScIndustryGroupKey": "businessservices",
+        "gtmIndustry": "Advertising, Media & Publishing",
+        "gtmIndustryKey": "advertisingmediaandpublishing",
+        "gtmIndustrySubgroup": "Media & Publishing",
+        "gtmIndustrySubgroupKey": "mediaandpublishing",
+        "scIndustryGroupEmoji": "💼",
+        "gtmIndustrySubgroupEmoji": "📰"
       }
     ],
     "businessservices": [
       {
-        "sourceRow": 3,
+        "sourceRow": 4,
         "scIndustryGroup": "Business Services",
         "scIndustryGroupKey": "businessservices",
         "sourceScIndustryGroup": "Business Services",
@@ -1881,19 +2214,6 @@
         "gtmIndustrySubgroupKey": "advisoryservices",
         "scIndustryGroupEmoji": "💼",
         "gtmIndustrySubgroupEmoji": "🧭"
-      },
-      {
-        "sourceRow": 4,
-        "scIndustryGroup": "Business Services",
-        "scIndustryGroupKey": "businessservices",
-        "sourceScIndustryGroup": "Business Services",
-        "sourceScIndustryGroupKey": "businessservices",
-        "gtmIndustry": "Business Services",
-        "gtmIndustryKey": "businessservices",
-        "gtmIndustrySubgroup": "Facilities Management",
-        "gtmIndustrySubgroupKey": "facilitiesmanagement",
-        "scIndustryGroupEmoji": "💼",
-        "gtmIndustrySubgroupEmoji": "🏢"
       },
       {
         "sourceRow": 5,
@@ -1907,492 +2227,65 @@
         "gtmIndustrySubgroupKey": "operationalsupportservices",
         "scIndustryGroupEmoji": "💼",
         "gtmIndustrySubgroupEmoji": "⚙️"
-      }
-    ],
-    "constructionandenergy": [
+      },
       {
         "sourceRow": 6,
-        "scIndustryGroup": "Construction & Energy",
-        "scIndustryGroupKey": "constructionandenergy",
-        "sourceScIndustryGroup": "Construction & Energy",
-        "sourceScIndustryGroupKey": "constructionandenergy",
-        "gtmIndustry": "Construction & Energy",
-        "gtmIndustryKey": "constructionandenergy",
-        "gtmIndustrySubgroup": "Energy & Natural Resource",
-        "gtmIndustrySubgroupKey": "energyandnaturalresource",
-        "scIndustryGroupEmoji": "🚧",
-        "gtmIndustrySubgroupEmoji": "⚡"
+        "scIndustryGroup": "Business Services",
+        "scIndustryGroupKey": "businessservices",
+        "sourceScIndustryGroup": "Business Services",
+        "sourceScIndustryGroupKey": "businessservices",
+        "gtmIndustry": "Business Services",
+        "gtmIndustryKey": "businessservices",
+        "gtmIndustrySubgroup": "Facilities Management",
+        "gtmIndustrySubgroupKey": "facilitiesmanagement",
+        "scIndustryGroupEmoji": "💼",
+        "gtmIndustrySubgroupEmoji": "🏢"
       },
       {
         "sourceRow": 7,
-        "scIndustryGroup": "Construction & Energy",
-        "scIndustryGroupKey": "constructionandenergy",
-        "sourceScIndustryGroup": "Construction & Energy",
-        "sourceScIndustryGroupKey": "constructionandenergy",
-        "gtmIndustry": "Construction & Energy",
-        "gtmIndustryKey": "constructionandenergy",
-        "gtmIndustrySubgroup": "Infrastructure & Utilities",
-        "gtmIndustrySubgroupKey": "infrastructureandutilities",
-        "scIndustryGroupEmoji": "🚧",
-        "gtmIndustrySubgroupEmoji": "🔌"
-      },
-      {
-        "sourceRow": 8,
-        "scIndustryGroup": "Construction & Energy",
-        "scIndustryGroupKey": "constructionandenergy",
-        "sourceScIndustryGroup": "Construction & Energy",
-        "sourceScIndustryGroupKey": "constructionandenergy",
-        "gtmIndustry": "Construction & Energy",
-        "gtmIndustryKey": "constructionandenergy",
-        "gtmIndustrySubgroup": "Construction & Engineering",
-        "gtmIndustrySubgroupKey": "constructionandengineering",
-        "scIndustryGroupEmoji": "🚧",
-        "gtmIndustrySubgroupEmoji": "🏗️"
+        "scIndustryGroup": "Business Services",
+        "scIndustryGroupKey": "businessservices",
+        "sourceScIndustryGroup": "Business Services",
+        "sourceScIndustryGroupKey": "businessservices",
+        "gtmIndustry": "Business Services",
+        "gtmIndustryKey": "businessservices",
+        "gtmIndustrySubgroup": "No Sub-Industry",
+        "gtmIndustrySubgroupKey": "nosubindustry",
+        "scIndustryGroupEmoji": "💼",
+        "gtmIndustrySubgroupEmoji": ""
       }
     ],
-    "consultinganditservices": [
+    "consulting": [
+      {
+        "sourceRow": 8,
+        "scIndustryGroup": "Business Services",
+        "scIndustryGroupKey": "businessservices",
+        "sourceScIndustryGroup": "Business Services",
+        "sourceScIndustryGroupKey": "businessservices",
+        "gtmIndustry": "Consulting",
+        "gtmIndustryKey": "consulting",
+        "gtmIndustrySubgroup": "Management Consulting",
+        "gtmIndustrySubgroupKey": "managementconsulting",
+        "scIndustryGroupEmoji": "💼",
+        "gtmIndustrySubgroupEmoji": "📊"
+      }
+    ],
+    "transportation": [
       {
         "sourceRow": 9,
         "scIndustryGroup": "Business Services",
         "scIndustryGroupKey": "businessservices",
         "sourceScIndustryGroup": "Business Services",
         "sourceScIndustryGroupKey": "businessservices",
-        "gtmIndustry": "Consulting & IT Services",
-        "gtmIndustryKey": "consultinganditservices",
-        "gtmIndustrySubgroup": "Management Consulting",
-        "gtmIndustrySubgroupKey": "managementconsulting",
+        "gtmIndustry": "Transportation",
+        "gtmIndustryKey": "transportation",
+        "gtmIndustrySubgroup": "Passenger Transportation",
+        "gtmIndustrySubgroupKey": "passengertransportation",
         "scIndustryGroupEmoji": "💼",
-        "gtmIndustrySubgroupEmoji": "📊"
+        "gtmIndustrySubgroupEmoji": "🚌"
       },
       {
         "sourceRow": 10,
-        "scIndustryGroup": "Business Services",
-        "scIndustryGroupKey": "businessservices",
-        "sourceScIndustryGroup": "Business Services",
-        "sourceScIndustryGroupKey": "businessservices",
-        "gtmIndustry": "Consulting & IT Services",
-        "gtmIndustryKey": "consultinganditservices",
-        "gtmIndustrySubgroup": "Custom Software & IT Services",
-        "gtmIndustrySubgroupKey": "customsoftwareanditservices",
-        "scIndustryGroupEmoji": "💼",
-        "gtmIndustrySubgroupEmoji": "🧩"
-      }
-    ],
-    "consumergoods": [
-      {
-        "sourceRow": 11,
-        "scIndustryGroup": "Products",
-        "scIndustryGroupKey": "products",
-        "sourceScIndustryGroup": "Products",
-        "sourceScIndustryGroupKey": "products",
-        "gtmIndustry": "Consumer Goods",
-        "gtmIndustryKey": "consumergoods",
-        "gtmIndustrySubgroup": "CG - Manufacturing - Discrete",
-        "gtmIndustrySubgroupKey": "cgmanufacturingdiscrete",
-        "scIndustryGroupEmoji": "📦",
-        "gtmIndustrySubgroupEmoji": "🔩"
-      },
-      {
-        "sourceRow": 12,
-        "scIndustryGroup": "Products",
-        "scIndustryGroupKey": "products",
-        "sourceScIndustryGroup": "Products",
-        "sourceScIndustryGroupKey": "products",
-        "gtmIndustry": "Consumer Goods",
-        "gtmIndustryKey": "consumergoods",
-        "gtmIndustrySubgroup": "CG - Wholesale & Distribution",
-        "gtmIndustrySubgroupKey": "cgwholesaleanddistribution",
-        "scIndustryGroupEmoji": "📦",
-        "gtmIndustrySubgroupEmoji": "🏷️"
-      },
-      {
-        "sourceRow": 13,
-        "scIndustryGroup": "Products",
-        "scIndustryGroupKey": "products",
-        "sourceScIndustryGroup": "Products",
-        "sourceScIndustryGroupKey": "products",
-        "gtmIndustry": "Consumer Goods",
-        "gtmIndustryKey": "consumergoods",
-        "gtmIndustrySubgroup": "CG - Retail",
-        "gtmIndustrySubgroupKey": "cgretail",
-        "scIndustryGroupEmoji": "📦",
-        "gtmIndustrySubgroupEmoji": "🛒"
-      },
-      {
-        "sourceRow": 14,
-        "scIndustryGroup": "Products",
-        "scIndustryGroupKey": "products",
-        "sourceScIndustryGroup": "Products",
-        "sourceScIndustryGroupKey": "products",
-        "gtmIndustry": "Consumer Goods",
-        "gtmIndustryKey": "consumergoods",
-        "gtmIndustrySubgroup": "CG - Manufacturing - Process",
-        "gtmIndustrySubgroupKey": "cgmanufacturingprocess",
-        "scIndustryGroupEmoji": "📦",
-        "gtmIndustrySubgroupEmoji": "⚗️"
-      }
-    ],
-    "consumerservices": [
-      {
-        "sourceRow": 15,
-        "scIndustryGroup": "Consumer Services",
-        "scIndustryGroupKey": "consumerservices",
-        "sourceScIndustryGroup": "Consumer Services",
-        "sourceScIndustryGroupKey": "consumerservices",
-        "gtmIndustry": "Consumer Services",
-        "gtmIndustryKey": "consumerservices",
-        "gtmIndustrySubgroup": "Personal Care Services",
-        "gtmIndustrySubgroupKey": "personalcareservices",
-        "scIndustryGroupEmoji": "🛍️",
-        "gtmIndustrySubgroupEmoji": "💇"
-      },
-      {
-        "sourceRow": 16,
-        "scIndustryGroup": "Consumer Services",
-        "scIndustryGroupKey": "consumerservices",
-        "sourceScIndustryGroup": "Consumer Services",
-        "sourceScIndustryGroupKey": "consumerservices",
-        "gtmIndustry": "Consumer Services",
-        "gtmIndustryKey": "consumerservices",
-        "gtmIndustrySubgroup": "Real Estate",
-        "gtmIndustrySubgroupKey": "realestate",
-        "scIndustryGroupEmoji": "🛍️",
-        "gtmIndustrySubgroupEmoji": "🏘️"
-      },
-      {
-        "sourceRow": 17,
-        "scIndustryGroup": "Consumer Services",
-        "scIndustryGroupKey": "consumerservices",
-        "sourceScIndustryGroup": "Consumer Services",
-        "sourceScIndustryGroupKey": "consumerservices",
-        "gtmIndustry": "Consumer Services",
-        "gtmIndustryKey": "consumerservices",
-        "gtmIndustrySubgroup": "Specialty Services & Repair",
-        "gtmIndustrySubgroupKey": "specialtyservicesandrepair",
-        "scIndustryGroupEmoji": "🛍️",
-        "gtmIndustrySubgroupEmoji": "🧰"
-      }
-    ],
-    "financialservices": [
-      {
-        "sourceRow": 18,
-        "scIndustryGroup": "Consumer Services",
-        "scIndustryGroupKey": "consumerservices",
-        "sourceScIndustryGroup": "Consumer Services",
-        "sourceScIndustryGroupKey": "consumerservices",
-        "gtmIndustry": "Financial Services",
-        "gtmIndustryKey": "financialservices",
-        "gtmIndustrySubgroup": "Investment Banks & Private Equity",
-        "gtmIndustrySubgroupKey": "investmentbanksandprivateequity",
-        "scIndustryGroupEmoji": "🛍️",
-        "gtmIndustrySubgroupEmoji": "💹"
-      },
-      {
-        "sourceRow": 19,
-        "scIndustryGroup": "Consumer Services",
-        "scIndustryGroupKey": "consumerservices",
-        "sourceScIndustryGroup": "Consumer Services",
-        "sourceScIndustryGroupKey": "consumerservices",
-        "gtmIndustry": "Financial Services",
-        "gtmIndustryKey": "financialservices",
-        "gtmIndustrySubgroup": "Consumer & Commercial Financial Services",
-        "gtmIndustrySubgroupKey": "consumerandcommercialfinancialservices",
-        "scIndustryGroupEmoji": "🛍️",
-        "gtmIndustrySubgroupEmoji": "🏦"
-      }
-    ],
-    "foodandbeverage": [
-      {
-        "sourceRow": 20,
-        "scIndustryGroup": "Products",
-        "scIndustryGroupKey": "products",
-        "sourceScIndustryGroup": "Products",
-        "sourceScIndustryGroupKey": "products",
-        "gtmIndustry": "Food & Beverage",
-        "gtmIndustryKey": "foodandbeverage",
-        "gtmIndustrySubgroup": "Agriculture, Livestock, Crops",
-        "gtmIndustrySubgroupKey": "agriculturelivestockcrops",
-        "scIndustryGroupEmoji": "📦",
-        "gtmIndustrySubgroupEmoji": "🌾"
-      },
-      {
-        "sourceRow": 21,
-        "scIndustryGroup": "Products",
-        "scIndustryGroupKey": "products",
-        "sourceScIndustryGroup": "Products",
-        "sourceScIndustryGroupKey": "products",
-        "gtmIndustry": "Food & Beverage",
-        "gtmIndustryKey": "foodandbeverage",
-        "gtmIndustrySubgroup": "Packaged Food & Beverage",
-        "gtmIndustrySubgroupKey": "packagedfoodandbeverage",
-        "scIndustryGroupEmoji": "📦",
-        "gtmIndustrySubgroupEmoji": "🥤"
-      },
-      {
-        "sourceRow": 22,
-        "scIndustryGroup": "Products",
-        "scIndustryGroupKey": "products",
-        "sourceScIndustryGroup": "Products",
-        "sourceScIndustryGroupKey": "products",
-        "gtmIndustry": "Food & Beverage",
-        "gtmIndustryKey": "foodandbeverage",
-        "gtmIndustrySubgroup": "Food Manufacturing & Processing",
-        "gtmIndustrySubgroupKey": "foodmanufacturingandprocessing",
-        "scIndustryGroupEmoji": "📦",
-        "gtmIndustrySubgroupEmoji": "🥫"
-      }
-    ],
-    "government": [
-      {
-        "sourceRow": 23,
-        "scIndustryGroup": "Business Services",
-        "scIndustryGroupKey": "businessservices",
-        "sourceScIndustryGroup": "Business Services",
-        "sourceScIndustryGroupKey": "businessservices",
-        "gtmIndustry": "Government",
-        "gtmIndustryKey": "government",
-        "gtmIndustrySubgroup": "Public Sector",
-        "gtmIndustrySubgroupKey": "publicsector",
-        "scIndustryGroupEmoji": "💼",
-        "gtmIndustrySubgroupEmoji": "🏛️"
-      },
-      {
-        "sourceRow": 24,
-        "scIndustryGroup": "Business Services",
-        "scIndustryGroupKey": "businessservices",
-        "sourceScIndustryGroup": "Business Services",
-        "sourceScIndustryGroupKey": "businessservices",
-        "gtmIndustry": "Government",
-        "gtmIndustryKey": "government",
-        "gtmIndustrySubgroup": "State & Local Governments",
-        "gtmIndustrySubgroupKey": "stateandlocalgovernments",
-        "scIndustryGroupEmoji": "💼",
-        "gtmIndustrySubgroupEmoji": "🏙️"
-      }
-    ],
-    "health": [
-      {
-        "sourceRow": 25,
-        "scIndustryGroup": "Health & Hospitality",
-        "scIndustryGroupKey": "healthandhospitality",
-        "sourceScIndustryGroup": "Health & Hospitality",
-        "sourceScIndustryGroupKey": "healthandhospitality",
-        "gtmIndustry": "Health",
-        "gtmIndustryKey": "health",
-        "gtmIndustrySubgroup": "Other Health Services",
-        "gtmIndustrySubgroupKey": "otherhealthservices",
-        "scIndustryGroupEmoji": "🏨",
-        "gtmIndustrySubgroupEmoji": "🩺"
-      },
-      {
-        "sourceRow": 26,
-        "scIndustryGroup": "Health & Hospitality",
-        "scIndustryGroupKey": "healthandhospitality",
-        "sourceScIndustryGroup": "Health & Hospitality",
-        "sourceScIndustryGroupKey": "healthandhospitality",
-        "gtmIndustry": "Health",
-        "gtmIndustryKey": "health",
-        "gtmIndustrySubgroup": "Hospitals",
-        "gtmIndustrySubgroupKey": "hospitals",
-        "scIndustryGroupEmoji": "🏨",
-        "gtmIndustrySubgroupEmoji": "🏥"
-      },
-      {
-        "sourceRow": 27,
-        "scIndustryGroup": "Health & Hospitality",
-        "scIndustryGroupKey": "healthandhospitality",
-        "sourceScIndustryGroup": "Health & Hospitality",
-        "sourceScIndustryGroupKey": "healthandhospitality",
-        "gtmIndustry": "Health",
-        "gtmIndustryKey": "health",
-        "gtmIndustrySubgroup": "Outpatient Clinics",
-        "gtmIndustrySubgroupKey": "outpatientclinics",
-        "scIndustryGroupEmoji": "🏨",
-        "gtmIndustrySubgroupEmoji": "🩹"
-      }
-    ],
-    "hospitality": [
-      {
-        "sourceRow": 28,
-        "scIndustryGroup": "Health & Hospitality",
-        "scIndustryGroupKey": "healthandhospitality",
-        "sourceScIndustryGroup": "Health & Hospitality",
-        "sourceScIndustryGroupKey": "healthandhospitality",
-        "gtmIndustry": "Hospitality",
-        "gtmIndustryKey": "hospitality",
-        "gtmIndustrySubgroup": "Sports Teams & Entertainment",
-        "gtmIndustrySubgroupKey": "sportsteamsandentertainment",
-        "scIndustryGroupEmoji": "🏨",
-        "gtmIndustrySubgroupEmoji": "🏟️"
-      },
-      {
-        "sourceRow": 29,
-        "scIndustryGroup": "Health & Hospitality",
-        "scIndustryGroupKey": "healthandhospitality",
-        "sourceScIndustryGroup": "Health & Hospitality",
-        "sourceScIndustryGroupKey": "healthandhospitality",
-        "gtmIndustry": "Hospitality",
-        "gtmIndustryKey": "hospitality",
-        "gtmIndustrySubgroup": "Food Service & Accommodation",
-        "gtmIndustrySubgroupKey": "foodserviceandaccommodation",
-        "scIndustryGroupEmoji": "🏨",
-        "gtmIndustrySubgroupEmoji": "🍽️"
-      }
-    ],
-    "industrialandequipment": [
-      {
-        "sourceRow": 30,
-        "scIndustryGroup": "Products",
-        "scIndustryGroupKey": "products",
-        "sourceScIndustryGroup": "Products",
-        "sourceScIndustryGroupKey": "products",
-        "gtmIndustry": "Industrial & Equipment",
-        "gtmIndustryKey": "industrialandequipment",
-        "gtmIndustrySubgroup": "Industrial & Equipment Process Manufacturing",
-        "gtmIndustrySubgroupKey": "industrialandequipmentprocessmanufacturing",
-        "scIndustryGroupEmoji": "📦",
-        "gtmIndustrySubgroupEmoji": "🛢️"
-      },
-      {
-        "sourceRow": 31,
-        "scIndustryGroup": "Products",
-        "scIndustryGroupKey": "products",
-        "sourceScIndustryGroup": "Products",
-        "sourceScIndustryGroupKey": "products",
-        "gtmIndustry": "Industrial & Equipment",
-        "gtmIndustryKey": "industrialandequipment",
-        "gtmIndustrySubgroup": "Industrial & Equipment Discrete Manufacturing",
-        "gtmIndustrySubgroupKey": "industrialandequipmentdiscretemanufacturing",
-        "scIndustryGroupEmoji": "📦",
-        "gtmIndustrySubgroupEmoji": "🏭"
-      }
-    ],
-    "lifesciences": [
-      {
-        "sourceRow": 32,
-        "scIndustryGroup": "Health & Hospitality",
-        "scIndustryGroupKey": "healthandhospitality",
-        "sourceScIndustryGroup": "Health & Hospitality",
-        "sourceScIndustryGroupKey": "healthandhospitality",
-        "gtmIndustry": "Life Sciences",
-        "gtmIndustryKey": "lifesciences",
-        "gtmIndustrySubgroup": "Research & Pharma",
-        "gtmIndustrySubgroupKey": "researchandpharma",
-        "scIndustryGroupEmoji": "🏨",
-        "gtmIndustrySubgroupEmoji": "🧪"
-      },
-      {
-        "sourceRow": 33,
-        "scIndustryGroup": "Health & Hospitality",
-        "scIndustryGroupKey": "healthandhospitality",
-        "sourceScIndustryGroup": "Health & Hospitality",
-        "sourceScIndustryGroupKey": "healthandhospitality",
-        "gtmIndustry": "Life Sciences",
-        "gtmIndustryKey": "lifesciences",
-        "gtmIndustrySubgroup": "MedTech",
-        "gtmIndustrySubgroupKey": "medtech",
-        "scIndustryGroupEmoji": "🏨",
-        "gtmIndustrySubgroupEmoji": "🦾"
-      }
-    ],
-    "nonprofitsandorganizations": [
-      {
-        "sourceRow": 34,
-        "scIndustryGroup": "Consumer Services",
-        "scIndustryGroupKey": "consumerservices",
-        "sourceScIndustryGroup": "Consumer Services",
-        "sourceScIndustryGroupKey": "consumerservices",
-        "gtmIndustry": "Nonprofits & Organizations",
-        "gtmIndustryKey": "nonprofitsandorganizations",
-        "gtmIndustrySubgroup": "Charity Foundations",
-        "gtmIndustrySubgroupKey": "charityfoundations",
-        "scIndustryGroupEmoji": "🛍️",
-        "gtmIndustrySubgroupEmoji": "🤝"
-      },
-      {
-        "sourceRow": 35,
-        "scIndustryGroup": "Consumer Services",
-        "scIndustryGroupKey": "consumerservices",
-        "sourceScIndustryGroup": "Consumer Services",
-        "sourceScIndustryGroupKey": "consumerservices",
-        "gtmIndustry": "Nonprofits & Organizations",
-        "gtmIndustryKey": "nonprofitsandorganizations",
-        "gtmIndustrySubgroup": "Cultural & Arts",
-        "gtmIndustrySubgroupKey": "culturalandarts",
-        "scIndustryGroupEmoji": "🛍️",
-        "gtmIndustrySubgroupEmoji": "🎭"
-      },
-      {
-        "sourceRow": 36,
-        "scIndustryGroup": "Consumer Services",
-        "scIndustryGroupKey": "consumerservices",
-        "sourceScIndustryGroup": "Consumer Services",
-        "sourceScIndustryGroupKey": "consumerservices",
-        "gtmIndustry": "Nonprofits & Organizations",
-        "gtmIndustryKey": "nonprofitsandorganizations",
-        "gtmIndustrySubgroup": "Educational Institutions",
-        "gtmIndustrySubgroupKey": "educationalinstitutions",
-        "scIndustryGroupEmoji": "🛍️",
-        "gtmIndustrySubgroupEmoji": "🎓"
-      },
-      {
-        "sourceRow": 37,
-        "scIndustryGroup": "Consumer Services",
-        "scIndustryGroupKey": "consumerservices",
-        "sourceScIndustryGroup": "Consumer Services",
-        "sourceScIndustryGroupKey": "consumerservices",
-        "gtmIndustry": "Nonprofits & Organizations",
-        "gtmIndustryKey": "nonprofitsandorganizations",
-        "gtmIndustrySubgroup": "Membership Organizations",
-        "gtmIndustrySubgroupKey": "membershiporganizations",
-        "scIndustryGroupEmoji": "🛍️",
-        "gtmIndustrySubgroupEmoji": "👥"
-      }
-    ],
-    "software": [
-      {
-        "sourceRow": 38,
-        "scIndustryGroup": "Software",
-        "scIndustryGroupKey": "software",
-        "sourceScIndustryGroup": "Software",
-        "sourceScIndustryGroupKey": "software",
-        "gtmIndustry": "Software",
-        "gtmIndustryKey": "software",
-        "gtmIndustrySubgroup": "Multimedia & Internet Software",
-        "gtmIndustrySubgroupKey": "multimediaandinternetsoftware",
-        "scIndustryGroupEmoji": "💻",
-        "gtmIndustrySubgroupEmoji": "🌐"
-      },
-      {
-        "sourceRow": 39,
-        "scIndustryGroup": "Software",
-        "scIndustryGroupKey": "software",
-        "sourceScIndustryGroup": "Software",
-        "sourceScIndustryGroupKey": "software",
-        "gtmIndustry": "Software",
-        "gtmIndustryKey": "software",
-        "gtmIndustrySubgroup": "Infrastructure & Technical Software",
-        "gtmIndustrySubgroupKey": "infrastructureandtechnicalsoftware",
-        "scIndustryGroupEmoji": "💻",
-        "gtmIndustrySubgroupEmoji": "🖥️"
-      },
-      {
-        "sourceRow": 40,
-        "scIndustryGroup": "Software",
-        "scIndustryGroupKey": "software",
-        "sourceScIndustryGroup": "Software",
-        "sourceScIndustryGroupKey": "software",
-        "gtmIndustry": "Software",
-        "gtmIndustryKey": "software",
-        "gtmIndustrySubgroup": "Enterprise Business Applications",
-        "gtmIndustrySubgroupKey": "enterprisebusinessapplications",
-        "scIndustryGroupEmoji": "💻",
-        "gtmIndustrySubgroupEmoji": "🧮"
-      }
-    ],
-    "transportation": [
-      {
-        "sourceRow": 41,
         "scIndustryGroup": "Business Services",
         "scIndustryGroupKey": "businessservices",
         "sourceScIndustryGroup": "Business Services",
@@ -2405,23 +2298,560 @@
         "gtmIndustrySubgroupEmoji": "🚚"
       },
       {
-        "sourceRow": 42,
+        "sourceRow": 11,
         "scIndustryGroup": "Business Services",
         "scIndustryGroupKey": "businessservices",
         "sourceScIndustryGroup": "Business Services",
         "sourceScIndustryGroupKey": "businessservices",
         "gtmIndustry": "Transportation",
         "gtmIndustryKey": "transportation",
-        "gtmIndustrySubgroup": "Passenger Transportation",
-        "gtmIndustrySubgroupKey": "passengertransportation",
+        "gtmIndustrySubgroup": "No Sub-Industry",
+        "gtmIndustrySubgroupKey": "nosubindustry",
         "scIndustryGroupEmoji": "💼",
-        "gtmIndustrySubgroupEmoji": "🚌"
+        "gtmIndustrySubgroupEmoji": ""
+      }
+    ],
+    "constructionandenergy": [
+      {
+        "sourceRow": 12,
+        "scIndustryGroup": "Construction & Energy",
+        "scIndustryGroupKey": "constructionandenergy",
+        "sourceScIndustryGroup": "Construction & Energy",
+        "sourceScIndustryGroupKey": "constructionandenergy",
+        "gtmIndustry": "Construction & Energy",
+        "gtmIndustryKey": "constructionandenergy",
+        "gtmIndustrySubgroup": "Energy & Natural Resource",
+        "gtmIndustrySubgroupKey": "energyandnaturalresource",
+        "scIndustryGroupEmoji": "🚧",
+        "gtmIndustrySubgroupEmoji": "⚡"
+      },
+      {
+        "sourceRow": 13,
+        "scIndustryGroup": "Construction & Energy",
+        "scIndustryGroupKey": "constructionandenergy",
+        "sourceScIndustryGroup": "Construction & Energy",
+        "sourceScIndustryGroupKey": "constructionandenergy",
+        "gtmIndustry": "Construction & Energy",
+        "gtmIndustryKey": "constructionandenergy",
+        "gtmIndustrySubgroup": "Construction & Engineering",
+        "gtmIndustrySubgroupKey": "constructionandengineering",
+        "scIndustryGroupEmoji": "🚧",
+        "gtmIndustrySubgroupEmoji": "🏗️"
+      },
+      {
+        "sourceRow": 14,
+        "scIndustryGroup": "Construction & Energy",
+        "scIndustryGroupKey": "constructionandenergy",
+        "sourceScIndustryGroup": "Construction & Energy",
+        "sourceScIndustryGroupKey": "constructionandenergy",
+        "gtmIndustry": "Construction & Energy",
+        "gtmIndustryKey": "constructionandenergy",
+        "gtmIndustrySubgroup": "Infrastructure & Utilities",
+        "gtmIndustrySubgroupKey": "infrastructureandutilities",
+        "scIndustryGroupEmoji": "🚧",
+        "gtmIndustrySubgroupEmoji": "🔌"
+      }
+    ],
+    "consumerservices": [
+      {
+        "sourceRow": 15,
+        "scIndustryGroup": "Consumer Services",
+        "scIndustryGroupKey": "consumerservices",
+        "sourceScIndustryGroup": "Consumer Services",
+        "sourceScIndustryGroupKey": "consumerservices",
+        "gtmIndustry": "Consumer Services",
+        "gtmIndustryKey": "consumerservices",
+        "gtmIndustrySubgroup": "Specialty Services & Repair",
+        "gtmIndustrySubgroupKey": "specialtyservicesandrepair",
+        "scIndustryGroupEmoji": "🛍️",
+        "gtmIndustrySubgroupEmoji": "🧰"
+      },
+      {
+        "sourceRow": 16,
+        "scIndustryGroup": "Consumer Services",
+        "scIndustryGroupKey": "consumerservices",
+        "sourceScIndustryGroup": "Consumer Services",
+        "sourceScIndustryGroupKey": "consumerservices",
+        "gtmIndustry": "Consumer Services",
+        "gtmIndustryKey": "consumerservices",
+        "gtmIndustrySubgroup": "Personal Care Services",
+        "gtmIndustrySubgroupKey": "personalcareservices",
+        "scIndustryGroupEmoji": "🛍️",
+        "gtmIndustrySubgroupEmoji": "💇"
+      },
+      {
+        "sourceRow": 17,
+        "scIndustryGroup": "Consumer Services",
+        "scIndustryGroupKey": "consumerservices",
+        "sourceScIndustryGroup": "Consumer Services",
+        "sourceScIndustryGroupKey": "consumerservices",
+        "gtmIndustry": "Consumer Services",
+        "gtmIndustryKey": "consumerservices",
+        "gtmIndustrySubgroup": "No Sub-Industry",
+        "gtmIndustrySubgroupKey": "nosubindustry",
+        "scIndustryGroupEmoji": "🛍️",
+        "gtmIndustrySubgroupEmoji": ""
+      },
+      {
+        "sourceRow": 18,
+        "scIndustryGroup": "Consumer Services",
+        "scIndustryGroupKey": "consumerservices",
+        "sourceScIndustryGroup": "Consumer Services",
+        "sourceScIndustryGroupKey": "consumerservices",
+        "gtmIndustry": "Consumer Services",
+        "gtmIndustryKey": "consumerservices",
+        "gtmIndustrySubgroup": "Real Estate",
+        "gtmIndustrySubgroupKey": "realestate",
+        "scIndustryGroupEmoji": "🛍️",
+        "gtmIndustrySubgroupEmoji": "🏘️"
+      }
+    ],
+    "financialservices": [
+      {
+        "sourceRow": 19,
+        "scIndustryGroup": "Consumer Services",
+        "scIndustryGroupKey": "consumerservices",
+        "sourceScIndustryGroup": "Consumer Services",
+        "sourceScIndustryGroupKey": "consumerservices",
+        "gtmIndustry": "Financial Services",
+        "gtmIndustryKey": "financialservices",
+        "gtmIndustrySubgroup": "Consumer & Commercial Financial Services",
+        "gtmIndustrySubgroupKey": "consumerandcommercialfinancialservices",
+        "scIndustryGroupEmoji": "🛍️",
+        "gtmIndustrySubgroupEmoji": "🏦"
+      },
+      {
+        "sourceRow": 20,
+        "scIndustryGroup": "Consumer Services",
+        "scIndustryGroupKey": "consumerservices",
+        "sourceScIndustryGroup": "Consumer Services",
+        "sourceScIndustryGroupKey": "consumerservices",
+        "gtmIndustry": "Financial Services",
+        "gtmIndustryKey": "financialservices",
+        "gtmIndustrySubgroup": "Investment Banks & Private Equity",
+        "gtmIndustrySubgroupKey": "investmentbanksandprivateequity",
+        "scIndustryGroupEmoji": "🛍️",
+        "gtmIndustrySubgroupEmoji": "💹"
+      },
+      {
+        "sourceRow": 21,
+        "scIndustryGroup": "Consumer Services",
+        "scIndustryGroupKey": "consumerservices",
+        "sourceScIndustryGroup": "Consumer Services",
+        "sourceScIndustryGroupKey": "consumerservices",
+        "gtmIndustry": "Financial Services",
+        "gtmIndustryKey": "financialservices",
+        "gtmIndustrySubgroup": "No Sub-Industry",
+        "gtmIndustrySubgroupKey": "nosubindustry",
+        "scIndustryGroupEmoji": "🛍️",
+        "gtmIndustrySubgroupEmoji": ""
+      }
+    ],
+    "nonprofitsandorganizations": [
+      {
+        "sourceRow": 22,
+        "scIndustryGroup": "Consumer Services",
+        "scIndustryGroupKey": "consumerservices",
+        "sourceScIndustryGroup": "Consumer Services",
+        "sourceScIndustryGroupKey": "consumerservices",
+        "gtmIndustry": "Nonprofits & Organizations",
+        "gtmIndustryKey": "nonprofitsandorganizations",
+        "gtmIndustrySubgroup": "Charitable Foundations",
+        "gtmIndustrySubgroupKey": "charitablefoundations",
+        "scIndustryGroupEmoji": "🛍️",
+        "gtmIndustrySubgroupEmoji": "🎗️"
+      },
+      {
+        "sourceRow": 23,
+        "scIndustryGroup": "Consumer Services",
+        "scIndustryGroupKey": "consumerservices",
+        "sourceScIndustryGroup": "Consumer Services",
+        "sourceScIndustryGroupKey": "consumerservices",
+        "gtmIndustry": "Nonprofits & Organizations",
+        "gtmIndustryKey": "nonprofitsandorganizations",
+        "gtmIndustrySubgroup": "Educational Institutions",
+        "gtmIndustrySubgroupKey": "educationalinstitutions",
+        "scIndustryGroupEmoji": "🛍️",
+        "gtmIndustrySubgroupEmoji": "🎓"
+      },
+      {
+        "sourceRow": 24,
+        "scIndustryGroup": "Consumer Services",
+        "scIndustryGroupKey": "consumerservices",
+        "sourceScIndustryGroup": "Consumer Services",
+        "sourceScIndustryGroupKey": "consumerservices",
+        "gtmIndustry": "Nonprofits & Organizations",
+        "gtmIndustryKey": "nonprofitsandorganizations",
+        "gtmIndustrySubgroup": "Cultural & Arts",
+        "gtmIndustrySubgroupKey": "culturalandarts",
+        "scIndustryGroupEmoji": "🛍️",
+        "gtmIndustrySubgroupEmoji": "🎭"
+      },
+      {
+        "sourceRow": 25,
+        "scIndustryGroup": "Consumer Services",
+        "scIndustryGroupKey": "consumerservices",
+        "sourceScIndustryGroup": "Consumer Services",
+        "sourceScIndustryGroupKey": "consumerservices",
+        "gtmIndustry": "Nonprofits & Organizations",
+        "gtmIndustryKey": "nonprofitsandorganizations",
+        "gtmIndustrySubgroup": "Membership Organizations",
+        "gtmIndustrySubgroupKey": "membershiporganizations",
+        "scIndustryGroupEmoji": "🛍️",
+        "gtmIndustrySubgroupEmoji": "👥"
+      },
+      {
+        "sourceRow": 26,
+        "scIndustryGroup": "Consumer Services",
+        "scIndustryGroupKey": "consumerservices",
+        "sourceScIndustryGroup": "Consumer Services",
+        "sourceScIndustryGroupKey": "consumerservices",
+        "gtmIndustry": "Nonprofits & Organizations",
+        "gtmIndustryKey": "nonprofitsandorganizations",
+        "gtmIndustrySubgroup": "No Sub-Industry",
+        "gtmIndustrySubgroupKey": "nosubindustry",
+        "scIndustryGroupEmoji": "🛍️",
+        "gtmIndustrySubgroupEmoji": ""
+      }
+    ],
+    "health": [
+      {
+        "sourceRow": 27,
+        "scIndustryGroup": "Health & Hospitality",
+        "scIndustryGroupKey": "healthandhospitality",
+        "sourceScIndustryGroup": "Health & Hospitality",
+        "sourceScIndustryGroupKey": "healthandhospitality",
+        "gtmIndustry": "Health",
+        "gtmIndustryKey": "health",
+        "gtmIndustrySubgroup": "Other Health Services",
+        "gtmIndustrySubgroupKey": "otherhealthservices",
+        "scIndustryGroupEmoji": "🏨",
+        "gtmIndustrySubgroupEmoji": "🩺"
+      },
+      {
+        "sourceRow": 28,
+        "scIndustryGroup": "Health & Hospitality",
+        "scIndustryGroupKey": "healthandhospitality",
+        "sourceScIndustryGroup": "Health & Hospitality",
+        "sourceScIndustryGroupKey": "healthandhospitality",
+        "gtmIndustry": "Health",
+        "gtmIndustryKey": "health",
+        "gtmIndustrySubgroup": "Outpatient Clinics",
+        "gtmIndustrySubgroupKey": "outpatientclinics",
+        "scIndustryGroupEmoji": "🏨",
+        "gtmIndustrySubgroupEmoji": "🩹"
+      },
+      {
+        "sourceRow": 29,
+        "scIndustryGroup": "Health & Hospitality",
+        "scIndustryGroupKey": "healthandhospitality",
+        "sourceScIndustryGroup": "Health & Hospitality",
+        "sourceScIndustryGroupKey": "healthandhospitality",
+        "gtmIndustry": "Health",
+        "gtmIndustryKey": "health",
+        "gtmIndustrySubgroup": "Hospitals",
+        "gtmIndustrySubgroupKey": "hospitals",
+        "scIndustryGroupEmoji": "🏨",
+        "gtmIndustrySubgroupEmoji": "🏥"
+      }
+    ],
+    "hospitality": [
+      {
+        "sourceRow": 30,
+        "scIndustryGroup": "Health & Hospitality",
+        "scIndustryGroupKey": "healthandhospitality",
+        "sourceScIndustryGroup": "Health & Hospitality",
+        "sourceScIndustryGroupKey": "healthandhospitality",
+        "gtmIndustry": "Hospitality",
+        "gtmIndustryKey": "hospitality",
+        "gtmIndustrySubgroup": "Food Service & Accommodation",
+        "gtmIndustrySubgroupKey": "foodserviceandaccommodation",
+        "scIndustryGroupEmoji": "🏨",
+        "gtmIndustrySubgroupEmoji": "🍽️"
+      },
+      {
+        "sourceRow": 31,
+        "scIndustryGroup": "Health & Hospitality",
+        "scIndustryGroupKey": "healthandhospitality",
+        "sourceScIndustryGroup": "Health & Hospitality",
+        "sourceScIndustryGroupKey": "healthandhospitality",
+        "gtmIndustry": "Hospitality",
+        "gtmIndustryKey": "hospitality",
+        "gtmIndustrySubgroup": "Sports Teams & Entertainment",
+        "gtmIndustrySubgroupKey": "sportsteamsandentertainment",
+        "scIndustryGroupEmoji": "🏨",
+        "gtmIndustrySubgroupEmoji": "🏟️"
+      },
+      {
+        "sourceRow": 32,
+        "scIndustryGroup": "Health & Hospitality",
+        "scIndustryGroupKey": "healthandhospitality",
+        "sourceScIndustryGroup": "Health & Hospitality",
+        "sourceScIndustryGroupKey": "healthandhospitality",
+        "gtmIndustry": "Hospitality",
+        "gtmIndustryKey": "hospitality",
+        "gtmIndustrySubgroup": "No Sub-Industry",
+        "gtmIndustrySubgroupKey": "nosubindustry",
+        "scIndustryGroupEmoji": "🏨",
+        "gtmIndustrySubgroupEmoji": ""
+      }
+    ],
+    "lifesciences": [
+      {
+        "sourceRow": 33,
+        "scIndustryGroup": "Health & Hospitality",
+        "scIndustryGroupKey": "healthandhospitality",
+        "sourceScIndustryGroup": "Health & Hospitality",
+        "sourceScIndustryGroupKey": "healthandhospitality",
+        "gtmIndustry": "Life Sciences",
+        "gtmIndustryKey": "lifesciences",
+        "gtmIndustrySubgroup": "Research & Pharma",
+        "gtmIndustrySubgroupKey": "researchandpharma",
+        "scIndustryGroupEmoji": "🏨",
+        "gtmIndustrySubgroupEmoji": "🧪"
+      },
+      {
+        "sourceRow": 34,
+        "scIndustryGroup": "Health & Hospitality",
+        "scIndustryGroupKey": "healthandhospitality",
+        "sourceScIndustryGroup": "Health & Hospitality",
+        "sourceScIndustryGroupKey": "healthandhospitality",
+        "gtmIndustry": "Life Sciences",
+        "gtmIndustryKey": "lifesciences",
+        "gtmIndustrySubgroup": "MedTech",
+        "gtmIndustrySubgroupKey": "medtech",
+        "scIndustryGroupEmoji": "🏨",
+        "gtmIndustrySubgroupEmoji": "🦾"
+      }
+    ],
+    "publicsector": [
+      {
+        "sourceRow": 35,
+        "scIndustryGroup": "Health & Hospitality",
+        "scIndustryGroupKey": "healthandhospitality",
+        "sourceScIndustryGroup": "Health & Hospitality",
+        "sourceScIndustryGroupKey": "healthandhospitality",
+        "gtmIndustry": "Public Sector",
+        "gtmIndustryKey": "publicsector",
+        "gtmIndustrySubgroup": "Public Sector",
+        "gtmIndustrySubgroupKey": "publicsector",
+        "scIndustryGroupEmoji": "🏨",
+        "gtmIndustrySubgroupEmoji": "🏛️"
+      },
+      {
+        "sourceRow": 36,
+        "scIndustryGroup": "Health & Hospitality",
+        "scIndustryGroupKey": "healthandhospitality",
+        "sourceScIndustryGroup": "Health & Hospitality",
+        "sourceScIndustryGroupKey": "healthandhospitality",
+        "gtmIndustry": "Public Sector",
+        "gtmIndustryKey": "publicsector",
+        "gtmIndustrySubgroup": "State & Local Governments",
+        "gtmIndustrySubgroupKey": "stateandlocalgovernments",
+        "scIndustryGroupEmoji": "🏨",
+        "gtmIndustrySubgroupEmoji": "🏙️"
+      }
+    ],
+    "consumergoods": [
+      {
+        "sourceRow": 37,
+        "scIndustryGroup": "Products",
+        "scIndustryGroupKey": "products",
+        "sourceScIndustryGroup": "Products",
+        "sourceScIndustryGroupKey": "products",
+        "gtmIndustry": "Consumer Goods",
+        "gtmIndustryKey": "consumergoods",
+        "gtmIndustrySubgroup": "CG Manufacturing - Process",
+        "gtmIndustrySubgroupKey": "cgmanufacturingprocess",
+        "scIndustryGroupEmoji": "📦",
+        "gtmIndustrySubgroupEmoji": "⚗️"
+      },
+      {
+        "sourceRow": 38,
+        "scIndustryGroup": "Products",
+        "scIndustryGroupKey": "products",
+        "sourceScIndustryGroup": "Products",
+        "sourceScIndustryGroupKey": "products",
+        "gtmIndustry": "Consumer Goods",
+        "gtmIndustryKey": "consumergoods",
+        "gtmIndustrySubgroup": "CG Manufacturing - Discrete",
+        "gtmIndustrySubgroupKey": "cgmanufacturingdiscrete",
+        "scIndustryGroupEmoji": "📦",
+        "gtmIndustrySubgroupEmoji": "🔩"
+      },
+      {
+        "sourceRow": 39,
+        "scIndustryGroup": "Products",
+        "scIndustryGroupKey": "products",
+        "sourceScIndustryGroup": "Products",
+        "sourceScIndustryGroupKey": "products",
+        "gtmIndustry": "Consumer Goods",
+        "gtmIndustryKey": "consumergoods",
+        "gtmIndustrySubgroup": "CG - Retail",
+        "gtmIndustrySubgroupKey": "cgretail",
+        "scIndustryGroupEmoji": "📦",
+        "gtmIndustrySubgroupEmoji": "🛒"
+      },
+      {
+        "sourceRow": 40,
+        "scIndustryGroup": "Products",
+        "scIndustryGroupKey": "products",
+        "sourceScIndustryGroup": "Products",
+        "sourceScIndustryGroupKey": "products",
+        "gtmIndustry": "Consumer Goods",
+        "gtmIndustryKey": "consumergoods",
+        "gtmIndustrySubgroup": "CG - Wholesale & Distribution",
+        "gtmIndustrySubgroupKey": "cgwholesaleanddistribution",
+        "scIndustryGroupEmoji": "📦",
+        "gtmIndustrySubgroupEmoji": "🏷️"
+      }
+    ],
+    "foodandbeverage": [
+      {
+        "sourceRow": 41,
+        "scIndustryGroup": "Products",
+        "scIndustryGroupKey": "products",
+        "sourceScIndustryGroup": "Products",
+        "sourceScIndustryGroupKey": "products",
+        "gtmIndustry": "Food & Beverage",
+        "gtmIndustryKey": "foodandbeverage",
+        "gtmIndustrySubgroup": "Agriculture, Livestock, Crops",
+        "gtmIndustrySubgroupKey": "agriculturelivestockcrops",
+        "scIndustryGroupEmoji": "📦",
+        "gtmIndustrySubgroupEmoji": "🌾"
+      },
+      {
+        "sourceRow": 42,
+        "scIndustryGroup": "Products",
+        "scIndustryGroupKey": "products",
+        "sourceScIndustryGroup": "Products",
+        "sourceScIndustryGroupKey": "products",
+        "gtmIndustry": "Food & Beverage",
+        "gtmIndustryKey": "foodandbeverage",
+        "gtmIndustrySubgroup": "Food Manufacturing & Processing",
+        "gtmIndustrySubgroupKey": "foodmanufacturingandprocessing",
+        "scIndustryGroupEmoji": "📦",
+        "gtmIndustrySubgroupEmoji": "🥫"
+      },
+      {
+        "sourceRow": 43,
+        "scIndustryGroup": "Products",
+        "scIndustryGroupKey": "products",
+        "sourceScIndustryGroup": "Products",
+        "sourceScIndustryGroupKey": "products",
+        "gtmIndustry": "Food & Beverage",
+        "gtmIndustryKey": "foodandbeverage",
+        "gtmIndustrySubgroup": "Packaged Food & Beverage",
+        "gtmIndustrySubgroupKey": "packagedfoodandbeverage",
+        "scIndustryGroupEmoji": "📦",
+        "gtmIndustrySubgroupEmoji": "🥤"
+      }
+    ],
+    "industrialandequipment": [
+      {
+        "sourceRow": 44,
+        "scIndustryGroup": "Products",
+        "scIndustryGroupKey": "products",
+        "sourceScIndustryGroup": "Products",
+        "sourceScIndustryGroupKey": "products",
+        "gtmIndustry": "Industrial & Equipment",
+        "gtmIndustryKey": "industrialandequipment",
+        "gtmIndustrySubgroup": "Industrial & Equipment Discrete Manufacturing",
+        "gtmIndustrySubgroupKey": "industrialandequipmentdiscretemanufacturing",
+        "scIndustryGroupEmoji": "📦",
+        "gtmIndustrySubgroupEmoji": "🏭"
+      },
+      {
+        "sourceRow": 45,
+        "scIndustryGroup": "Products",
+        "scIndustryGroupKey": "products",
+        "sourceScIndustryGroup": "Products",
+        "sourceScIndustryGroupKey": "products",
+        "gtmIndustry": "Industrial & Equipment",
+        "gtmIndustryKey": "industrialandequipment",
+        "gtmIndustrySubgroup": "Industrial & Equipment Process Manufacturing",
+        "gtmIndustrySubgroupKey": "industrialandequipmentprocessmanufacturing",
+        "scIndustryGroupEmoji": "📦",
+        "gtmIndustrySubgroupEmoji": "🛢️"
+      }
+    ],
+    "software": [
+      {
+        "sourceRow": 46,
+        "scIndustryGroup": "Software",
+        "scIndustryGroupKey": "software",
+        "sourceScIndustryGroup": "Software",
+        "sourceScIndustryGroupKey": "software",
+        "gtmIndustry": "Software",
+        "gtmIndustryKey": "software",
+        "gtmIndustrySubgroup": "Custom Software & IT Services",
+        "gtmIndustrySubgroupKey": "customsoftwareanditservices",
+        "scIndustryGroupEmoji": "💻",
+        "gtmIndustrySubgroupEmoji": "🧩"
+      },
+      {
+        "sourceRow": 47,
+        "scIndustryGroup": "Software",
+        "scIndustryGroupKey": "software",
+        "sourceScIndustryGroup": "Software",
+        "sourceScIndustryGroupKey": "software",
+        "gtmIndustry": "Software",
+        "gtmIndustryKey": "software",
+        "gtmIndustrySubgroup": "Multimedia & Internet Software",
+        "gtmIndustrySubgroupKey": "multimediaandinternetsoftware",
+        "scIndustryGroupEmoji": "💻",
+        "gtmIndustrySubgroupEmoji": "🌐"
+      },
+      {
+        "sourceRow": 48,
+        "scIndustryGroup": "Software",
+        "scIndustryGroupKey": "software",
+        "sourceScIndustryGroup": "Software",
+        "sourceScIndustryGroupKey": "software",
+        "gtmIndustry": "Software",
+        "gtmIndustryKey": "software",
+        "gtmIndustrySubgroup": "Enterprise Business Applications",
+        "gtmIndustrySubgroupKey": "enterprisebusinessapplications",
+        "scIndustryGroupEmoji": "💻",
+        "gtmIndustrySubgroupEmoji": "🧮"
+      },
+      {
+        "sourceRow": 49,
+        "scIndustryGroup": "Software",
+        "scIndustryGroupKey": "software",
+        "sourceScIndustryGroup": "Software",
+        "sourceScIndustryGroupKey": "software",
+        "gtmIndustry": "Software",
+        "gtmIndustryKey": "software",
+        "gtmIndustrySubgroup": "Infrastructure & Technical Software",
+        "gtmIndustrySubgroupKey": "infrastructureandtechnicalsoftware",
+        "scIndustryGroupEmoji": "💻",
+        "gtmIndustrySubgroupEmoji": "🖥️"
+      },
+      {
+        "sourceRow": 50,
+        "scIndustryGroup": "Software",
+        "scIndustryGroupKey": "software",
+        "sourceScIndustryGroup": "Software",
+        "sourceScIndustryGroupKey": "software",
+        "gtmIndustry": "Software",
+        "gtmIndustryKey": "software",
+        "gtmIndustrySubgroup": "No Sub-Industry",
+        "gtmIndustrySubgroupKey": "nosubindustry",
+        "scIndustryGroupEmoji": "💻",
+        "gtmIndustrySubgroupEmoji": ""
       }
     ]
   },
   "review": {
     "incompleteRows": [],
     "duplicateMappings": [],
-    "missingEmojiMappings": []
+    "missingEmojiMappings": [
+      {
+        "type": "GTM Industry Subgroup",
+        "value": "No Sub-Industry",
+        "sourceRow": 7
+      }
+    ]
   }
 }
