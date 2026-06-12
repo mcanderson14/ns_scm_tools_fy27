@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.35
+// @version      27.0.36
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -42,7 +42,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.35";
+  const HELPER_VERSION = "27.0.36";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -3083,6 +3083,531 @@ Health & Hospitality	DIRECT	NL	West	West
   function refreshMappingHealthPanel() {
     const panel = document.getElementById("scr-helper-mapping-health-panel");
     if (panel) panel.innerHTML = renderMappingHealthPanel();
+    refreshMappingExplorerIfOpen();
+  }
+
+  function mappingExplorerTabDefinitions() {
+    return [
+      {
+        key: "gtm",
+        label: "GTM to SC Industry",
+        emptyLabel: "No GTM mapping rows matched.",
+        filters: [
+          { key: "industryFamily", label: "SC Industry Group" },
+          { key: "gtmIndustry", label: "FY27 GTM Industry" },
+          { key: "gtmIndustrySubgroup", label: "FY27 GTM Industry Subgroup" }
+        ],
+        columns: [
+          { key: "industryFamily", label: "SC Industry Group" },
+          { key: "gtmIndustry", label: "FY27 GTM Industry" },
+          { key: "gtmIndustrySubgroup", label: "FY27 GTM Subgroup" },
+          { key: "lookupKey", label: "Lookup Key" }
+        ]
+      },
+      {
+        key: "region",
+        label: "Region Mapping",
+        emptyLabel: "No region mapping rows matched.",
+        filters: [
+          { key: "industryFamily", label: "SC Industry Group" },
+          { key: "amoDirect", label: "Request Type" },
+          { key: "state", label: "State" },
+          { key: "salesRegion", label: "Sales Region" },
+          { key: "staffingRegion", label: "SC Staffing Region" }
+        ],
+        columns: [
+          { key: "industryFamily", label: "SC Industry Group" },
+          { key: "amoDirect", label: "Request Type" },
+          { key: "state", label: "State" },
+          { key: "salesRegion", label: "Sales Region" },
+          { key: "staffingRegion", label: "Staffing Region" },
+          { key: "lookupKey", label: "Lookup Key" }
+        ]
+      },
+      {
+        key: "scm",
+        label: "SCM Relationships",
+        emptyLabel: "No SCM relationship rows matched.",
+        filters: [
+          { key: "salesRegion", label: "Sales Region" },
+          { key: "requestType", label: "Request Type" },
+          { key: "regionalDirector", label: "Regional Director / RSM" },
+          { key: "scm", label: "SCM Owner" }
+        ],
+        columns: [
+          { key: "salesRegion", label: "Sales Region" },
+          { key: "requestType", label: "Request Type" },
+          { key: "regionalDirector", label: "Regional Director / RSM" },
+          { key: "scm", label: "SCM Owner" },
+          { key: "directors", label: "Director Viewers" },
+          { key: "lookupKey", label: "Lookup Key" }
+        ]
+      },
+      {
+        key: "authorized",
+        label: "Authorized Managers",
+        emptyLabel: "No authorized manager rows matched.",
+        filters: [
+          { key: "groups", label: "SC Industry Group" },
+          { key: "canOwn", label: "Can Own" },
+          { key: "canView", label: "Can View" }
+        ],
+        columns: [
+          { key: "name", label: "Name" },
+          { key: "email", label: "Email" },
+          { key: "role", label: "Role" },
+          { key: "groups", label: "Groups" },
+          { key: "canOwn", label: "Can Own" },
+          { key: "canView", label: "Can View" },
+          { key: "sourceRows", label: "Source Rows" }
+        ]
+      }
+    ];
+  }
+
+  function mappingExplorerTabDefinition(tabKey = mappingExplorerState.activeTab) {
+    return mappingExplorerTabDefinitions().find(tab => tab.key === tabKey) || mappingExplorerTabDefinitions()[0];
+  }
+
+  function mappingExplorerFiltersForTab(tabKey = mappingExplorerState.activeTab) {
+    if (!mappingExplorerState.filters[tabKey]) mappingExplorerState.filters[tabKey] = {};
+    return mappingExplorerState.filters[tabKey];
+  }
+
+  function mappingExplorerDisplayValue(value) {
+    if (Array.isArray(value)) return value.map(mappingExplorerDisplayValue).filter(Boolean).join(", ");
+    if (value === true) return "Yes";
+    if (value === false) return "No";
+    return normalizeSpaces(value);
+  }
+
+  function mappingExplorerLookupKey(parts) {
+    return parts.map(part => normalizeKey(part)).join("|");
+  }
+
+  function mappingExplorerRows(tabKey = mappingExplorerState.activeTab) {
+    if (tabKey === "region") {
+      return mappingRows.map((row, index) => {
+        const lookupKey = mappingExplorerLookupKey([row.industryFamily, row.amoDirect, row.state]);
+        return {
+          key: `region-${index}`,
+          values: {
+            industryFamily: row.industryFamily,
+            amoDirect: row.amoDirect,
+            state: row.state,
+            salesRegion: row.salesRegion,
+            staffingRegion: row.staffingRegion,
+            lookupKey
+          },
+          filterValues: {
+            industryFamily: [row.industryFamily],
+            amoDirect: [row.amoDirect],
+            state: [row.state],
+            salesRegion: [row.salesRegion],
+            staffingRegion: [row.staffingRegion]
+          },
+          detail: {
+            ...row,
+            lookupKey
+          }
+        };
+      });
+    }
+
+    if (tabKey === "scm") {
+      return productsScmRelationships.map((row, index) => {
+        const lookupKey = mappingExplorerLookupKey([row.requestType, row.regionalDirector, row.salesRegion]);
+        return {
+          key: `scm-${index}`,
+          values: {
+            salesRegion: row.salesRegion,
+            requestType: row.requestType,
+            regionalDirector: row.regionalDirector,
+            scm: row.scm,
+            directors: row.directors,
+            lookupKey
+          },
+          filterValues: {
+            salesRegion: [row.salesRegion],
+            requestType: [row.requestType],
+            regionalDirector: [row.regionalDirector],
+            scm: [row.scm],
+            directors: row.directors || []
+          },
+          detail: {
+            ...row,
+            lookupKey
+          }
+        };
+      });
+    }
+
+    if (tabKey === "authorized") {
+      return authorizedManagerRecords.map((row, index) => ({
+        key: `authorized-${index}`,
+        values: {
+          name: row.name,
+          email: row.email,
+          role: row.role,
+          groups: row.groups,
+          canOwn: row.canOwn,
+          canView: row.canView,
+          sourceRows: row.sourceRows
+        },
+        filterValues: {
+          groups: row.groups || [],
+          canOwn: [row.canOwn ? "Yes" : "No"],
+          canView: [row.canView ? "Yes" : "No"]
+        },
+        detail: { ...row }
+      }));
+    }
+
+    return gtmIndustryMappingRows.map((row, index) => {
+      const lookupKey = mappingExplorerLookupKey([row.gtmIndustry, row.gtmIndustrySubgroup]);
+      return {
+        key: `gtm-${index}`,
+        values: {
+          industryFamily: row.industryFamily,
+          gtmIndustry: row.gtmIndustry,
+          gtmIndustrySubgroup: row.gtmIndustrySubgroup,
+          lookupKey
+        },
+        filterValues: {
+          industryFamily: [row.industryFamily],
+          gtmIndustry: [row.gtmIndustry],
+          gtmIndustrySubgroup: [row.gtmIndustrySubgroup]
+        },
+        detail: {
+          ...row,
+          lookupKey,
+          scIndustryEmoji: (getIndustryGroupBranding(row.industryFamily) || {}).emoji || "",
+          gtmIndustrySubgroupEmoji: getGtmSubgroupEmoji(row.gtmIndustrySubgroup)
+        }
+      };
+    });
+  }
+
+  function mappingExplorerRowSearchText(row) {
+    return normalizeSpaces(
+      Object.values(row.values || {})
+        .concat([JSON.stringify(row.detail || {})])
+        .map(mappingExplorerDisplayValue)
+        .join(" ")
+    ).toLowerCase();
+  }
+
+  function mappingExplorerFilterOptions(rows, filterKey) {
+    return uniqueSorted(rows.flatMap(row => {
+      const values = row.filterValues && row.filterValues[filterKey] !== undefined
+        ? row.filterValues[filterKey]
+        : row.values && row.values[filterKey];
+      return Array.isArray(values) ? values : [values];
+    }).map(mappingExplorerDisplayValue).filter(Boolean));
+  }
+
+  function mappingExplorerFilteredRows(tabKey = mappingExplorerState.activeTab) {
+    const tab = mappingExplorerTabDefinition(tabKey);
+    const filters = mappingExplorerFiltersForTab(tab.key);
+    const search = normalizeSpaces(filters.search || "").toLowerCase();
+    const rows = mappingExplorerRows(tab.key);
+
+    return rows.filter(row => {
+      if (search && !mappingExplorerRowSearchText(row).includes(search)) return false;
+      return tab.filters.every(filter => {
+        const selected = filters[filter.key];
+        if (!selected) return true;
+        const values = row.filterValues && row.filterValues[filter.key] !== undefined
+          ? row.filterValues[filter.key]
+          : row.values && row.values[filter.key];
+        return (Array.isArray(values) ? values : [values])
+          .map(mappingExplorerDisplayValue)
+          .some(value => normalizeKey(value) === normalizeKey(selected));
+      });
+    });
+  }
+
+  function mappingExplorerSourceTimestamp(metadata = {}) {
+    if (!metadata.loadedAt) return "";
+    try {
+      return new Date(metadata.loadedAt).toLocaleString();
+    } catch (error) {
+      return "";
+    }
+  }
+
+  function renderMappingExplorerSourceCards() {
+    return mappingHealthItems().map(item => {
+      const metadata = item.metadata || {};
+      const tone = mappingHealthTone(metadata);
+      const details = [metadata.label || "Not loaded"]
+        .concat(item.metrics || [])
+        .concat(metadata.generatedAt ? [`generated ${metadata.generatedAt}`] : [])
+        .concat(mappingExplorerSourceTimestamp(metadata) ? [`loaded ${mappingExplorerSourceTimestamp(metadata)}`] : [])
+        .filter(Boolean);
+      return `
+        <div class="scr-helper-mapping-explorer-source is-${escapeHtml(tone)}">
+          <div class="scr-helper-mapping-explorer-source-head">
+            <span>${escapeHtml(item.name)}</span>
+            <span>${escapeHtml(mappingHealthLabel(metadata))}</span>
+          </div>
+          <div class="scr-helper-mapping-explorer-source-detail">${escapeHtml(details.join(" · "))}</div>
+          ${metadata.error ? `<div class="scr-helper-mapping-explorer-source-error" title="${escapeHtml(metadata.error)}">${escapeHtml(shortMappingError(metadata.error))}</div>` : ""}
+        </div>
+      `;
+    }).join("");
+  }
+
+  function renderMappingExplorerFilters(tab, rows, filters) {
+    return `
+      <label class="scr-helper-mapping-explorer-search">
+        <span>Search rows</span>
+        <input id="scr-helper-mapping-explorer-search" type="search" value="${escapeHtml(filters.search || "")}" placeholder="Search by industry, subgroup, region, person, or key">
+      </label>
+      ${tab.filters.map(filter => {
+        const options = mappingExplorerFilterOptions(rows, filter.key);
+        const current = filters[filter.key] || "";
+        return `
+          <label>
+            <span>${escapeHtml(filter.label)}</span>
+            <select data-mapping-explorer-filter="${escapeHtml(filter.key)}">
+              <option value="">All</option>
+              ${options.map(option => `<option value="${escapeHtml(option)}"${normalizeKey(option) === normalizeKey(current) ? " selected" : ""}>${escapeHtml(option)}</option>`).join("")}
+            </select>
+          </label>
+        `;
+      }).join("")}
+    `;
+  }
+
+  function renderMappingExplorerSummary(tabKey, row) {
+    if (!row) return "";
+    const values = row.values || {};
+    if (tabKey === "gtm") {
+      const branding = getIndustryGroupBranding(values.industryFamily) || {};
+      const gtmEmoji = getGtmSubgroupEmoji(values.gtmIndustrySubgroup);
+      return `
+        <div class="scr-helper-mapping-explorer-summary">
+          <span class="scr-helper-mapping-explorer-summary-label">Maps to</span>
+          <span class="scr-helper-mapping-explorer-summary-value">${escapeHtml([branding.emoji, values.industryFamily].filter(Boolean).join(" "))}</span>
+          ${values.gtmIndustrySubgroup ? `<span class="scr-helper-mapping-explorer-summary-note">${escapeHtml([gtmEmoji, values.gtmIndustrySubgroup].filter(Boolean).join(" "))}</span>` : ""}
+        </div>
+      `;
+    }
+    if (tabKey === "region") {
+      return `
+        <div class="scr-helper-mapping-explorer-summary">
+          <span class="scr-helper-mapping-explorer-summary-label">Routes to</span>
+          <span class="scr-helper-mapping-explorer-summary-value">${escapeHtml(values.staffingRegion || "Unmapped")}</span>
+          <span class="scr-helper-mapping-explorer-summary-note">${escapeHtml([values.industryFamily, values.amoDirect, values.state].filter(Boolean).join(" · "))}</span>
+        </div>
+      `;
+    }
+    if (tabKey === "scm") {
+      return `
+        <div class="scr-helper-mapping-explorer-summary">
+          <span class="scr-helper-mapping-explorer-summary-label">SCM owner</span>
+          <span class="scr-helper-mapping-explorer-summary-value">${escapeHtml(values.scm || "Unmapped")}</span>
+          <span class="scr-helper-mapping-explorer-summary-note">${escapeHtml([values.requestType, values.regionalDirector, values.salesRegion].filter(Boolean).join(" · "))}</span>
+        </div>
+      `;
+    }
+    return `
+      <div class="scr-helper-mapping-explorer-summary">
+        <span class="scr-helper-mapping-explorer-summary-label">Access</span>
+        <span class="scr-helper-mapping-explorer-summary-value">${escapeHtml(values.canOwn ? "Can own" : "View only")}</span>
+        <span class="scr-helper-mapping-explorer-summary-note">${escapeHtml(mappingExplorerDisplayValue(values.groups) || "No groups")}</span>
+      </div>
+    `;
+  }
+
+  function renderMappingExplorerTable(tab, rows, selectedKey) {
+    if (!rows.length) {
+      return `<div class="scr-helper-mapping-explorer-empty">${escapeHtml(tab.emptyLabel)}</div>`;
+    }
+
+    return `
+      <table class="scr-helper-mapping-explorer-table">
+        <thead>
+          <tr>${tab.columns.map(column => `<th>${escapeHtml(column.label)}</th>`).join("")}</tr>
+        </thead>
+        <tbody>
+          ${rows.map(row => `
+            <tr data-mapping-explorer-row="${escapeHtml(row.key)}"${row.key === selectedKey ? " class=\"is-selected\"" : ""}>
+              ${tab.columns.map(column => `<td>${escapeHtml(mappingExplorerDisplayValue(row.values[column.key]))}</td>`).join("")}
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+  }
+
+  function renderMappingExplorerDetail(tabKey, row) {
+    if (!row) {
+      return `
+        <div class="scr-helper-mapping-explorer-detail-empty">
+          Select a row to inspect its raw JSON.
+        </div>
+      `;
+    }
+
+    return `
+      ${renderMappingExplorerSummary(tabKey, row)}
+      <pre>${escapeHtml(JSON.stringify(row.detail || {}, null, 2))}</pre>
+    `;
+  }
+
+  function updateMappingExplorerGrid() {
+    const backdrop = document.getElementById("scr-helper-mapping-explorer-backdrop");
+    if (!backdrop) return;
+
+    const tab = mappingExplorerTabDefinition();
+    const rows = mappingExplorerFilteredRows(tab.key);
+    const selected = rows.find(row => row.key === mappingExplorerState.selectedKey) || rows[0] || null;
+    mappingExplorerState.selectedKey = selected ? selected.key : "";
+
+    const count = backdrop.querySelector("#scr-helper-mapping-explorer-count");
+    if (count) {
+      const total = mappingExplorerRows(tab.key).length;
+      count.textContent = `${rows.length.toLocaleString()} of ${total.toLocaleString()} rows`;
+    }
+
+    const table = backdrop.querySelector("#scr-helper-mapping-explorer-table-wrap");
+    if (table) table.innerHTML = renderMappingExplorerTable(tab, rows, mappingExplorerState.selectedKey);
+
+    const detail = backdrop.querySelector("#scr-helper-mapping-explorer-detail");
+    if (detail) detail.innerHTML = renderMappingExplorerDetail(tab.key, selected);
+
+    const copyButton = backdrop.querySelector("#scr-helper-mapping-explorer-copy");
+    if (copyButton) copyButton.disabled = !rows.length;
+  }
+
+  function renderMappingExplorerModal() {
+    mappingExplorerState.open = true;
+    const tab = mappingExplorerTabDefinition();
+    const allRows = mappingExplorerRows(tab.key);
+    const filters = mappingExplorerFiltersForTab(tab.key);
+    let backdrop = document.getElementById("scr-helper-mapping-explorer-backdrop");
+    if (!backdrop) {
+      backdrop = document.createElement("div");
+      backdrop.id = "scr-helper-mapping-explorer-backdrop";
+      backdrop.className = "scr-helper-mapping-explorer-backdrop";
+      backdrop.tabIndex = -1;
+      const host = document.getElementById(HELPER_ID) || document.body;
+      host.appendChild(backdrop);
+    }
+
+    backdrop.innerHTML = `
+      <div class="scr-helper-mapping-explorer" role="dialog" aria-modal="true" aria-labelledby="scr-helper-mapping-explorer-title">
+        <div class="scr-helper-mapping-explorer-header">
+          <div>
+            <div id="scr-helper-mapping-explorer-title" class="scr-helper-mapping-explorer-title">Mapping JSON Explorer</div>
+            <div class="scr-helper-mapping-explorer-subtitle">Inspect the live JSON rows IQUEUE is using for routing, redirects, ownership, and authorization.</div>
+          </div>
+          <button type="button" id="scr-helper-mapping-explorer-close" class="scr-helper-icon-button" title="Close mapping explorer">Close</button>
+        </div>
+        <div id="scr-helper-mapping-explorer-sources" class="scr-helper-mapping-explorer-sources">
+          ${renderMappingExplorerSourceCards()}
+        </div>
+        <div class="scr-helper-mapping-explorer-tabs" role="tablist" aria-label="Mapping tables">
+          ${mappingExplorerTabDefinitions().map(definition => `
+            <button type="button" role="tab" data-mapping-explorer-tab="${escapeHtml(definition.key)}" class="${definition.key === tab.key ? "is-active" : ""}" aria-selected="${definition.key === tab.key ? "true" : "false"}">
+              ${escapeHtml(definition.label)}
+            </button>
+          `).join("")}
+        </div>
+        <div class="scr-helper-mapping-explorer-filters">
+          ${renderMappingExplorerFilters(tab, allRows, filters)}
+        </div>
+        <div class="scr-helper-mapping-explorer-actions">
+          <span id="scr-helper-mapping-explorer-count"></span>
+          <span id="scr-helper-mapping-explorer-copy-status" class="scr-helper-mapping-explorer-copy-status"></span>
+          <button type="button" id="scr-helper-mapping-explorer-copy" class="scr-helper-secondary-button">Copy filtered JSON</button>
+        </div>
+        <div class="scr-helper-mapping-explorer-body">
+          <div id="scr-helper-mapping-explorer-table-wrap" class="scr-helper-mapping-explorer-table-wrap"></div>
+          <div class="scr-helper-mapping-explorer-detail-panel">
+            <div class="scr-helper-mapping-explorer-detail-title">Selected Row JSON</div>
+            <div id="scr-helper-mapping-explorer-detail" class="scr-helper-mapping-explorer-detail"></div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    backdrop.onclick = event => {
+      if (event.target === backdrop) closeMappingExplorer();
+    };
+    backdrop.onkeydown = event => {
+      if (event.key === "Escape") closeMappingExplorer();
+    };
+    backdrop.querySelector("#scr-helper-mapping-explorer-close").addEventListener("click", closeMappingExplorer);
+    backdrop.querySelectorAll("[data-mapping-explorer-tab]").forEach(button => {
+      button.addEventListener("click", () => {
+        mappingExplorerState.activeTab = button.dataset.mappingExplorerTab;
+        mappingExplorerState.selectedKey = "";
+        renderMappingExplorerModal();
+      });
+    });
+    const search = backdrop.querySelector("#scr-helper-mapping-explorer-search");
+    if (search) {
+      search.addEventListener("input", event => {
+        mappingExplorerFiltersForTab(tab.key).search = event.target.value;
+        mappingExplorerState.selectedKey = "";
+        updateMappingExplorerGrid();
+      });
+    }
+    backdrop.querySelectorAll("[data-mapping-explorer-filter]").forEach(select => {
+      select.addEventListener("change", event => {
+        const key = event.target.dataset.mappingExplorerFilter;
+        mappingExplorerFiltersForTab(tab.key)[key] = event.target.value;
+        mappingExplorerState.selectedKey = "";
+        updateMappingExplorerGrid();
+      });
+    });
+    backdrop.querySelector("#scr-helper-mapping-explorer-table-wrap").addEventListener("click", event => {
+      const row = closestElement(event.target, "[data-mapping-explorer-row]");
+      if (!row) return;
+      mappingExplorerState.selectedKey = row.dataset.mappingExplorerRow;
+      updateMappingExplorerGrid();
+    });
+    backdrop.querySelector("#scr-helper-mapping-explorer-copy").addEventListener("click", async event => {
+      const button = event.currentTarget;
+      const status = backdrop.querySelector("#scr-helper-mapping-explorer-copy-status");
+      button.disabled = true;
+      if (status) status.textContent = "Copying...";
+      try {
+        const rows = mappingExplorerFilteredRows(tab.key).map(row => row.detail);
+        await copyTextToClipboard(JSON.stringify(rows, null, 2));
+        if (status) status.textContent = "Copied";
+      } catch (error) {
+        if (status) status.textContent = error.message || "Copy failed";
+      } finally {
+        window.setTimeout(() => {
+          button.disabled = !mappingExplorerFilteredRows(tab.key).length;
+          if (status) status.textContent = "";
+        }, 1200);
+      }
+    });
+
+    updateMappingExplorerGrid();
+    backdrop.focus();
+  }
+
+  function openMappingExplorer() {
+    renderMappingExplorerModal();
+  }
+
+  function closeMappingExplorer() {
+    mappingExplorerState.open = false;
+    const backdrop = document.getElementById("scr-helper-mapping-explorer-backdrop");
+    if (backdrop) backdrop.remove();
+  }
+
+  function refreshMappingExplorerIfOpen() {
+    if (!mappingExplorerState.open) return;
+    const backdrop = document.getElementById("scr-helper-mapping-explorer-backdrop");
+    if (!backdrop) return;
+    renderMappingExplorerModal();
   }
 
   function mappingStatusText() {
@@ -9875,6 +10400,7 @@ Health & Hospitality	DIRECT	NL	West	West
           <div id="scr-helper-mapping-health-panel" class="scr-helper-mapping-health-panel" aria-label="Mapping JSON status">
             ${renderMappingHealthPanel()}
           </div>
+          <button type="button" id="scr-helper-open-mapping-explorer" class="scr-helper-options-button">Mapping JSON Explorer</button>
           <button type="button" id="scr-helper-refresh-mapping" class="scr-helper-options-button">Refresh Mapping JSONs</button>
           <button type="button" id="scr-helper-check-update" class="scr-helper-options-button">Check for IQUEUE Update</button>
         </div>
@@ -10075,6 +10601,7 @@ Health & Hospitality	DIRECT	NL	West	West
       if (!button || button.classList.contains("is-active")) return;
       openEditUrlWithGm(button.dataset.queueUrl);
     });
+    document.getElementById("scr-helper-open-mapping-explorer").addEventListener("click", openMappingExplorer);
     document.getElementById("scr-helper-refresh-mapping").addEventListener("click", () => {
       loadExternalMapping({ force: true });
       loadGtmScIndustryMapping({ force: true });
@@ -10636,6 +11163,385 @@ Health & Hospitality	DIRECT	NL	West	West
 
       #${HELPER_ID} .scr-helper-options-status[hidden] {
         display: none;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+        background: rgba(31, 39, 39, 0.42);
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer {
+        width: min(1180px, calc(100vw - 36px));
+        height: min(780px, calc(100vh - 36px));
+        display: grid;
+        grid-template-rows: auto auto auto auto auto minmax(0, 1fr);
+        overflow: hidden;
+        border: 1px solid var(--rw-slate-50);
+        border-radius: 8px;
+        background: #ffffff;
+        box-shadow: 0 18px 44px rgba(31, 39, 39, 0.32);
+        color: var(--rw-slate-150);
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--rw-slate-50);
+        background: var(--ns-ui-primary);
+        color: #ffffff;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-title {
+        font-size: 18px;
+        font-weight: 800;
+        line-height: 1.15;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-subtitle {
+        margin-top: 4px;
+        color: rgba(255, 255, 255, 0.82);
+        font-size: 12px;
+        line-height: 1.3;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-header .scr-helper-icon-button {
+        border-color: rgba(255, 255, 255, 0.45);
+        background: rgba(255, 255, 255, 0.12);
+        color: #ffffff;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-sources {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+        padding: 10px 12px;
+        border-bottom: 1px solid rgba(194, 212, 212, 0.72);
+        background: #f7faf9;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-source {
+        min-width: 0;
+        border: 1px solid var(--rw-slate-50);
+        border-left: 5px solid var(--rw-slate-100);
+        border-radius: 6px;
+        padding: 8px;
+        background: #ffffff;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-source.is-good {
+        border-left-color: var(--rw-pine-100);
+        background: #f4faf6;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-source.is-warn {
+        border-left-color: var(--rw-brand-yellow);
+        background: #fff8e6;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-source-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        color: var(--rw-slate-150);
+        font-size: 12px;
+        font-weight: 800;
+        line-height: 1.2;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-source-head span:last-child {
+        flex: 0 0 auto;
+        border-radius: 999px;
+        padding: 2px 7px;
+        background: var(--rw-slate-50);
+        font-size: 10px;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-source.is-good .scr-helper-mapping-explorer-source-head span:last-child {
+        background: #dcefe4;
+        color: #1f6f45;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-source.is-warn .scr-helper-mapping-explorer-source-head span:last-child {
+        background: #ffe7a6;
+        color: #7a4a00;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-source-detail,
+      #${HELPER_ID} .scr-helper-mapping-explorer-source-error {
+        margin-top: 5px;
+        overflow: hidden;
+        color: var(--rw-slate-100);
+        font-size: 11px;
+        line-height: 1.3;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-source-error {
+        color: #7a4a00;
+        font-weight: 700;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-tabs {
+        display: flex;
+        gap: 6px;
+        padding: 10px 12px 0;
+        background: #ffffff;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-tabs button {
+        border: 1px solid var(--rw-slate-50);
+        border-bottom-color: var(--rw-slate-50);
+        border-radius: 6px 6px 0 0;
+        padding: 8px 10px;
+        background: #f7faf9;
+        color: var(--rw-slate-150);
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 800;
+        line-height: 1.2;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-tabs button:hover {
+        background: var(--ns-ui-primary-soft);
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-tabs button.is-active {
+        border-color: var(--ns-ui-primary);
+        background: var(--ns-ui-primary);
+        color: #ffffff;
+        cursor: default;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-filters {
+        display: grid;
+        grid-template-columns: minmax(230px, 1.3fr) repeat(3, minmax(160px, 1fr));
+        gap: 8px;
+        padding: 10px 12px;
+        border-top: 1px solid var(--rw-slate-50);
+        border-bottom: 1px solid var(--rw-slate-50);
+        background: #ffffff;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-filters label {
+        min-width: 0;
+        display: grid;
+        gap: 4px;
+        color: var(--rw-slate-100);
+        font-size: 11px;
+        font-weight: 800;
+        line-height: 1.2;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-filters input,
+      #${HELPER_ID} .scr-helper-mapping-explorer-filters select {
+        width: 100%;
+        min-width: 0;
+        border: 1px solid var(--rw-slate-50);
+        border-radius: 4px;
+        padding: 7px 8px;
+        background: #ffffff;
+        color: var(--rw-slate-150);
+        font: inherit;
+        font-weight: 500;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-filters input:focus,
+      #${HELPER_ID} .scr-helper-mapping-explorer-filters select:focus {
+        outline: 2px solid var(--ns-ui-primary-soft);
+        border-color: var(--ns-ui-primary);
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--rw-slate-50);
+        background: #f7faf9;
+        color: var(--rw-slate-100);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-copy-status {
+        margin-left: auto;
+        color: var(--rw-pine-100);
+        font-size: 11px;
+      }
+
+      #${HELPER_ID} .scr-helper-secondary-button {
+        border: 1px solid var(--ns-ui-primary);
+        border-radius: 4px;
+        padding: 7px 10px;
+        background: #ffffff;
+        color: var(--ns-ui-primary);
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 800;
+        line-height: 1.2;
+      }
+
+      #${HELPER_ID} .scr-helper-secondary-button:hover {
+        background: var(--ns-ui-primary-soft);
+      }
+
+      #${HELPER_ID} .scr-helper-secondary-button:disabled {
+        border-color: var(--rw-slate-50);
+        background: #f7faf9;
+        color: var(--rw-slate-100);
+        cursor: not-allowed;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-body {
+        min-height: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+        gap: 0;
+        overflow: hidden;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-table-wrap {
+        min-width: 0;
+        min-height: 0;
+        overflow: auto;
+        border-right: 1px solid var(--rw-slate-50);
+        background: #ffffff;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-table th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        border-bottom: 1px solid var(--rw-slate-50);
+        padding: 8px 9px;
+        background: #edf4f3;
+        color: var(--rw-slate-150);
+        font-size: 11px;
+        font-weight: 800;
+        line-height: 1.2;
+        text-align: left;
+        white-space: nowrap;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-table td {
+        max-width: 260px;
+        border-bottom: 1px solid rgba(194, 212, 212, 0.55);
+        padding: 8px 9px;
+        color: var(--rw-slate-150);
+        line-height: 1.25;
+        vertical-align: top;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-table tr {
+        cursor: pointer;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-table tbody tr:hover {
+        background: var(--ns-ui-primary-soft);
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-table tbody tr.is-selected {
+        background: #fff4ce;
+        box-shadow: inset 4px 0 0 var(--rw-brand-yellow);
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-empty {
+        padding: 18px;
+        color: var(--rw-slate-100);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-detail-panel {
+        min-width: 0;
+        min-height: 0;
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        background: #fbfdfc;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-detail-title {
+        border-bottom: 1px solid var(--rw-slate-50);
+        padding: 10px 12px;
+        color: var(--rw-slate-150);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-detail {
+        min-height: 0;
+        overflow: auto;
+        padding: 12px;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-summary {
+        display: grid;
+        gap: 5px;
+        margin-bottom: 10px;
+        border: 1px solid var(--rw-slate-50);
+        border-left: 5px solid var(--rw-brand-yellow);
+        border-radius: 6px;
+        padding: 9px 10px;
+        background: #ffffff;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-summary-label {
+        color: var(--rw-slate-100);
+        font-size: 10px;
+        font-weight: 800;
+        line-height: 1.1;
+        text-transform: uppercase;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-summary-value {
+        color: var(--rw-slate-150);
+        font-size: 14px;
+        font-weight: 800;
+        line-height: 1.2;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-summary-note {
+        color: var(--rw-slate-100);
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1.3;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-detail pre {
+        margin: 0;
+        overflow: auto;
+        border: 1px solid var(--rw-slate-50);
+        border-radius: 6px;
+        padding: 10px;
+        background: #ffffff;
+        color: #243333;
+        font-family: Menlo, Consolas, "Courier New", monospace;
+        font-size: 11px;
+        line-height: 1.45;
+        white-space: pre;
+      }
+
+      #${HELPER_ID} .scr-helper-mapping-explorer-detail-empty {
+        color: var(--rw-slate-100);
+        font-size: 12px;
+        font-weight: 700;
       }
 
       #${HELPER_ID} .scr-helper-icon-button,
@@ -11839,6 +12745,31 @@ Health & Hospitality	DIRECT	NL	West	West
         text-align: center;
       }
 
+      @media (max-width: 1000px) {
+        #${HELPER_ID} .scr-helper-mapping-explorer {
+          width: calc(100vw - 24px);
+          height: calc(100vh - 24px);
+        }
+
+        #${HELPER_ID} .scr-helper-mapping-explorer-sources {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        #${HELPER_ID} .scr-helper-mapping-explorer-filters {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        #${HELPER_ID} .scr-helper-mapping-explorer-body {
+          grid-template-columns: 1fr;
+          grid-template-rows: minmax(0, 1.4fr) minmax(220px, 0.9fr);
+        }
+
+        #${HELPER_ID} .scr-helper-mapping-explorer-table-wrap {
+          border-right: 0;
+          border-bottom: 1px solid var(--rw-slate-50);
+        }
+      }
+
       @media (max-width: 700px) {
         #${HELPER_ID} {
           right: 10px;
@@ -11858,6 +12789,24 @@ Health & Hospitality	DIRECT	NL	West	West
         #${HELPER_ID} .scr-helper-summary-grid,
         #${HELPER_ID}.scr-helper-fullscreen .scr-helper-summary-grid {
           grid-template-columns: 1fr;
+        }
+
+        #${HELPER_ID} .scr-helper-mapping-explorer-backdrop {
+          padding: 10px;
+        }
+
+        #${HELPER_ID} .scr-helper-mapping-explorer-sources,
+        #${HELPER_ID} .scr-helper-mapping-explorer-filters {
+          grid-template-columns: 1fr;
+        }
+
+        #${HELPER_ID} .scr-helper-mapping-explorer-tabs {
+          overflow-x: auto;
+          padding-bottom: 4px;
+        }
+
+        #${HELPER_ID} .scr-helper-mapping-explorer-tabs button {
+          flex: 0 0 auto;
         }
       }
     `;
