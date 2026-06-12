@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.36
+// @version      27.0.37
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -42,7 +42,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.36";
+  const HELPER_VERSION = "27.0.37";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -1584,6 +1584,19 @@ Health & Hospitality	DIRECT	NL	West	West
       /cross[\s-]*vertical|cross[\s-]*vert/i.test(`${field.label} ${field.value}`)
       && normalizeYesNo(field.value) === "Yes"
     ));
+  }
+
+  function rowIsCrossIndustryRedirected(row) {
+    if (!row) return false;
+    const info = getCrossIndustryInfoForRow(row);
+    return Boolean(info.includeAll || info.targets.length || rowHasCrossVerticalFlag(row));
+  }
+
+  function crossIndustryRedirectTargetsLabel(row) {
+    const info = getCrossIndustryInfoForRow(row);
+    if (info.includeAll) return "all industry queues";
+    if (info.targets.length) return info.targets.map(target => target.family).join(", ");
+    return "cross-industry";
   }
 
   function rowMatchesEpmQueue(row) {
@@ -5340,8 +5353,9 @@ Health & Hospitality	DIRECT	NL	West	West
     const soft = options.soft || "#ffffff";
     const className = options.className ? ` ${options.className}` : "";
     const style = `--badge-color: ${escapeHtml(color)}; --badge-bg: ${escapeHtml(soft)};`;
+    const title = options.title ? ` title="${escapeHtml(options.title)}"` : "";
     return `
-      <span class="scr-helper-brand-badge${className}" style="${style}">
+      <span class="scr-helper-brand-badge${className}" style="${style}"${title}>
         ${renderBrandEmojiHtml(emoji)}
         <span>${escapeHtml(text)}</span>
       </span>
@@ -6146,6 +6160,17 @@ Health & Hospitality	DIRECT	NL	West	West
     });
   }
 
+  function renderCrossIndustryRedirectBadge(row) {
+    if (!rowIsCrossIndustryRedirected(row)) return "";
+    return renderBrandBadge("Redirected", {
+      emoji: "🔀",
+      color: "#7a4a00",
+      soft: "#fff8e6",
+      className: "is-cross-industry-redirect",
+      title: `Cross-industry redirected to ${crossIndustryRedirectTargetsLabel(row)}`
+    });
+  }
+
   function editUrlForRow(row) {
     if (!row) return "";
     return row.editUrl || makeEditUrl("", row.internalId);
@@ -6665,8 +6690,10 @@ Health & Hospitality	DIRECT	NL	West	West
     const cardStyle = industryBranding
       ? `style="--scr-industry-color: ${escapeHtml(industryBranding.color)}; --scr-industry-bg: ${escapeHtml(industryBranding.soft)};"`
       : "";
+    const redirectedClass = rowIsCrossIndustryRedirected(row) ? " is-cross-industry-redirected" : "";
     const titleBadges = [
       industryGroupBadges,
+      renderCrossIndustryRedirectBadge(row),
       renderAiRequestBadge(row),
       renderGtmSubgroupBadge(summary.gtmIndustrySubgroup),
       renderTigerEnterpriseBadge(summary.salesVertical) || renderTigerEnterpriseBadge(summary.salesTier),
@@ -6745,7 +6772,7 @@ Health & Hospitality	DIRECT	NL	West	West
     ];
 
     return `
-      <article class="scr-helper-card${requestClass}${summary.slaInfo.passed ? " is-sla-passed" : ""}" data-row-id="${escapeHtml(row.id)}" data-request-type="${escapeHtml(requestKey)}" ${cardStyle}>
+      <article class="scr-helper-card${requestClass}${redirectedClass}${summary.slaInfo.passed ? " is-sla-passed" : ""}" data-row-id="${escapeHtml(row.id)}" data-request-type="${escapeHtml(requestKey)}" ${cardStyle}>
         <div class="scr-helper-card-head">
           <div>
             <div class="scr-helper-card-title" ${requestColor ? `style="color: ${escapeHtml(requestColor)};"` : ""}>
@@ -9012,6 +9039,7 @@ Health & Hospitality	DIRECT	NL	West	West
       card.classList.toggle("is-request-direct", requestKey === "direct");
       card.classList.toggle("is-request-scai", requestKey === "scai");
       card.classList.toggle("is-sla-passed", rowSlaInfo(row).passed);
+      card.classList.toggle("is-cross-industry-redirected", rowIsCrossIndustryRedirected(row));
       if (industryBranding) {
         card.style.setProperty("--scr-industry-color", industryBranding.color);
         card.style.setProperty("--scr-industry-bg", industryBranding.soft);
@@ -9792,6 +9820,7 @@ Health & Hospitality	DIRECT	NL	West	West
       : "Route to Industry";
     const defaultOwner = defaultCrossIndustryOwner(row, target);
     const options = uniqueSorted([defaultOwner].concat(crossIndustryOwnerOptions(row, target)).filter(Boolean));
+    const routeNotePrefix = `${formatShortNumericDate()} [${currentRouteNoteUserName()}]:`;
 
     return new Promise(resolve => {
       const backdrop = document.createElement("div");
@@ -9801,7 +9830,7 @@ Health & Hospitality	DIRECT	NL	West	West
           <div class="scr-helper-owner-modal-head">
             <div>
               <div id="scr-helper-owner-modal-title" class="scr-helper-owner-modal-title">Cross-staff to ${escapeHtml(family)}</div>
-              <div class="scr-helper-owner-modal-subtitle">${escapeHtml(options.length ? "Choose an SCM owner, or route to the industry queue only." : "No authorized SCM owners are loaded for this industry. You can still route to the industry queue.")}</div>
+              <div class="scr-helper-owner-modal-subtitle">${escapeHtml(options.length ? "Choose an SCM owner, or route to the industry queue only. A redirect note is required." : "No authorized SCM owners are loaded for this industry. You can still route to the industry queue, but a redirect note is required.")}</div>
             </div>
             <button type="button" class="scr-helper-owner-modal-close" title="Cancel">×</button>
           </div>
@@ -9811,8 +9840,9 @@ Health & Hospitality	DIRECT	NL	West	West
           </label>
           <div class="scr-helper-owner-modal-list" role="listbox"></div>
           <label class="scr-helper-owner-modal-field">
-            <span>Redirect note</span>
-            <textarea class="scr-helper-owner-note-input" placeholder="Why is this cross-industry redirect happening?"></textarea>
+            <span>Redirect note <strong>Required</strong></span>
+            <textarea class="scr-helper-owner-note-input" placeholder="Why is this cross-industry redirect happening?" required aria-required="true"></textarea>
+            <span class="scr-helper-owner-note-help">Saved to staffing notes as: ${escapeHtml(routeNotePrefix)} &lt;your note&gt;</span>
           </label>
           <label class="scr-helper-owner-notify">
             <input class="scr-helper-owner-notify-input" type="checkbox" disabled>
@@ -9845,10 +9875,16 @@ Health & Hospitality	DIRECT	NL	West	West
 
       function updateSaveLabel() {
         const ownerName = selectedOwner();
+        const hasRedirectNote = Boolean(redirectNote());
         routeOnly.textContent = routeOnlyLabel;
+        routeOnly.disabled = !hasRedirectNote;
+        routeOnly.title = hasRedirectNote
+          ? `${routeOnlyLabel} without assigning an SCM owner.`
+          : "Add a redirect note before saving the route.";
         save.textContent = ownerName ? `Route to ${ownerName}` : "Route to SCM Owner";
-        save.disabled = !ownerName;
-        save.classList.toggle("is-ready", Boolean(ownerName));
+        save.disabled = !ownerName || !hasRedirectNote;
+        save.classList.toggle("is-ready", Boolean(ownerName && hasRedirectNote));
+        if (noteInput) noteInput.classList.toggle("is-missing", !hasRedirectNote && document.activeElement === noteInput);
         if (notifyInput) {
           notifyInput.disabled = !ownerName;
           if (!ownerName) {
@@ -9902,7 +9938,19 @@ Health & Hospitality	DIRECT	NL	West	West
         return normalizeSpaces(noteInput && noteInput.value);
       }
 
+      function requireRedirectNote() {
+        if (redirectNote()) return true;
+        message.textContent = "Add a redirect note before saving the cross-industry redirect.";
+        if (noteInput) {
+          noteInput.classList.add("is-missing");
+          noteInput.focus();
+        }
+        updateSaveLabel();
+        return false;
+      }
+
       function saveSelection() {
+        if (!requireRedirectNote()) return;
         const value = normalizeSpaces(input.value);
         if (!value) {
           message.textContent = "Choose an SCM owner first, or use Route to Industry.";
@@ -9919,6 +9967,7 @@ Health & Hospitality	DIRECT	NL	West	West
       }
 
       function routeSelectionWithoutAssignment() {
+        if (!requireRedirectNote()) return;
         close({ ownerName: "", notifyOwner: false, redirectNote: redirectNote() });
       }
 
@@ -9928,6 +9977,13 @@ Health & Hospitality	DIRECT	NL	West	West
         if (nextOwnerName && normalizeKey(nextOwnerName) !== normalizeKey(selectedOwnerName)) notifyTouched = false;
         selectedOwnerName = nextOwnerName;
         renderOptions();
+      });
+      noteInput.addEventListener("input", () => {
+        if (redirectNote()) {
+          noteInput.classList.remove("is-missing");
+          if (/redirect note/i.test(message.textContent || "")) message.textContent = "";
+        }
+        updateSaveLabel();
       });
       input.addEventListener("keydown", event => {
         if (event.key === "Escape") {
@@ -10015,9 +10071,13 @@ Health & Hospitality	DIRECT	NL	West	West
     return initialsFromPersonName(getCurrentUserName()) || "IQ";
   }
 
+  function currentRouteNoteUserName() {
+    return cleanPersonName(getCurrentUserName()) || "IQUEUE User";
+  }
+
   function formatCrossIndustryRouteNote(noteText) {
     const text = normalizeSpaces(noteText);
-    return text ? `${formatShortNumericDate()} [${currentUserInitials()}]: ${text}` : "";
+    return text ? `${formatShortNumericDate()} [${currentRouteNoteUserName()}]: ${text}` : "";
   }
 
   function prependStaffingNoteLine(currentNotes, noteLine) {
@@ -10169,6 +10229,16 @@ Health & Hospitality	DIRECT	NL	West	West
     const assignment = await showCrossIndustryAssignmentDialog(row, target);
     if (!assignment) return;
     const routeNoteLine = formatCrossIndustryRouteNote(assignment.redirectNote);
+    if (!routeNoteLine) {
+      row.routingNotice = {
+        message: "Cross-industry route not saved. Add a redirect note before saving the redirect.",
+        state: "error",
+        links: []
+      };
+      setStaffingNotesStatus(card, "Redirect note is required before saving the route.", "error");
+      renderResults();
+      return;
+    }
 
     const buttons = card ? Array.from(card.querySelectorAll(".scr-helper-xvr-button")) : [];
     buttons.forEach(item => { item.disabled = true; });
@@ -12045,6 +12115,10 @@ Health & Hospitality	DIRECT	NL	West	West
         box-shadow: 0 0 0 2px rgba(241, 177, 63, 0.35), 0 6px 18px rgba(60, 69, 69, 0.12);
       }
 
+      #${HELPER_ID} .scr-helper-card.is-cross-industry-redirected {
+        box-shadow: inset 0 0 0 1px rgba(241, 177, 63, 0.58), 0 4px 14px rgba(60, 69, 69, 0.08);
+      }
+
       #${HELPER_ID} .scr-helper-card.is-working::after {
         content: "⏳ Working...";
         position: absolute;
@@ -12086,6 +12160,15 @@ Health & Hospitality	DIRECT	NL	West	West
 
       #${HELPER_ID} .scr-helper-card.is-sla-passed .scr-helper-card-head {
         background: linear-gradient(90deg, #fff4d8, var(--scr-industry-bg, #ffffff) 42%, #ffffff 86%);
+        box-shadow: inset 0 2px 0 var(--rw-brand-yellow);
+      }
+
+      #${HELPER_ID} .scr-helper-card.is-cross-industry-redirected .scr-helper-card-head {
+        background: linear-gradient(90deg, #fff8e6, var(--scr-industry-bg, #ffffff) 46%, #ffffff 88%);
+      }
+
+      #${HELPER_ID} .scr-helper-card.is-cross-industry-redirected.is-sla-passed .scr-helper-card-head {
+        background: linear-gradient(90deg, #fff4d8, #fff8e6 34%, var(--scr-industry-bg, #ffffff) 72%, #ffffff 94%);
         box-shadow: inset 0 2px 0 var(--rw-brand-yellow);
       }
 
@@ -12172,6 +12255,14 @@ Health & Hospitality	DIRECT	NL	West	West
         border-color: var(--scr-tiger-purple);
         background: var(--scr-tiger-purple-soft);
         color: var(--scr-tiger-purple);
+        font-weight: 800;
+      }
+
+      #${HELPER_ID} .scr-helper-brand-badge.is-cross-industry-redirect {
+        border-color: var(--rw-brand-yellow);
+        border-left-color: #7a4a00;
+        background: #fff8e6;
+        color: #7a4a00;
         font-weight: 800;
       }
 
@@ -12516,6 +12607,12 @@ Health & Hospitality	DIRECT	NL	West	West
         font-weight: 700;
       }
 
+      .scr-helper-owner-modal-field strong {
+        color: #7a4a00;
+        font-size: 10px;
+        text-transform: uppercase;
+      }
+
       .scr-helper-owner-modal-input,
       .scr-helper-owner-note-input {
         min-height: 34px;
@@ -12533,6 +12630,18 @@ Health & Hospitality	DIRECT	NL	West	West
         resize: vertical;
         line-height: 1.35;
         font-family: Arial, Helvetica, sans-serif;
+      }
+
+      .scr-helper-owner-note-input.is-missing {
+        border-color: var(--rw-brand-yellow);
+        box-shadow: 0 0 0 2px rgba(241, 177, 63, 0.32);
+      }
+
+      .scr-helper-owner-note-help {
+        color: var(--rw-slate-100);
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1.35;
       }
 
       .scr-helper-owner-modal-input:focus,
