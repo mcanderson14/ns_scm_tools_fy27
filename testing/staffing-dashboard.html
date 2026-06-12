@@ -1236,7 +1236,7 @@
     <div class="header-inner">
       <div class="brand-row">
         <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
-        <span class="version-pill">v27.0.17</span>
+        <span class="version-pill">v27.0.20</span>
       </div>
       <div class="header-actions">
         <div class="refresh-panel">
@@ -8647,6 +8647,8 @@
     ];
 
     const STAFFING_WINDOW_DAYS = 21;
+    const STAFFING_CARD_INITIAL_RENDER_COUNT = 18;
+    const STAFFING_CARD_RENDER_CHUNK_SIZE = 18;
 
 const SNAPSHOT_LOADED_EMAILS = new Set([
     "abbey.vahhaji@oracle.com",
@@ -8676,6 +8678,9 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     const LOCAL_GRAPH_CACHE_KEY = "sc-staffing-dashboard-local-graph-cache-v1";
     const STAFFING_LOAD_STORAGE_KEY = "scout-staffing-dashboard-load-report-v1";
     const STAFFING_LOAD_NETSUITE_SEARCH_ID = "1324335";
+    const STAFFING_LOAD_BRIDGE_REQUEST_TYPE = "scout-staffing-load-refresh-request";
+    const STAFFING_LOAD_BRIDGE_RESPONSE_TYPE = "scout-staffing-load-refresh-response";
+    const STAFFING_LOAD_BRIDGE_TIMEOUT_MS = 125000;
     const STAFFING_LOAD_CACHE_STALE_MS = 4 * 60 * 60 * 1000;
     const STAFFING_LOAD_SHAREPOINT_URL = "https://oracle.sharepoint.com/:x:/r/sites/solutionconsultingmanagers/_layouts/15/Doc.aspx?sourcedoc=%7B8BD2C115-A31F-4734-8F17-FB70AEC09A69%7D&file=SCOUT_SC_LOAD_REPORT.xls&action=default&mobileredirect=true";
     const GRAPH_EXPLORER_TOKEN_VAULT_KEY = "sc-staffing-dashboard-graph-explorer-token-vault-v2";
@@ -8708,6 +8713,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     let lastDebugText = "";
     let calendarActivityLog = [];
     let staffingLoadRefreshPromise = null;
+    let renderSequence = 0;
 
     function logCalendarActivity(step, details = {}) {
       calendarActivityLog.unshift({
@@ -10169,9 +10175,11 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       };
     }
 
-    function analyzePerson(person, windowConfig) {
+    function analyzePerson(person, windowConfig, eventsByEmail = null) {
       const softMode = document.getElementById("softMode").value;
-      const events = normalizedEvents.filter(event => event.email === person.email);
+      const events = eventsByEmail
+        ? eventsByEmail.get(normalizeEmail(person.email)) || []
+        : normalizedEvents.filter(event => normalizeEmail(event.email) === normalizeEmail(person.email));
       const calendarLoaded = hasLoadedCalendar(person);
       const conflicts = events
         .filter(event => rangesOverlap(windowConfig.protectedStart, windowConfig.protectedEnd, event.startDate, event.endDate))
@@ -10236,9 +10244,9 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       };
     }
 
-    function getAvailabilityRows(windowConfig = getWindow()) {
-      return selectedRoster()
-        .map(person => analyzePerson(person, windowConfig))
+    function getAvailabilityRows(windowConfig = getWindow(), people = selectedRoster(), eventsByEmail = buildEventsByEmail(normalizedEvents)) {
+      return people
+        .map(person => analyzePerson(person, windowConfig, eventsByEmail))
         .sort((a, b) => {
           if (a.rank !== b.rank) return a.rank - b.rank;
           if (a.hardMeeting !== b.hardMeeting) return a.hardMeeting - b.hardMeeting;
@@ -10352,7 +10360,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       }).join("");
     }
 
-    function renderAlternateSlots() {
+    function renderAlternateSlots(availabilityRows = null, people = selectedRoster(), eventsByEmail = buildEventsByEmail(normalizedEvents)) {
       const selectedStart = Number(document.getElementById("meetingStart").value);
       const selectedDuration = Number(document.getElementById("meetingDuration").value);
       const container = document.getElementById("alternateSlots");
@@ -10360,12 +10368,12 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const workdayStart = 8 * 60;
       const workdayEnd = 17 * 60;
       const lastStart = Math.max(workdayStart, workdayEnd - selectedDuration);
-      const activeRows = getAvailabilityRows(getWindow());
+      const activeRows = Array.isArray(availabilityRows) ? availabilityRows : getAvailabilityRows(getWindow(), people, eventsByEmail);
       const activeRank = new Map(activeRows.map((row, index) => [normalizeEmail(row.email), index]));
 
       for (let start = workdayStart; start <= lastStart; start += 30) {
         const windowConfig = getWindow(start);
-        const rows = getAvailabilityRows(windowConfig);
+        const rows = getAvailabilityRows(windowConfig, people, eventsByEmail);
         const clean = rows.filter(row => row.rank === 0);
         if (!clean.length) continue;
         clean.forEach(row => {
@@ -10611,7 +10619,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       `;
     }
 
-    function renderWeeklyAvailability(availabilityRows = null) {
+    function renderWeeklyAvailability(availabilityRows = null, eventsByEmail = buildEventsByEmail(normalizedEvents)) {
       const container = document.getElementById("weeklyAvailabilityChart");
       const subtitle = document.getElementById("weeklyAvailabilitySubtitle");
       if (!container || !subtitle) return;
@@ -10619,8 +10627,6 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const dateKeys = getStaffingDateKeys();
       const zone = document.getElementById("planningZone").value;
       const people = Array.isArray(availabilityRows) ? availabilityRows : getAvailabilityRows(getWindow());
-      const eventsByEmail = buildEventsByEmail(normalizedEvents);
-
       subtitle.textContent = `${formatStaffingWindow()} - weekdays 8:00 AM-5:00 PM ${getZoneLabel(zone)} - ${people.length} consultant${people.length === 1 ? "" : "s"}`;
 
       if (!people.length) {
@@ -10646,11 +10652,11 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       `;
     }
 
-    function renderLoad(availabilityRows = null) {
+    function renderLoad(availabilityRows = null, eventsByEmail = buildEventsByEmail(normalizedEvents)) {
       const dayWindow = getDayWindow();
       const people = Array.isArray(availabilityRows) ? availabilityRows : getAvailabilityRows(getWindow());
       const stats = people.map(person => {
-        const events = normalizedEvents.filter(event => event.email === person.email);
+        const events = eventsByEmail.get(normalizeEmail(person.email)) || [];
         const calendarLoaded = hasLoadedCalendar(person);
         const hard = events.filter(event => event.severity === "hard").reduce((sum, event) => sum + eventMinutesInDay(event, dayWindow), 0);
         const soft = events.filter(event => event.severity === "soft").reduce((sum, event) => sum + eventMinutesInDay(event, dayWindow), 0);
@@ -10737,6 +10743,67 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         if (Number.isFinite(refreshedMs) && Date.now() - refreshedMs < maxAge) return true;
       }
       return report.cacheDate === getBrowserDateStamp();
+    }
+
+    function getStaffingLoadBridgeStatus() {
+      const bridge = window.__SCOUT_STAFFING_LOAD_BRIDGE || null;
+      const hasDirectFunction = typeof window.refreshScoutStaffingLoadFromNetSuite === "function";
+      return {
+        bridge,
+        hasDirectFunction,
+        installed: Boolean(bridge?.installed || hasDirectFunction),
+        version: bridge?.version || "",
+        mode: bridge?.mode || (hasDirectFunction ? "direct" : ""),
+        isLocalFile: window.location.protocol === "file:"
+      };
+    }
+
+    function staffingLoadBridgeMissingMessage() {
+      const status = getStaffingLoadBridgeStatus();
+      if (status.isLocalFile) {
+        return "The NetSuite cache bridge is not attached. If this dashboard is opened from a local file, enable Tampermonkey's file URL access or use the GitHub Pages dashboard URL.";
+      }
+      return "Install or enable the SCOUT Staffing Load Cache Bridge Tampermonkey script, then reload this dashboard.";
+    }
+
+    function requestStaffingLoadViaPostMessageBridge() {
+      return new Promise((resolve, reject) => {
+        const requestId = `scout-dashboard-load-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const timer = window.setTimeout(() => {
+          window.removeEventListener("message", onMessage);
+          reject(new Error("SCOUT Staffing Load Cache Bridge did not respond."));
+        }, STAFFING_LOAD_BRIDGE_TIMEOUT_MS);
+
+        function onMessage(event) {
+          if (event.source !== window) return;
+          const data = event.data || {};
+          if (!data || data.type !== STAFFING_LOAD_BRIDGE_RESPONSE_TYPE || data.requestId !== requestId) return;
+          window.clearTimeout(timer);
+          window.removeEventListener("message", onMessage);
+          if (data.ok) resolve(data.report || null);
+          else reject(new Error(data.message || "Staffing load refresh failed."));
+        }
+
+        window.addEventListener("message", onMessage);
+        window.postMessage({ type: STAFFING_LOAD_BRIDGE_REQUEST_TYPE, requestId }, "*");
+      });
+    }
+
+    async function requestStaffingLoadFromBridge() {
+      if (typeof window.refreshScoutStaffingLoadFromNetSuite === "function") {
+        return window.refreshScoutStaffingLoadFromNetSuite();
+      }
+
+      const bridge = window.__SCOUT_STAFFING_LOAD_BRIDGE;
+      if (bridge?.installed || bridge?.mode === "postMessage") {
+        return requestStaffingLoadViaPostMessageBridge();
+      }
+
+      try {
+        return await requestStaffingLoadViaPostMessageBridge();
+      } catch (error) {
+        throw new Error(staffingLoadBridgeMissingMessage());
+      }
     }
 
     function decodeSpreadsheetText(buffer) {
@@ -10912,15 +10979,16 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
 
       staffingLoadRefreshPromise = (async () => {
         try {
-          if (typeof window.refreshScoutStaffingLoadFromNetSuite !== "function") {
+          const bridgeStatus = getStaffingLoadBridgeStatus();
+          logCalendarActivity("staffing-load-cache-bridge-check", bridgeStatus);
+          if (!bridgeStatus.installed && !bridgeStatus.hasDirectFunction) {
             logCalendarActivity("staffing-load-cache-bridge-missing", {
               searchId: STAFFING_LOAD_NETSUITE_SEARCH_ID,
-              note: "Install or enable the SCOUT Staffing Load Cache Bridge Tampermonkey script, then click Refresh Staffing Data."
+              note: staffingLoadBridgeMissingMessage()
             });
-            return getStoredStaffingLoadReport();
           }
 
-          const report = await window.refreshScoutStaffingLoadFromNetSuite();
+          const report = await requestStaffingLoadFromBridge();
           if (report?.rows?.length) {
             writeJsonStorage(STAFFING_LOAD_STORAGE_KEY, report);
             logCalendarActivity("staffing-load-refresh-complete", {
@@ -11007,9 +11075,11 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       return name && lookup.byName.has(name) ? lookup.byName.get(name) : null;
     }
 
-    function getCalendarDayStats(person) {
+    function getCalendarDayStats(person, eventsByEmail = null) {
       const dayWindow = getDayWindow();
-      const events = normalizedEvents.filter(event => event.email === person.email);
+      const events = eventsByEmail
+        ? eventsByEmail.get(normalizeEmail(person.email)) || []
+        : normalizedEvents.filter(event => normalizeEmail(event.email) === normalizeEmail(person.email));
       const calendarLoaded = hasLoadedCalendar(person);
       const pto = events.filter(isPtoCalendarEvent).reduce((sum, event) => sum + eventMinutesInDay(event, dayWindow), 0);
       const hard = events.filter(event => event.severity === "hard" && !isPtoCalendarEvent(event)).reduce((sum, event) => sum + eventMinutesInDay(event, dayWindow), 0);
@@ -11049,7 +11119,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       `;
     }
 
-    function findOpenRangesForPerson(person, maxRanges = 3) {
+    function findOpenRangesForPerson(person, maxRanges = 3, eventsByEmail = buildEventsByEmail(normalizedEvents)) {
       const selectedDuration = Number(document.getElementById("meetingDuration").value);
       const workdayStart = 8 * 60;
       const workdayEnd = 17 * 60;
@@ -11057,7 +11127,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const starts = [];
 
       for (let start = workdayStart; start <= lastStart; start += 30) {
-        const row = analyzePerson(person, getWindow(start));
+        const row = analyzePerson(person, getWindow(start), eventsByEmail);
         if (row.rank === 0) starts.push(start);
       }
 
@@ -11079,14 +11149,14 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       return ranges.slice(0, maxRanges);
     }
 
-    function renderOpenRanges(person) {
+    function renderOpenRanges(person, eventsByEmail = buildEventsByEmail(normalizedEvents)) {
       if (!hasLoadedCalendar(person)) {
         return `<div class="empty-note">${escapeHtml(missingCalendarSentence(person))}</div>`;
       }
 
       const date = document.getElementById("meetingDate").value;
       const timeZone = document.getElementById("planningZone").value;
-      const ranges = findOpenRangesForPerson(person);
+      const ranges = findOpenRangesForPerson(person, 3, eventsByEmail);
       if (!ranges.length) return `<div class="empty-note">No clean open ranges for this duration and buffer.</div>`;
 
       return `
@@ -11101,11 +11171,11 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       `;
     }
 
-    function renderMiniCalendarStrip(person) {
+    function renderMiniCalendarStrip(person, eventsByEmail = buildEventsByEmail(normalizedEvents)) {
       const dateKeys = getCardDateKeys();
       const zone = document.getElementById("planningZone").value;
       const personEmail = normalizeEmail(person.email);
-      const events = normalizedEvents.filter(event => normalizeEmail(event.email) === personEmail);
+      const events = eventsByEmail.get(personEmail) || [];
       const calendarLoaded = hasLoadedCalendar(person);
       return `
         <div class="mini-calendar-strip" aria-label="21-day working-day calendar strip">
@@ -11241,106 +11311,165 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     }
 
     function bindCardDayMeetings(container, rows) {
-      const rowByEmail = new Map(rows.map(row => [normalizeEmail(row.email), row]));
-      container.querySelectorAll("[data-day-date]").forEach(button => {
-        button.addEventListener("click", () => {
-          const person = rowByEmail.get(normalizeEmail(button.dataset.dayEmail));
-          const card = button.closest(".staffing-card-row");
-          const panel = card?.querySelector("[data-day-meeting-panel]");
-          if (!person || !panel) return;
+      container.__scoutRowByEmail = new Map(rows.map(row => [normalizeEmail(row.email), row]));
+      if (container.__scoutDayMeetingsBound) return;
+      container.__scoutDayMeetingsBound = true;
 
-          const shouldClose = !panel.hidden && panel.dataset.activeDate === button.dataset.dayDate;
-          container.querySelectorAll("[data-day-meeting-panel]").forEach(item => {
-            item.hidden = true;
-            item.innerHTML = "";
-            delete item.dataset.activeDate;
-          });
-          container.querySelectorAll(".mini-day-button.is-selected").forEach(item => item.classList.remove("is-selected"));
-          if (shouldClose) return;
+      container.addEventListener("click", event => {
+        const closeButton = event.target.closest("[data-day-meeting-close]");
+        if (closeButton) {
+          const panel = closeButton.closest("[data-day-meeting-panel]");
+          const card = closeButton.closest(".staffing-card-row");
+          panel.hidden = true;
+          panel.innerHTML = "";
+          delete panel.dataset.activeDate;
+          card?.querySelector(".mini-day-button.is-selected")?.classList.remove("is-selected");
+          return;
+        }
 
-          panel.innerHTML = renderDayMeetingPanel(person, button.dataset.dayDate);
-          panel.hidden = false;
-          panel.dataset.activeDate = button.dataset.dayDate;
-          button.classList.add("is-selected");
-          panel.querySelector("[data-day-meeting-close]")?.addEventListener("click", () => {
-            panel.hidden = true;
-            panel.innerHTML = "";
-            delete panel.dataset.activeDate;
-            button.classList.remove("is-selected");
-          });
+        const button = event.target.closest("[data-day-date]");
+        if (!button || button.disabled || !container.contains(button)) return;
+
+        const person = container.__scoutRowByEmail?.get(normalizeEmail(button.dataset.dayEmail));
+        const card = button.closest(".staffing-card-row");
+        const panel = card?.querySelector("[data-day-meeting-panel]");
+        if (!person || !panel) return;
+
+        const shouldClose = !panel.hidden && panel.dataset.activeDate === button.dataset.dayDate;
+        container.querySelectorAll("[data-day-meeting-panel]").forEach(item => {
+          item.hidden = true;
+          item.innerHTML = "";
+          delete item.dataset.activeDate;
         });
+        container.querySelectorAll(".mini-day-button.is-selected").forEach(item => item.classList.remove("is-selected"));
+        if (shouldClose) return;
+
+        panel.innerHTML = renderDayMeetingPanel(person, button.dataset.dayDate);
+        panel.hidden = false;
+        panel.dataset.activeDate = button.dataset.dayDate;
+        button.classList.add("is-selected");
       });
     }
 
-    function renderStaffingCards(rows, windowConfig) {
+    function scheduleDeferredRender(callback) {
+      if (typeof window.requestIdleCallback === "function") {
+        window.requestIdleCallback(callback, { timeout: 250 });
+        return;
+      }
+      window.setTimeout(callback, 0);
+    }
+
+    function renderStaffingCardRowHtml(row, loadLookup, eventsByEmail) {
+      const load = getStaffingLoadForPerson(row, loadLookup);
+      const stats = getCalendarDayStats(row, eventsByEmail);
+      return `
+        <article class="staffing-card-row ${row.pill}">
+          <div class="staffing-cell">
+            <div class="staffing-name">
+              <strong>${escapeHtml(row.name)}</strong>
+              ${legacyOrgBadge(row)}
+              ${locationBadge(row)}
+            </div>
+            <div class="subtle">${escapeHtml(getManagerLabel(row))} - ${getZoneLabel(row.timeZone)}</div>
+            <div class="subtle">${escapeHtml(row.email || "")}</div>
+            <div class="staffing-status-line">
+              <span class="pill ${row.pill}">${row.label}</span>
+              ${coverageBadge(row)}
+              ${stats.pto ? `<span class="pill pto">PTO/OOO</span>` : ""}
+              ${row.otWarning ? `<span class="pill ot-warning">OT WARNING</span>` : ""}
+            </div>
+          </div>
+
+          <div class="staffing-cell">
+            <p class="staffing-section-label">Workload</p>
+            ${renderWorkloadStats(load)}
+            ${renderLoadMix(load, row)}
+          </div>
+
+          <div class="staffing-cell">
+            <p class="staffing-section-label">Calendar Detail</p>
+            <div class="subtle"><strong>${stats.calendarLoaded ? `${(stats.open / 60).toFixed(1)}h open on ${formatIsoDate(getSelectedMeetingDate())}` : missingCalendarLabel(row)}</strong></div>
+            ${renderCalendarLoadBar(stats)}
+            <div class="subtle">${(stats.pto / 60).toFixed(1)} PTO/OOO; ${(stats.hard / 60).toFixed(1)} hard; ${(stats.soft / 60).toFixed(1)} soft; ${(stats.other / 60).toFixed(1)} review; ${stats.calendarLoaded ? `${(stats.open / 60).toFixed(1)} open` : missingCalendarSubtle(row)}</div>
+            ${renderOpenRanges(row, eventsByEmail)}
+            ${renderMiniCalendarStrip(row, eventsByEmail)}
+            ${renderConflictHighlights(row)}
+          </div>
+        </article>
+      `;
+    }
+
+    function renderStaffingCards(rows, windowConfig, eventsByEmail = buildEventsByEmail(normalizedEvents)) {
       const container = document.getElementById("staffingCardList");
       const subtitle = document.getElementById("staffingCardsSubtitle");
       if (!container || !subtitle) return;
 
+      const sequence = renderSequence;
       const loadLookup = getStaffingLoadLookup();
-      subtitle.textContent = `${rows.length} consultant${rows.length === 1 ? "" : "s"} shown; ${getStaffingLoadSourceSummary(loadLookup.rows.length)}; ${formatDate(windowConfig.meetingStart, windowConfig.timeZone)} ${formatTimeRange(windowConfig.meetingStart, windowConfig.meetingEnd, windowConfig.timeZone)} ${getZoneLabel(windowConfig.timeZone)}`;
+      const baseSubtitle = `${rows.length} consultant${rows.length === 1 ? "" : "s"} shown; ${getStaffingLoadSourceSummary(loadLookup.rows.length)}; ${formatDate(windowConfig.meetingStart, windowConfig.timeZone)} ${formatTimeRange(windowConfig.meetingStart, windowConfig.meetingEnd, windowConfig.timeZone)} ${getZoneLabel(windowConfig.timeZone)}`;
+      subtitle.textContent = baseSubtitle;
+      bindCardDayMeetings(container, rows);
 
       if (!rows.length) {
         container.innerHTML = `<div class="empty-note">No consultants match the current filters.</div>`;
         return;
       }
 
-      container.innerHTML = rows.map(row => {
-        const load = getStaffingLoadForPerson(row, loadLookup);
-        const stats = getCalendarDayStats(row);
-        return `
-          <article class="staffing-card-row ${row.pill}">
-            <div class="staffing-cell">
-              <div class="staffing-name">
-                <strong>${escapeHtml(row.name)}</strong>
-                ${legacyOrgBadge(row)}
-                ${locationBadge(row)}
-              </div>
-              <div class="subtle">${escapeHtml(getManagerLabel(row))} - ${getZoneLabel(row.timeZone)}</div>
-              <div class="subtle">${escapeHtml(row.email || "")}</div>
-              <div class="staffing-status-line">
-                <span class="pill ${row.pill}">${row.label}</span>
-                ${coverageBadge(row)}
-                ${stats.pto ? `<span class="pill pto">PTO/OOO</span>` : ""}
-                ${row.otWarning ? `<span class="pill ot-warning">OT WARNING</span>` : ""}
-              </div>
-            </div>
+      const initialCount = Math.min(rows.length, STAFFING_CARD_INITIAL_RENDER_COUNT);
+      container.innerHTML = rows.slice(0, initialCount)
+        .map(row => renderStaffingCardRowHtml(row, loadLookup, eventsByEmail))
+        .join("");
 
-            <div class="staffing-cell">
-              <p class="staffing-section-label">Workload</p>
-              ${renderWorkloadStats(load)}
-              ${renderLoadMix(load, row)}
-            </div>
+      let rendered = initialCount;
+      if (rendered < rows.length) {
+        subtitle.textContent = `${baseSubtitle}; rendering ${rendered} of ${rows.length}`;
+      }
 
-            <div class="staffing-cell">
-              <p class="staffing-section-label">Calendar Detail</p>
-              <div class="subtle"><strong>${stats.calendarLoaded ? `${(stats.open / 60).toFixed(1)}h open on ${formatIsoDate(getSelectedMeetingDate())}` : missingCalendarLabel(row)}</strong></div>
-              ${renderCalendarLoadBar(stats)}
-              <div class="subtle">${(stats.pto / 60).toFixed(1)} PTO/OOO; ${(stats.hard / 60).toFixed(1)} hard; ${(stats.soft / 60).toFixed(1)} soft; ${(stats.other / 60).toFixed(1)} review; ${stats.calendarLoaded ? `${(stats.open / 60).toFixed(1)} open` : missingCalendarSubtle(row)}</div>
-              ${renderOpenRanges(row)}
-              ${renderMiniCalendarStrip(row)}
-              ${renderConflictHighlights(row)}
-            </div>
-          </article>
-        `;
-      }).join("");
-      bindCardDayMeetings(container, rows);
+      const appendNextChunk = () => {
+        if (sequence !== renderSequence) return;
+        const next = rows.slice(rendered, rendered + STAFFING_CARD_RENDER_CHUNK_SIZE);
+        if (!next.length) {
+          subtitle.textContent = baseSubtitle;
+          return;
+        }
+
+        container.insertAdjacentHTML("beforeend", next.map(row => renderStaffingCardRowHtml(row, loadLookup, eventsByEmail)).join(""));
+        rendered += next.length;
+        subtitle.textContent = rendered < rows.length
+          ? `${baseSubtitle}; rendering ${rendered} of ${rows.length}`
+          : baseSubtitle;
+        if (rendered < rows.length) scheduleDeferredRender(appendNextChunk);
+      };
+
+      if (rendered < rows.length) scheduleDeferredRender(appendNextChunk);
     }
 
     function renderAll() {
+      const sequence = ++renderSequence;
       configureDateWindow();
       renderRefreshState();
       updateStaffingLoadRefreshButton();
       const windowConfig = getWindow();
-      const rows = getAvailabilityRows(windowConfig);
+      const people = selectedRoster();
+      const eventsByEmail = buildEventsByEmail(normalizedEvents);
+      const rows = getAvailabilityRows(windowConfig, people, eventsByEmail);
       renderMetrics(rows);
       renderRecommendation(rows, windowConfig);
-      renderStaffingCards(rows, windowConfig);
-      renderAvailabilityTable(rows, windowConfig);
-      renderAlternateSlots();
-      renderWeeklyAvailability(rows);
-      renderLoad(rows);
-      renderDebugConsole();
+      scheduleDeferredRender(() => {
+        if (sequence !== renderSequence) return;
+        renderStaffingCards(rows, windowConfig, eventsByEmail);
+        scheduleDeferredRender(() => {
+          if (sequence !== renderSequence) return;
+          renderAvailabilityTable(rows, windowConfig);
+          renderAlternateSlots(rows, people, eventsByEmail);
+          scheduleDeferredRender(() => {
+            if (sequence !== renderSequence) return;
+            renderWeeklyAvailability(rows, eventsByEmail);
+            renderLoad(rows, eventsByEmail);
+            renderDebugConsole();
+          });
+        });
+      });
     }
 
     function setDashboardRefreshStatus(title, detail) {
@@ -11375,10 +11504,10 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
             "Staffing data refreshed",
             `${report.rows.length} workload row${report.rows.length === 1 ? "" : "s"} from ${report.source || "NetSuite saved search"}; refreshed ${report.refreshedAt ? formatRefreshTimestamp(new Date(report.refreshedAt)) : "now"}`
           );
-        } else if (typeof window.refreshScoutStaffingLoadFromNetSuite !== "function") {
+        } else if (!getStaffingLoadBridgeStatus().installed) {
           setDashboardRefreshStatus(
             "Staffing data bridge missing",
-            "Install or enable the SCOUT Staffing Load Cache Bridge Tampermonkey script, then reload this dashboard."
+            staffingLoadBridgeMissingMessage()
           );
         } else {
           setDashboardRefreshStatus("Staffing data not refreshed", "No workload rows were returned.");
@@ -11968,7 +12097,6 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     wireEvents();
     renderAll();
     window.refreshScoutStaffingLoad = () => refreshStaffingLoadFromNetSuiteCache({ force: true });
-    refreshStaffingLoadFromNetSuiteCache();
   </script>
 </body>
 </html>
