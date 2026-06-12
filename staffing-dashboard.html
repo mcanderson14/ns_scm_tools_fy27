@@ -155,6 +155,27 @@
       opacity: 0.7;
     }
 
+    .workload-refresh-button {
+      background: #E2C06B;
+      border-color: rgba(19, 33, 44, 0.18);
+      color: #13212C;
+    }
+
+    .workload-refresh-button:hover {
+      background: #edcf82;
+      border-color: rgba(19, 33, 44, 0.28);
+    }
+
+    .workload-refresh-button.is-stale {
+      animation: workloadRefreshPulse 1.65s ease-in-out infinite;
+    }
+
+    @keyframes workloadRefreshPulse {
+      0% { box-shadow: 0 0 0 0 rgba(226, 192, 107, 0.72); }
+      70% { box-shadow: 0 0 0 8px rgba(226, 192, 107, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(226, 192, 107, 0); }
+    }
+
     .cache-note {
       color: rgba(255, 255, 255, 0.72);
       font-size: 11px;
@@ -365,7 +386,8 @@
     .pill.yazbeck { color: #754f90; background: #f1ebf7; border-color: #d7c4e6; }
     .pill.gorajek { color: #835334; background: #f8eee8; border-color: #e3c8b6; }
     .pill.direct { color: #194f77; background: #e8f2fb; border-color: #c4dced; }
-    .pill.amo { color: #78520d; background: #fff2dc; border-color: #eccb91; }
+    .pill.amo { color: #9f2d23; background: #fde9e6; border-color: #f0b8b0; }
+    .pill.pto { color: #6d28a8; background: #f3e8ff; border-color: #d8b4fe; }
     .pill.rating3 { color: #0d6630; background: #e7f6ec; border-color: #b9e5c7; }
     .pill.rating2 { color: #245b86; background: #e8f2fb; border-color: #c5dceb; }
     .pill.rating1 { color: #886000; background: #fff4d8; border-color: #ecd38e; }
@@ -688,6 +710,7 @@
 
     .weekly-bar-open { background: var(--green); }
     .weekly-bar-busy { background: var(--red); }
+    .weekly-bar-pto { background: #8b5cf6; }
     .weekly-bar-unknown { background: #c9d2db; height: 100%; }
 
     .weekly-weekend-spacer {
@@ -709,6 +732,454 @@
       color: #465567;
       font-size: 10px;
       font-weight: 850;
+    }
+
+    .staffing-card-panel {
+      margin: 14px 0;
+    }
+
+    .staffing-card-list {
+      display: grid;
+      gap: 10px;
+      padding: 14px 16px 16px;
+    }
+
+    .staffing-card-row {
+      display: grid;
+      grid-template-columns: minmax(260px, 0.95fr) minmax(280px, 1.05fr) minmax(340px, 1.2fr);
+      gap: 12px;
+      align-items: stretch;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+      padding: 12px;
+    }
+
+    .staffing-card-row.available {
+      box-shadow: inset 4px 0 0 var(--green);
+    }
+
+    .staffing-card-row.soft {
+      box-shadow: inset 4px 0 0 #d29216;
+    }
+
+    .staffing-card-row.buffer,
+    .staffing-card-row.review {
+      box-shadow: inset 4px 0 0 #6c7885;
+    }
+
+    .staffing-card-row.busy,
+    .staffing-card-row.unknown {
+      box-shadow: inset 4px 0 0 var(--red);
+    }
+
+    .staffing-cell {
+      min-width: 0;
+    }
+
+    .staffing-cell + .staffing-cell {
+      border-left: 1px solid var(--line);
+      padding-left: 12px;
+    }
+
+    .staffing-name {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 4px;
+    }
+
+    .staffing-name strong {
+      font-size: 17px;
+    }
+
+    .staffing-status-line {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .staffing-section-label {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 850;
+      letter-spacing: 0.08em;
+      margin: 0 0 8px;
+      text-transform: uppercase;
+    }
+
+    .staffing-stat-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(58px, 1fr));
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+
+    .staffing-stat {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #f8fafb;
+      padding: 7px 8px;
+    }
+
+    .staffing-stat span {
+      display: block;
+      color: var(--muted);
+      font-size: 9px;
+      font-weight: 850;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .staffing-stat strong {
+      display: block;
+      margin-top: 3px;
+      color: var(--ink);
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    .mix-block {
+      position: relative;
+      margin-top: 8px;
+    }
+
+    .mix-block:focus-within .mix-popover,
+    .mix-block:hover .mix-popover {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .mix-bar {
+      display: flex;
+      height: 16px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e8edf2;
+      border: 1px solid #d6e0e8;
+    }
+
+    .mix-segment {
+      height: 100%;
+      min-width: 2px;
+    }
+
+    .mix-popover {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: calc(100% + 8px);
+      z-index: 6;
+      opacity: 0;
+      transform: translateY(4px);
+      pointer-events: none;
+      transition: opacity 0.12s ease, transform 0.12s ease;
+      padding: 10px;
+      border: 1px solid var(--line-strong);
+      border-radius: 7px;
+      background: #fff;
+      box-shadow: var(--shadow);
+    }
+
+    .mix-popover h3 {
+      margin: 0 0 8px;
+      font-size: 12px;
+    }
+
+    .mix-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      margin-top: 6px;
+      font-size: 12px;
+    }
+
+    .calendar-load-bar {
+      display: flex;
+      height: 18px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #dfe7ee;
+      border: 1px solid #d0dbe4;
+      margin: 7px 0 6px;
+    }
+
+    .calendar-load-block {
+      position: relative;
+    }
+
+    .calendar-load-block:focus-within .calendar-load-popover,
+    .calendar-load-block:hover .calendar-load-popover {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .calendar-load-popover {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: calc(100% + 8px);
+      z-index: 6;
+      opacity: 0;
+      transform: translateY(4px);
+      pointer-events: none;
+      transition: opacity 0.12s ease, transform 0.12s ease;
+      padding: 9px 10px;
+      border: 1px solid var(--line-strong);
+      border-radius: 7px;
+      background: #fff;
+      box-shadow: var(--shadow);
+    }
+
+    .calendar-load-bar > span {
+      display: block;
+      min-width: 2px;
+    }
+
+    .calendar-pto { background: #8b5cf6; }
+    .calendar-hard { background: #cf4f4f; }
+    .calendar-soft { background: #c88408; }
+    .calendar-review { background: #94a3b8; }
+    .calendar-open { background: #2fa66a; }
+    .calendar-gap { background: #cbd5df; }
+
+    .mini-calendar-strip {
+      display: flex;
+      gap: 3px;
+      margin-top: 8px;
+      overflow-x: auto;
+      padding-bottom: 5px;
+      scrollbar-width: thin;
+    }
+
+    .mini-day-wrap {
+      flex: 0 0 28px;
+      display: grid;
+      gap: 3px;
+    }
+
+    .mini-day-button {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      padding: 0;
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .mini-day-button[disabled] {
+      cursor: default;
+    }
+
+    .mini-day-button:not([disabled]):hover .mini-day,
+    .mini-day-button.is-selected .mini-day {
+      border-color: var(--teal);
+      box-shadow: 0 0 0 2px rgba(74, 142, 158, 0.16);
+    }
+
+    .mini-day-button:focus-visible .mini-day {
+      outline: 2px solid var(--teal);
+      outline-offset: 2px;
+    }
+
+    .mini-day-wrap.weekend {
+      flex-basis: 10px;
+    }
+
+    .mini-day {
+      height: 30px;
+      border: 1px solid #d8e1e8;
+      border-radius: 4px;
+      background: #f2f6f8;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column-reverse;
+      justify-content: flex-end;
+    }
+
+    .mini-day.weekend {
+      background: #e9f4f6;
+      border-color: #d9ecef;
+    }
+
+    .mini-day-fill {
+      display: block;
+      width: 100%;
+      min-height: 2px;
+      background: #2fa66a;
+    }
+
+    .mini-day-fill.busy {
+      background: #cf4f4f;
+    }
+
+    .mini-day-fill.pto {
+      background: #8b5cf6;
+    }
+
+    .mini-day-fill.gap {
+      height: 100%;
+      background: #cbd5df;
+    }
+
+    .mini-day-label {
+      color: var(--muted);
+      font-size: 9px;
+      font-weight: 800;
+      line-height: 1.05;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .mini-day-label strong {
+      display: block;
+      color: #465567;
+      font-size: 9px;
+    }
+
+    .mini-day-wrap.weekend .mini-day-label {
+      overflow: hidden;
+      text-indent: -999px;
+    }
+
+    .day-meeting-panel {
+      margin-top: 9px;
+      max-height: 190px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fbfcfd;
+      padding: 9px 10px;
+    }
+
+    .day-meeting-panel[hidden] {
+      display: none;
+    }
+
+    .day-meeting-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 7px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 850;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .day-meeting-close {
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: #fff;
+      color: #465567;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 850;
+      line-height: 1;
+      padding: 5px 7px;
+    }
+
+    .day-meeting-list {
+      display: grid;
+      gap: 7px;
+    }
+
+    .day-meeting-item {
+      border-left: 3px solid #94a3b8;
+      padding-left: 8px;
+      color: #314253;
+      font-size: 12px;
+      line-height: 1.32;
+    }
+
+    .day-meeting-item.pto {
+      border-left-color: #8b5cf6;
+    }
+
+    .day-meeting-item.hard {
+      border-left-color: #cf4f4f;
+    }
+
+    .day-meeting-item.soft {
+      border-left-color: #c88408;
+    }
+
+    .day-meeting-time {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 5px;
+      font-weight: 850;
+    }
+
+    .day-meeting-title {
+      margin-top: 2px;
+    }
+
+    .day-meeting-tag {
+      border: 1px solid #d0dbe4;
+      border-radius: 999px;
+      background: #fff;
+      color: #5a6a78;
+      font-size: 10px;
+      font-weight: 850;
+      padding: 1px 6px;
+      text-transform: uppercase;
+    }
+
+    .calendar-detail-list {
+      display: grid;
+      gap: 5px;
+      margin-top: 8px;
+      max-height: 86px;
+      overflow: auto;
+    }
+
+    .calendar-detail-item {
+      border-left: 3px solid #d29216;
+      padding-left: 7px;
+      color: #3c4d5d;
+      font-size: 12px;
+      line-height: 1.25;
+    }
+
+    .open-slot-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-top: 7px;
+    }
+
+    .open-slot-heading {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 850;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .open-slot-chip {
+      border: 1px solid #b9d9cf;
+      border-radius: 999px;
+      background: #ebfaf4;
+      color: #075f40;
+      padding: 4px 8px;
+      font-size: 11px;
+      font-weight: 850;
+    }
+
+    .empty-note {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
     }
 
     .event-controls {
@@ -733,6 +1204,13 @@
       .control-bar { grid-template-columns: repeat(4, minmax(140px, 1fr)); }
       .layout,
       .recommendation { grid-template-columns: 1fr; }
+      .staffing-card-row { grid-template-columns: 1fr; }
+      .staffing-cell + .staffing-cell {
+        border-left: 0;
+        border-top: 1px solid var(--line);
+        padding-left: 0;
+        padding-top: 12px;
+      }
     }
 
     @media (max-width: 760px) {
@@ -746,7 +1224,8 @@
       .cache-note { text-align: left; }
       .control-bar,
       .summary-grid,
-      .event-controls { grid-template-columns: 1fr; }
+      .event-controls,
+      .staffing-stat-grid { grid-template-columns: 1fr; }
       table { min-width: 760px; }
       h1 { font-size: 23px; }
     }
@@ -757,11 +1236,12 @@
     <div class="header-inner">
       <div class="brand-row">
         <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
-        <span class="version-pill">v27.0.11</span>
+        <span class="version-pill">v27.0.17</span>
       </div>
       <div class="header-actions">
         <div class="refresh-panel">
           <div class="refresh-row">
+            <button class="refresh-button workload-refresh-button is-stale" id="staffingLoadRefreshButton" type="button" title="Refresh workload data from NetSuite saved search 1324335">Refresh Staffing Data</button>
             <button class="refresh-button" id="refreshButton" type="button" title="Refresh the current dashboard scope with the saved Graph token">Refresh selected via token</button>
             <button class="refresh-button" id="openRefreshConsoleButton" type="button" title="Open the calendar refresh page with the current dashboard scope">Open token refresh</button>
             <div class="snapshot-pill" id="lastRefreshLabel">Last refresh pending</div>
@@ -885,6 +1365,16 @@
         <div class="recommendation-main" id="protectedWindowLabel">-</div>
         <div class="subtle" id="protectedWindowDetail"></div>
       </div>
+    </section>
+
+    <section class="panel staffing-card-panel" aria-label="Staffing decision cards">
+      <div class="panel-header">
+        <div>
+          <h2>Staffing Cards</h2>
+          <div class="subtle" id="staffingCardsSubtitle">Calendar and workload signals by consultant.</div>
+        </div>
+      </div>
+      <div class="staffing-card-list" id="staffingCardList"></div>
     </section>
 
     <section class="debug-console" aria-label="Calendar debug console">
@@ -8142,6 +8632,20 @@
       other: { label: "Review", pill: "review" }
     };
 
+    const staffingMixColumns = [
+      { key: "acsLcs", label: "ACS/LCS", color: "#2c62a3" },
+      { key: "aiOverview", label: "AI Overview", color: "#7f52c8" },
+      { key: "businessReview", label: "Business Review", color: "#17843b" },
+      { key: "customerSat", label: "Customer Sat", color: "#d28a00" },
+      { key: "netNew", label: "Net New", color: "#536170" },
+      { key: "platform", label: "Platform", color: "#915b2d" },
+      { key: "revSaveRenewal", label: "Rev/Renewal", color: "#b56b00" },
+      { key: "upsell", label: "Upsell", color: "#bd3030" },
+      { key: "validation", label: "Validation", color: "#5266b0" },
+      { key: "whitespacing", label: "Whitespacing", color: "#0f766e" },
+      { key: "suiteSuccess", label: "SuiteSuccess", color: "#137c75" }
+    ];
+
     const STAFFING_WINDOW_DAYS = 21;
 
 const SNAPSHOT_LOADED_EMAILS = new Set([
@@ -8170,6 +8674,10 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
 
     const CACHE_KEY = "sc-staffing-dashboard-calendar-cache-direct-connector-202605062230";
     const LOCAL_GRAPH_CACHE_KEY = "sc-staffing-dashboard-local-graph-cache-v1";
+    const STAFFING_LOAD_STORAGE_KEY = "scout-staffing-dashboard-load-report-v1";
+    const STAFFING_LOAD_NETSUITE_SEARCH_ID = "1324335";
+    const STAFFING_LOAD_CACHE_STALE_MS = 4 * 60 * 60 * 1000;
+    const STAFFING_LOAD_SHAREPOINT_URL = "https://oracle.sharepoint.com/:x:/r/sites/solutionconsultingmanagers/_layouts/15/Doc.aspx?sourcedoc=%7B8BD2C115-A31F-4734-8F17-FB70AEC09A69%7D&file=SCOUT_SC_LOAD_REPORT.xls&action=default&mobileredirect=true";
     const GRAPH_EXPLORER_TOKEN_VAULT_KEY = "sc-staffing-dashboard-graph-explorer-token-vault-v2";
     const GRAPH_EXPLORER_LOCAL_KEY_KEY = "sc-staffing-dashboard-graph-explorer-local-key-v1";
     const GRAPH_GET_SCHEDULE_URL = "https://graph.microsoft.com/v1.0/me/calendar/getSchedule";
@@ -8199,6 +8707,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     let refreshSource = "snapshot";
     let lastDebugText = "";
     let calendarActivityLog = [];
+    let staffingLoadRefreshPromise = null;
 
     function logCalendarActivity(step, details = {}) {
       calendarActivityLog.unshift({
@@ -8230,6 +8739,27 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
 
     function writeJsonStorage(key, value) {
       window.localStorage.setItem(key, JSON.stringify(value));
+    }
+
+    function getBrowserDateStamp(date = new Date()) {
+      return [
+        date.getFullYear(),
+        String(date.getMonth() + 1).padStart(2, "0"),
+        String(date.getDate()).padStart(2, "0")
+      ].join("-");
+    }
+
+    function base64UrlEncode(value) {
+      const utf8 = new TextEncoder().encode(String(value));
+      let binary = "";
+      utf8.forEach(byte => {
+        binary += String.fromCharCode(byte);
+      });
+      return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+    }
+
+    function graphShareIdFromUrl(url) {
+      return `u!${base64UrlEncode(url)}`;
     }
 
     function addDaysIso(dateValue, days) {
@@ -9401,6 +9931,12 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       return "other";
     }
 
+    function isPtoCalendarEvent(event) {
+      const text = `${event?.subject || ""} ${event?.status || ""}`.toLowerCase();
+      const status = String(event?.status || "").toLowerCase();
+      return status === "oof" || /(out of office|\booo\b|pto|vacation|holiday)/.test(text);
+    }
+
     function getZoneLabel(zone) {
       const zoneLabels = {
         "America/New_York": "Eastern (ET)",
@@ -9914,6 +10450,14 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       };
     }
 
+    function getFullDayWindow(date, zone) {
+      return {
+        start: zonedDateTime(date, 0, zone),
+        end: zonedDateTime(date, 24 * 60, zone),
+        zone
+      };
+    }
+
     function getDayWindow() {
       const date = document.getElementById("meetingDate").value;
       const zone = document.getElementById("planningZone").value;
@@ -9924,9 +10468,66 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       return overlapMinutes(dayWindow.start, dayWindow.end, event.startDate, event.endDate);
     }
 
+    function getCalendarEventsForDate(person, dateValue) {
+      const personEmail = normalizeEmail(person?.email);
+      if (!personEmail) return [];
+      const zone = document.getElementById("planningZone").value;
+      const dayWindow = getFullDayWindow(dateValue, zone);
+      return normalizedEvents
+        .filter(event => normalizeEmail(event.email) === personEmail)
+        .filter(event => String(event.status || "").toLowerCase() !== "free")
+        .filter(event => overlapMinutes(dayWindow.start, dayWindow.end, event.startDate, event.endDate) > 0)
+        .sort((a, b) => a.startDate - b.startDate || String(a.subject || "").localeCompare(String(b.subject || "")));
+    }
+
+    function getMeetingSeverityClass(event) {
+      if (isPtoCalendarEvent(event)) return "pto";
+      const severity = event?.severity || classifyEvent(event?.subject, event?.status);
+      return severity === "hard" || severity === "soft" ? severity : "review";
+    }
+
+    function renderDayMeetingPanel(person, dateValue) {
+      const zone = document.getElementById("planningZone").value;
+      const dayWindow = getFullDayWindow(dateValue, zone);
+      const meetings = getCalendarEventsForDate(person, dateValue);
+      const heading = `${escapeHtml(formatIsoDate(dateValue))} meetings`;
+
+      return `
+        <div class="day-meeting-panel-header">
+          <span>${heading}</span>
+          <button class="day-meeting-close" type="button" data-day-meeting-close>Close</button>
+        </div>
+        ${meetings.length ? `
+          <div class="day-meeting-list">
+            ${meetings.map(event => {
+              const displayStart = new Date(Math.max(event.startDate.getTime(), dayWindow.start.getTime()));
+              const displayEnd = new Date(Math.min(event.endDate.getTime(), dayWindow.end.getTime()));
+              const meetingClass = getMeetingSeverityClass(event);
+              const status = isPtoCalendarEvent(event) ? "PTO/OOO" : String(event.status || "busy");
+              return `
+                <div class="day-meeting-item ${meetingClass}">
+                  <div class="day-meeting-time">
+                    <span>${formatTimeRange(displayStart, displayEnd, zone)}</span>
+                    <span class="day-meeting-tag">${escapeHtml(status)}</span>
+                  </div>
+                  <div class="day-meeting-title">${escapeHtml(event.subject || "Calendar item")}</div>
+                  ${event.location ? `<div class="subtle">${escapeHtml(event.location)}</div>` : ""}
+                </div>
+              `;
+            }).join("")}
+          </div>
+        ` : `<div class="empty-note">No meetings found for this day.</div>`}
+      `;
+    }
+
     function getStaffingDateKeys() {
       const activeStart = getActiveStaffingWindowStart();
       return Array.from({ length: getActiveStaffingWindowDays() }, (_, index) => addDaysIso(activeStart, index));
+    }
+
+    function getCardDateKeys() {
+      const start = getSelectedMeetingDate();
+      return Array.from({ length: STAFFING_WINDOW_DAYS }, (_, index) => addDaysIso(start, index));
     }
 
     function isWeekendIso(dateValue) {
@@ -9980,20 +10581,30 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
 
       const dayWindow = getWorkdayWindow(dateValue, zone);
       const personEvents = eventsByEmail.get(normalizeEmail(person.email)) || [];
+      const ptoMinutes = Math.min(
+        dayWindow.workdayMinutes,
+        personEvents
+          .filter(isPtoCalendarEvent)
+          .reduce((sum, event) => sum + eventMinutesInDay(event, dayWindow), 0)
+      );
       const busyMinutes = Math.min(
         dayWindow.workdayMinutes,
-        personEvents.reduce((sum, event) => sum + eventMinutesInDay(event, dayWindow), 0)
+        personEvents
+          .filter(event => !isPtoCalendarEvent(event))
+          .reduce((sum, event) => sum + eventMinutesInDay(event, dayWindow), 0)
       );
-      const openMinutes = Math.max(0, dayWindow.workdayMinutes - busyMinutes);
+      const openMinutes = Math.max(0, dayWindow.workdayMinutes - busyMinutes - ptoMinutes);
       const busyHeight = Math.max(0, Math.min(100, Math.round((busyMinutes / dayWindow.workdayMinutes) * 100)));
-      const openHeight = Math.max(0, 100 - busyHeight);
-      const title = `${person.name} ${label.weekday} ${label.monthDay}: ${(openMinutes / 60).toFixed(1)}h open, ${(busyMinutes / 60).toFixed(1)}h booked`;
+      const ptoHeight = Math.max(0, Math.min(100, Math.round((ptoMinutes / dayWindow.workdayMinutes) * 100)));
+      const openHeight = Math.max(0, 100 - busyHeight - ptoHeight);
+      const title = `${person.name} ${label.weekday} ${label.monthDay}: ${(openMinutes / 60).toFixed(1)}h open, ${(busyMinutes / 60).toFixed(1)}h booked${ptoMinutes ? `, ${(ptoMinutes / 60).toFixed(1)}h PTO/OOO` : ""}`;
 
       return `
         <div class="weekly-day-cell${weekStartClass}" title="${escapeHtml(title)}">
           <div class="weekly-bar" aria-label="${escapeHtml(title)}">
             <div class="weekly-bar-open" style="height:${openHeight}%"></div>
             <div class="weekly-bar-busy" style="height:${busyHeight}%"></div>
+            ${ptoMinutes ? `<div class="weekly-bar-pto" style="height:${ptoHeight}%"></div>` : ""}
           </div>
           ${labelMarkup}
         </div>
@@ -10017,9 +10628,13 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         return;
       }
 
-      container.style.setProperty("--day-count", String(dateKeys.length));
+      const gridColumns = [
+        "minmax(220px, 260px)",
+        ...dateKeys.map(dateValue => isWeekendIso(dateValue) ? "24px" : "46px")
+      ].join(" ");
+      const gridMinWidth = 260 + dateKeys.reduce((sum, dateValue) => sum + (isWeekendIso(dateValue) ? 24 : 46), 0);
       container.innerHTML = `
-        <div class="weekly-grid" style="--day-count:${dateKeys.length}; min-width: max(100%, ${260 + dateKeys.length * 46}px);">
+        <div class="weekly-grid" style="grid-template-columns:${gridColumns}; min-width: max(100%, ${gridMinWidth}px);">
           ${people.map(person => `
             <div class="weekly-person-cell">
               <div class="person-line"><span class="person-name">${escapeHtml(person.name)}</span>${legacyOrgBadge(person)}${locationBadge(person)}</div>
@@ -10075,13 +10690,652 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       }).join("");
     }
 
+    function normalizeLoadKey(value) {
+      return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    }
+
+    function loadNumber(value) {
+      const clean = String(value ?? "").replace(/,/g, "").trim();
+      if (!clean || clean === "--" || clean === "- None -") return 0;
+      const parsed = Number(clean);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    function formatLoadNumber(value) {
+      return Number(value || 0).toLocaleString("en-US");
+    }
+
+    function readLoadField(record, aliases) {
+      if (!record || typeof record !== "object") return "";
+      const wanted = aliases.map(normalizeLoadKey);
+      const key = Object.keys(record).find(item => wanted.includes(normalizeLoadKey(item)));
+      return key ? record[key] : "";
+    }
+
+    function getRawStaffingLoadRows() {
+      const storageValue = readJsonStorage(STAFFING_LOAD_STORAGE_KEY);
+      const candidates = [
+        window.SCOUT_STAFFING_LOAD_ROWS,
+        window.SCOUT_SC_LOAD_ROWS,
+        window.SCOUT_SC_LOAD_REPORT && window.SCOUT_SC_LOAD_REPORT.rows,
+        Array.isArray(storageValue) ? storageValue : storageValue && storageValue.rows
+      ];
+
+      return candidates.find(Array.isArray) || [];
+    }
+
+    function getStoredStaffingLoadReport() {
+      const stored = readJsonStorage(STAFFING_LOAD_STORAGE_KEY);
+      return stored && Array.isArray(stored.rows) ? stored : null;
+    }
+
+    function isStoredStaffingLoadFresh(report = getStoredStaffingLoadReport()) {
+      if (!report?.rows?.length) return false;
+      if (report.refreshedAt) {
+        const refreshedMs = new Date(report.refreshedAt).getTime();
+        const maxAge = Number(report.staleAfterMs || STAFFING_LOAD_CACHE_STALE_MS);
+        if (Number.isFinite(refreshedMs) && Date.now() - refreshedMs < maxAge) return true;
+      }
+      return report.cacheDate === getBrowserDateStamp();
+    }
+
+    function decodeSpreadsheetText(buffer) {
+      const bytes = new Uint8Array(buffer);
+      if (bytes[0] === 0xff && bytes[1] === 0xfe) return new TextDecoder("utf-16le").decode(buffer);
+      if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) return new TextDecoder("utf-8").decode(buffer);
+      return new TextDecoder("utf-8").decode(buffer);
+    }
+
+    function parseDelimitedTextRows(text, delimiter = ",") {
+      const rows = [];
+      let row = [];
+      let cell = "";
+      let quoted = false;
+
+      for (let index = 0; index < text.length; index += 1) {
+        const character = text[index];
+        const next = text[index + 1];
+        if (quoted) {
+          if (character === "\"" && next === "\"") {
+            cell += "\"";
+            index += 1;
+          } else if (character === "\"") {
+            quoted = false;
+          } else {
+            cell += character;
+          }
+          continue;
+        }
+        if (character === "\"") {
+          quoted = true;
+          continue;
+        }
+        if (character === delimiter) {
+          row.push(cell.trim());
+          cell = "";
+          continue;
+        }
+        if (character === "\n") {
+          row.push(cell.trim());
+          rows.push(row);
+          row = [];
+          cell = "";
+          continue;
+        }
+        if (character !== "\r") cell += character;
+      }
+
+      row.push(cell.trim());
+      if (row.some(Boolean)) rows.push(row);
+      return rows;
+    }
+
+    function rowsToObjects(grid) {
+      if (!Array.isArray(grid) || !grid.length) return [];
+      const headerIndex = grid.findIndex(row => {
+        const keys = row.map(normalizeLoadKey);
+        return keys.includes("scname") || keys.includes("email") || keys.includes("totalscrs");
+      });
+      if (headerIndex < 0) return [];
+
+      const headers = grid[headerIndex].map(header => String(header || "").trim());
+      return grid.slice(headerIndex + 1)
+        .filter(row => row.some(Boolean))
+        .map(row => headers.reduce((record, header, index) => {
+          if (header) record[header] = row[index] || "";
+          return record;
+        }, {}))
+        .filter(record => {
+          const name = readLoadField(record, ["SC NAME", "SC", "Name", "Consultant"]);
+          return name && normalizeLoadKey(name) !== "total";
+        });
+    }
+
+    function parseHtmlTableRows(text) {
+      const documentNode = new DOMParser().parseFromString(text, "text/html");
+      const tables = [...documentNode.querySelectorAll("table")];
+      let bestRows = [];
+      tables.forEach(table => {
+        const grid = [...table.querySelectorAll("tr")].map(row =>
+          [...row.querySelectorAll("th,td")].map(cell => cell.textContent.replace(/\s+/g, " ").trim())
+        );
+        const rows = rowsToObjects(grid);
+        if (rows.length > bestRows.length) bestRows = rows;
+      });
+      return bestRows;
+    }
+
+    function parseStaffingLoadSpreadsheet(buffer, contentType = "") {
+      const bytes = new Uint8Array(buffer);
+      if (bytes[0] === 0x50 && bytes[1] === 0x4b) {
+        throw new Error("SharePoint returned a binary Excel workbook. Export the saved search as CSV/HTML, or publish a JSON copy for SCOUT.");
+      }
+      if (bytes[0] === 0xd0 && bytes[1] === 0xcf && bytes[2] === 0x11 && bytes[3] === 0xe0) {
+        throw new Error("SharePoint returned a legacy binary .xls workbook. Export the saved search as CSV/HTML, or publish a JSON copy for SCOUT.");
+      }
+
+      const text = decodeSpreadsheetText(buffer);
+      if (/<table[\s>]/i.test(text) || /<html[\s>]/i.test(text)) return parseHtmlTableRows(text);
+      if (contentType.includes("tab-separated-values") || text.split("\n", 1)[0]?.includes("\t")) {
+        return rowsToObjects(parseDelimitedTextRows(text, "\t"));
+      }
+      return rowsToObjects(parseDelimitedTextRows(text, ","));
+    }
+
+    async function fetchSharePointStaffingLoadReport(token) {
+      const shareId = graphShareIdFromUrl(STAFFING_LOAD_SHAREPOINT_URL);
+      const metadataResponse = await fetch(`https://graph.microsoft.com/v1.0/shares/${shareId}/driveItem`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const metadata = await metadataResponse.json().catch(() => ({}));
+      if (!metadataResponse.ok) {
+        throw new Error(metadata.error?.message || metadata.message || `Could not read SharePoint file metadata (${metadataResponse.status})`);
+      }
+
+      const contentResponse = await fetch(`https://graph.microsoft.com/v1.0/shares/${shareId}/driveItem/content`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!contentResponse.ok) {
+        const detail = await contentResponse.text().catch(() => "");
+        throw new Error(detail || `Could not download SharePoint SCR load file (${contentResponse.status})`);
+      }
+
+      const buffer = await contentResponse.arrayBuffer();
+      const rows = parseStaffingLoadSpreadsheet(buffer, contentResponse.headers.get("content-type") || "");
+      if (!rows.length) throw new Error("The SharePoint SCR load file downloaded, but no staffing rows were parsed.");
+
+      return {
+        cacheDate: getBrowserDateStamp(),
+        refreshedAt: new Date().toISOString(),
+        source: "SharePoint",
+        sourceUrl: STAFFING_LOAD_SHAREPOINT_URL,
+        fileName: metadata.name || "SCOUT_SC_LOAD_REPORT.xls",
+        lastModifiedDateTime: metadata.lastModifiedDateTime || "",
+        rows
+      };
+    }
+
+    async function refreshStaffingLoadFromSharePointIfNeeded({ force = false } = {}) {
+      if (!force && isStoredStaffingLoadFresh()) return getStoredStaffingLoadReport();
+      if (staffingLoadRefreshPromise) return staffingLoadRefreshPromise;
+
+      staffingLoadRefreshPromise = (async () => {
+        try {
+          const token = await getStoredGraphExplorerToken();
+          const report = await fetchSharePointStaffingLoadReport(token);
+          writeJsonStorage(STAFFING_LOAD_STORAGE_KEY, report);
+          logCalendarActivity("staffing-load-refresh-complete", {
+            source: report.source,
+            rows: report.rows.length,
+            fileName: report.fileName,
+            lastModifiedDateTime: report.lastModifiedDateTime
+          });
+          renderAll();
+          return report;
+        } catch (error) {
+          logCalendarActivity("staffing-load-refresh-failed", {
+            message: error.message,
+            note: "The dashboard will continue using cached or manually injected SCR load rows."
+          });
+          return getStoredStaffingLoadReport();
+        } finally {
+          staffingLoadRefreshPromise = null;
+        }
+      })();
+
+      return staffingLoadRefreshPromise;
+    }
+
+    async function refreshStaffingLoadFromNetSuiteCache({ force = false } = {}) {
+      if (!force && isStoredStaffingLoadFresh()) return getStoredStaffingLoadReport();
+      if (staffingLoadRefreshPromise) return staffingLoadRefreshPromise;
+
+      staffingLoadRefreshPromise = (async () => {
+        try {
+          if (typeof window.refreshScoutStaffingLoadFromNetSuite !== "function") {
+            logCalendarActivity("staffing-load-cache-bridge-missing", {
+              searchId: STAFFING_LOAD_NETSUITE_SEARCH_ID,
+              note: "Install or enable the SCOUT Staffing Load Cache Bridge Tampermonkey script, then click Refresh Staffing Data."
+            });
+            return getStoredStaffingLoadReport();
+          }
+
+          const report = await window.refreshScoutStaffingLoadFromNetSuite();
+          if (report?.rows?.length) {
+            writeJsonStorage(STAFFING_LOAD_STORAGE_KEY, report);
+            logCalendarActivity("staffing-load-refresh-complete", {
+              source: report.source || "NetSuite saved search",
+              searchId: report.searchId || STAFFING_LOAD_NETSUITE_SEARCH_ID,
+              rows: report.rows.length,
+              refreshedAt: report.refreshedAt
+            });
+            renderAll();
+          }
+          return report || getStoredStaffingLoadReport();
+        } catch (error) {
+          logCalendarActivity("staffing-load-refresh-failed", {
+            message: error.message,
+            searchId: STAFFING_LOAD_NETSUITE_SEARCH_ID,
+            note: "The dashboard will continue using cached or manually injected SCR load rows."
+          });
+          return getStoredStaffingLoadReport();
+        } finally {
+          staffingLoadRefreshPromise = null;
+        }
+      })();
+
+      return staffingLoadRefreshPromise;
+    }
+
+    function normalizeStaffingLoadRow(record) {
+      const row = {
+        name: String(readLoadField(record, ["SC NAME", "SC", "Name", "Consultant"]) || "").trim(),
+        email: normalizeEmail(readLoadField(record, ["EMAIL", "Email Address", "SC Email", "Work Email"])),
+        scIndustry: String(readLoadField(record, ["SC INDUSTRY", "Industry", "SC Industry"]) || "").trim(),
+        legacyTeam: String(readLoadField(record, ["LEGACY TEAM", "Direct/AMO", "Type", "Legacy Org"]) || "").trim(),
+        totalScrs: loadNumber(readLoadField(record, ["Total SCRs", "Total SCR", "Total"])),
+        assignedLast10Days: loadNumber(readLoadField(record, ["SCRS ASGND -10 DAYS", "Assigned -10 Days", "Assigned Last 10 Days"])),
+        thisWeek: loadNumber(readLoadField(record, ["SCRs THIS WEEK", "This Week"])),
+        nextWeek: loadNumber(readLoadField(record, ["SCRs NEXT WEEK", "Next Week"])),
+        thisMonth: loadNumber(readLoadField(record, ["SCRs THIS MONTH", "This Month"])),
+        nextMonth: loadNumber(readLoadField(record, ["SCRs NEXT MONTH", "Next Month"])),
+        inProgress: loadNumber(readLoadField(record, ["IN PROGRESS", "In Progress"])),
+        onHold: loadNumber(readLoadField(record, ["ON HOLD", "On Hold"])),
+        acsLcs: loadNumber(readLoadField(record, ["ACS/LCS", "ACS LCS"])),
+        aiOverview: loadNumber(readLoadField(record, ["AI OVERVIEW", "AI Overview"])),
+        businessReview: loadNumber(readLoadField(record, ["BUSINESS REVIEW", "Business Review"])),
+        customerSat: loadNumber(readLoadField(record, ["CUSTOMER SAT", "Customer Sat"])),
+        netNew: loadNumber(readLoadField(record, ["NET NEW", "Net New"])),
+        platform: loadNumber(readLoadField(record, ["PLATFORM", "Platform"])),
+        revSaveRenewal: loadNumber(readLoadField(record, ["REV SAVE/RENEWAL", "Revenue Save/Renewal", "Revenue/Renewal"])),
+        upsell: loadNumber(readLoadField(record, ["UPSELL", "Upsell"])),
+        validation: loadNumber(readLoadField(record, ["VALIDATION", "Validation"])),
+        whitespacing: loadNumber(readLoadField(record, ["WHITESPACING", "Whitespacing"])),
+        suiteSuccess: loadNumber(readLoadField(record, ["SUITESUCCESS", "SuiteSuccess"]))
+      };
+
+      return row.name || row.email ? row : null;
+    }
+
+    function getStaffingLoadLookup() {
+      const rows = getRawStaffingLoadRows().map(normalizeStaffingLoadRow).filter(Boolean);
+      const byEmail = new Map();
+      const byName = new Map();
+      rows.forEach(row => {
+        if (row.email) byEmail.set(row.email, row);
+        if (row.name) byName.set(canonicalName(row.name), row);
+      });
+      return { rows, byEmail, byName };
+    }
+
+    function getStaffingLoadSourceSummary(loadRowCount) {
+      if (Array.isArray(window.SCOUT_STAFFING_LOAD_ROWS) || Array.isArray(window.SCOUT_SC_LOAD_ROWS) || window.SCOUT_SC_LOAD_REPORT?.rows) {
+        return `${loadRowCount} workload row${loadRowCount === 1 ? "" : "s"} from page data`;
+      }
+      const report = getStoredStaffingLoadReport();
+      if (!report?.rows?.length) return `${loadRowCount} workload row${loadRowCount === 1 ? "" : "s"} available`;
+
+      const timestamp = report.refreshedAt ? formatRefreshTimestamp(new Date(report.refreshedAt)) : "unknown time";
+      const stale = isStoredStaffingLoadFresh(report) ? "" : " stale";
+      return `${loadRowCount} workload row${loadRowCount === 1 ? "" : "s"} from ${report.source || "cache"}${stale}; refreshed ${timestamp}`;
+    }
+
+    function getStaffingLoadForPerson(person, lookup = getStaffingLoadLookup()) {
+      const email = normalizeEmail(person?.email);
+      if (email && lookup.byEmail.has(email)) return lookup.byEmail.get(email);
+      const name = canonicalName(person?.name);
+      return name && lookup.byName.has(name) ? lookup.byName.get(name) : null;
+    }
+
+    function getCalendarDayStats(person) {
+      const dayWindow = getDayWindow();
+      const events = normalizedEvents.filter(event => event.email === person.email);
+      const calendarLoaded = hasLoadedCalendar(person);
+      const pto = events.filter(isPtoCalendarEvent).reduce((sum, event) => sum + eventMinutesInDay(event, dayWindow), 0);
+      const hard = events.filter(event => event.severity === "hard" && !isPtoCalendarEvent(event)).reduce((sum, event) => sum + eventMinutesInDay(event, dayWindow), 0);
+      const soft = events.filter(event => event.severity === "soft").reduce((sum, event) => sum + eventMinutesInDay(event, dayWindow), 0);
+      const other = events.filter(event => event.severity === "other").reduce((sum, event) => sum + eventMinutesInDay(event, dayWindow), 0);
+      const busy = Math.min(dayWindow.workdayMinutes, pto + hard + soft + other);
+      const open = calendarLoaded ? Math.max(0, dayWindow.workdayMinutes - busy) : 0;
+      return { dayWindow, calendarLoaded, pto, hard, soft, other, open, busy };
+    }
+
+    function renderCalendarLoadBar(stats) {
+      const max = stats.dayWindow.workdayMinutes || 1;
+      const ptoWidth = Math.round((stats.pto / max) * 100);
+      const hardWidth = Math.round((stats.hard / max) * 100);
+      const softWidth = Math.round((stats.soft / max) * 100);
+      const otherWidth = Math.round((stats.other / max) * 100);
+      const openWidth = stats.calendarLoaded ? Math.max(0, 100 - ptoWidth - hardWidth - softWidth - otherWidth) : 0;
+      const gapWidth = stats.calendarLoaded ? 0 : Math.max(0, 100 - ptoWidth - hardWidth - softWidth - otherWidth);
+      return `
+        <div class="calendar-load-block" tabindex="0">
+          <div class="calendar-load-bar" title="${escapeHtml(`${(stats.open / 60).toFixed(1)}h open; ${(stats.pto / 60).toFixed(1)}h PTO/OOO; ${(stats.hard / 60).toFixed(1)}h hard; ${(stats.soft / 60).toFixed(1)}h soft; ${(stats.other / 60).toFixed(1)}h review`)}">
+            <span class="calendar-pto" style="width:${ptoWidth}%"></span>
+            <span class="calendar-hard" style="width:${hardWidth}%"></span>
+            <span class="calendar-soft" style="width:${softWidth}%"></span>
+            <span class="calendar-review" style="width:${otherWidth}%"></span>
+            <span class="calendar-open" style="width:${openWidth}%"></span>
+            <span class="calendar-gap" style="width:${gapWidth}%"></span>
+          </div>
+          <div class="calendar-load-popover">
+            <div class="mix-row"><span>Open</span><strong>${(stats.open / 60).toFixed(1)}h</strong></div>
+            <div class="mix-row"><span>PTO/OOO</span><strong>${(stats.pto / 60).toFixed(1)}h</strong></div>
+            <div class="mix-row"><span>Hard booked</span><strong>${(stats.hard / 60).toFixed(1)}h</strong></div>
+            <div class="mix-row"><span>Soft conflict</span><strong>${(stats.soft / 60).toFixed(1)}h</strong></div>
+            <div class="mix-row"><span>Review</span><strong>${(stats.other / 60).toFixed(1)}h</strong></div>
+          </div>
+        </div>
+      `;
+    }
+
+    function findOpenRangesForPerson(person, maxRanges = 3) {
+      const selectedDuration = Number(document.getElementById("meetingDuration").value);
+      const workdayStart = 8 * 60;
+      const workdayEnd = 17 * 60;
+      const lastStart = Math.max(workdayStart, workdayEnd - selectedDuration);
+      const starts = [];
+
+      for (let start = workdayStart; start <= lastStart; start += 30) {
+        const row = analyzePerson(person, getWindow(start));
+        if (row.rank === 0) starts.push(start);
+      }
+
+      if (!starts.length) return [];
+
+      const ranges = [];
+      let rangeStart = starts[0];
+      let previous = starts[0];
+      starts.slice(1).forEach(start => {
+        if (start === previous + 30) {
+          previous = start;
+          return;
+        }
+        ranges.push({ start: rangeStart, end: previous + selectedDuration, lastStart: previous });
+        rangeStart = start;
+        previous = start;
+      });
+      ranges.push({ start: rangeStart, end: previous + selectedDuration, lastStart: previous });
+      return ranges.slice(0, maxRanges);
+    }
+
+    function renderOpenRanges(person) {
+      if (!hasLoadedCalendar(person)) {
+        return `<div class="empty-note">${escapeHtml(missingCalendarSentence(person))}</div>`;
+      }
+
+      const date = document.getElementById("meetingDate").value;
+      const timeZone = document.getElementById("planningZone").value;
+      const ranges = findOpenRangesForPerson(person);
+      if (!ranges.length) return `<div class="empty-note">No clean open ranges for this duration and buffer.</div>`;
+
+      return `
+        <div class="open-slot-heading">Open window</div>
+        <div class="open-slot-list">
+          ${ranges.map(range => {
+            const start = zonedDateTime(date, range.start, timeZone);
+            const end = zonedDateTime(date, range.end, timeZone);
+            return `<span class="open-slot-chip">${formatTimeRange(start, end, timeZone)}</span>`;
+          }).join("")}
+        </div>
+      `;
+    }
+
+    function renderMiniCalendarStrip(person) {
+      const dateKeys = getCardDateKeys();
+      const zone = document.getElementById("planningZone").value;
+      const personEmail = normalizeEmail(person.email);
+      const events = normalizedEvents.filter(event => normalizeEmail(event.email) === personEmail);
+      const calendarLoaded = hasLoadedCalendar(person);
+      return `
+        <div class="mini-calendar-strip" aria-label="21-day working-day calendar strip">
+          ${dateKeys.map(dateValue => {
+            const dayWindow = getWorkdayWindow(dateValue, zone);
+            const label = getWeeklyDateLabel(dateValue);
+            const labelMarkup = `<div class="mini-day-label">${label.weekday}<strong>${label.monthDay}</strong></div>`;
+            if (isWeekendIso(dateValue)) {
+              const title = `${label.weekday} ${label.monthDay}: weekend${calendarLoaded ? " - click to show meetings" : ""}`;
+              return `
+                <button class="mini-day-wrap mini-day-button weekend" type="button" data-day-email="${escapeHtml(personEmail)}" data-day-date="${dateValue}" title="${escapeHtml(title)}" aria-label="${escapeHtml(`Show ${person.name} meetings for ${label.weekday} ${label.monthDay}`)}"${calendarLoaded ? "" : " disabled"}>
+                  <div class="mini-day weekend"></div>
+                  ${labelMarkup}
+                </button>
+              `;
+            }
+            if (!calendarLoaded) {
+              return `
+                <button class="mini-day-wrap mini-day-button" type="button" title="${escapeHtml(`${label.weekday} ${label.monthDay}: ${missingCalendarLabel(person)}`)}" aria-label="${escapeHtml(`${person.name} calendar is not loaded for ${label.weekday} ${label.monthDay}`)}" disabled>
+                  <div class="mini-day"><span class="mini-day-fill gap"></span></div>
+                  ${labelMarkup}
+                </button>
+              `;
+            }
+            const pto = Math.min(
+              dayWindow.workdayMinutes,
+              events
+                .filter(isPtoCalendarEvent)
+                .reduce((sum, event) => sum + eventMinutesInDay(event, dayWindow), 0)
+            );
+            const busy = Math.min(
+              dayWindow.workdayMinutes,
+              events
+                .filter(event => !isPtoCalendarEvent(event))
+                .reduce((sum, event) => sum + eventMinutesInDay(event, dayWindow), 0)
+            );
+            const busyHeight = Math.max(0, Math.min(100, Math.round((busy / dayWindow.workdayMinutes) * 100)));
+            const ptoHeight = Math.max(0, Math.min(100, Math.round((pto / dayWindow.workdayMinutes) * 100)));
+            const openHeight = Math.max(0, 100 - busyHeight - ptoHeight);
+            const title = `${label.weekday} ${label.monthDay}: ${(openHeight / 100 * dayWindow.workdayMinutes / 60).toFixed(1)}h open${pto ? `, ${(pto / 60).toFixed(1)}h PTO/OOO` : ""}, ${(busy / 60).toFixed(1)}h booked - click to show meetings`;
+            return `
+              <button class="mini-day-wrap mini-day-button" type="button" data-day-email="${escapeHtml(personEmail)}" data-day-date="${dateValue}" title="${escapeHtml(title)}" aria-label="${escapeHtml(`Show ${person.name} meetings for ${label.weekday} ${label.monthDay}`)}">
+                <div class="mini-day">
+                  <span class="mini-day-fill" style="height:${openHeight}%"></span>
+                  <span class="mini-day-fill busy" style="height:${busyHeight}%"></span>
+                  ${pto ? `<span class="mini-day-fill pto" style="height:${ptoHeight}%"></span>` : ""}
+                </div>
+                ${labelMarkup}
+              </button>
+            `;
+          }).join("")}
+        </div>
+        <div class="day-meeting-panel" data-day-meeting-panel="${escapeHtml(personEmail)}" hidden></div>
+      `;
+    }
+
+    function renderConflictHighlights(row) {
+      if (!row.conflicts.length) {
+        return row.calendarLoaded
+          ? `<div class="empty-note">No overlapping protected-window calendar items.</div>`
+          : `<div class="empty-note">${escapeHtml(missingCalendarSentence(row))}</div>`;
+      }
+
+      return `
+        <div class="calendar-detail-list">
+          ${row.conflicts
+            .slice()
+            .sort((a, b) => a.startDate - b.startDate)
+            .slice(0, 4)
+            .map(conflict => `
+              <div class="calendar-detail-item">
+                <strong>${formatTimeRange(conflict.startDate, conflict.endDate, row.timeZone)}</strong>
+                <span>${escapeHtml(conflict.subject || "Calendar item")}</span>
+              </div>
+            `).join("")}
+        </div>
+      `;
+    }
+
+    function renderLoadMix(load, person) {
+      if (!load) {
+        return `<div class="empty-note">No workload report row matched this consultant yet.</div>`;
+      }
+
+      const total = staffingMixColumns.reduce((sum, item) => sum + loadNumber(load[item.key]), 0);
+      if (!total) {
+        const isDirect = String(person.legacyOrg || load.legacyTeam || "").toLowerCase().includes("direct");
+        return `<div class="empty-note">${isDirect ? "Deliverable mix is not present for Direct SCs in the current load export." : "No deliverable mix was returned for this SC."}</div>`;
+      }
+
+      return `
+        <div class="mix-block" tabindex="0">
+          <div class="mix-bar" aria-label="Deliverable mix">
+            ${staffingMixColumns.map(item => {
+              const value = loadNumber(load[item.key]);
+              if (!value) return "";
+              return `<span class="mix-segment" style="width:${Math.max(2, Math.round((value / total) * 100))}%; background:${item.color}"></span>`;
+            }).join("")}
+          </div>
+          <div class="mix-popover">
+            <h3>Deliverable mix (${formatLoadNumber(total)})</h3>
+            ${staffingMixColumns.map(item => {
+              const value = loadNumber(load[item.key]);
+              if (!value) return "";
+              const pct = Math.round((value / total) * 100);
+              return `<div class="mix-row"><span>${escapeHtml(item.label)}</span><strong>${formatLoadNumber(value)} (${pct}%)</strong></div>`;
+            }).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderWorkloadStats(load) {
+      if (!load) {
+        return `
+          <div class="staffing-stat-grid">
+            <div class="staffing-stat"><span>Total</span><strong>-</strong></div>
+            <div class="staffing-stat"><span>-10 Days</span><strong>-</strong></div>
+            <div class="staffing-stat"><span>In Prog</span><strong>-</strong></div>
+            <div class="staffing-stat"><span>Next Wk</span><strong>-</strong></div>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="staffing-stat-grid">
+          <div class="staffing-stat"><span>Total</span><strong>${formatLoadNumber(load.totalScrs)}</strong></div>
+          <div class="staffing-stat"><span>-10 Days</span><strong>${formatLoadNumber(load.assignedLast10Days)}</strong></div>
+          <div class="staffing-stat"><span>In Prog</span><strong>${formatLoadNumber(load.inProgress)}</strong></div>
+          <div class="staffing-stat"><span>Next Wk</span><strong>${formatLoadNumber(load.nextWeek)}</strong></div>
+        </div>
+      `;
+    }
+
+    function bindCardDayMeetings(container, rows) {
+      const rowByEmail = new Map(rows.map(row => [normalizeEmail(row.email), row]));
+      container.querySelectorAll("[data-day-date]").forEach(button => {
+        button.addEventListener("click", () => {
+          const person = rowByEmail.get(normalizeEmail(button.dataset.dayEmail));
+          const card = button.closest(".staffing-card-row");
+          const panel = card?.querySelector("[data-day-meeting-panel]");
+          if (!person || !panel) return;
+
+          const shouldClose = !panel.hidden && panel.dataset.activeDate === button.dataset.dayDate;
+          container.querySelectorAll("[data-day-meeting-panel]").forEach(item => {
+            item.hidden = true;
+            item.innerHTML = "";
+            delete item.dataset.activeDate;
+          });
+          container.querySelectorAll(".mini-day-button.is-selected").forEach(item => item.classList.remove("is-selected"));
+          if (shouldClose) return;
+
+          panel.innerHTML = renderDayMeetingPanel(person, button.dataset.dayDate);
+          panel.hidden = false;
+          panel.dataset.activeDate = button.dataset.dayDate;
+          button.classList.add("is-selected");
+          panel.querySelector("[data-day-meeting-close]")?.addEventListener("click", () => {
+            panel.hidden = true;
+            panel.innerHTML = "";
+            delete panel.dataset.activeDate;
+            button.classList.remove("is-selected");
+          });
+        });
+      });
+    }
+
+    function renderStaffingCards(rows, windowConfig) {
+      const container = document.getElementById("staffingCardList");
+      const subtitle = document.getElementById("staffingCardsSubtitle");
+      if (!container || !subtitle) return;
+
+      const loadLookup = getStaffingLoadLookup();
+      subtitle.textContent = `${rows.length} consultant${rows.length === 1 ? "" : "s"} shown; ${getStaffingLoadSourceSummary(loadLookup.rows.length)}; ${formatDate(windowConfig.meetingStart, windowConfig.timeZone)} ${formatTimeRange(windowConfig.meetingStart, windowConfig.meetingEnd, windowConfig.timeZone)} ${getZoneLabel(windowConfig.timeZone)}`;
+
+      if (!rows.length) {
+        container.innerHTML = `<div class="empty-note">No consultants match the current filters.</div>`;
+        return;
+      }
+
+      container.innerHTML = rows.map(row => {
+        const load = getStaffingLoadForPerson(row, loadLookup);
+        const stats = getCalendarDayStats(row);
+        return `
+          <article class="staffing-card-row ${row.pill}">
+            <div class="staffing-cell">
+              <div class="staffing-name">
+                <strong>${escapeHtml(row.name)}</strong>
+                ${legacyOrgBadge(row)}
+                ${locationBadge(row)}
+              </div>
+              <div class="subtle">${escapeHtml(getManagerLabel(row))} - ${getZoneLabel(row.timeZone)}</div>
+              <div class="subtle">${escapeHtml(row.email || "")}</div>
+              <div class="staffing-status-line">
+                <span class="pill ${row.pill}">${row.label}</span>
+                ${coverageBadge(row)}
+                ${stats.pto ? `<span class="pill pto">PTO/OOO</span>` : ""}
+                ${row.otWarning ? `<span class="pill ot-warning">OT WARNING</span>` : ""}
+              </div>
+            </div>
+
+            <div class="staffing-cell">
+              <p class="staffing-section-label">Workload</p>
+              ${renderWorkloadStats(load)}
+              ${renderLoadMix(load, row)}
+            </div>
+
+            <div class="staffing-cell">
+              <p class="staffing-section-label">Calendar Detail</p>
+              <div class="subtle"><strong>${stats.calendarLoaded ? `${(stats.open / 60).toFixed(1)}h open on ${formatIsoDate(getSelectedMeetingDate())}` : missingCalendarLabel(row)}</strong></div>
+              ${renderCalendarLoadBar(stats)}
+              <div class="subtle">${(stats.pto / 60).toFixed(1)} PTO/OOO; ${(stats.hard / 60).toFixed(1)} hard; ${(stats.soft / 60).toFixed(1)} soft; ${(stats.other / 60).toFixed(1)} review; ${stats.calendarLoaded ? `${(stats.open / 60).toFixed(1)} open` : missingCalendarSubtle(row)}</div>
+              ${renderOpenRanges(row)}
+              ${renderMiniCalendarStrip(row)}
+              ${renderConflictHighlights(row)}
+            </div>
+          </article>
+        `;
+      }).join("");
+      bindCardDayMeetings(container, rows);
+    }
+
     function renderAll() {
       configureDateWindow();
       renderRefreshState();
+      updateStaffingLoadRefreshButton();
       const windowConfig = getWindow();
       const rows = getAvailabilityRows(windowConfig);
       renderMetrics(rows);
       renderRecommendation(rows, windowConfig);
+      renderStaffingCards(rows, windowConfig);
       renderAvailabilityTable(rows, windowConfig);
       renderAlternateSlots();
       renderWeeklyAvailability(rows);
@@ -10094,6 +11348,50 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const status = document.getElementById("cacheStatusLabel");
       if (label && title) label.textContent = title;
       if (status && detail) status.textContent = detail;
+    }
+
+    function updateStaffingLoadRefreshButton() {
+      const button = document.getElementById("staffingLoadRefreshButton");
+      if (!button) return;
+      const report = getStoredStaffingLoadReport();
+      const fresh = isStoredStaffingLoadFresh(report);
+      button.classList.toggle("is-stale", !fresh);
+      button.title = report?.rows?.length
+        ? `${report.rows.length} workload row${report.rows.length === 1 ? "" : "s"} cached; refreshed ${report.refreshedAt ? formatRefreshTimestamp(new Date(report.refreshedAt)) : "unknown time"}${fresh ? "" : " (stale)"}`
+        : `Refresh workload data from NetSuite saved search ${STAFFING_LOAD_NETSUITE_SEARCH_ID}`;
+    }
+
+    async function handleStaffingLoadRefreshClick() {
+      const button = document.getElementById("staffingLoadRefreshButton");
+      if (!button) return;
+      const originalText = button.textContent;
+      button.disabled = true;
+      button.textContent = "Refreshing...";
+      setDashboardRefreshStatus("Refreshing staffing data...", `NetSuite saved search ${STAFFING_LOAD_NETSUITE_SEARCH_ID}`);
+      try {
+        const report = await refreshStaffingLoadFromNetSuiteCache({ force: true });
+        if (report?.rows?.length) {
+          setDashboardRefreshStatus(
+            "Staffing data refreshed",
+            `${report.rows.length} workload row${report.rows.length === 1 ? "" : "s"} from ${report.source || "NetSuite saved search"}; refreshed ${report.refreshedAt ? formatRefreshTimestamp(new Date(report.refreshedAt)) : "now"}`
+          );
+        } else if (typeof window.refreshScoutStaffingLoadFromNetSuite !== "function") {
+          setDashboardRefreshStatus(
+            "Staffing data bridge missing",
+            "Install or enable the SCOUT Staffing Load Cache Bridge Tampermonkey script, then reload this dashboard."
+          );
+        } else {
+          setDashboardRefreshStatus("Staffing data not refreshed", "No workload rows were returned.");
+        }
+        renderAll();
+      } catch (error) {
+        setDashboardRefreshStatus("Staffing data refresh failed", error.message);
+        renderDebugConsole();
+      } finally {
+        button.disabled = false;
+        button.textContent = originalText || "Refresh Staffing Data";
+        updateStaffingLoadRefreshButton();
+      }
     }
 
     async function handleManualRefresh() {
@@ -10207,6 +11505,16 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       if (!opened && navigator.clipboard?.writeText) {
         navigator.clipboard.writeText(url).catch(() => {});
       }
+    }
+
+    function handleStaffingLoadCacheUpdated(event) {
+      logCalendarActivity("staffing-load-cache-updated", {
+        source: event?.detail?.source || "NetSuite saved search",
+        searchId: event?.detail?.searchId || STAFFING_LOAD_NETSUITE_SEARCH_ID,
+        rows: event?.detail?.rows || getStoredStaffingLoadReport()?.rows?.length || 0,
+        refreshedAt: event?.detail?.refreshedAt || getStoredStaffingLoadReport()?.refreshedAt || ""
+      });
+      renderAll();
     }
 
     function setSelectValue(id, value) {
@@ -10611,8 +11919,10 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     }
 
     function wireEvents() {
+      document.getElementById("staffingLoadRefreshButton")?.addEventListener("click", handleStaffingLoadRefreshClick);
       document.getElementById("refreshButton").addEventListener("click", handleManualRefresh);
       document.getElementById("openRefreshConsoleButton")?.addEventListener("click", openRefreshConsole);
+      window.addEventListener("scout-staffing-load-cache-updated", handleStaffingLoadCacheUpdated);
       document.getElementById("copyDebugButton")?.addEventListener("click", copyDebugConsole);
       document.getElementById("personFilter").addEventListener("change", () => {
         syncPlanningZoneToSelectedConsultant();
@@ -10657,7 +11967,8 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     ensureFocusedConsultantInFilter();
     wireEvents();
     renderAll();
+    window.refreshScoutStaffingLoad = () => refreshStaffingLoadFromNetSuiteCache({ force: true });
+    refreshStaffingLoadFromNetSuiteCache();
   </script>
 </body>
 </html>
-
