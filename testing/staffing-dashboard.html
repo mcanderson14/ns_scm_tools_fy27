@@ -170,6 +170,56 @@
       animation: workloadRefreshPulse 1.65s ease-in-out infinite;
     }
 
+    .staffing-refresh-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: rgba(19, 33, 44, 0.62);
+      backdrop-filter: blur(2px);
+    }
+
+    .staffing-refresh-overlay[hidden] {
+      display: none;
+    }
+
+    .staffing-refresh-dialog {
+      width: min(520px, 100%);
+      border: 1px solid rgba(226, 192, 107, 0.62);
+      border-radius: 8px;
+      background: #13212C;
+      box-shadow: 0 22px 58px rgba(0, 0, 0, 0.35);
+      color: #f7fbfc;
+      padding: 22px 24px;
+    }
+
+    .staffing-refresh-kicker {
+      color: #E2C06B;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .staffing-refresh-title {
+      margin-top: 7px;
+      font-size: 22px;
+      font-weight: 900;
+    }
+
+    .staffing-refresh-detail {
+      margin-top: 9px;
+      color: rgba(247, 251, 252, 0.78);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    body.staffing-load-refreshing {
+      overflow: hidden;
+    }
+
     @keyframes workloadRefreshPulse {
       0% { box-shadow: 0 0 0 0 rgba(226, 192, 107, 0.72); }
       70% { box-shadow: 0 0 0 8px rgba(226, 192, 107, 0); }
@@ -1349,7 +1399,7 @@
     <div class="header-inner">
       <div class="brand-row">
         <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
-        <span class="version-pill">v27.0.36</span>
+        <span class="version-pill">v27.0.37</span>
       </div>
       <div class="header-actions">
         <div class="refresh-panel">
@@ -1364,6 +1414,14 @@
       </div>
     </div>
   </header>
+
+  <div class="staffing-refresh-overlay" id="staffingLoadRefreshOverlay" hidden aria-hidden="true">
+    <div class="staffing-refresh-dialog" role="status" aria-live="polite">
+      <div class="staffing-refresh-kicker">SCOUT</div>
+      <div class="staffing-refresh-title">Refreshing staffing data...</div>
+      <div class="staffing-refresh-detail" id="staffingLoadRefreshOverlayDetail">Please keep this page open while SCOUT rebuilds the NetSuite saved-search cache.</div>
+    </div>
+  </div>
 
   <main>
     <section class="control-bar" aria-label="Staffing filters">
@@ -8805,7 +8863,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     const STAFFING_LOAD_BRIDGE_REQUEST_TYPE = "scout-staffing-load-refresh-request";
     const STAFFING_LOAD_BRIDGE_RESPONSE_TYPE = "scout-staffing-load-refresh-response";
     const STAFFING_LOAD_BRIDGE_TIMEOUT_MS = 10 * 60 * 1000 + 45000;
-    const STAFFING_LOAD_CACHE_STALE_MS = 4 * 60 * 60 * 1000;
+    const STAFFING_LOAD_CACHE_STALE_MS = 24 * 60 * 60 * 1000;
     const STAFFING_LOAD_SHAREPOINT_URL = "https://oracle.sharepoint.com/:x:/r/sites/solutionconsultingmanagers/_layouts/15/Doc.aspx?sourcedoc=%7B8BD2C115-A31F-4734-8F17-FB70AEC09A69%7D&file=SCOUT_SC_LOAD_REPORT.xls&action=default&mobileredirect=true";
     const GRAPH_EXPLORER_TOKEN_VAULT_KEY = "sc-staffing-dashboard-graph-explorer-token-vault-v2";
     const GRAPH_EXPLORER_LOCAL_KEY_KEY = "sc-staffing-dashboard-graph-explorer-local-key-v1";
@@ -11125,7 +11183,10 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       if (!report?.rows?.length) return false;
       if (report.refreshedAt) {
         const refreshedMs = new Date(report.refreshedAt).getTime();
-        const maxAge = Number(report.staleAfterMs || STAFFING_LOAD_CACHE_STALE_MS);
+        const reportMaxAge = Number(report.staleAfterMs);
+        const maxAge = Number.isFinite(reportMaxAge)
+          ? Math.max(reportMaxAge, STAFFING_LOAD_CACHE_STALE_MS)
+          : STAFFING_LOAD_CACHE_STALE_MS;
         if (Number.isFinite(refreshedMs) && Date.now() - refreshedMs < maxAge) return true;
       }
       return report.cacheDate === getBrowserDateStamp();
@@ -12131,6 +12192,18 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       if (status && detail) status.textContent = detail;
     }
 
+    function setStaffingLoadRefreshOverlay(active, detail = "") {
+      document.body.classList.toggle("staffing-load-refreshing", Boolean(active));
+      const overlay = document.getElementById("staffingLoadRefreshOverlay");
+      const detailElement = document.getElementById("staffingLoadRefreshOverlayDetail");
+      if (!overlay) return;
+      overlay.hidden = !active;
+      overlay.setAttribute("aria-hidden", active ? "false" : "true");
+      if (detailElement) {
+        detailElement.textContent = detail || "Please keep this page open while SCOUT rebuilds the NetSuite saved-search cache.";
+      }
+    }
+
     function updateStaffingLoadRefreshButton() {
       const button = document.getElementById("staffingLoadRefreshButton");
       if (!button) return;
@@ -12148,7 +12221,9 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const originalText = button.textContent;
       button.disabled = true;
       button.textContent = "Refreshing...";
-      setDashboardRefreshStatus("Refreshing staffing data...", `NetSuite saved search ${STAFFING_LOAD_NETSUITE_SEARCH_ID}; large reports can take several minutes`);
+      const refreshDetail = `NetSuite saved search ${STAFFING_LOAD_NETSUITE_SEARCH_ID}; please keep this page open while the cache rebuilds. Large reports can take several minutes.`;
+      setDashboardRefreshStatus("Refreshing staffing data...", refreshDetail);
+      setStaffingLoadRefreshOverlay(true, "Please keep this page open while SCOUT rebuilds the NetSuite saved-search cache. Large reports can take several minutes.");
       try {
         const report = await refreshStaffingLoadFromNetSuiteCache({ force: true });
         if (report?.rows?.length) {
@@ -12169,6 +12244,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         setDashboardRefreshStatus("Staffing data refresh failed", error.message);
         renderDebugConsole();
       } finally {
+        setStaffingLoadRefreshOverlay(false);
         button.disabled = false;
         button.textContent = originalText || "Refresh Staffing Data";
         updateStaffingLoadRefreshButton();
@@ -12188,7 +12264,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         .slice(0, 20)
         .map(person => ({ name: person.name, email: person.email, manager: getManagerLabel(person) }));
       return {
-        dashboardVersion: "v27.0.36",
+        dashboardVersion: "v27.0.37",
         pageUrl: window.location.href,
         bridgeStatus: getStaffingLoadBridgeStatus(),
         storedRows: stored?.rows?.length || 0,
