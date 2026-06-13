@@ -1340,7 +1340,7 @@
     <div class="header-inner">
       <div class="brand-row">
         <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
-        <span class="version-pill">v27.0.28</span>
+        <span class="version-pill">v27.0.30</span>
       </div>
       <div class="header-actions">
         <div class="refresh-panel">
@@ -10163,7 +10163,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     }
 
     function coverageBadge(row) {
-      return row.calendarLoaded
+      return hasLoadedCalendar(row)
         ? `<span class="pill available">3-week snapshot loaded</span>`
         : `<span class="pill unknown">${missingCalendarLabel(row)}</span>`;
     }
@@ -12049,7 +12049,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         .slice(0, 20)
         .map(person => ({ name: person.name, email: person.email, manager: getManagerLabel(person) }));
       return {
-        dashboardVersion: "v27.0.28",
+        dashboardVersion: "v27.0.30",
         pageUrl: window.location.href,
         bridgeStatus: getStaffingLoadBridgeStatus(),
         storedRows: stored?.rows?.length || 0,
@@ -12267,13 +12267,28 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         .filter(person => !hasLoadedCalendar(person))
         .slice(0, 20)
         .map(person => ({ name: person.name, email: person.email, manager: getManagerLabel(person) }));
+      const people = matchedPeople.map(getCalendarPersonDiagnostic);
+      const peopleSummary = people.map(person => ({
+        name: person.name,
+        email: person.email,
+        manager: person.manager,
+        legacyOrg: person.legacyOrg,
+        calendarLoaded: person.calendarLoaded,
+        localGraphLoadedEmail: person.loadedBy.localGraphLoadedEmails,
+        localGraphAnyRecords: person.loadedBy.localGraphAnyRecords,
+        availabilitySnapshots: person.localGraphCounts.availabilitySnapshots,
+        detailedEvents: person.localGraphCounts.directEvents,
+        usableEvents: person.localGraphCounts.usableEventsAfterExpansion,
+        likelyIssue: person.likelyIssue
+      }));
 
       return {
         query: text,
         note: "Use exact Oracle email when refreshing calendars. Close matches below usually mean a typo or cache/roster email mismatch.",
         cacheSummary: getCalendarCacheSummary(),
         closeEmailMatches: queryEmail ? findCloseEmails(queryEmail, allEmails) : [],
-        people: matchedPeople.map(getCalendarPersonDiagnostic),
+        peopleSummary,
+        people,
         missingVisibleSample,
         visibleRosterRows: selectedRoster().length
       };
@@ -12399,6 +12414,21 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         rows: event?.detail?.rows || getStoredStaffingLoadReport()?.rows?.length || 0,
         refreshedAt: event?.detail?.refreshedAt || getStoredStaffingLoadReport()?.refreshedAt || ""
       });
+      renderAll();
+    }
+
+    function handleCalendarCacheStorageUpdated(event) {
+      if (!event || (event.key !== LOCAL_GRAPH_CACHE_KEY && event.key !== CACHE_KEY)) return;
+      localGraphCacheMemoPayload = null;
+      localGraphCacheMemoValue = undefined;
+      addCalendarDataRosterEntries();
+      populateRosterFilterOptions();
+      populatePersonFilter();
+      refreshCalendarData({ force: true, includeLocalGraph: true });
+      setDashboardRefreshStatus(
+        "Calendar cache updated",
+        "Dashboard picked up the refreshed calendar cache from another tab."
+      );
       renderAll();
     }
 
@@ -12808,6 +12838,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       document.getElementById("refreshButton").addEventListener("click", handleManualRefresh);
       document.getElementById("openRefreshConsoleButton")?.addEventListener("click", openRefreshConsole);
       window.addEventListener("scout-staffing-load-cache-updated", handleStaffingLoadCacheUpdated);
+      window.addEventListener("storage", handleCalendarCacheStorageUpdated);
       document.getElementById("copyDebugButton")?.addEventListener("click", copyDebugConsole);
       document.getElementById("personFilter").addEventListener("change", () => {
         syncPlanningZoneToSelectedConsultant();
