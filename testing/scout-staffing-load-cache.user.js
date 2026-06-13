@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT Staffing Load Cache Bridge
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.1
+// @version      27.0.2
 // @description  Refreshes the SCOUT staffing-dashboard workload cache from NetSuite saved search 1324335.
 // @author       Michael Anderson
 // @match        https://mcanderson14.github.io/ns_scm_tools_fy27/staffing-dashboard.html*
@@ -27,7 +27,7 @@
   const NETSUITE_HOST = window.location.hostname.includes("nlcorp-sb2")
     ? "nlcorp-sb2.app.netsuite.com"
     : "nlcorp.app.netsuite.com";
-  const SAVED_SEARCH_URL = `https://${NETSUITE_HOST}/app/common/search/savedsearchresults.nl?searchid=${SAVED_SEARCH_ID}&csv=HTML&OfficeXML=F&pdf=&size=1000`;
+  const SAVED_SEARCH_URL = `https://${NETSUITE_HOST}/app/common/search/savedsearchresults.nl?searchid=${SAVED_SEARCH_ID}`;
   const DASHBOARD_STORAGE_KEY = "scout-staffing-dashboard-load-report-v1";
   const GM_CACHE_KEY = "scout-staffing-dashboard-load-report-gm-v1";
   const PAGE_REQUEST_TYPE = "scout-staffing-load-refresh-request";
@@ -398,7 +398,7 @@
   function publishBridgeApi() {
     pageWindow().__SCOUT_STAFFING_LOAD_BRIDGE = {
       installed: true,
-      version: "27.0.1",
+      version: "27.0.2",
       searchId: SAVED_SEARCH_ID,
       installedAt: new Date().toISOString()
     };
@@ -437,7 +437,7 @@
       window.__SCOUT_STAFFING_LOAD_BRIDGE = Object.assign({}, window.__SCOUT_STAFFING_LOAD_BRIDGE, {
         installed: true,
         mode: "postMessage",
-        version: "27.0.1",
+        version: "27.0.2",
         searchId: ${JSON.stringify(SAVED_SEARCH_ID)},
         installedAt: new Date().toISOString()
       });

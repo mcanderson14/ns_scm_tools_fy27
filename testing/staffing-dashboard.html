@@ -1236,7 +1236,7 @@
     <div class="header-inner">
       <div class="brand-row">
         <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
-        <span class="version-pill">v27.0.23</span>
+        <span class="version-pill">v27.0.24</span>
       </div>
       <div class="header-actions">
         <div class="refresh-panel">
@@ -11073,10 +11073,12 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
           const bridgeStatus = getStaffingLoadBridgeStatus();
           logCalendarActivity("staffing-load-cache-bridge-check", bridgeStatus);
           if (!bridgeStatus.installed && !bridgeStatus.hasDirectFunction) {
+            const message = staffingLoadBridgeMissingMessage();
             logCalendarActivity("staffing-load-cache-bridge-missing", {
               searchId: STAFFING_LOAD_NETSUITE_SEARCH_ID,
-              note: staffingLoadBridgeMissingMessage()
+              note: message
             });
+            throw new Error(message);
           }
 
           const report = await requestStaffingLoadFromBridge();
@@ -11097,6 +11099,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
             searchId: STAFFING_LOAD_NETSUITE_SEARCH_ID,
             note: "The dashboard will continue using cached or manually injected SCR load rows."
           });
+          if (force) throw error;
           return getStoredStaffingLoadReport();
         } finally {
           staffingLoadRefreshPromise = null;
@@ -11612,6 +11615,24 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         button.textContent = originalText || "Refresh Staffing Data";
         updateStaffingLoadRefreshButton();
       }
+    }
+
+    function getStaffingLoadDiagnostics() {
+      const stored = getStoredStaffingLoadReport();
+      const bridgeCache = typeof window.getScoutStaffingLoadCache === "function"
+        ? window.getScoutStaffingLoadCache()
+        : null;
+      return {
+        dashboardVersion: "v27.0.24",
+        pageUrl: window.location.href,
+        bridgeStatus: getStaffingLoadBridgeStatus(),
+        storedRows: stored?.rows?.length || 0,
+        storedRefreshedAt: stored?.refreshedAt || "",
+        bridgeCacheRows: bridgeCache?.rows?.length || 0,
+        bridgeCacheRefreshedAt: bridgeCache?.refreshedAt || "",
+        sourceUrl: bridgeCache?.sourceUrl || stored?.sourceUrl || "",
+        lastActivity: calendarActivityLog.slice(0, 8)
+      };
     }
 
     async function handleManualRefresh() {
@@ -12192,6 +12213,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       renderAll();
     }, 350);
     window.refreshScoutStaffingLoad = () => refreshStaffingLoadFromNetSuiteCache({ force: true });
+    window.debugScoutStaffingLoad = getStaffingLoadDiagnostics;
   </script>
 </body>
 </html>
