@@ -1340,7 +1340,7 @@
     <div class="header-inner">
       <div class="brand-row">
         <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
-        <span class="version-pill">v27.0.27</span>
+        <span class="version-pill">v27.0.28</span>
       </div>
       <div class="header-actions">
         <div class="refresh-panel">
@@ -11545,6 +11545,20 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       };
     }
 
+    function getStaffingScoreExplanation(recommendation) {
+      if (!recommendation) return "";
+      const calendar = recommendation.calendar || {};
+      const workload = recommendation.workload || {};
+      const calendarText = `Calendar ${calendar.label || "Unknown"}: ${calendar.threeHourBlocks || 0} clean 3h blocks; ${calendar.fourHourBlocks || 0} clean 4h blocks.`;
+      const workloadText = `Workload ${workload.label || "Unknown"}: ${workload.note || "no workload signal"}`;
+      const ruleText = recommendation.label === "Staff"
+        ? "Staff means calendar and workload are both green."
+        : recommendation.label === "Avoid"
+          ? "Avoid means calendar or workload is red."
+          : "Review means a yellow or unknown signal needs human review.";
+      return `Score ${recommendation.score} (${recommendation.label}). ${ruleText} ${calendarText} ${workloadText}`;
+    }
+
     function renderSignalBox(title, signal) {
       return `
         <div class="staffing-signal-box">
@@ -11860,7 +11874,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
                 <div class="subtle">${escapeHtml(getManagerLabel(row))} - ${getZoneLabel(row.timeZone)}</div>
                 <div class="subtle">${escapeHtml(row.email || "")}</div>
               </div>
-              <div class="staffing-recommendation-score ${recommendation.cardClass}">
+              <div class="staffing-recommendation-score ${recommendation.cardClass}" title="${escapeHtml(getStaffingScoreExplanation(recommendation))}">
                 <strong>${formatLoadNumber(recommendation.score)}</strong>
                 <span>${escapeHtml(recommendation.label)}</span>
               </div>
@@ -12035,7 +12049,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         .slice(0, 20)
         .map(person => ({ name: person.name, email: person.email, manager: getManagerLabel(person) }));
       return {
-        dashboardVersion: "v27.0.27",
+        dashboardVersion: "v27.0.28",
         pageUrl: window.location.href,
         bridgeStatus: getStaffingLoadBridgeStatus(),
         storedRows: stored?.rows?.length || 0,
@@ -12084,6 +12098,183 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         })),
         loadMatches,
         cacheRows: loadLookup.rows.length,
+        visibleRosterRows: selectedRoster().length
+      };
+    }
+
+    function emailLocalPart(value) {
+      return normalizeEmail(value).split("@")[0] || "";
+    }
+
+    function boundedEditDistance(a, b, maxDistance = 2) {
+      const left = String(a || "");
+      const right = String(b || "");
+      if (left === right) return 0;
+      if (!left || !right) return Math.max(left.length, right.length);
+      if (Math.abs(left.length - right.length) > maxDistance) return maxDistance + 1;
+
+      let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+      for (let i = 1; i <= left.length; i += 1) {
+        const current = [i];
+        let rowMin = current[0];
+        for (let j = 1; j <= right.length; j += 1) {
+          const cost = left[i - 1] === right[j - 1] ? 0 : 1;
+          const value = Math.min(
+            previous[j] + 1,
+            current[j - 1] + 1,
+            previous[j - 1] + cost
+          );
+          current[j] = value;
+          rowMin = Math.min(rowMin, value);
+        }
+        if (rowMin > maxDistance) return maxDistance + 1;
+        previous = current;
+      }
+
+      return previous[right.length];
+    }
+
+    function collectCalendarDiagnosticEmails() {
+      const cache = readLocalGraphCache();
+      const emails = new Set();
+      const addEmail = value => {
+        const email = normalizeEmail(value);
+        if (email) emails.add(email);
+      };
+
+      roster.forEach(person => addEmail(person.email));
+      SNAPSHOT_LOADED_EMAILS.forEach(addEmail);
+      DIRECT_CONNECTOR_LOADED_EMAILS.forEach(addEmail);
+      DIRECT_CONNECTOR_EVENTS.forEach(event => addEmail(event.email));
+      DIRECT_CONNECTOR_AVAILABILITY.forEach(snapshot => addEmail(snapshot.email));
+      embeddedEvents.forEach(event => addEmail(event.email));
+      rawEvents.forEach(event => addEmail(event.email));
+      if (cache) {
+        (cache.loadedEmails || []).forEach(addEmail);
+        (cache.availability || []).forEach(snapshot => addEmail(snapshot.email));
+        (cache.directEvents || []).forEach(event => addEmail(event.email));
+        (cache.events || []).forEach(event => addEmail(event.email));
+        (cache.roster || []).forEach(person => addEmail(person.email));
+      }
+
+      return [...emails].sort();
+    }
+
+    function findCloseEmails(email, candidates, limit = 8) {
+      const normalized = normalizeEmail(email);
+      if (!normalized) return [];
+      const local = emailLocalPart(normalized);
+      return candidates
+        .map(candidate => {
+          const candidateEmail = normalizeEmail(candidate);
+          const candidateLocal = emailLocalPart(candidateEmail);
+          const distance = boundedEditDistance(local, candidateLocal, 3);
+          return {
+            email: candidateEmail,
+            distance,
+            contains: Boolean(local && candidateLocal && (candidateLocal.includes(local) || local.includes(candidateLocal)))
+          };
+        })
+        .filter(item => item.email && item.email !== normalized && (item.distance <= 3 || item.contains))
+        .sort((a, b) => a.distance - b.distance || a.email.localeCompare(b.email))
+        .slice(0, limit);
+    }
+
+    function personMatchesCalendarQuery(person, text, queryEmail, queryKeys, queryName, queryLooseKey) {
+      const email = normalizeEmail(person.email);
+      const rowKeys = nameMatchKeys(person.name);
+      if (queryEmail && email === queryEmail) return true;
+      if (queryEmail && boundedEditDistance(emailLocalPart(queryEmail), emailLocalPart(email), 2) <= 2) return true;
+      if (queryLooseKey && looseNameKey(person.name) === queryLooseKey) return true;
+      if (queryName && rowKeys.some(key => queryKeys.has(key) || key.includes(queryName) || queryName.includes(key))) return true;
+      return Boolean(text && email.includes(normalizeEmail(text)));
+    }
+
+    function getCalendarCacheSummary() {
+      const cache = readLocalGraphCache();
+      const storedCache = readCalendarCache();
+      return {
+        localGraphStorageKey: LOCAL_GRAPH_CACHE_KEY,
+        localGraphPresent: Boolean(cache),
+        localGraphRefreshedAt: cache?.refreshedAt || "",
+        localGraphWindow: cache ? `${cache.start || "?"} -> ${cache.end || "?"}` : "",
+        localGraphLoadedEmails: cache?.loadedEmails?.length || 0,
+        localGraphAvailabilityRows: cache?.availability?.length || 0,
+        localGraphDetailedEvents: cache?.directEvents?.length || 0,
+        localGraphExpandedEvents: cache?.events?.length || 0,
+        localGraphErrors: cache?.errors || [],
+        legacyCalendarStorageKey: CACHE_KEY,
+        legacyCalendarPresent: Boolean(storedCache),
+        legacyCalendarEvents: storedCache?.events?.length || 0,
+        snapshotLoadedEmails: SNAPSHOT_LOADED_EMAILS.size,
+        directConnectorLoadedEmails: DIRECT_CONNECTOR_LOADED_EMAILS.size,
+        normalizedEvents: normalizedEvents.length,
+        rawEvents: rawEvents.length
+      };
+    }
+
+    function getCalendarPersonDiagnostic(person) {
+      const email = normalizeEmail(person?.email);
+      const cache = readLocalGraphCache();
+      const localEvents = getLocalGraphEvents(email, new Set([email]));
+      const localAvailability = cache?.availability?.filter(item => normalizeEmail(item.email) === email) || [];
+      const localDirectEvents = cache?.directEvents?.filter(item => normalizeEmail(item.email) === email) || [];
+      const localExpandedEvents = cache?.events?.filter(item => normalizeEmail(item.email) === email) || [];
+      const loadedEmails = getLocalGraphLoadedEmails();
+      return {
+        name: person?.name || "",
+        email,
+        manager: getManagerLabel(person),
+        legacyOrg: person?.legacyOrg || "",
+        source: getConsultantSource(person),
+        calendarLoaded: hasLoadedCalendar(person),
+        loadedBy: {
+          hardCodedSnapshot: SNAPSHOT_LOADED_EMAILS.has(email),
+          directConnectorLoadedEmails: DIRECT_CONNECTOR_LOADED_EMAILS.has(email),
+          localGraphLoadedEmails: loadedEmails.has(email),
+          localGraphAnyRecords: localEvents.length > 0,
+          embeddedEvents: countCalendarRecordsForEmail(embeddedEvents, email),
+          rawEvents: countCalendarRecordsForEmail(rawEvents, email)
+        },
+        localGraphCounts: {
+          availabilitySnapshots: localAvailability.length,
+          directEvents: localDirectEvents.length,
+          expandedEvents: localExpandedEvents.length,
+          usableEventsAfterExpansion: localEvents.length
+        },
+        directConnectorCounts: {
+          events: countCalendarRecordsForEmail(DIRECT_CONNECTOR_EVENTS, email),
+          availability: countCalendarRecordsForEmail(DIRECT_CONNECTOR_AVAILABILITY, email)
+        },
+        likelyIssue: hasLoadedCalendar(person)
+          ? (localEvents.length ? "Calendar records are present for this exact email." : "Loaded flag is present, but no detailed/free-busy rows are available in this browser cache for this exact email.")
+          : "No matching loaded email or calendar rows were found for this exact email."
+      };
+    }
+
+    function findCalendarDiagnostic(query) {
+      const text = String(query || "").trim();
+      const queryEmail = normalizeEmail(text.includes("@") ? text : "");
+      const queryKeys = new Set(nameMatchKeys(text));
+      const queryName = canonicalName(text);
+      const queryLooseKey = looseNameKey(text);
+      const allEmails = collectCalendarDiagnosticEmails();
+      const matchedPeople = (text
+        ? roster.filter(person => personMatchesCalendarQuery(person, text, queryEmail, queryKeys, queryName, queryLooseKey))
+        : selectedRoster()
+      ).slice(0, 25);
+      const missingVisibleSample = selectedRoster()
+        .filter(person => !hasLoadedCalendar(person))
+        .slice(0, 20)
+        .map(person => ({ name: person.name, email: person.email, manager: getManagerLabel(person) }));
+
+      return {
+        query: text,
+        note: "Use exact Oracle email when refreshing calendars. Close matches below usually mean a typo or cache/roster email mismatch.",
+        cacheSummary: getCalendarCacheSummary(),
+        closeEmailMatches: queryEmail ? findCloseEmails(queryEmail, allEmails) : [],
+        people: matchedPeople.map(getCalendarPersonDiagnostic),
+        missingVisibleSample,
         visibleRosterRows: selectedRoster().length
       };
     }
@@ -12668,6 +12859,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     window.refreshScoutStaffingLoad = () => refreshStaffingLoadFromNetSuiteCache({ force: true });
     window.debugScoutStaffingLoad = getStaffingLoadDiagnostics;
     window.findScoutStaffingLoad = findStaffingLoadDiagnostic;
+    window.findScoutCalendar = findCalendarDiagnostic;
   </script>
 </body>
 </html>
