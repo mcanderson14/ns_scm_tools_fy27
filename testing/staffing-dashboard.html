@@ -1126,6 +1126,11 @@
       background: #8b5cf6;
     }
 
+    .mini-day-fill.free {
+      min-height: 3px;
+      background: #39d68f;
+    }
+
     .mini-day-fill.gap {
       height: 100%;
       background: #cbd5df;
@@ -1213,6 +1218,10 @@
 
     .day-meeting-item.soft {
       border-left-color: #c88408;
+    }
+
+    .day-meeting-item.free {
+      border-left-color: #2fa66a;
     }
 
     .day-meeting-time {
@@ -1340,7 +1349,7 @@
     <div class="header-inner">
       <div class="brand-row">
         <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
-        <span class="version-pill">v27.0.30</span>
+        <span class="version-pill">v27.0.33</span>
       </div>
       <div class="header-actions">
         <div class="refresh-panel">
@@ -8753,12 +8762,12 @@
     const STAFFING_RECOMMENDATION_DAYS = 14;
     const STAFFING_GREEN_FOUR_HOUR_BLOCKS = 6;
     const STAFFING_YELLOW_THREE_HOUR_BLOCKS = 2;
-    const STAFFING_CARD_INITIAL_RENDER_COUNT = 8;
-    const STAFFING_CARD_RENDER_CHUNK_SIZE = 6;
-    const AVAILABILITY_TABLE_RENDER_LIMIT = 80;
+    const STAFFING_CARD_INITIAL_RENDER_COUNT = 4;
+    const STAFFING_CARD_RENDER_CHUNK_SIZE = 2;
+    const AVAILABILITY_TABLE_RENDER_LIMIT = 50;
     const ALTERNATE_SLOT_CONSULTANT_LIMIT = 48;
-    const WEEKLY_AVAILABILITY_RENDER_LIMIT = 48;
-    const DAILY_LOAD_RENDER_LIMIT = 80;
+    const WEEKLY_AVAILABILITY_RENDER_LIMIT = 32;
+    const DAILY_LOAD_RENDER_LIMIT = 50;
     const LOCAL_GRAPH_STARTUP_SCOPE_LIMIT = 80;
 
 const SNAPSHOT_LOADED_EMAILS = new Set([
@@ -9417,7 +9426,6 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
 
     function normalizeScheduleItem(item, email, context) {
       const status = String(item?.status || item?.showAs || "busy");
-      if (status.toLowerCase() === "free") return null;
       const start = graphDateTimeToIso(item?.start, context.timeZone);
       const end = graphDateTimeToIso(item?.end, context.timeZone);
       if (!start || !end || Number.isNaN(Date.parse(start)) || Number.isNaN(Date.parse(end))) return null;
@@ -10083,6 +10091,14 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       setCopied();
     }
 
+    function isFreeCalendarEvent(event) {
+      return String(event?.status || "").toLowerCase() === "free";
+    }
+
+    function isBlockingCalendarEvent(event) {
+      return !isFreeCalendarEvent(event);
+    }
+
     function classifyEvent(subject, status) {
       const text = `${subject || ""} ${status || ""}`.toLowerCase();
       const freeBusyOnly = /^free\/busy:/i.test(subject || "");
@@ -10091,6 +10107,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const prospect = /(business discussion|discovery|demonstration|\bdemo\b|scope confirmation|scoping discussion|requirements discussion|solution recommendation|alignment|annual business review|renewal q&a|process workflow review|overview demo|customer|prospect)/;
       const internal = /(\bkt\b|knowledge transfer|internal|training|office hours|forecast|team meeting|all hands|huddle|war room|admin|lunch|1:1|oneworld|knowledge sharing)/;
 
+      if (String(status || "").toLowerCase() === "free") return "free";
       if (freeBusyOnly && (status === "oof" || status === "busy")) return "hard";
       if (freeBusyOnly && (status === "tentative" || status === "workingElsewhere")) return "soft";
       if (status === "oof" || unavailable.test(text)) return "hard";
@@ -10426,6 +10443,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         : normalizedEvents.filter(event => normalizeEmail(event.email) === normalizeEmail(person.email));
       const calendarLoaded = hasLoadedCalendar(person);
       const conflicts = events
+        .filter(isBlockingCalendarEvent)
         .filter(event => rangesOverlap(windowConfig.protectedStart, windowConfig.protectedEnd, event.startDate, event.endDate))
         .map(event => {
           const meetingOverlap = overlapMinutes(windowConfig.meetingStart, windowConfig.meetingEnd, event.startDate, event.endDate);
@@ -10746,12 +10764,12 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const dayWindow = getFullDayWindow(dateValue, zone);
       return normalizedEvents
         .filter(event => normalizeEmail(event.email) === personEmail)
-        .filter(event => String(event.status || "").toLowerCase() !== "free")
         .filter(event => overlapMinutes(dayWindow.start, dayWindow.end, event.startDate, event.endDate) > 0)
         .sort((a, b) => a.startDate - b.startDate || String(a.subject || "").localeCompare(String(b.subject || "")));
     }
 
     function getMeetingSeverityClass(event) {
+      if (isFreeCalendarEvent(event)) return "free";
       if (isPtoCalendarEvent(event)) return "pto";
       const severity = event?.severity || classifyEvent(event?.subject, event?.status);
       return severity === "hard" || severity === "soft" ? severity : "review";
@@ -10864,6 +10882,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const busyMinutes = Math.min(
         dayWindow.workdayMinutes,
         personEvents
+          .filter(isBlockingCalendarEvent)
           .filter(event => !isPtoCalendarEvent(event))
           .reduce((sum, event) => sum + eventMinutesInDay(event, dayWindow), 0)
       );
@@ -11434,7 +11453,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       selectedStaffingRecommendationDates().forEach(dateValue => {
         const dayWindow = getWorkdayWindow(dateValue, zone);
         const busyIntervals = mergeBusyIntervals(events
-          .filter(event => String(event.status || "").toLowerCase() !== "free")
+          .filter(isBlockingCalendarEvent)
           .filter(event => overlapMinutes(dayWindow.start, dayWindow.end, event.startDate, event.endDate) > 0)
           .map(event => {
             return {
@@ -11487,7 +11506,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const inProgress = loadNumber(load.inProgress);
       const thresholds = amo
         ? { yellowMonth: 6, redMonth: 8, yellowInProgress: 12, redInProgress: 16 }
-        : { yellowMonth: 4, redMonth: 5, yellowInProgress: 7, redInProgress: 10 };
+        : { yellowMonth: 5, redMonth: 7, yellowInProgress: 7, redInProgress: 10 };
 
       let level = "green";
       let label = "Light";
@@ -11694,6 +11713,8 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
                 </button>
               `;
             }
+            const fullDayWindow = getFullDayWindow(dateValue, zone);
+            const freeItems = events.filter(event => isFreeCalendarEvent(event) && overlapMinutes(fullDayWindow.start, fullDayWindow.end, event.startDate, event.endDate) > 0).length;
             const pto = Math.min(
               dayWindow.workdayMinutes,
               events
@@ -11703,19 +11724,21 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
             const busy = Math.min(
               dayWindow.workdayMinutes,
               events
+                .filter(isBlockingCalendarEvent)
                 .filter(event => !isPtoCalendarEvent(event))
                 .reduce((sum, event) => sum + eventMinutesInDay(event, dayWindow), 0)
             );
             const busyHeight = Math.max(0, Math.min(100, Math.round((busy / dayWindow.workdayMinutes) * 100)));
             const ptoHeight = Math.max(0, Math.min(100, Math.round((pto / dayWindow.workdayMinutes) * 100)));
             const openHeight = Math.max(0, 100 - busyHeight - ptoHeight);
-            const title = `${label.weekday} ${label.monthDay}: ${(openHeight / 100 * dayWindow.workdayMinutes / 60).toFixed(1)}h open${pto ? `, ${(pto / 60).toFixed(1)}h PTO/OOO` : ""}, ${(busy / 60).toFixed(1)}h booked - click to show meetings`;
+            const title = `${label.weekday} ${label.monthDay}: ${(openHeight / 100 * dayWindow.workdayMinutes / 60).toFixed(1)}h open${pto ? `, ${(pto / 60).toFixed(1)}h PTO/OOO` : ""}, ${(busy / 60).toFixed(1)}h booked${freeItems ? `, ${freeItems} free/nonblocking item${freeItems === 1 ? "" : "s"}` : ""} - click to show meetings`;
             return `
               <button class="mini-day-wrap mini-day-button" type="button" data-day-email="${escapeHtml(personEmail)}" data-day-date="${dateValue}" title="${escapeHtml(title)}" aria-label="${escapeHtml(`Show ${person.name} meetings for ${label.weekday} ${label.monthDay}`)}">
                 <div class="mini-day">
                   <span class="mini-day-fill" style="height:${openHeight}%"></span>
                   <span class="mini-day-fill busy" style="height:${busyHeight}%"></span>
                   ${pto ? `<span class="mini-day-fill pto" style="height:${ptoHeight}%"></span>` : ""}
+                  ${freeItems ? `<span class="mini-day-fill free" title="${escapeHtml(`${freeItems} free/nonblocking calendar item${freeItems === 1 ? "" : "s"}`)}"></span>` : ""}
                 </div>
                 ${labelMarkup}
               </button>
@@ -11850,11 +11873,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     }
 
     function scheduleDeferredRender(callback) {
-      if (typeof window.requestIdleCallback === "function") {
-        window.requestIdleCallback(callback, { timeout: 250 });
-        return;
-      }
-      window.setTimeout(callback, 0);
+      window.setTimeout(callback, 16);
     }
 
     function renderStaffingCardRowHtml(row, loadLookup, eventsByEmail) {
@@ -12049,7 +12068,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         .slice(0, 20)
         .map(person => ({ name: person.name, email: person.email, manager: getManagerLabel(person) }));
       return {
-        dashboardVersion: "v27.0.30",
+        dashboardVersion: "v27.0.33",
         pageUrl: window.location.href,
         bridgeStatus: getStaffingLoadBridgeStatus(),
         storedRows: stored?.rows?.length || 0,
@@ -12240,6 +12259,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
           availabilitySnapshots: localAvailability.length,
           directEvents: localDirectEvents.length,
           expandedEvents: localExpandedEvents.length,
+          freeEvents: localEvents.filter(isFreeCalendarEvent).length,
           usableEventsAfterExpansion: localEvents.length
         },
         directConnectorCounts: {
@@ -12278,6 +12298,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         localGraphAnyRecords: person.loadedBy.localGraphAnyRecords,
         availabilitySnapshots: person.localGraphCounts.availabilitySnapshots,
         detailedEvents: person.localGraphCounts.directEvents,
+        freeEvents: person.localGraphCounts.freeEvents,
         usableEvents: person.localGraphCounts.usableEventsAfterExpansion,
         likelyIssue: person.likelyIssue
       }));
@@ -12291,6 +12312,46 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         people,
         missingVisibleSample,
         visibleRosterRows: selectedRoster().length
+      };
+    }
+
+    function findCalendarDayDiagnostic(query, dateValue = getSelectedMeetingDate()) {
+      const calendarDiagnostic = findCalendarDiagnostic(query);
+      const person = calendarDiagnostic.people[0];
+      if (!person) {
+        return {
+          query,
+          date: dateValue,
+          error: "No matching consultant was found."
+        };
+      }
+      const zone = document.getElementById("planningZone")?.value || "America/New_York";
+      const dayWindow = getFullDayWindow(dateValue, zone);
+      const events = normalizedEvents
+        .filter(event => normalizeEmail(event.email) === person.email)
+        .filter(event => overlapMinutes(dayWindow.start, dayWindow.end, event.startDate, event.endDate) > 0)
+        .sort((a, b) => a.startDate - b.startDate || String(a.subject || "").localeCompare(String(b.subject || "")));
+
+      return {
+        query,
+        date: dateValue,
+        zone,
+        person: {
+          name: person.name,
+          email: person.email,
+          calendarLoaded: person.calendarLoaded
+        },
+        eventCount: events.length,
+        freeEvents: events.filter(isFreeCalendarEvent).length,
+        blockingEvents: events.filter(isBlockingCalendarEvent).length,
+        events: events.map(event => ({
+          start: formatTime(event.startDate, zone),
+          end: formatTime(event.endDate, zone),
+          status: event.status,
+          severity: event.severity,
+          subject: event.subject,
+          location: event.location || ""
+        }))
       };
     }
 
@@ -12891,6 +12952,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     window.debugScoutStaffingLoad = getStaffingLoadDiagnostics;
     window.findScoutStaffingLoad = findStaffingLoadDiagnostic;
     window.findScoutCalendar = findCalendarDiagnostic;
+    window.findScoutCalendarDay = findCalendarDayDiagnostic;
   </script>
 </body>
 </html>
