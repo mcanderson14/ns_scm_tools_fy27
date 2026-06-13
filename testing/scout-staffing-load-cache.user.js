@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT Staffing Load Cache Bridge
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.2
+// @version      27.0.5
 // @description  Refreshes the SCOUT staffing-dashboard workload cache from NetSuite saved search 1324335.
 // @author       Michael Anderson
 // @match        https://mcanderson14.github.io/ns_scm_tools_fy27/staffing-dashboard.html*
@@ -33,10 +33,16 @@
   const PAGE_REQUEST_TYPE = "scout-staffing-load-refresh-request";
   const PAGE_RESPONSE_TYPE = "scout-staffing-load-refresh-response";
   const STALE_AFTER_MS = 4 * 60 * 60 * 1000;
+  const SAVED_SEARCH_TIMEOUT_MS = 10 * 60 * 1000;
+  const PAGE_BRIDGE_TIMEOUT_MS = SAVED_SEARCH_TIMEOUT_MS + 30000;
   const BUTTON_ID = "scout-staffing-load-cache-refresh";
   const STATUS_ID = "scout-staffing-load-cache-status";
 
   let refreshPromise = null;
+
+  function isDashboardPage() {
+    return /staffing-dashboard\.html/i.test(window.location.href || "");
+  }
 
   function pageWindow() {
     return typeof unsafeWindow !== "undefined" ? unsafeWindow : window;
@@ -184,7 +190,7 @@
     const request = {
       method: "GET",
       url,
-      timeout: 120000,
+      timeout: SAVED_SEARCH_TIMEOUT_MS,
       headers: {
         "Cache-Control": "no-cache",
         "Pragma": "no-cache"
@@ -201,7 +207,7 @@
             else reject(new Error(`NetSuite saved search returned ${response.status}`));
           },
           onerror: () => reject(new Error("Could not reach NetSuite saved search.")),
-          ontimeout: () => reject(new Error("NetSuite saved search timed out."))
+          ontimeout: () => reject(new Error("NetSuite saved search timed out after 10 minutes."))
         });
       });
     }
@@ -398,7 +404,7 @@
   function publishBridgeApi() {
     pageWindow().__SCOUT_STAFFING_LOAD_BRIDGE = {
       installed: true,
-      version: "27.0.2",
+      version: "27.0.5",
       searchId: SAVED_SEARCH_ID,
       installedAt: new Date().toISOString()
     };
@@ -437,7 +443,7 @@
       window.__SCOUT_STAFFING_LOAD_BRIDGE = Object.assign({}, window.__SCOUT_STAFFING_LOAD_BRIDGE, {
         installed: true,
         mode: "postMessage",
-        version: "27.0.2",
+        version: "27.0.5",
         searchId: ${JSON.stringify(SAVED_SEARCH_ID)},
         installedAt: new Date().toISOString()
       });
@@ -451,7 +457,7 @@
           const timer = window.setTimeout(() => {
             window.removeEventListener("message", onMessage);
             reject(new Error("SCOUT Staffing Load Cache Bridge did not respond."));
-          }, 125000);
+          }, ${PAGE_BRIDGE_TIMEOUT_MS});
           function onMessage(event) {
             const data = event.data || {};
             if (!data || data.type !== responseType || data.requestId !== requestId) return;
@@ -473,10 +479,12 @@
   installPageMessageBridge();
   mirrorGmCacheToPageStorage();
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", insertButton, { once: true });
-  } else {
-    insertButton();
+  if (!isDashboardPage()) {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", insertButton, { once: true });
+    } else {
+      insertButton();
+    }
   }
 
   window.setInterval(() => updateButtonState(), 60 * 1000);

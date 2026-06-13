@@ -182,6 +182,11 @@
       text-align: right;
     }
 
+    #scout-staffing-load-cache-refresh,
+    #scout-staffing-load-cache-status {
+      display: none !important;
+    }
+
     main {
       max-width: 1680px;
       margin: 0 auto;
@@ -1236,7 +1241,7 @@
     <div class="header-inner">
       <div class="brand-row">
         <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
-        <span class="version-pill">v27.0.24</span>
+        <span class="version-pill">v27.0.26</span>
       </div>
       <div class="header-actions">
         <div class="refresh-panel">
@@ -8684,7 +8689,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     const STAFFING_LOAD_NETSUITE_SEARCH_ID = "1324335";
     const STAFFING_LOAD_BRIDGE_REQUEST_TYPE = "scout-staffing-load-refresh-request";
     const STAFFING_LOAD_BRIDGE_RESPONSE_TYPE = "scout-staffing-load-refresh-response";
-    const STAFFING_LOAD_BRIDGE_TIMEOUT_MS = 125000;
+    const STAFFING_LOAD_BRIDGE_TIMEOUT_MS = 10 * 60 * 1000 + 45000;
     const STAFFING_LOAD_CACHE_STALE_MS = 4 * 60 * 60 * 1000;
     const STAFFING_LOAD_SHAREPOINT_URL = "https://oracle.sharepoint.com/:x:/r/sites/solutionconsultingmanagers/_layouts/15/Doc.aspx?sourcedoc=%7B8BD2C115-A31F-4734-8F17-FB70AEC09A69%7D&file=SCOUT_SC_LOAD_REPORT.xls&action=default&mobileredirect=true";
     const GRAPH_EXPLORER_TOKEN_VAULT_KEY = "sc-staffing-dashboard-graph-explorer-token-vault-v2";
@@ -10060,6 +10065,40 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       return String(value || "").toLowerCase().replace(/[^a-z]/g, "");
     }
 
+    function nameMatchKeys(value) {
+      const raw = String(value || "").trim();
+      const keys = new Set();
+      const addKey = candidate => {
+        const key = canonicalName(candidate);
+        if (key) keys.add(key);
+      };
+      const tokens = candidate => String(candidate || "")
+        .replace(/[^a-zA-Z\s]/g, " ")
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+
+      addKey(raw);
+
+      if (raw.includes(",")) {
+        const [last, ...restParts] = raw.split(",");
+        const firstParts = tokens(restParts.join(" "));
+        const lastParts = tokens(last);
+        if (firstParts.length && lastParts.length) {
+          addKey([...firstParts, ...lastParts].join(" "));
+          addKey([firstParts[0], lastParts[lastParts.length - 1]].join(" "));
+        }
+      } else {
+        const parts = tokens(raw);
+        if (parts.length >= 2) {
+          addKey([parts[0], parts[parts.length - 1]].join(" "));
+          addKey([parts[parts.length - 1], parts[0]].join(" "));
+        }
+      }
+
+      return [...keys];
+    }
+
     function getTimeZoneOffset(date, timeZone) {
       const parts = getCachedFormatter(`offset|${timeZone}`, {
         timeZone,
@@ -11145,7 +11184,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const byName = new Map();
       rows.forEach(row => {
         if (row.email) byEmail.set(row.email, row);
-        if (row.name) byName.set(canonicalName(row.name), row);
+        nameMatchKeys(row.name).forEach(key => byName.set(key, row));
       });
       return { rows, byEmail, byName };
     }
@@ -11165,8 +11204,8 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     function getStaffingLoadForPerson(person, lookup = getStaffingLoadLookup()) {
       const email = normalizeEmail(person?.email);
       if (email && lookup.byEmail.has(email)) return lookup.byEmail.get(email);
-      const name = canonicalName(person?.name);
-      return name && lookup.byName.has(name) ? lookup.byName.get(name) : null;
+      const key = nameMatchKeys(person?.name).find(item => lookup.byName.has(item));
+      return key ? lookup.byName.get(key) : null;
     }
 
     function getCalendarDayStats(person, eventsByEmail = null) {
@@ -11590,7 +11629,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const originalText = button.textContent;
       button.disabled = true;
       button.textContent = "Refreshing...";
-      setDashboardRefreshStatus("Refreshing staffing data...", `NetSuite saved search ${STAFFING_LOAD_NETSUITE_SEARCH_ID}`);
+      setDashboardRefreshStatus("Refreshing staffing data...", `NetSuite saved search ${STAFFING_LOAD_NETSUITE_SEARCH_ID}; large reports can take several minutes`);
       try {
         const report = await refreshStaffingLoadFromNetSuiteCache({ force: true });
         if (report?.rows?.length) {
@@ -11623,7 +11662,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         ? window.getScoutStaffingLoadCache()
         : null;
       return {
-        dashboardVersion: "v27.0.24",
+        dashboardVersion: "v27.0.26",
         pageUrl: window.location.href,
         bridgeStatus: getStaffingLoadBridgeStatus(),
         storedRows: stored?.rows?.length || 0,
