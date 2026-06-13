@@ -1349,7 +1349,7 @@
     <div class="header-inner">
       <div class="brand-row">
         <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
-        <span class="version-pill">v27.0.34</span>
+        <span class="version-pill">v27.0.35</span>
       </div>
       <div class="header-actions">
         <div class="refresh-panel">
@@ -10179,31 +10179,33 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       setCopied();
     }
 
-    function isFreeCalendarEvent(event) {
-      return String(event?.status || "").toLowerCase() === "free";
-    }
-
-    function isBlockingCalendarEvent(event) {
-      return !isFreeCalendarEvent(event);
-    }
-
     function classifyEvent(subject, status) {
       const text = `${subject || ""} ${status || ""}`.toLowerCase();
+      const statusText = String(status || "").toLowerCase();
       const freeBusyOnly = /^free\/busy:/i.test(subject || "");
       const unavailable = /(out of office|\booo\b|pto|holiday|child\s*care|childcare|pickup|doctor|dentist|medical|appointment|private appointment|wedding|not available|unavailable|do not book|\bdnb\b|please ask before booking|ask before booking|travel|onsite|on site)/;
       const prep = /(demo prep|\bprep\b|dry[-\s]?run|planning)/;
       const prospect = /(business discussion|discovery|demonstration|\bdemo\b|scope confirmation|scoping discussion|requirements discussion|solution recommendation|alignment|annual business review|renewal q&a|process workflow review|overview demo|customer|prospect)/;
       const internal = /(\bkt\b|knowledge transfer|internal|training|office hours|forecast|team meeting|all hands|huddle|war room|admin|lunch|1:1|oneworld|knowledge sharing)/;
 
-      if (String(status || "").toLowerCase() === "free") return "free";
-      if (freeBusyOnly && (status === "oof" || status === "busy")) return "hard";
-      if (freeBusyOnly && (status === "tentative" || status === "workingElsewhere")) return "soft";
-      if (status === "oof" || unavailable.test(text)) return "hard";
+      if (freeBusyOnly && (statusText === "oof" || statusText === "busy")) return "hard";
+      if (freeBusyOnly && (statusText === "tentative" || statusText === "workingelsewhere")) return "soft";
+      if (statusText === "oof" || unavailable.test(text)) return "hard";
       if (prep.test(text) && !/(do not book|\bdnb\b|not available|travel|onsite|on site)/.test(text)) return "soft";
       if (prospect.test(text)) return "hard";
       if (internal.test(text)) return "soft";
-      if (status === "tentative" || status === "workingElsewhere") return "soft";
+      if (statusText === "tentative" || statusText === "workingelsewhere") return "soft";
+      if (statusText === "free") return "free";
       return "other";
+    }
+
+    function isFreeCalendarEvent(event) {
+      const severity = event?.severity || classifyEvent(event?.subject, event?.status);
+      return severity === "free";
+    }
+
+    function isBlockingCalendarEvent(event) {
+      return !isFreeCalendarEvent(event);
     }
 
     function isPtoCalendarEvent(event) {
@@ -12156,7 +12158,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         .slice(0, 20)
         .map(person => ({ name: person.name, email: person.email, manager: getManagerLabel(person) }));
       return {
-        dashboardVersion: "v27.0.34",
+        dashboardVersion: "v27.0.35",
         pageUrl: window.location.href,
         bridgeStatus: getStaffingLoadBridgeStatus(),
         storedRows: stored?.rows?.length || 0,
