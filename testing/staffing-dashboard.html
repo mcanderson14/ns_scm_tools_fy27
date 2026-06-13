@@ -778,6 +778,26 @@
       box-shadow: inset 4px 0 0 var(--red);
     }
 
+    .staffing-card-row.staffing-rec-green {
+      border-color: #b9e5c7;
+      box-shadow: inset 4px 0 0 var(--green);
+    }
+
+    .staffing-card-row.staffing-rec-yellow {
+      border-color: #f0d58f;
+      box-shadow: inset 4px 0 0 #c88408;
+    }
+
+    .staffing-card-row.staffing-rec-red {
+      border-color: #efb9b9;
+      box-shadow: inset 4px 0 0 var(--red);
+    }
+
+    .staffing-card-row.staffing-rec-unknown {
+      border-color: #cfd8e1;
+      box-shadow: inset 4px 0 0 #6c7885;
+    }
+
     .staffing-cell {
       min-width: 0;
     }
@@ -799,6 +819,66 @@
       font-size: 17px;
     }
 
+    .staffing-card-top {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: start;
+    }
+
+    .staffing-recommendation-score {
+      min-width: 56px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #f8fafb;
+      padding: 7px 8px;
+      text-align: center;
+    }
+
+    .staffing-recommendation-score strong {
+      display: block;
+      color: var(--ink);
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .staffing-recommendation-score span {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 9px;
+      font-weight: 900;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .staffing-recommendation-score.staffing-rec-green {
+      background: #e8f6ed;
+      border-color: #bfe7cb;
+    }
+
+    .staffing-recommendation-score.staffing-rec-yellow {
+      background: #fff5db;
+      border-color: #f4d891;
+    }
+
+    .staffing-recommendation-score.staffing-rec-red {
+      background: #fae8e8;
+      border-color: #efb9b9;
+    }
+
+    .staffing-recommendation-score.staffing-rec-unknown {
+      background: #edf1f5;
+      border-color: #cfd8e1;
+    }
+
+    .staffing-signal-note {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
     .staffing-status-line {
       display: flex;
       flex-wrap: wrap;
@@ -817,7 +897,7 @@
 
     .staffing-stat-grid {
       display: grid;
-      grid-template-columns: repeat(4, minmax(58px, 1fr));
+      grid-template-columns: repeat(6, minmax(58px, 1fr));
       gap: 6px;
       margin-bottom: 10px;
     }
@@ -844,6 +924,25 @@
       color: var(--ink);
       font-size: 16px;
       line-height: 1;
+    }
+
+    .staffing-signal-box {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #f8fafb;
+      padding: 8px 9px;
+      margin-bottom: 8px;
+    }
+
+    .staffing-signal-box strong {
+      display: block;
+      margin-top: 5px;
+      color: var(--ink);
+      font-size: 13px;
+    }
+
+    .staffing-signal-box .subtle {
+      margin-top: 4px;
     }
 
     .mix-block {
@@ -1241,7 +1340,7 @@
     <div class="header-inner">
       <div class="brand-row">
         <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
-        <span class="version-pill">v27.0.26</span>
+        <span class="version-pill">v27.0.27</span>
       </div>
       <div class="header-actions">
         <div class="refresh-panel">
@@ -8651,6 +8750,9 @@
     ];
 
     const STAFFING_WINDOW_DAYS = 21;
+    const STAFFING_RECOMMENDATION_DAYS = 14;
+    const STAFFING_GREEN_FOUR_HOUR_BLOCKS = 6;
+    const STAFFING_YELLOW_THREE_HOUR_BLOCKS = 2;
     const STAFFING_CARD_INITIAL_RENDER_COUNT = 8;
     const STAFFING_CARD_RENDER_CHUNK_SIZE = 6;
     const AVAILABILITY_TABLE_RENDER_LIMIT = 80;
@@ -10005,6 +10107,11 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       return status === "oof" || /(out of office|\booo\b|pto|vacation|holiday)/.test(text);
     }
 
+    function isTravelCalendarEvent(event) {
+      const text = `${event?.subject || ""} ${event?.location || ""} ${event?.status || ""}`.toLowerCase();
+      return /(travel|flight|airport|hotel|onsite|on site|customer visit|site visit|drive time|driving|roadshow)/.test(text);
+    }
+
     function getZoneLabel(zone) {
       const zoneLabels = {
         "America/New_York": "Eastern (ET)",
@@ -10097,6 +10204,32 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       }
 
       return [...keys];
+    }
+
+    function looseNameKey(value) {
+      const raw = String(value || "").trim();
+      const tokens = candidate => String(candidate || "")
+        .replace(/[^a-zA-Z\s]/g, " ")
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+
+      let first = "";
+      let last = "";
+      if (raw.includes(",")) {
+        const [lastPart, ...firstParts] = raw.split(",");
+        const parsedFirst = tokens(firstParts.join(" "));
+        const parsedLast = tokens(lastPart);
+        first = parsedFirst[0] || "";
+        last = parsedLast[parsedLast.length - 1] || "";
+      } else {
+        const parts = tokens(raw);
+        first = parts[0] || "";
+        last = parts[parts.length - 1] || "";
+      }
+
+      const key = `${canonicalName(last)}|${canonicalName(first).slice(0, 1)}`;
+      return key.length > 1 ? key : "";
     }
 
     function getTimeZoneOffset(date, timeZone) {
@@ -10378,14 +10511,24 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     }
 
     function renderRecommendation(rows, windowConfig) {
-      const clean = rows.filter(row => row.rank === 0);
-      const top = rows.slice(0, 4);
+      const eventsByEmail = buildEventsByEmail(normalizedEvents);
+      const loadLookup = getStaffingLoadLookup();
+      const ranked = rows.map(row => {
+        const load = getStaffingLoadForPerson(row, loadLookup);
+        return { row, load, recommendation: getStaffingRecommendation(row, load, eventsByEmail) };
+      }).sort((a, b) => {
+        if (a.recommendation.score !== b.recommendation.score) return b.recommendation.score - a.recommendation.score;
+        if (a.row.rank !== b.row.rank) return a.row.rank - b.row.rank;
+        return a.row.name.localeCompare(b.row.name);
+      });
+      const clean = ranked.filter(item => item.recommendation.level === "green");
+      const top = ranked.slice(0, 4);
       const partialCount = rows.filter(row => !row.calendarLoaded).length;
       const unknownCount = rows.filter(row => row.rank === 5).length;
       const pendingSelected = rows.filter(row => !row.calendarLoaded && isPendingCalendarConsultant(row));
       const title = clean.length
-        ? `${clean.length} clean option${clean.length === 1 ? "" : "s"}`
-        : "No clean options";
+        ? `${clean.length} staff-ready option${clean.length === 1 ? "" : "s"}`
+        : "No staff-ready options";
       const focusedMissing = rows.find(row => !row.calendarLoaded && isFocusedConsultant(row));
       const coverageDetail = focusedMissing
         ? ` ${missingCalendarSentence(focusedMissing)}`
@@ -10395,8 +10538,8 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         ? ` ${partialCount} consultants still need 3-week Outlook snapshot data; ${unknownCount} are not counted as open for this window.`
         : "";
       const detail = clean.length
-        ? `Best fit starts with ${clean.slice(0, 3).map(row => row.name).join(", ")}.${coverageDetail}`
-        : `Best fallback is ${top[0]?.name || "none"} with ${top[0]?.label.toLowerCase() || "no recommendation"}.${coverageDetail}`;
+        ? `Best staffing capacity starts with ${clean.slice(0, 3).map(item => item.row.name).join(", ")}.${coverageDetail}`
+        : `Best fallback is ${top[0]?.row?.name || "none"} with ${top[0]?.recommendation?.label.toLowerCase() || "no recommendation"}.${coverageDetail}`;
 
       document.getElementById("recommendationHeadline").textContent = title;
       document.getElementById("recommendationDetail").textContent = detail;
@@ -10405,13 +10548,13 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       document.getElementById("availabilitySubtitle").textContent = `${formatDate(windowConfig.meetingStart, windowConfig.timeZone)} ${formatTimeRange(windowConfig.meetingStart, windowConfig.meetingEnd, windowConfig.timeZone)} ${getZoneLabel(windowConfig.timeZone)}`;
 
       const container = document.getElementById("topRecommendations");
-      container.innerHTML = top.map(row => `
+      container.innerHTML = top.map(({ row, recommendation }) => `
         <div class="top-person">
           <div>
             <div class="person-line"><span class="person-name">${row.name}</span>${legacyOrgBadge(row)}${locationBadge(row)}</div>
-            <div class="subtle">${escapeHtml(getManagerLabel(row))} - ${getZoneLabel(row.timeZone)}${row.calendarLoaded ? "" : ` - ${missingCalendarLabel(row).toLowerCase()}`}</div>
+            <div class="subtle">${escapeHtml(getManagerLabel(row))} - ${getZoneLabel(row.timeZone)} - ${escapeHtml(recommendation.calendar.label)} calendar / ${escapeHtml(recommendation.workload.label.toLowerCase())} load</div>
           </div>
-          <span class="pill ${row.pill}">${row.label}</span>
+          <span class="pill ${recommendation.level === "green" ? "available" : recommendation.level === "red" ? "busy" : recommendation.level === "unknown" ? "unknown" : "soft"}">${recommendation.score} ${recommendation.label}</span>
         </div>
       `).join("");
     }
@@ -11182,11 +11325,17 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const rows = getRawStaffingLoadRows().map(normalizeStaffingLoadRow).filter(Boolean);
       const byEmail = new Map();
       const byName = new Map();
+      const byLooseName = new Map();
       rows.forEach(row => {
         if (row.email) byEmail.set(row.email, row);
         nameMatchKeys(row.name).forEach(key => byName.set(key, row));
+        const looseKey = looseNameKey(row.name);
+        if (looseKey) {
+          if (!byLooseName.has(looseKey)) byLooseName.set(looseKey, []);
+          byLooseName.get(looseKey).push(row);
+        }
       });
-      return { rows, byEmail, byName };
+      return { rows, byEmail, byName, byLooseName };
     }
 
     function getStaffingLoadSourceSummary(loadRowCount) {
@@ -11205,7 +11354,205 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const email = normalizeEmail(person?.email);
       if (email && lookup.byEmail.has(email)) return lookup.byEmail.get(email);
       const key = nameMatchKeys(person?.name).find(item => lookup.byName.has(item));
-      return key ? lookup.byName.get(key) : null;
+      if (key) return lookup.byName.get(key);
+      const looseKey = looseNameKey(person?.name);
+      const looseMatches = looseKey ? lookup.byLooseName.get(looseKey) || [] : [];
+      return looseMatches.length === 1 ? looseMatches[0] : null;
+    }
+
+    function isAmoConsultant(person, load = null) {
+      const text = `${person?.legacyOrg || ""} ${person?.industryFamily || ""} ${load?.legacyTeam || ""}`.toLowerCase();
+      return /\bamo\b/.test(text);
+    }
+
+    function selectedStaffingRecommendationDates(days = STAFFING_RECOMMENDATION_DAYS) {
+      const start = getSelectedMeetingDate();
+      return Array.from({ length: days }, (_, index) => addDaysIso(start, index))
+        .filter(dateValue => !isWeekendIso(dateValue));
+    }
+
+    function mergeBusyIntervals(intervals) {
+      const sorted = intervals
+        .filter(item => item.end > item.start)
+        .sort((a, b) => a.start - b.start || a.end - b.end);
+      const merged = [];
+
+      sorted.forEach(interval => {
+        const last = merged[merged.length - 1];
+        if (!last || interval.start > last.end) {
+          merged.push({ ...interval });
+          return;
+        }
+        last.end = Math.max(last.end, interval.end);
+      });
+
+      return merged;
+    }
+
+    function countBlocksInOpenSegments(dayWindow, busyIntervals, durationMinutes) {
+      const durationMs = durationMinutes * 60000;
+      let cursor = dayWindow.start.getTime();
+      let count = 0;
+
+      busyIntervals.forEach(interval => {
+        if (interval.start > cursor) {
+          count += Math.floor((interval.start - cursor) / durationMs);
+        }
+        cursor = Math.max(cursor, interval.end);
+      });
+
+      const dayEnd = dayWindow.end.getTime();
+      if (dayEnd > cursor) count += Math.floor((dayEnd - cursor) / durationMs);
+      return count;
+    }
+
+    function getCalendarCapacitySignal(person, eventsByEmail = buildEventsByEmail(normalizedEvents)) {
+      const calendarLoaded = hasLoadedCalendar(person);
+      const email = normalizeEmail(person?.email);
+      if (!calendarLoaded || !email) {
+        return {
+          level: "unknown",
+          label: "Unknown",
+          pill: "unknown",
+          threeHourBlocks: 0,
+          fourHourBlocks: 0,
+          hasTravel: false,
+          note: missingCalendarSentence(person)
+        };
+      }
+
+      const zone = document.getElementById("planningZone").value;
+      const events = eventsByEmail.get(email) || [];
+      let threeHourBlocks = 0;
+      let fourHourBlocks = 0;
+      const allDateKeys = Array.from({ length: STAFFING_RECOMMENDATION_DAYS }, (_, index) => addDaysIso(getSelectedMeetingDate(), index));
+      let hasTravel = events.some(event => isTravelCalendarEvent(event) && allDateKeys.some(dateValue => {
+        const fullDay = getFullDayWindow(dateValue, zone);
+        return overlapMinutes(fullDay.start, fullDay.end, event.startDate, event.endDate) > 0;
+      }));
+
+      selectedStaffingRecommendationDates().forEach(dateValue => {
+        const dayWindow = getWorkdayWindow(dateValue, zone);
+        const busyIntervals = mergeBusyIntervals(events
+          .filter(event => String(event.status || "").toLowerCase() !== "free")
+          .filter(event => overlapMinutes(dayWindow.start, dayWindow.end, event.startDate, event.endDate) > 0)
+          .map(event => {
+            return {
+              start: Math.max(dayWindow.start.getTime(), event.startDate.getTime()),
+              end: Math.min(dayWindow.end.getTime(), event.endDate.getTime())
+            };
+          }));
+
+        threeHourBlocks += countBlocksInOpenSegments(dayWindow, busyIntervals, 180);
+        fourHourBlocks += countBlocksInOpenSegments(dayWindow, busyIntervals, 240);
+      });
+
+      let level = "red";
+      let label = "Red";
+      let note = `${threeHourBlocks} clean 3h blocks; ${fourHourBlocks} clean 4h blocks in the next 2 weeks.`;
+      if (fourHourBlocks >= STAFFING_GREEN_FOUR_HOUR_BLOCKS) {
+        level = "green";
+        label = "Green";
+      } else if (threeHourBlocks >= STAFFING_YELLOW_THREE_HOUR_BLOCKS) {
+        level = "yellow";
+        label = "Yellow";
+      }
+      if (hasTravel) note += " Onsite note: travel or onsite calendar language detected.";
+
+      return {
+        level,
+        label,
+        pill: level === "green" ? "available" : level === "yellow" ? "soft" : "busy",
+        threeHourBlocks,
+        fourHourBlocks,
+        hasTravel,
+        note
+      };
+    }
+
+    function getWorkloadSignal(person, load) {
+      if (!load) {
+        return {
+          level: "unknown",
+          label: "Unknown",
+          pill: "unknown",
+          score: 10,
+          monthlyLoad: 0,
+          note: "No workload report row matched this consultant yet."
+        };
+      }
+
+      const amo = isAmoConsultant(person, load);
+      const monthlyLoad = Math.max(loadNumber(load.thisMonth), loadNumber(load.nextMonth));
+      const inProgress = loadNumber(load.inProgress);
+      const thresholds = amo
+        ? { yellowMonth: 6, redMonth: 8, yellowInProgress: 12, redInProgress: 16 }
+        : { yellowMonth: 4, redMonth: 5, yellowInProgress: 7, redInProgress: 10 };
+
+      let level = "green";
+      let label = "Light";
+      if (monthlyLoad > thresholds.redMonth || inProgress > thresholds.redInProgress) {
+        level = "red";
+        label = "Heavy";
+      } else if (monthlyLoad >= thresholds.yellowMonth || inProgress >= thresholds.yellowInProgress) {
+        level = "yellow";
+        label = "Review";
+      }
+
+      const typeLabel = amo ? "AMO" : "Direct";
+      const note = `${typeLabel} load: ${inProgress} in progress; ${monthlyLoad} max this/next month.`;
+      return {
+        level,
+        label,
+        pill: level === "green" ? "available" : level === "yellow" ? "soft" : "busy",
+        score: level === "green" ? 35 : level === "yellow" ? 18 : 0,
+        monthlyLoad,
+        note
+      };
+    }
+
+    function getStaffingRecommendation(person, load, eventsByEmail = buildEventsByEmail(normalizedEvents)) {
+      const calendar = getCalendarCapacitySignal(person, eventsByEmail);
+      const workload = getWorkloadSignal(person, load);
+      let level = "yellow";
+      let label = "Review";
+      let score = 45;
+
+      if (calendar.level === "red" || workload.level === "red") {
+        level = "red";
+        label = "Avoid";
+        score = Math.min(40, (calendar.level === "red" ? 16 : 35) + (workload.level === "red" ? 8 : workload.score));
+      } else if (calendar.level === "green" && workload.level === "green") {
+        level = "green";
+        label = "Staff";
+        score = 90;
+      } else if (calendar.level === "unknown" || workload.level === "unknown") {
+        level = "unknown";
+        label = "Review";
+        score = 50;
+      } else {
+        score = 65;
+      }
+
+      return {
+        level,
+        label,
+        score,
+        cardClass: `staffing-rec-${level}`,
+        calendar,
+        workload,
+        note: `${calendar.note} ${workload.note}`.trim()
+      };
+    }
+
+    function renderSignalBox(title, signal) {
+      return `
+        <div class="staffing-signal-box">
+          <span class="staffing-section-label">${escapeHtml(title)}</span>
+          <span class="pill ${signal.pill}">${escapeHtml(signal.label)}</span>
+          <strong>${escapeHtml(signal.note)}</strong>
+        </div>
+      `;
     }
 
     function getCalendarDayStats(person, eventsByEmail = null) {
@@ -11429,6 +11776,8 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
             <div class="staffing-stat"><span>-10 Days</span><strong>-</strong></div>
             <div class="staffing-stat"><span>In Prog</span><strong>-</strong></div>
             <div class="staffing-stat"><span>Next Wk</span><strong>-</strong></div>
+            <div class="staffing-stat"><span>This Mo</span><strong>-</strong></div>
+            <div class="staffing-stat"><span>Next Mo</span><strong>-</strong></div>
           </div>
         `;
       }
@@ -11439,6 +11788,8 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
           <div class="staffing-stat"><span>-10 Days</span><strong>${formatLoadNumber(load.assignedLast10Days)}</strong></div>
           <div class="staffing-stat"><span>In Prog</span><strong>${formatLoadNumber(load.inProgress)}</strong></div>
           <div class="staffing-stat"><span>Next Wk</span><strong>${formatLoadNumber(load.nextWeek)}</strong></div>
+          <div class="staffing-stat"><span>This Mo</span><strong>${formatLoadNumber(load.thisMonth)}</strong></div>
+          <div class="staffing-stat"><span>Next Mo</span><strong>${formatLoadNumber(load.nextMonth)}</strong></div>
         </div>
       `;
     }
@@ -11495,32 +11846,47 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     function renderStaffingCardRowHtml(row, loadLookup, eventsByEmail) {
       const load = getStaffingLoadForPerson(row, loadLookup);
       const stats = getCalendarDayStats(row, eventsByEmail);
+      const recommendation = getStaffingRecommendation(row, load, eventsByEmail);
       return `
-        <article class="staffing-card-row ${row.pill}">
+        <article class="staffing-card-row ${row.pill} ${recommendation.cardClass}">
           <div class="staffing-cell">
-            <div class="staffing-name">
-              <strong>${escapeHtml(row.name)}</strong>
-              ${legacyOrgBadge(row)}
-              ${locationBadge(row)}
+            <div class="staffing-card-top">
+              <div>
+                <div class="staffing-name">
+                  <strong>${escapeHtml(row.name)}</strong>
+                  ${legacyOrgBadge(row)}
+                  ${locationBadge(row)}
+                </div>
+                <div class="subtle">${escapeHtml(getManagerLabel(row))} - ${getZoneLabel(row.timeZone)}</div>
+                <div class="subtle">${escapeHtml(row.email || "")}</div>
+              </div>
+              <div class="staffing-recommendation-score ${recommendation.cardClass}">
+                <strong>${formatLoadNumber(recommendation.score)}</strong>
+                <span>${escapeHtml(recommendation.label)}</span>
+              </div>
             </div>
-            <div class="subtle">${escapeHtml(getManagerLabel(row))} - ${getZoneLabel(row.timeZone)}</div>
-            <div class="subtle">${escapeHtml(row.email || "")}</div>
             <div class="staffing-status-line">
               <span class="pill ${row.pill}">${row.label}</span>
+              <span class="pill ${recommendation.calendar.pill}">Calendar ${recommendation.calendar.label}</span>
+              <span class="pill ${recommendation.workload.pill}">Load ${recommendation.workload.label}</span>
               ${coverageBadge(row)}
               ${stats.pto ? `<span class="pill pto">PTO/OOO</span>` : ""}
+              ${recommendation.calendar.hasTravel ? `<span class="pill ot-warning">Onsite note</span>` : ""}
               ${row.otWarning ? `<span class="pill ot-warning">OT WARNING</span>` : ""}
             </div>
+            <div class="staffing-signal-note">${escapeHtml(recommendation.note)}</div>
           </div>
 
           <div class="staffing-cell">
             <p class="staffing-section-label">Workload</p>
+            ${renderSignalBox("Workload Signal", recommendation.workload)}
             ${renderWorkloadStats(load)}
             ${renderLoadMix(load, row)}
           </div>
 
           <div class="staffing-cell">
             <p class="staffing-section-label">Calendar Detail</p>
+            ${renderSignalBox("Calendar Heat", recommendation.calendar)}
             <div class="subtle"><strong>${stats.calendarLoaded ? `${(stats.open / 60).toFixed(1)}h open on ${formatIsoDate(getSelectedMeetingDate())}` : missingCalendarLabel(row)}</strong></div>
             ${renderCalendarLoadBar(stats)}
             <div class="subtle">${(stats.pto / 60).toFixed(1)} PTO/OOO; ${(stats.hard / 60).toFixed(1)} hard; ${(stats.soft / 60).toFixed(1)} soft; ${(stats.other / 60).toFixed(1)} review; ${stats.calendarLoaded ? `${(stats.open / 60).toFixed(1)} open` : missingCalendarSubtle(row)}</div>
@@ -11661,16 +12027,64 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const bridgeCache = typeof window.getScoutStaffingLoadCache === "function"
         ? window.getScoutStaffingLoadCache()
         : null;
+      const loadLookup = getStaffingLoadLookup();
+      const visibleRoster = selectedRoster();
+      const matchedVisible = visibleRoster.filter(person => getStaffingLoadForPerson(person, loadLookup));
+      const unmatchedVisible = visibleRoster
+        .filter(person => !getStaffingLoadForPerson(person, loadLookup))
+        .slice(0, 20)
+        .map(person => ({ name: person.name, email: person.email, manager: getManagerLabel(person) }));
       return {
-        dashboardVersion: "v27.0.26",
+        dashboardVersion: "v27.0.27",
         pageUrl: window.location.href,
         bridgeStatus: getStaffingLoadBridgeStatus(),
         storedRows: stored?.rows?.length || 0,
         storedRefreshedAt: stored?.refreshedAt || "",
         bridgeCacheRows: bridgeCache?.rows?.length || 0,
         bridgeCacheRefreshedAt: bridgeCache?.refreshedAt || "",
+        normalizedLoadRows: loadLookup.rows.length,
+        visibleRosterRows: visibleRoster.length,
+        matchedVisibleWorkloadRows: matchedVisible.length,
+        unmatchedVisibleWorkloadSample: unmatchedVisible,
         sourceUrl: bridgeCache?.sourceUrl || stored?.sourceUrl || "",
         lastActivity: calendarActivityLog.slice(0, 8)
+      };
+    }
+
+    function findStaffingLoadDiagnostic(query) {
+      const text = String(query || "").trim();
+      const queryKeys = new Set(nameMatchKeys(text));
+      const queryName = canonicalName(text);
+      const queryEmail = normalizeEmail(text);
+      const queryLooseKey = looseNameKey(text);
+      const loadLookup = getStaffingLoadLookup();
+      const loadMatches = loadLookup.rows.filter(row => {
+        const rowKeys = nameMatchKeys(row.name);
+        return (queryEmail && row.email === queryEmail)
+          || (queryLooseKey && looseNameKey(row.name) === queryLooseKey)
+          || rowKeys.some(key => queryKeys.has(key) || key.includes(queryName) || queryName.includes(key));
+      }).slice(0, 20);
+      const rosterMatches = roster.filter(person => {
+        const rowKeys = nameMatchKeys(person.name);
+        const email = normalizeEmail(person.email);
+        return (queryEmail && email === queryEmail)
+          || (queryLooseKey && looseNameKey(person.name) === queryLooseKey)
+          || rowKeys.some(key => queryKeys.has(key) || key.includes(queryName) || queryName.includes(key));
+      }).slice(0, 20);
+
+      return {
+        query: text,
+        rosterMatches: rosterMatches.map(person => ({
+          name: person.name,
+          email: person.email,
+          manager: getManagerLabel(person),
+          legacyOrg: person.legacyOrg,
+          calendarLoaded: hasLoadedCalendar(person),
+          workloadMatch: getStaffingLoadForPerson(person, loadLookup)
+        })),
+        loadMatches,
+        cacheRows: loadLookup.rows.length,
+        visibleRosterRows: selectedRoster().length
       };
     }
 
@@ -12253,6 +12667,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     }, 350);
     window.refreshScoutStaffingLoad = () => refreshStaffingLoadFromNetSuiteCache({ force: true });
     window.debugScoutStaffingLoad = getStaffingLoadDiagnostics;
+    window.findScoutStaffingLoad = findStaffingLoadDiagnostic;
   </script>
 </body>
 </html>
