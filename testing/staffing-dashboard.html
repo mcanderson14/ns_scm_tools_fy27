@@ -1349,7 +1349,7 @@
     <div class="header-inner">
       <div class="brand-row">
         <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
-        <span class="version-pill">v27.0.35</span>
+        <span class="version-pill">v27.0.36</span>
       </div>
       <div class="header-actions">
         <div class="refresh-panel">
@@ -8760,8 +8760,12 @@
 
     const STAFFING_WINDOW_DAYS = 21;
     const STAFFING_RECOMMENDATION_DAYS = 14;
-    const STAFFING_GREEN_FOUR_HOUR_BLOCKS = 6;
-    const STAFFING_YELLOW_THREE_HOUR_BLOCKS = 2;
+    const STAFFING_GREEN_BLOCK_COUNT = 6;
+    const STAFFING_YELLOW_BLOCK_COUNT = 2;
+    const DIRECT_YELLOW_BLOCK_MINUTES = 180;
+    const DIRECT_GREEN_BLOCK_MINUTES = 240;
+    const AMO_YELLOW_BLOCK_MINUTES = 120;
+    const AMO_GREEN_BLOCK_MINUTES = 180;
     const STAFFING_CARD_INITIAL_RENDER_COUNT = 4;
     const STAFFING_CARD_RENDER_CHUNK_SIZE = 2;
     const AVAILABILITY_TABLE_RENDER_LIMIT = 50;
@@ -11515,6 +11519,11 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       return count;
     }
 
+    function formatCleanBlockDuration(minutes) {
+      const hours = minutes / 60;
+      return Number.isInteger(hours) ? `${hours}h` : `${hours.toFixed(1)}h`;
+    }
+
     function getCalendarCapacitySignal(person, eventsByEmail = buildEventsByEmail(normalizedEvents)) {
       const calendarLoaded = hasLoadedCalendar(person);
       const email = normalizeEmail(person?.email);
@@ -11525,6 +11534,10 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
           pill: "unknown",
           threeHourBlocks: 0,
           fourHourBlocks: 0,
+          yellowBlocks: 0,
+          greenBlocks: 0,
+          yellowBlockMinutes: DIRECT_YELLOW_BLOCK_MINUTES,
+          greenBlockMinutes: DIRECT_GREEN_BLOCK_MINUTES,
           hasTravel: false,
           note: missingCalendarSentence(person)
         };
@@ -11532,8 +11545,11 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
 
       const zone = document.getElementById("planningZone").value;
       const events = eventsByEmail.get(email) || [];
-      let threeHourBlocks = 0;
-      let fourHourBlocks = 0;
+      const amo = isAmoConsultant(person);
+      const yellowBlockMinutes = amo ? AMO_YELLOW_BLOCK_MINUTES : DIRECT_YELLOW_BLOCK_MINUTES;
+      const greenBlockMinutes = amo ? AMO_GREEN_BLOCK_MINUTES : DIRECT_GREEN_BLOCK_MINUTES;
+      let yellowBlocks = 0;
+      let greenBlocks = 0;
       const allDateKeys = Array.from({ length: STAFFING_RECOMMENDATION_DAYS }, (_, index) => addDaysIso(getSelectedMeetingDate(), index));
       let hasTravel = events.some(event => isTravelCalendarEvent(event) && allDateKeys.some(dateValue => {
         const fullDay = getFullDayWindow(dateValue, zone);
@@ -11552,17 +11568,17 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
             };
           }));
 
-        threeHourBlocks += countBlocksInOpenSegments(dayWindow, busyIntervals, 180);
-        fourHourBlocks += countBlocksInOpenSegments(dayWindow, busyIntervals, 240);
+        yellowBlocks += countBlocksInOpenSegments(dayWindow, busyIntervals, yellowBlockMinutes);
+        greenBlocks += countBlocksInOpenSegments(dayWindow, busyIntervals, greenBlockMinutes);
       });
 
       let level = "red";
       let label = "Red";
-      let note = `${threeHourBlocks} clean 3h blocks; ${fourHourBlocks} clean 4h blocks in the next 2 weeks.`;
-      if (fourHourBlocks >= STAFFING_GREEN_FOUR_HOUR_BLOCKS) {
+      let note = `${yellowBlocks} clean ${formatCleanBlockDuration(yellowBlockMinutes)} blocks; ${greenBlocks} clean ${formatCleanBlockDuration(greenBlockMinutes)} blocks in the next 2 weeks.`;
+      if (greenBlocks >= STAFFING_GREEN_BLOCK_COUNT) {
         level = "green";
         label = "Green";
-      } else if (threeHourBlocks >= STAFFING_YELLOW_THREE_HOUR_BLOCKS) {
+      } else if (yellowBlocks >= STAFFING_YELLOW_BLOCK_COUNT) {
         level = "yellow";
         label = "Yellow";
       }
@@ -11572,8 +11588,12 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         level,
         label,
         pill: level === "green" ? "available" : level === "yellow" ? "soft" : "busy",
-        threeHourBlocks,
-        fourHourBlocks,
+        threeHourBlocks: yellowBlocks,
+        fourHourBlocks: greenBlocks,
+        yellowBlocks,
+        greenBlocks,
+        yellowBlockMinutes,
+        greenBlockMinutes,
         hasTravel,
         note
       };
@@ -11595,7 +11615,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const monthlyLoad = Math.max(loadNumber(load.thisMonth), loadNumber(load.nextMonth));
       const inProgress = loadNumber(load.inProgress);
       const thresholds = amo
-        ? { yellowMonth: 6, redMonth: 8, yellowInProgress: 12, redInProgress: 16 }
+        ? { yellowMonth: 9, redMonth: 14, yellowInProgress: 8, redInProgress: 14 }
         : { yellowMonth: 5, redMonth: 7, yellowInProgress: 7, redInProgress: 10 };
 
       let level = "green";
@@ -11658,7 +11678,11 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       if (!recommendation) return "";
       const calendar = recommendation.calendar || {};
       const workload = recommendation.workload || {};
-      const calendarText = `Calendar ${calendar.label || "Unknown"}: ${calendar.threeHourBlocks || 0} clean 3h blocks; ${calendar.fourHourBlocks || 0} clean 4h blocks.`;
+      const yellowBlockMinutes = calendar.yellowBlockMinutes || DIRECT_YELLOW_BLOCK_MINUTES;
+      const greenBlockMinutes = calendar.greenBlockMinutes || DIRECT_GREEN_BLOCK_MINUTES;
+      const yellowBlocks = calendar.yellowBlocks ?? calendar.threeHourBlocks ?? 0;
+      const greenBlocks = calendar.greenBlocks ?? calendar.fourHourBlocks ?? 0;
+      const calendarText = `Calendar ${calendar.label || "Unknown"}: ${yellowBlocks} clean ${formatCleanBlockDuration(yellowBlockMinutes)} blocks; ${greenBlocks} clean ${formatCleanBlockDuration(greenBlockMinutes)} blocks.`;
       const workloadText = `Workload ${workload.label || "Unknown"}: ${workload.note || "no workload signal"}`;
       const ruleText = recommendation.label === "Staff"
         ? "Staff means calendar and workload are both green."
@@ -11701,9 +11725,16 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const otherWidth = Math.round((stats.other / max) * 100);
       const openWidth = stats.calendarLoaded ? Math.max(0, 100 - ptoWidth - hardWidth - softWidth - otherWidth) : 0;
       const gapWidth = stats.calendarLoaded ? 0 : Math.max(0, 100 - ptoWidth - hardWidth - softWidth - otherWidth);
+      const calendarBarSummary = [
+        `${(stats.pto / 60).toFixed(1)}h PTO/OOO`,
+        `${(stats.hard / 60).toFixed(1)}h hard`,
+        `${(stats.soft / 60).toFixed(1)}h soft`,
+        `${(stats.other / 60).toFixed(1)}h review`,
+        stats.calendarLoaded ? `${(stats.open / 60).toFixed(1)}h open` : "calendar not loaded"
+      ].join("; ");
       return `
         <div class="calendar-load-block" tabindex="0">
-          <div class="calendar-load-bar" title="${escapeHtml(`${(stats.open / 60).toFixed(1)}h open; ${(stats.pto / 60).toFixed(1)}h PTO/OOO; ${(stats.hard / 60).toFixed(1)}h hard; ${(stats.soft / 60).toFixed(1)}h soft; ${(stats.other / 60).toFixed(1)}h review`)}">
+          <div class="calendar-load-bar" title="${escapeHtml(calendarBarSummary)}">
             <span class="calendar-pto" style="width:${ptoWidth}%"></span>
             <span class="calendar-hard" style="width:${hardWidth}%"></span>
             <span class="calendar-soft" style="width:${softWidth}%"></span>
@@ -11712,11 +11743,11 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
             <span class="calendar-gap" style="width:${gapWidth}%"></span>
           </div>
           <div class="calendar-load-popover">
-            <div class="mix-row"><span>Open</span><strong>${(stats.open / 60).toFixed(1)}h</strong></div>
             <div class="mix-row"><span>PTO/OOO</span><strong>${(stats.pto / 60).toFixed(1)}h</strong></div>
             <div class="mix-row"><span>Hard booked</span><strong>${(stats.hard / 60).toFixed(1)}h</strong></div>
             <div class="mix-row"><span>Soft conflict</span><strong>${(stats.soft / 60).toFixed(1)}h</strong></div>
             <div class="mix-row"><span>Review</span><strong>${(stats.other / 60).toFixed(1)}h</strong></div>
+            <div class="mix-row"><span>Open</span><strong>${(stats.open / 60).toFixed(1)}h</strong></div>
           </div>
         </div>
       `;
@@ -12015,7 +12046,6 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
             <div class="subtle">${(stats.pto / 60).toFixed(1)} PTO/OOO; ${(stats.hard / 60).toFixed(1)} hard; ${(stats.soft / 60).toFixed(1)} soft; ${(stats.other / 60).toFixed(1)} review; ${stats.calendarLoaded ? `${(stats.open / 60).toFixed(1)} open` : missingCalendarSubtle(row)}</div>
             ${renderOpenRanges(row, eventsByEmail)}
             ${renderMiniCalendarStrip(row, eventsByEmail)}
-            ${renderConflictHighlights(row)}
           </div>
         </article>
       `;
@@ -12158,7 +12188,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         .slice(0, 20)
         .map(person => ({ name: person.name, email: person.email, manager: getManagerLabel(person) }));
       return {
-        dashboardVersion: "v27.0.35",
+        dashboardVersion: "v27.0.36",
         pageUrl: window.location.href,
         bridgeStatus: getStaffingLoadBridgeStatus(),
         storedRows: stored?.rows?.length || 0,
