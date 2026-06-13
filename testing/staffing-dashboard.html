@@ -1236,7 +1236,7 @@
     <div class="header-inner">
       <div class="brand-row">
         <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
-        <span class="version-pill">v27.0.20</span>
+        <span class="version-pill">v27.0.23</span>
       </div>
       <div class="header-actions">
         <div class="refresh-panel">
@@ -1467,7 +1467,6 @@
     </div>
   </main>
 
-  <script src="direct-connector-events.js"></script>
   <script>
     const ROSTER_CONFIG_STORAGE_KEY = "sc-staffing-dashboard-netsuite-roster-v1";
 
@@ -8647,8 +8646,13 @@
     ];
 
     const STAFFING_WINDOW_DAYS = 21;
-    const STAFFING_CARD_INITIAL_RENDER_COUNT = 18;
-    const STAFFING_CARD_RENDER_CHUNK_SIZE = 18;
+    const STAFFING_CARD_INITIAL_RENDER_COUNT = 8;
+    const STAFFING_CARD_RENDER_CHUNK_SIZE = 6;
+    const AVAILABILITY_TABLE_RENDER_LIMIT = 80;
+    const ALTERNATE_SLOT_CONSULTANT_LIMIT = 48;
+    const WEEKLY_AVAILABILITY_RENDER_LIMIT = 48;
+    const DAILY_LOAD_RENDER_LIMIT = 80;
+    const LOCAL_GRAPH_STARTUP_SCOPE_LIMIT = 80;
 
 const SNAPSHOT_LOADED_EMAILS = new Set([
     "abbey.vahhaji@oracle.com",
@@ -8714,6 +8718,18 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     let calendarActivityLog = [];
     let staffingLoadRefreshPromise = null;
     let renderSequence = 0;
+    let localGraphCacheMemoPayload = null;
+    let localGraphCacheMemoValue = undefined;
+    const dateTimeFormatterCache = new Map();
+    const zonedDateTimeCache = new Map();
+    const weeklyDateLabelCache = new Map();
+
+    function getCachedFormatter(cacheKey, options) {
+      if (!dateTimeFormatterCache.has(cacheKey)) {
+        dateTimeFormatterCache.set(cacheKey, new Intl.DateTimeFormat("en-US", options));
+      }
+      return dateTimeFormatterCache.get(cacheKey);
+    }
 
     function logCalendarActivity(step, details = {}) {
       calendarActivityLog.unshift({
@@ -8826,7 +8842,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     }
 
     function getCacheStaffingWindow() {
-      const cache = readLocalGraphCache();
+      const cache = localGraphCacheMemoValue !== undefined ? localGraphCacheMemoValue : null;
       const start = isIsoDate(cache?.start) ? cache.start : "";
       const endExclusive = isIsoDate(cache?.end) ? cache.end : "";
       const days = start && endExclusive ? diffIsoDays(start, endExclusive) : 0;
@@ -8993,13 +9009,15 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
 
     function cloneEmbeddedEvents(
       focusEmail = getCalendarFocusEmail({ includeSelected: false }),
-      selectedEmails = getLaunchSelectedEmailSet()
+      selectedEmails = getLaunchSelectedEmailSet(),
+      options = {}
     ) {
+      const includeLocalGraph = options.includeLocalGraph !== false;
       const seen = new Set();
       return [
         ...embeddedEvents,
         ...DIRECT_CONNECTOR_EVENTS,
-        ...getLocalGraphEvents(focusEmail, selectedEmails),
+        ...(includeLocalGraph ? getLocalGraphEvents(focusEmail, selectedEmails) : []),
         ...expandConnectorAvailability(focusEmail, selectedEmails)
       ]
         .filter(event => !focusEmail || String(event.email || "").toLowerCase() === focusEmail)
@@ -9045,19 +9063,28 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         if (typeof window === "undefined" || !window.localStorage) return null;
         const payload = window.localStorage.getItem(LOCAL_GRAPH_CACHE_KEY);
         if (!payload) return null;
+        if (payload === localGraphCacheMemoPayload) return localGraphCacheMemoValue;
         const parsed = JSON.parse(payload);
-        if (!parsed.refreshedAt) return null;
+        if (!parsed.refreshedAt) {
+          localGraphCacheMemoPayload = payload;
+          localGraphCacheMemoValue = null;
+          return null;
+        }
         const availability = Array.isArray(parsed.availability) ? parsed.availability : [];
         const directEvents = Array.isArray(parsed.directEvents) ? parsed.directEvents : [];
-        return {
+        const events = Array.isArray(parsed.events) ? parsed.events : [];
+        const cache = {
           ...parsed,
           availability,
           directEvents,
-          events: Array.isArray(parsed.events) && parsed.events.length
-            ? parsed.events
-            : eventsWithDetailedFallback(availability, directEvents)
+          events
         };
+        localGraphCacheMemoPayload = payload;
+        localGraphCacheMemoValue = cache;
+        return cache;
       } catch (error) {
+        localGraphCacheMemoPayload = null;
+        localGraphCacheMemoValue = null;
         return null;
       }
     }
@@ -9076,10 +9103,26 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const cache = readLocalGraphCache();
       if (!cache) return [];
       const selected = selectedEmails instanceof Set ? selectedEmails : new Set(selectedEmails || []);
-      return cache.events
-        .filter(event => !focusEmail || normalizeEmail(event.email) === focusEmail)
-        .filter(event => !selected.size || selected.has(normalizeEmail(event.email)))
-        .map(event => ({ ...event }));
+      const inScope = record => {
+        const email = normalizeEmail(record.email);
+        if (focusEmail) return email === focusEmail;
+        if (selected.size) return selected.has(email);
+        return true;
+      };
+      const scopedEvents = Array.isArray(cache.events) ? cache.events.filter(inScope) : [];
+      const scopedDirectEvents = Array.isArray(cache.directEvents) ? cache.directEvents.filter(inScope) : [];
+      const scopedAvailability = Array.isArray(cache.availability) ? cache.availability.filter(inScope) : [];
+      const detailedEmails = new Set([
+        ...scopedEvents.map(event => normalizeEmail(event.email)),
+        ...scopedDirectEvents.map(event => normalizeEmail(event.email))
+      ].filter(Boolean));
+      return [
+        ...scopedEvents,
+        ...scopedDirectEvents,
+        ...scopedAvailability
+          .filter(snapshot => !detailedEmails.has(normalizeEmail(snapshot.email)))
+          .flatMap(expandDashboardAvailability)
+      ].map(event => ({ ...event }));
     }
 
     function getLocalGraphLoadedEmails() {
@@ -9526,11 +9569,16 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         embeddedEvents: embeddedEvents.filter(inScope).length,
         directConnectorEvents: DIRECT_CONNECTOR_EVENTS.filter(inScope).length,
         directConnectorAvailabilitySnapshots: DIRECT_CONNECTOR_AVAILABILITY.filter(inScope).length,
-          localConnectorEvents: localGraphCache ? localGraphCache.events.filter(inScope).length : 0,
-        cacheEvents: (() => {
-          const cached = readCalendarCache();
-          return cached ? cached.events.filter(inScope).length : 0;
-        })()
+        localConnectorEvents: localGraphCache
+          ? [
+              ...(Array.isArray(localGraphCache.events) ? localGraphCache.events : []),
+              ...(Array.isArray(localGraphCache.directEvents) ? localGraphCache.directEvents : [])
+            ].filter(inScope).length
+          : 0,
+        localConnectorAvailabilitySnapshots: localGraphCache && Array.isArray(localGraphCache.availability)
+          ? localGraphCache.availability.filter(inScope).length
+          : 0,
+        cacheEvents: 0
       };
     }
 
@@ -9614,20 +9662,25 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
 
     function refreshCalendarData(options = {}) {
       const force = Boolean(options.force);
+      const includeLocalGraph = options.includeLocalGraph !== false;
       const focusEmail = getCalendarFocusEmail({ focusEmail: options.focusEmail, includeSelected: false });
       const selectedEmails = getLaunchSelectedEmailSet();
-      const cached = readCalendarCache();
-      const localGraphCache = readLocalGraphCache();
+      const localGraphScopeEmails = getScopedStartupCalendarEmails(focusEmail, selectedEmails);
+      const cached = includeLocalGraph && force ? readCalendarCache() : null;
+      const localGraphCache = includeLocalGraph ? readLocalGraphCache() : null;
       const cacheIsFresh = cached && Date.now() - Number(cached.cachedAt || cached.refreshedAt) < CACHE_TTL_MS;
       const selectedEmailList = [...selectedEmails];
 
       logCalendarActivity("refresh-start", {
         force,
+        includeLocalGraph,
         focusEmail: focusEmail || "",
         selectedEmails: selectedEmailList,
+        localGraphScopeEmails: [...localGraphScopeEmails].slice(0, 10),
+        localGraphScopeCount: localGraphScopeEmails.size,
         cacheAvailable: Boolean(cached),
         cacheIsFresh: Boolean(cacheIsFresh),
-        scopedRecordCountsBeforeRefresh: getScopedRecordCounts(focusEmail, selectedEmails)
+        scopedRecordCountsBeforeRefresh: includeLocalGraph ? getScopedRecordCounts(focusEmail, localGraphScopeEmails) : null
       });
 
       if (!force && cacheIsFresh) {
@@ -9645,20 +9698,24 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
           refreshedAt: cached.refreshedAt || null
         });
       } else {
-        rawEvents = cloneEmbeddedEvents(focusEmail, selectedEmails);
+        rawEvents = cloneEmbeddedEvents(focusEmail, localGraphScopeEmails, { includeLocalGraph });
         lastRefreshAt = localGraphCache?.refreshedAt ? new Date(localGraphCache.refreshedAt) : null;
         refreshSource = focusEmail
           ? (force ? "focused manual refresh" : "focused snapshot refresh")
           : selectedEmails.size
           ? (force ? "selected manual refresh" : "selected snapshot refresh")
+          : includeLocalGraph
+          ? "scoped local graph cache"
           : (force ? "manual refresh" : "snapshot refresh");
         logCalendarActivity("snapshot-refresh", {
           refreshSource,
           rawEvents: rawEvents.length,
           focusedRefresh: Boolean(focusEmail),
-          selectedRefresh: Boolean(selectedEmails.size)
+          selectedRefresh: Boolean(selectedEmails.size),
+          includeLocalGraph,
+          localGraphScopeCount: localGraphScopeEmails.size
         });
-        if (!focusEmail && !selectedEmails.size) {
+        if (includeLocalGraph && force && !focusEmail && !selectedEmails.size) {
           const cacheTimestamp = lastRefreshAt ? lastRefreshAt.toISOString() : new Date().toISOString();
           writeCalendarCache(rawEvents, cacheTimestamp);
           logCalendarActivity("cache-write", {
@@ -9675,7 +9732,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       logCalendarActivity("normalize-complete", {
         rawEvents: rawEvents.length,
         normalizedEvents: normalizedEvents.length,
-        scopedRecordCountsAfterRefresh: getScopedRecordCounts(focusEmail, selectedEmails)
+        scopedRecordCountsAfterRefresh: includeLocalGraph ? getScopedRecordCounts(focusEmail, localGraphScopeEmails) : null
       });
       if (missingSelectedPeople.length) {
         logCalendarActivity("missing-selected-consultants", {
@@ -10004,7 +10061,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     }
 
     function getTimeZoneOffset(date, timeZone) {
-      const parts = new Intl.DateTimeFormat("en-US", {
+      const parts = getCachedFormatter(`offset|${timeZone}`, {
         timeZone,
         hour12: false,
         year: "numeric",
@@ -10030,15 +10087,19 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     }
 
     function zonedDateTime(dateValue, minutes, timeZone) {
+      const cacheKey = `${dateValue}|${minutes}|${timeZone}`;
+      if (zonedDateTimeCache.has(cacheKey)) return new Date(zonedDateTimeCache.get(cacheKey));
       const [year, month, day] = dateValue.split("-").map(Number);
       const hours = Math.floor(minutes / 60);
       const mins = minutes % 60;
       const guess = new Date(Date.UTC(year, month - 1, day, hours, mins, 0));
-      return new Date(guess.getTime() - getTimeZoneOffset(guess, timeZone));
+      const timestamp = guess.getTime() - getTimeZoneOffset(guess, timeZone);
+      zonedDateTimeCache.set(cacheKey, timestamp);
+      return new Date(timestamp);
     }
 
     function formatTime(date, timeZone) {
-      return new Intl.DateTimeFormat("en-US", {
+      return getCachedFormatter(`time|${timeZone}`, {
         timeZone,
         hour: "numeric",
         minute: "2-digit"
@@ -10046,7 +10107,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     }
 
     function formatDate(date, timeZone) {
-      return new Intl.DateTimeFormat("en-US", {
+      return getCachedFormatter(`date|${timeZone}`, {
         timeZone,
         weekday: "short",
         month: "short",
@@ -10059,7 +10120,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     }
 
     function getLocalMinutesOfDay(date, timeZone) {
-      const parts = new Intl.DateTimeFormat("en-US", {
+      const parts = getCachedFormatter(`minute|${timeZone}`, {
         timeZone,
         hour12: false,
         hour: "2-digit",
@@ -10112,6 +10173,17 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         if (person !== "all" && item.email !== person) return false;
         return true;
       });
+    }
+
+    function getScopedStartupCalendarEmails(focusEmail, selectedEmails) {
+      if (focusEmail) return new Set([focusEmail]);
+      if (selectedEmails?.size) return selectedEmails;
+      return new Set(
+        selectedRoster()
+          .slice(0, LOCAL_GRAPH_STARTUP_SCOPE_LIMIT)
+          .map(person => normalizeEmail(person.email))
+          .filter(Boolean)
+      );
     }
 
     function populateTimeOptions() {
@@ -10312,7 +10384,9 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         return;
       }
 
-      body.innerHTML = rows.map((row, index) => {
+      const visibleRows = rows.slice(0, AVAILABILITY_TABLE_RENDER_LIMIT);
+      const moreCount = rows.length - visibleRows.length;
+      body.innerHTML = visibleRows.map((row, index) => {
         const conflictHtml = row.conflicts.length
           ? `<div class="conflicts">${row.conflicts
               .sort((a, b) => a.startDate - b.startDate)
@@ -10357,7 +10431,9 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
             <td>${conflictHtml}</td>
           </tr>
         `;
-      }).join("");
+      }).join("") + (moreCount > 0
+        ? `<tr><td colspan="7" class="subtle">Showing the first ${visibleRows.length} consultants. Narrow filters to render the remaining ${moreCount}.</td></tr>`
+        : "");
     }
 
     function renderAlternateSlots(availabilityRows = null, people = selectedRoster(), eventsByEmail = buildEventsByEmail(normalizedEvents)) {
@@ -10369,11 +10445,13 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const workdayEnd = 17 * 60;
       const lastStart = Math.max(workdayStart, workdayEnd - selectedDuration);
       const activeRows = Array.isArray(availabilityRows) ? availabilityRows : getAvailabilityRows(getWindow(), people, eventsByEmail);
+      const slotPeople = activeRows.slice(0, ALTERNATE_SLOT_CONSULTANT_LIMIT);
+      const omittedCount = Math.max(0, activeRows.length - slotPeople.length);
       const activeRank = new Map(activeRows.map((row, index) => [normalizeEmail(row.email), index]));
 
       for (let start = workdayStart; start <= lastStart; start += 30) {
         const windowConfig = getWindow(start);
-        const rows = getAvailabilityRows(windowConfig, people, eventsByEmail);
+        const rows = getAvailabilityRows(windowConfig, slotPeople, eventsByEmail);
         const clean = rows.filter(row => row.rank === 0);
         if (!clean.length) continue;
         clean.forEach(row => {
@@ -10411,13 +10489,16 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       });
 
       if (!groups.length) {
-        container.innerHTML = `<div class="subtle">No open ${selectedDuration}-minute slots match the current consultant, date, and buffer.</div>`;
+        container.innerHTML = `<div class="subtle">No open ${selectedDuration}-minute slots match the current consultant, date, and buffer.${omittedCount ? ` Checked the top ${slotPeople.length} ranked consultants; narrow filters to evaluate the remaining ${omittedCount}.` : ""}</div>`;
         return;
       }
 
       const date = document.getElementById("meetingDate").value;
       const timeZone = document.getElementById("planningZone").value;
-      container.innerHTML = groups.map(group => {
+      const scopedNote = omittedCount
+        ? `<div class="subtle">Alternate slots are calculated for the top ${slotPeople.length} ranked consultants. Narrow filters to evaluate the remaining ${omittedCount}.</div>`
+        : "";
+      container.innerHTML = scopedNote + groups.map(group => {
         return `
           <div class="alt-slot" role="group" aria-label="${escapeHtml(`${group.person.name} open ranges`)}">
             <div class="alt-top">
@@ -10545,12 +10626,15 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     }
 
     function getWeeklyDateLabel(dateValue) {
+      if (weeklyDateLabelCache.has(dateValue)) return weeklyDateLabelCache.get(dateValue);
       const [year, month, day] = dateValue.split("-").map(Number);
       const date = new Date(Date.UTC(year, month - 1, day));
-      return {
-        weekday: new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "UTC" }).format(date),
-        monthDay: new Intl.DateTimeFormat("en-US", { month: "numeric", day: "numeric", timeZone: "UTC" }).format(date)
+      const label = {
+        weekday: getCachedFormatter("weekday|UTC", { weekday: "short", timeZone: "UTC" }).format(date),
+        monthDay: getCachedFormatter("monthDay|UTC", { month: "numeric", day: "numeric", timeZone: "UTC" }).format(date)
       };
+      weeklyDateLabelCache.set(dateValue, label);
+      return label;
     }
 
     function buildEventsByEmail(events) {
@@ -10626,8 +10710,10 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
 
       const dateKeys = getStaffingDateKeys();
       const zone = document.getElementById("planningZone").value;
-      const people = Array.isArray(availabilityRows) ? availabilityRows : getAvailabilityRows(getWindow());
-      subtitle.textContent = `${formatStaffingWindow()} - weekdays 8:00 AM-5:00 PM ${getZoneLabel(zone)} - ${people.length} consultant${people.length === 1 ? "" : "s"}`;
+      const allPeople = Array.isArray(availabilityRows) ? availabilityRows : getAvailabilityRows(getWindow());
+      const people = allPeople.slice(0, WEEKLY_AVAILABILITY_RENDER_LIMIT);
+      const omittedCount = Math.max(0, allPeople.length - people.length);
+      subtitle.textContent = `${formatStaffingWindow()} - weekdays 8:00 AM-5:00 PM ${getZoneLabel(zone)} - ${allPeople.length} consultant${allPeople.length === 1 ? "" : "s"}${omittedCount ? `; showing top ${people.length}` : ""}`;
 
       if (!people.length) {
         container.innerHTML = `<div class="footnote">No consultants match the current filters.</div>`;
@@ -10640,6 +10726,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       ].join(" ");
       const gridMinWidth = 260 + dateKeys.reduce((sum, dateValue) => sum + (isWeekendIso(dateValue) ? 24 : 46), 0);
       container.innerHTML = `
+        ${omittedCount ? `<div class="subtle">Showing the top ${people.length} ranked consultants. Narrow filters to render the remaining ${omittedCount}.</div>` : ""}
         <div class="weekly-grid" style="grid-template-columns:${gridColumns}; min-width: max(100%, ${gridMinWidth}px);">
           ${people.map(person => `
             <div class="weekly-person-cell">
@@ -10654,7 +10741,9 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
 
     function renderLoad(availabilityRows = null, eventsByEmail = buildEventsByEmail(normalizedEvents)) {
       const dayWindow = getDayWindow();
-      const people = Array.isArray(availabilityRows) ? availabilityRows : getAvailabilityRows(getWindow());
+      const allPeople = Array.isArray(availabilityRows) ? availabilityRows : getAvailabilityRows(getWindow());
+      const people = allPeople.slice(0, DAILY_LOAD_RENDER_LIMIT);
+      const omittedCount = Math.max(0, allPeople.length - people.length);
       const stats = people.map(person => {
         const events = eventsByEmail.get(normalizeEmail(person.email)) || [];
         const calendarLoaded = hasLoadedCalendar(person);
@@ -10667,8 +10756,10 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       });
 
       const max = dayWindow.workdayMinutes;
-      document.getElementById("loadSubtitle").textContent = `${formatDate(dayWindow.start, dayWindow.zone)} 8:00 AM-5:00 PM ${getZoneLabel(dayWindow.zone)}`;
-      document.getElementById("loadList").innerHTML = stats.map(item => {
+      document.getElementById("loadSubtitle").textContent = `${formatDate(dayWindow.start, dayWindow.zone)} 8:00 AM-5:00 PM ${getZoneLabel(dayWindow.zone)}${omittedCount ? ` - showing top ${people.length} of ${allPeople.length}` : ""}`;
+      document.getElementById("loadList").innerHTML = (omittedCount
+        ? `<div class="subtle">Showing the top ${people.length} ranked consultants. Narrow filters to render the remaining ${omittedCount}.</div>`
+        : "") + stats.map(item => {
         const hardWidth = Math.round((item.hard / max) * 100);
         const softWidth = Math.round((item.soft / max) * 100);
         const otherWidth = Math.round((item.other / max) * 100);
@@ -12092,10 +12183,14 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     populatePersonFilter();
     applyLaunchParams();
     ensureFocusedConsultantInFilter();
-    refreshCalendarData();
+    refreshCalendarData({ includeLocalGraph: false });
     ensureFocusedConsultantInFilter();
     wireEvents();
     renderAll();
+    window.setTimeout(() => {
+      refreshCalendarData({ includeLocalGraph: true });
+      renderAll();
+    }, 350);
     window.refreshScoutStaffingLoad = () => refreshStaffingLoadFromNetSuiteCache({ force: true });
   </script>
 </body>
