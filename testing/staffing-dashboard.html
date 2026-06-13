@@ -902,6 +902,16 @@
       text-transform: uppercase;
     }
 
+    .staffing-recommendation-score em {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 8px;
+      font-style: normal;
+      font-weight: 800;
+      line-height: 1.1;
+    }
+
     .staffing-recommendation-score.staffing-rec-green {
       background: #e8f6ed;
       border-color: #bfe7cb;
@@ -934,6 +944,93 @@
       flex-wrap: wrap;
       gap: 6px;
       margin-top: 8px;
+    }
+
+    .staffing-context-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 7px;
+      margin-top: 10px;
+    }
+
+    .staffing-context-item {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #f8fafb;
+      padding: 7px 8px;
+    }
+
+    .staffing-context-label {
+      display: block;
+      color: var(--muted);
+      font-size: 9px;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .staffing-context-value {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin-top: 5px;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 850;
+      line-height: 1.2;
+    }
+
+    .staffing-context-detail {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.25;
+    }
+
+    .signal-dot {
+      flex: 0 0 auto;
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      background: #9aa6b2;
+    }
+
+    .signal-dot.green,
+    .signal-dot.available {
+      background: var(--green);
+    }
+
+    .signal-dot.yellow,
+    .signal-dot.soft,
+    .signal-dot.review {
+      background: #c88408;
+    }
+
+    .signal-dot.red,
+    .signal-dot.busy {
+      background: var(--red);
+    }
+
+    .signal-dot.unknown,
+    .signal-dot.buffer {
+      background: #6c7885;
+    }
+
+    .travel-indicator {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border: 1px solid #f0c46a;
+      border-radius: 999px;
+      background: #fff4d8;
+      color: #8a5b00;
+      font-size: 23px;
+      line-height: 1;
+      box-shadow: 0 2px 8px rgba(138, 91, 0, 0.16);
     }
 
     .staffing-section-label {
@@ -1388,6 +1485,7 @@
       .control-bar,
       .summary-grid,
       .event-controls,
+      .staffing-context-grid,
       .staffing-stat-grid { grid-template-columns: 1fr; }
       table { min-width: 760px; }
       h1 { font-size: 23px; }
@@ -1399,7 +1497,7 @@
     <div class="header-inner">
       <div class="brand-row">
         <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
-        <span class="version-pill">v27.0.37</span>
+        <span class="version-pill">v27.0.38</span>
       </div>
       <div class="header-actions">
         <div class="refresh-panel">
@@ -11643,7 +11741,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         level = "yellow";
         label = "Yellow";
       }
-      if (hasTravel) note += " Onsite note: travel or onsite calendar language detected.";
+      if (hasTravel) note += " Travel or onsite calendar language detected.";
 
       return {
         level,
@@ -11750,7 +11848,55 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         : recommendation.label === "Avoid"
           ? "Avoid means calendar or workload is red."
           : "Review means a yellow or unknown signal needs human review.";
-      return `Score ${recommendation.score} (${recommendation.label}). ${ruleText} ${calendarText} ${workloadText}`;
+      return `Score ${recommendation.score}/100 (${recommendation.label}). Higher scores are easier to staff. ${ruleText} ${calendarText} ${workloadText}`;
+    }
+
+    function signalDotClass(signal) {
+      return signal?.level || signal?.pill || "unknown";
+    }
+
+    function scoreScaleText(recommendation) {
+      if (!recommendation) return "Higher score = easier to staff.";
+      if (recommendation.label === "Staff") return "Higher score = easier to staff.";
+      if (recommendation.label === "Avoid") return "Lower score = avoid unless there is a strong business reason.";
+      return "Higher score = easier to staff; Review means one signal needs judgment.";
+    }
+
+    function renderTravelIndicator(calendarSignal) {
+      if (!calendarSignal?.hasTravel) return "";
+      return `<span class="travel-indicator" title="Travel or onsite calendar language detected" aria-label="Travel or onsite calendar language detected">✈</span>`;
+    }
+
+    function renderStaffingContextGrid(row, recommendation, stats) {
+      const selectedDate = formatIsoDate(getSelectedMeetingDate());
+      const calendarDetail = stats.calendarLoaded
+        ? `${(stats.open / 60).toFixed(1)}h open on ${selectedDate}`
+        : missingCalendarLabel(row);
+      const workloadDetail = recommendation.workload?.note || "No workload signal found.";
+      return `
+        <div class="staffing-context-grid" aria-label="Staffing signal summary">
+          <div class="staffing-context-item">
+            <span class="staffing-context-label">Proposed Meeting Time</span>
+            <span class="staffing-context-value"><span class="signal-dot ${row.pill}"></span>${escapeHtml(row.label)}</span>
+            <span class="staffing-context-detail">Uses selected date, start time, duration, and buffer.</span>
+          </div>
+          <div class="staffing-context-item">
+            <span class="staffing-context-label">Calendar Availability</span>
+            <span class="staffing-context-value"><span class="signal-dot ${signalDotClass(recommendation.calendar)}"></span>${escapeHtml(recommendation.calendar.label)}</span>
+            <span class="staffing-context-detail">${escapeHtml(calendarDetail)}</span>
+          </div>
+          <div class="staffing-context-item">
+            <span class="staffing-context-label">Workload</span>
+            <span class="staffing-context-value"><span class="signal-dot ${signalDotClass(recommendation.workload)}"></span>${escapeHtml(recommendation.workload.label)}</span>
+            <span class="staffing-context-detail">${escapeHtml(workloadDetail)}</span>
+          </div>
+          <div class="staffing-context-item">
+            <span class="staffing-context-label">Staffability Score</span>
+            <span class="staffing-context-value">${formatLoadNumber(recommendation.score)}/100 ${escapeHtml(recommendation.label)}</span>
+            <span class="staffing-context-detail">${escapeHtml(scoreScaleText(recommendation))}</span>
+          </div>
+        </div>
+      `;
     }
 
     function renderSignalBox(title, signal) {
@@ -12078,15 +12224,14 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
               <div class="staffing-recommendation-score ${recommendation.cardClass}" title="${escapeHtml(getStaffingScoreExplanation(recommendation))}">
                 <strong>${formatLoadNumber(recommendation.score)}</strong>
                 <span>${escapeHtml(recommendation.label)}</span>
+                <em>higher = easier</em>
               </div>
             </div>
+            ${renderStaffingContextGrid(row, recommendation, stats)}
             <div class="staffing-status-line">
-              <span class="pill ${row.pill}">${row.label}</span>
-              <span class="pill ${recommendation.calendar.pill}">Calendar ${recommendation.calendar.label}</span>
-              <span class="pill ${recommendation.workload.pill}">Load ${recommendation.workload.label}</span>
               ${coverageBadge(row)}
               ${stats.pto ? `<span class="pill pto">PTO/OOO</span>` : ""}
-              ${recommendation.calendar.hasTravel ? `<span class="pill ot-warning">Onsite note</span>` : ""}
+              ${renderTravelIndicator(recommendation.calendar)}
               ${row.otWarning ? `<span class="pill ot-warning">OT WARNING</span>` : ""}
             </div>
             <div class="staffing-signal-note">${escapeHtml(recommendation.note)}</div>
@@ -12264,7 +12409,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         .slice(0, 20)
         .map(person => ({ name: person.name, email: person.email, manager: getManagerLabel(person) }));
       return {
-        dashboardVersion: "v27.0.37",
+        dashboardVersion: "v27.0.38",
         pageUrl: window.location.href,
         bridgeStatus: getStaffingLoadBridgeStatus(),
         storedRows: stored?.rows?.length || 0,
