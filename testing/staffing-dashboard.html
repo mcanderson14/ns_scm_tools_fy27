@@ -1509,7 +1509,7 @@
     <div class="header-inner">
       <div class="brand-row">
         <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
-        <span class="version-pill">v27.0.41</span>
+        <span class="version-pill">v27.0.42</span>
       </div>
       <div class="header-actions">
         <div class="refresh-panel">
@@ -10038,6 +10038,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     function refreshCalendarData(options = {}) {
       const force = Boolean(options.force);
       const includeLocalGraph = options.includeLocalGraph !== false;
+      const writeCache = options.writeCache !== false;
       const focusEmail = getCalendarFocusEmail({ focusEmail: options.focusEmail, includeSelected: false });
       const selectedEmails = getLaunchSelectedEmailSet();
       const localGraphScopeEmails = getScopedStartupCalendarEmails(focusEmail, selectedEmails);
@@ -10090,7 +10091,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
           includeLocalGraph,
           localGraphScopeCount: localGraphScopeEmails.size
         });
-        if (includeLocalGraph && force && !focusEmail && !selectedEmails.size) {
+        if (includeLocalGraph && force && writeCache && !focusEmail && !selectedEmails.size) {
           const cacheTimestamp = lastRefreshAt ? lastRefreshAt.toISOString() : new Date().toISOString();
           writeCalendarCache(rawEvents, cacheTimestamp);
           logCalendarActivity("cache-write", {
@@ -12500,7 +12501,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         .slice(0, 20)
         .map(person => ({ name: person.name, email: person.email, manager: getManagerLabel(person) }));
       return {
-        dashboardVersion: "v27.0.41",
+        dashboardVersion: "v27.0.42",
         pageUrl: window.location.href,
         bridgeStatus: getStaffingLoadBridgeStatus(),
         storedRows: stored?.rows?.length || 0,
@@ -12960,6 +12961,16 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       renderAll();
     }
 
+    let filterCalendarRefreshTimer = null;
+
+    function refreshCalendarDataForFilterChange() {
+      window.clearTimeout(filterCalendarRefreshTimer);
+      filterCalendarRefreshTimer = window.setTimeout(() => {
+        refreshCalendarData({ force: true, includeLocalGraph: true, writeCache: false });
+        renderAll();
+      }, 0);
+    }
+
     function setSelectValue(id, value) {
       const select = document.getElementById(id);
       if (!select || value == null || value === "") return false;
@@ -13370,13 +13381,13 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       document.getElementById("copyDebugButton")?.addEventListener("click", copyDebugConsole);
       document.getElementById("personFilter").addEventListener("change", () => {
         syncPlanningZoneToSelectedConsultant();
-        renderAll();
+        refreshCalendarDataForFilterChange();
       });
 
       ["teamFilter", "legacyOrgFilter"].forEach(id => {
         document.getElementById(id).addEventListener("change", () => {
           populatePersonFilter();
-          renderAll();
+          refreshCalendarDataForFilterChange();
         });
       });
 

@@ -1215,7 +1215,7 @@
     <div class="header-inner">
       <div class="brand-row">
         <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
-        <span class="version-pill">v27.0.15</span>
+        <span class="version-pill">v27.0.16</span>
       </div>
       <div class="header-actions">
         <div class="refresh-panel">
@@ -9584,6 +9584,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
 
     function refreshCalendarData(options = {}) {
       const force = Boolean(options.force);
+      const writeCache = options.writeCache !== false;
       const focusEmail = getCalendarFocusEmail({ focusEmail: options.focusEmail, includeSelected: false });
       const selectedEmails = getLaunchSelectedEmailSet();
       const cached = readCalendarCache();
@@ -9628,7 +9629,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
           focusedRefresh: Boolean(focusEmail),
           selectedRefresh: Boolean(selectedEmails.size)
         });
-        if (!focusEmail && !selectedEmails.size) {
+        if (writeCache && !focusEmail && !selectedEmails.size) {
           const cacheTimestamp = lastRefreshAt ? lastRefreshAt.toISOString() : new Date().toISOString();
           writeCalendarCache(rawEvents, cacheTimestamp);
           logCalendarActivity("cache-write", {
@@ -11417,6 +11418,16 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       return true;
     }
 
+    let filterCalendarRefreshTimer = null;
+
+    function refreshCalendarDataForFilterChange() {
+      window.clearTimeout(filterCalendarRefreshTimer);
+      filterCalendarRefreshTimer = window.setTimeout(() => {
+        refreshCalendarData({ force: true, writeCache: false });
+        renderAll();
+      }, 0);
+    }
+
     function ensureFilterOption(id, value, label) {
       const select = document.getElementById(id);
       if (!select || value == null || value === "") return false;
@@ -11798,13 +11809,13 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       document.getElementById("copyDebugButton")?.addEventListener("click", copyDebugConsole);
       document.getElementById("personFilter").addEventListener("change", () => {
         syncPlanningZoneToSelectedConsultant();
-        renderAll();
+        refreshCalendarDataForFilterChange();
       });
 
       ["teamFilter", "legacyOrgFilter"].forEach(id => {
         document.getElementById(id).addEventListener("change", () => {
           populatePersonFilter();
-          renderAll();
+          refreshCalendarDataForFilterChange();
         });
       });
 
