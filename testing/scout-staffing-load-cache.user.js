@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT Staffing Load Cache Bridge
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.6
+// @version      27.0.5
 // @description  Refreshes the SCOUT staffing-dashboard workload cache from NetSuite saved search 1324335.
 // @author       Michael Anderson
 // @match        https://mcanderson14.github.io/ns_scm_tools_fy27/staffing-dashboard.html*
@@ -32,7 +32,7 @@
   const GM_CACHE_KEY = "scout-staffing-dashboard-load-report-gm-v1";
   const PAGE_REQUEST_TYPE = "scout-staffing-load-refresh-request";
   const PAGE_RESPONSE_TYPE = "scout-staffing-load-refresh-response";
-  const STALE_AFTER_MS = 24 * 60 * 60 * 1000;
+  const STALE_AFTER_MS = 4 * 60 * 60 * 1000;
   const SAVED_SEARCH_TIMEOUT_MS = 10 * 60 * 1000;
   const PAGE_BRIDGE_TIMEOUT_MS = SAVED_SEARCH_TIMEOUT_MS + 30000;
   const BUTTON_ID = "scout-staffing-load-cache-refresh";
@@ -284,21 +284,6 @@
     status.dataset.tone = tone;
   }
 
-  function setRefreshControlVisibility(report, fresh) {
-    if (isDashboardPage()) return;
-    const button = document.getElementById(BUTTON_ID);
-    const status = document.getElementById(STATUS_ID);
-    if (!button) return;
-    const visible = Boolean(refreshPromise || !report?.rows?.length || !fresh);
-    const wrapper = button.closest(".scout-staffing-cache-floating");
-    if (wrapper) {
-      wrapper.hidden = !visible;
-    } else {
-      button.hidden = !visible;
-      if (status) status.hidden = !visible;
-    }
-  }
-
   function updateButtonState(report = latestReport()) {
     const button = document.getElementById(BUTTON_ID);
     if (!button) return;
@@ -313,7 +298,6 @@
         : "Staffing data cache is missing.",
       fresh ? "good" : "warn"
     );
-    setRefreshControlVisibility(report, fresh);
   }
 
   function insertStyles() {
@@ -358,11 +342,6 @@
         border-radius: 9px;
         background: rgba(19, 33, 44, 0.9);
         box-shadow: 0 10px 28px rgba(0, 0, 0, 0.26);
-      }
-      .scout-staffing-cache-floating[hidden],
-      #${BUTTON_ID}[hidden],
-      #${STATUS_ID}[hidden] {
-        display: none !important;
       }
       .scout-staffing-cache-floating #${STATUS_ID} {
         max-width: 190px;
@@ -425,7 +404,7 @@
   function publishBridgeApi() {
     pageWindow().__SCOUT_STAFFING_LOAD_BRIDGE = {
       installed: true,
-      version: "27.0.6",
+      version: "27.0.5",
       searchId: SAVED_SEARCH_ID,
       installedAt: new Date().toISOString()
     };
@@ -464,7 +443,7 @@
       window.__SCOUT_STAFFING_LOAD_BRIDGE = Object.assign({}, window.__SCOUT_STAFFING_LOAD_BRIDGE, {
         installed: true,
         mode: "postMessage",
-        version: "27.0.6",
+        version: "27.0.5",
         searchId: ${JSON.stringify(SAVED_SEARCH_ID)},
         installedAt: new Date().toISOString()
       });
