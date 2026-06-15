@@ -1509,7 +1509,7 @@
     <div class="header-inner">
       <div class="brand-row">
         <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
-        <span class="version-pill">v27.0.39</span>
+        <span class="version-pill">v27.0.40</span>
       </div>
       <div class="header-actions">
         <div class="refresh-panel">
@@ -11907,7 +11907,8 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
           const ptoMinutes = events
             .filter(isPtoCalendarEvent)
             .reduce((sum, event) => sum + eventMinutesInDay(event, dayWindow), 0);
-          return ptoMinutes >= dayWindow.workdayMinutes * 0.5;
+          const fullDayThreshold = Math.max(0, dayWindow.workdayMinutes - 15);
+          return ptoMinutes >= fullDayThreshold;
         }));
 
       const firstPtoDate = [...ptoDateSet].sort()[0];
@@ -12482,7 +12483,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         .slice(0, 20)
         .map(person => ({ name: person.name, email: person.email, manager: getManagerLabel(person) }));
       return {
-        dashboardVersion: "v27.0.39",
+        dashboardVersion: "v27.0.40",
         pageUrl: window.location.href,
         bridgeStatus: getStaffingLoadBridgeStatus(),
         storedRows: stored?.rows?.length || 0,
