@@ -989,6 +989,14 @@
       line-height: 1.25;
     }
 
+    .staffing-context-detail.pto-return {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      color: #6d28a8;
+      font-weight: 850;
+    }
+
     .signal-dot {
       flex: 0 0 auto;
       width: 9px;
@@ -1016,6 +1024,10 @@
     .signal-dot.unknown,
     .signal-dot.buffer {
       background: #6c7885;
+    }
+
+    .signal-dot.pto {
+      background: #8b5cf6;
     }
 
     .travel-indicator {
@@ -1497,7 +1509,7 @@
     <div class="header-inner">
       <div class="brand-row">
         <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
-        <span class="version-pill">v27.0.38</span>
+        <span class="version-pill">v27.0.39</span>
       </div>
       <div class="header-actions">
         <div class="refresh-panel">
@@ -11075,6 +11087,20 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       return dayOfWeek === 0 || dayOfWeek === 6;
     }
 
+    function nextWorkdayIso(dateValue) {
+      let next = addDaysIso(dateValue, 1);
+      while (isWeekendIso(next)) next = addDaysIso(next, 1);
+      return next;
+    }
+
+    function formatWeekdayMonthDay(dateValue) {
+      const [year, month, day] = dateValue.split("-").map(Number);
+      const date = new Date(Date.UTC(year, month - 1, day));
+      const weekday = getCachedFormatter("weekdayLong|UTC", { weekday: "long", timeZone: "UTC" }).format(date);
+      const monthDay = getCachedFormatter("numericMonthDay|UTC", { month: "numeric", day: "numeric", timeZone: "UTC" }).format(date);
+      return `${weekday} ${monthDay}`;
+    }
+
     function getWeeklyDateLabel(dateValue) {
       if (weeklyDateLabelCache.has(dateValue)) return weeklyDateLabelCache.get(dateValue);
       const [year, month, day] = dateValue.split("-").map(Number);
@@ -11867,8 +11893,54 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       return `<span class="travel-indicator" title="Travel or onsite calendar language detected" aria-label="Travel or onsite calendar language detected">✈</span>`;
     }
 
-    function renderStaffingContextGrid(row, recommendation, stats) {
+    function getPtoAvailabilitySummary(person, eventsByEmail = buildEventsByEmail(normalizedEvents)) {
+      const email = normalizeEmail(person?.email);
+      if (!email || !hasLoadedCalendar(person)) return null;
+      const zone = document.getElementById("planningZone").value;
+      const events = eventsByEmail.get(email) || [];
+      if (!events.some(isPtoCalendarEvent)) return null;
+
+      const ptoDateSet = new Set(getCardDateKeys()
+        .filter(dateValue => !isWeekendIso(dateValue))
+        .filter(dateValue => {
+          const dayWindow = getWorkdayWindow(dateValue, zone);
+          const ptoMinutes = events
+            .filter(isPtoCalendarEvent)
+            .reduce((sum, event) => sum + eventMinutesInDay(event, dayWindow), 0);
+          return ptoMinutes >= dayWindow.workdayMinutes * 0.5;
+        }));
+
+      const firstPtoDate = [...ptoDateSet].sort()[0];
+      if (!firstPtoDate) return null;
+
+      let lastPtoDate = firstPtoDate;
+      while (ptoDateSet.has(nextWorkdayIso(lastPtoDate))) {
+        lastPtoDate = nextWorkdayIso(lastPtoDate);
+      }
+
+      let returnDate = nextWorkdayIso(lastPtoDate);
+      while (ptoDateSet.has(returnDate)) returnDate = nextWorkdayIso(returnDate);
+
+      return {
+        firstPtoDate,
+        lastPtoDate,
+        returnDate,
+        label: `On PTO, returning ${formatWeekdayMonthDay(returnDate)}`
+      };
+    }
+
+    function renderPtoAvailabilityNote(ptoSummary) {
+      if (!ptoSummary) return "";
+      return `
+        <span class="staffing-context-detail pto-return">
+          <span class="signal-dot pto"></span>${escapeHtml(ptoSummary.label)}
+        </span>
+      `;
+    }
+
+    function renderStaffingContextGrid(row, recommendation, stats, eventsByEmail = buildEventsByEmail(normalizedEvents)) {
       const selectedDate = formatIsoDate(getSelectedMeetingDate());
+      const ptoSummary = getPtoAvailabilitySummary(row, eventsByEmail);
       const calendarDetail = stats.calendarLoaded
         ? `${(stats.open / 60).toFixed(1)}h open on ${selectedDate}`
         : missingCalendarLabel(row);
@@ -11884,6 +11956,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
             <span class="staffing-context-label">Calendar Availability</span>
             <span class="staffing-context-value"><span class="signal-dot ${signalDotClass(recommendation.calendar)}"></span>${escapeHtml(recommendation.calendar.label)}</span>
             <span class="staffing-context-detail">${escapeHtml(calendarDetail)}</span>
+            ${renderPtoAvailabilityNote(ptoSummary)}
           </div>
           <div class="staffing-context-item">
             <span class="staffing-context-label">Workload</span>
@@ -12227,7 +12300,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
                 <em>higher = easier</em>
               </div>
             </div>
-            ${renderStaffingContextGrid(row, recommendation, stats)}
+            ${renderStaffingContextGrid(row, recommendation, stats, eventsByEmail)}
             <div class="staffing-status-line">
               ${coverageBadge(row)}
               ${stats.pto ? `<span class="pill pto">PTO/OOO</span>` : ""}
@@ -12409,7 +12482,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         .slice(0, 20)
         .map(person => ({ name: person.name, email: person.email, manager: getManagerLabel(person) }));
       return {
-        dashboardVersion: "v27.0.38",
+        dashboardVersion: "v27.0.39",
         pageUrl: window.location.href,
         bridgeStatus: getStaffingLoadBridgeStatus(),
         storedRows: stored?.rows?.length || 0,
