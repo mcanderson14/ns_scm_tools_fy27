@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.38
+// @version      27.0.39
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -42,7 +42,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.38";
+  const HELPER_VERSION = "27.0.39";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -6611,6 +6611,12 @@ Health & Hospitality	DIRECT	NL	West	West
     const staffingRegionKeys = staffingRegions.map(normalizeKey).filter(Boolean);
     const amoDirectKey = normalizeKey(normalizeAmoDirect(amoDirect));
     const productsScmOwnerMeActive = productsScmOwnerMe && productsScmUserIsOwner();
+    const selectedProductsScms = [
+      productsScmOwnerMeActive ? currentProductsScmUserName() || getCurrentUserName() : "",
+      ...productsScmOwners
+    ].filter(Boolean);
+    const ownerFiltersActive = productsScmUserCanView() && selectedProductsScms.length;
+    const ownerFiltersMatch = ownerFiltersActive && rowMatchesProductsScmOwnerFilter(row, selectedProductsScms, false);
     const peopleFiltersActive = PEOPLE_FILTERS.some(filter => selectedPeopleFilterValues(filter.key).length);
     const hasNonAssignedFilters = Boolean(
       industry
@@ -6619,8 +6625,6 @@ Health & Hospitality	DIRECT	NL	West	West
       || salesVertical
       || staffingRegionKeys.length
       || amoDirect
-      || productsScmOwnerMeActive
-      || productsScmOwners.length
       || unmappedOnly
       || hideTigerEnterprise
       || slaHotlist
@@ -6638,14 +6642,6 @@ Health & Hospitality	DIRECT	NL	West	West
       if (salesRegion && !isUnmappedReviewRow(row) && normalizeKey(canonicalSalesRegion(row.originalSalesRegion) || row.mappedSalesRegion) !== salesRegionKey) return false;
       if (salesVertical && normalizeKey(row.salesVertical) !== salesVerticalKey) return false;
       if (!rowMatchesPeopleFilters(row)) return false;
-      if (productsScmUserCanView() && (productsScmOwnerMeActive || productsScmOwners.length)) {
-        const selectedProductsScms = [
-          productsScmOwnerMeActive ? currentProductsScmUserName() || getCurrentUserName() : "",
-          ...productsScmOwners
-        ].filter(Boolean);
-        const includeUnmappedProductsScmOwners = Boolean(staffingRegionKeys.length);
-        if (!rowMatchesProductsScmOwnerFilter(row, selectedProductsScms, includeUnmappedProductsScmOwners)) return false;
-      }
       if (staffingRegionKeys.length) {
         const rowStaffingRegionKeys = effectiveStaffingRegionKeys(row, industryKey);
         if (!staffingRegionKeys.some(regionKey => rowStaffingRegionKeys.includes(regionKey))) return false;
@@ -6656,6 +6652,7 @@ Health & Hospitality	DIRECT	NL	West	West
     };
 
     const selectedFiltersMatch = matchesSelectedFilters();
+    if (ownerFiltersMatch) return true;
     if (!assignedToMe) return selectedFiltersMatch;
     return hasNonAssignedFilters ? selectedFiltersMatch || assignedToCurrentUser : assignedToCurrentUser;
   }
@@ -6829,11 +6826,11 @@ Health & Hospitality	DIRECT	NL	West	West
     }
     add("Type", controls.amoDirect.value, controls.amoDirect.value, { removeType: "select", removeKey: "amoDirect" });
     if (controls.productsScmOwnerMe && controls.productsScmOwnerMe.checked) {
-      add("SCM Owner", currentProductsScmUserName() ? `Me (${currentProductsScmUserName()})` : "Me", undefined, { removeType: "checkbox", removeKey: "productsScmOwnerMe", groupKey: "scmOwner", section: "owner" });
+      add("SCM Owner", currentProductsScmUserName() ? `Me (${currentProductsScmUserName()})` : "Me", undefined, { removeType: "checkbox", removeKey: "productsScmOwnerMe", groupKey: "scmOwner", section: "owner", sectionConnector: items.length ? "OR" : "" });
     }
     if (controls.productsScmOwner) {
       productsScmOwnerValuesFromString(controls.productsScmOwner.value).forEach(owner => {
-        add("SCM Owner", owner, owner, { removeType: "productsScmOwner", groupKey: "scmOwner", section: "owner" });
+        add("SCM Owner", owner, owner, { removeType: "productsScmOwner", groupKey: "scmOwner", section: "owner", sectionConnector: items.length ? "OR" : "" });
       });
     }
     PEOPLE_FILTERS.forEach(filter => {
@@ -6961,7 +6958,15 @@ Health & Hospitality	DIRECT	NL	West	West
   function readHelperState() {
     try {
       const parsed = JSON.parse(localStorage.getItem(HELPER_STATE_STORAGE_KEY) || "{}");
-      return parsed && typeof parsed === "object" ? parsed : {};
+      if (!parsed || typeof parsed !== "object") return {};
+      if (!parsed.productsScmOwnerMeDefaultedV39) {
+        parsed.filters = {
+          ...(parsed.filters || {}),
+          productsScmOwnerMe: true
+        };
+        parsed.productsScmOwnerMeDefaultedV39 = true;
+      }
+      return parsed;
     } catch (error) {
       console.warn("SCR helper could not read saved helper state", error);
       return {};
@@ -6990,6 +6995,13 @@ Health & Hospitality	DIRECT	NL	West	West
       slaHotlist: Boolean(controls.slaHotlist && controls.slaHotlist.checked),
       text: controls.text ? controls.text.value : ""
     };
+  }
+
+  function productsScmOwnerMeDefaultChecked() {
+    const filters = helperState.filters || {};
+    return Object.prototype.hasOwnProperty.call(filters, "productsScmOwnerMe")
+      ? Boolean(filters.productsScmOwnerMe)
+      : true;
   }
 
   function getPortletMaximized() {
@@ -8756,7 +8768,7 @@ Health & Hospitality	DIRECT	NL	West	West
       if (controls.staffingRegion) controls.staffingRegion.value = "";
       renderStaffingRegionTokens(Array.isArray(filters.staffingRegions) ? filters.staffingRegions : [filters.staffingRegion].filter(Boolean));
       setSelectValue(controls.amoDirect, filters.amoDirect);
-      if (controls.productsScmOwnerMe) controls.productsScmOwnerMe.checked = Boolean(filters.productsScmOwnerMe);
+      if (controls.productsScmOwnerMe) controls.productsScmOwnerMe.checked = productsScmOwnerMeDefaultChecked();
       const savedScmOwners = Array.isArray(filters.productsScmOwners) ? filters.productsScmOwners : [filters.productsScmOwner].filter(Boolean);
       renderProductsScmOwnerTokens(savedScmOwners);
       if (controls.assignedToMe) controls.assignedToMe.checked = Boolean(filters.assignedToMe);
@@ -8891,6 +8903,8 @@ Health & Hospitality	DIRECT	NL	West	West
       hideProductsScmOwnerSuggestions();
     } else if (!isOwner) {
       checkbox.checked = false;
+    } else {
+      checkbox.checked = productsScmOwnerMeDefaultChecked();
     }
 
     if (datalist) {
@@ -8905,7 +8919,7 @@ Health & Hospitality	DIRECT	NL	West	West
       } else if (!productsScmMetadata.rowCount) {
         note.textContent = "SCM relationship mapping not loaded";
       } else if (isOwner) {
-        note.textContent = `SCM owner: ${currentProductsScmUserName() || getCurrentUserName()}`;
+        note.textContent = `Also includes SCM owner: ${currentProductsScmUserName() || getCurrentUserName()}`;
       } else if (productsScmUserIsDirector()) {
         note.textContent = `Director view: ${currentProductsScmDirectorName() || getCurrentUserName()}`;
       } else if (productsScmUserIsViewer()) {
@@ -10541,7 +10555,7 @@ Health & Hospitality	DIRECT	NL	West	West
             <label class="scr-helper-checkbox-filter">
               <span>SCM Owner</span>
               <span class="scr-helper-checkbox-row">
-                <input id="scr-helper-products-scm-owner-me-filter" type="checkbox">
+                <input id="scr-helper-products-scm-owner-me-filter" type="checkbox" checked>
                 Me
               </span>
               <span id="scr-helper-products-scm-note" class="scr-helper-filter-note"></span>
