@@ -1,10 +1,14 @@
 // ==UserScript==
 // @name         SCOUT Staffing Load Cache Bridge
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0
+// @version      27.0.7
 // @description  Refreshes the SCOUT staffing-dashboard workload cache from NetSuite saved search 1324335.
 // @author       Michael Anderson
+// @homepageURL  https://github.com/mcanderson14/ns_scm_tools_fy27/tree/main/SCOUT
+// @downloadURL  https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/scout-staffing-load-cache.user.js
+// @updateURL    https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/scout-staffing-load-cache.user.js
 // @match        https://mcanderson14.github.io/ns_scm_tools_fy27/staffing-dashboard.html*
+// @match        https://mcanderson14.github.io/ns_scm_tools_fy27/testing/staffing-dashboard.html*
 // @match        file://*/staffing-dashboard.html*
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
 // @match        https://nlcorp-sb2.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -27,14 +31,22 @@
   const NETSUITE_HOST = window.location.hostname.includes("nlcorp-sb2")
     ? "nlcorp-sb2.app.netsuite.com"
     : "nlcorp.app.netsuite.com";
-  const SAVED_SEARCH_URL = `https://${NETSUITE_HOST}/app/common/search/savedsearchresults.nl?searchid=${SAVED_SEARCH_ID}&csv=HTML&OfficeXML=F&pdf=&size=1000`;
+  const SAVED_SEARCH_URL = `https://${NETSUITE_HOST}/app/common/search/savedsearchresults.nl?searchid=${SAVED_SEARCH_ID}`;
   const DASHBOARD_STORAGE_KEY = "scout-staffing-dashboard-load-report-v1";
   const GM_CACHE_KEY = "scout-staffing-dashboard-load-report-gm-v1";
-  const STALE_AFTER_MS = 4 * 60 * 60 * 1000;
+  const PAGE_REQUEST_TYPE = "scout-staffing-load-refresh-request";
+  const PAGE_RESPONSE_TYPE = "scout-staffing-load-refresh-response";
+  const STALE_AFTER_MS = 24 * 60 * 60 * 1000;
+  const SAVED_SEARCH_TIMEOUT_MS = 10 * 60 * 1000;
+  const PAGE_BRIDGE_TIMEOUT_MS = SAVED_SEARCH_TIMEOUT_MS + 30000;
   const BUTTON_ID = "scout-staffing-load-cache-refresh";
   const STATUS_ID = "scout-staffing-load-cache-status";
 
   let refreshPromise = null;
+
+  function isDashboardPage() {
+    return /staffing-dashboard\.html/i.test(window.location.href || "");
+  }
 
   function pageWindow() {
     return typeof unsafeWindow !== "undefined" ? unsafeWindow : window;
@@ -182,7 +194,7 @@
     const request = {
       method: "GET",
       url,
-      timeout: 120000,
+      timeout: SAVED_SEARCH_TIMEOUT_MS,
       headers: {
         "Cache-Control": "no-cache",
         "Pragma": "no-cache"
@@ -199,7 +211,7 @@
             else reject(new Error(`NetSuite saved search returned ${response.status}`));
           },
           onerror: () => reject(new Error("Could not reach NetSuite saved search.")),
-          ontimeout: () => reject(new Error("NetSuite saved search timed out."))
+          ontimeout: () => reject(new Error("NetSuite saved search timed out after 10 minutes."))
         });
       });
     }
@@ -276,6 +288,21 @@
     status.dataset.tone = tone;
   }
 
+  function setRefreshControlVisibility(report, fresh) {
+    if (isDashboardPage()) return;
+    const button = document.getElementById(BUTTON_ID);
+    const status = document.getElementById(STATUS_ID);
+    if (!button) return;
+    const visible = Boolean(refreshPromise || !report?.rows?.length || !fresh);
+    const wrapper = button.closest(".scout-staffing-cache-floating");
+    if (wrapper) {
+      wrapper.hidden = !visible;
+    } else {
+      button.hidden = !visible;
+      if (status) status.hidden = !visible;
+    }
+  }
+
   function updateButtonState(report = latestReport()) {
     const button = document.getElementById(BUTTON_ID);
     if (!button) return;
@@ -290,6 +317,7 @@
         : "Staffing data cache is missing.",
       fresh ? "good" : "warn"
     );
+    setRefreshControlVisibility(report, fresh);
   }
 
   function insertStyles() {
@@ -334,6 +362,11 @@
         border-radius: 9px;
         background: rgba(19, 33, 44, 0.9);
         box-shadow: 0 10px 28px rgba(0, 0, 0, 0.26);
+      }
+      .scout-staffing-cache-floating[hidden],
+      #${BUTTON_ID}[hidden],
+      #${STATUS_ID}[hidden] {
+        display: none !important;
       }
       .scout-staffing-cache-floating #${STATUS_ID} {
         max-width: 190px;
@@ -394,17 +427,89 @@
   }
 
   function publishBridgeApi() {
+    pageWindow().__SCOUT_STAFFING_LOAD_BRIDGE = {
+      installed: true,
+      version: "27.0.6",
+      searchId: SAVED_SEARCH_ID,
+      installedAt: new Date().toISOString()
+    };
     pageWindow().refreshScoutStaffingLoadFromNetSuite = refreshStaffingLoadCache;
     pageWindow().getScoutStaffingLoadCache = () => latestReport();
   }
 
+  function installPageMessageBridge() {
+    window.addEventListener("message", async event => {
+      if (event.source !== window) return;
+      const data = event.data || {};
+      if (!data || data.type !== PAGE_REQUEST_TYPE || !data.requestId) return;
+      try {
+        const report = await refreshStaffingLoadCache();
+        pageWindow().postMessage({
+          type: PAGE_RESPONSE_TYPE,
+          requestId: data.requestId,
+          ok: true,
+          report
+        }, "*");
+      } catch (error) {
+        pageWindow().postMessage({
+          type: PAGE_RESPONSE_TYPE,
+          requestId: data.requestId,
+          ok: false,
+          message: error.message || String(error)
+        }, "*");
+      }
+    });
+
+    const script = document.createElement("script");
+    script.textContent = `(() => {
+      const requestType = ${JSON.stringify(PAGE_REQUEST_TYPE)};
+      const responseType = ${JSON.stringify(PAGE_RESPONSE_TYPE)};
+      const storageKey = ${JSON.stringify(DASHBOARD_STORAGE_KEY)};
+      window.__SCOUT_STAFFING_LOAD_BRIDGE = Object.assign({}, window.__SCOUT_STAFFING_LOAD_BRIDGE, {
+        installed: true,
+        mode: "postMessage",
+        version: "27.0.6",
+        searchId: ${JSON.stringify(SAVED_SEARCH_ID)},
+        installedAt: new Date().toISOString()
+      });
+      window.getScoutStaffingLoadCache = window.getScoutStaffingLoadCache || function () {
+        try { return JSON.parse(localStorage.getItem(storageKey) || "null"); }
+        catch (error) { return null; }
+      };
+      window.refreshScoutStaffingLoadFromNetSuite = window.refreshScoutStaffingLoadFromNetSuite || function () {
+        return new Promise((resolve, reject) => {
+          const requestId = "scout-load-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+          const timer = window.setTimeout(() => {
+            window.removeEventListener("message", onMessage);
+            reject(new Error("SCOUT Staffing Load Cache Bridge did not respond."));
+          }, ${PAGE_BRIDGE_TIMEOUT_MS});
+          function onMessage(event) {
+            const data = event.data || {};
+            if (!data || data.type !== responseType || data.requestId !== requestId) return;
+            window.clearTimeout(timer);
+            window.removeEventListener("message", onMessage);
+            if (data.ok) resolve(data.report || null);
+            else reject(new Error(data.message || "Staffing load refresh failed."));
+          }
+          window.addEventListener("message", onMessage);
+          window.postMessage({ type: requestType, requestId }, "*");
+        });
+      };
+    })();`;
+    (document.head || document.documentElement).appendChild(script);
+    script.remove();
+  }
+
   publishBridgeApi();
+  installPageMessageBridge();
   mirrorGmCacheToPageStorage();
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", insertButton, { once: true });
-  } else {
-    insertButton();
+  if (!isDashboardPage()) {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", insertButton, { once: true });
+    } else {
+      insertButton();
+    }
   }
 
   window.setInterval(() => updateButtonState(), 60 * 1000);
