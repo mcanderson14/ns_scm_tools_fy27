@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.0.23
+// @version      27.0.24
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.0.23
+   SCOUT — SC Operations Utility Tool  27.0.24
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.0.23';
+  const SCRIPT_VERSION = '27.0.24';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -398,9 +398,6 @@ Good luck with ${sc}!
   const NETSUITE_FORM_INIT_TIMEOUT_MS = 20000;
   const NETSUITE_FORM_INIT_POLL_MS = 250;
   const SEARCH_RESULT_CACHE = {};
-  const RECENT_LOAD_CACHE = new Map();
-  const RECENT_LOAD_CACHE_TTL_MS = 2 * 60 * 1000;
-  const RECENT_LOAD_SEARCH_ID = '1316256';
   const PREVIOUS_SC_HISTORY_SEARCH_ID = '1316506';
   const CUSTOMER_LICENSE_SEARCH_ID = '1316575';
   const ASSIGNEE_EMPLOYEE_CACHE = {};
@@ -1337,15 +1334,6 @@ html.sc-resizing #sc-skills-toggle { transition: none !important; }
   gap: 3px;
   margin-top: 4px;
 }
-.sc-load-badge {
-  font-size: 10px;
-  background: #fff4d8;
-  color: #7a5600;
-  border: 1px solid #e6c773;
-  border-radius: 3px;
-  padding: 1px 5px;
-  white-space: nowrap;
-}
 .sc-card-right {
   display: flex;
   flex-direction: column;
@@ -1353,29 +1341,6 @@ html.sc-resizing #sc-skills-toggle { transition: none !important; }
   gap: 4px;
   flex-shrink: 0;
 }
-.sc-avail-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 99px;
-  white-space: nowrap;
-}
-.sc-avail-pill.green   { background: #e6f4ec; color: var(--sc-green-dark); }
-.sc-avail-pill.yellow  { background: #fdf3e3; color: #8a6020; }
-.sc-avail-pill.red     { background: #fdecea; color: var(--sc-red-dark); }
-.sc-avail-pill.unknown { background: #f0f0f0; color: var(--sc-text-muted); }
-.sc-avail-dot {
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.sc-avail-dot.green   { background: var(--sc-green); }
-.sc-avail-dot.yellow  { background: var(--sc-yellow); }
-.sc-avail-dot.red     { background: var(--sc-red); }
-.sc-avail-dot.unknown { background: #bbb; }
 
 /* ── Card action buttons row ─────────────────────────────────────── */
 .sc-card-btn-row {
@@ -1388,16 +1353,6 @@ html.sc-resizing #sc-skills-toggle { transition: none !important; }
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-.sc-card-avail-notes {
-  font-size: 11px;
-  color: var(--sc-text);
-  line-height: 1.45;
-}
-.sc-card-avail-res {
-  font-size: 10px;
-  color: var(--sc-red);
-  margin-top: 2px;
 }
 .sc-card-skills {
   display: flex;
@@ -7091,243 +7046,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     return d;
   }
 
-  function getRecentScrLoad(members) {
-    members = members || [];
-    const ids = [...new Set(members.map(m => m.employeeId).filter(Boolean))];
-    const rosterByEmployee = {};
-    const rosterByName = {};
-
-    function addRosterNameVariant(name, rosterId) {
-      const key = normalizeLoose(name);
-      if (key && rosterId) rosterByName[key] = rosterId;
-    }
-
-    members.forEach(m => {
-      if (m.employeeRecId && m.employeeId) rosterByEmployee[m.employeeRecId] = m.employeeId;
-      const rawName = m.employee || m.name || '';
-      addRosterNameVariant(rawName, m.employeeId);
-      if (rawName.includes(',')) {
-        const parts = rawName.split(',').map(s => s.trim()).filter(Boolean);
-        if (parts.length >= 2) addRosterNameVariant(`${parts[1]} ${parts[0]}`, m.employeeId);
-      } else {
-        const parts = rawName.trim().split(/\s+/).filter(Boolean);
-        if (parts.length >= 2) addRosterNameVariant(`${parts.slice(-1)[0]}, ${parts.slice(0, -1).join(' ')}`, m.employeeId);
-      }
-    });
-    const counts = {};
-    const now = Date.now();
-    ids.forEach(id => {
-      const cached = RECENT_LOAD_CACHE.get(id);
-      counts[id] = cached && (now - cached.ts < RECENT_LOAD_CACHE_TTL_MS) ? cached.count : 0;
-    });
-    const missing = ids.filter(id => {
-      const cached = RECENT_LOAD_CACHE.get(id);
-      return !cached || (now - cached.ts >= RECENT_LOAD_CACHE_TTL_MS);
-    });
-    if (!missing.length) return counts;
-
-    const missingSet = new Set(missing);
-    const employeeIds = Object.keys(rosterByEmployee).filter(empId => missingSet.has(rosterByEmployee[empId]));
-    const seenScrs = new Set();
-    const loadDebugSamples = [];
-    missing.forEach(id => { counts[id] = 0; });
-
-    function readSearchValue(r, fieldId, joinId) {
-      try { return joinId ? r.getValue(fieldId, joinId) : r.getValue(fieldId); }
-      catch (e) { return ''; }
-    }
-
-    function readSearchText(r, fieldId, joinId) {
-      try { return joinId ? r.getText(fieldId, joinId) : r.getText(fieldId); }
-      catch (e) { return ''; }
-    }
-
-    function columnDescriptor(col) {
-      const parts = [];
-      ['getName', 'getLabel', 'getJoin', 'getSummary'].forEach(fn => {
-        try {
-          if (col && typeof col[fn] === 'function') parts.push(col[fn]() || '');
-        } catch (e) { /* ignore */ }
-      });
-      return parts.join(' ').toLowerCase();
-    }
-
-    function parseLoadCountValue(value) {
-      const normalized = String(value == null ? '' : value).replace(/,/g, '').trim();
-      if (!/^\d+(?:\.\d+)?$/.test(normalized)) return null;
-      return Math.max(0, Math.round(Number(normalized)));
-    }
-
-    function loadCountFromSavedSearchColumns(r) {
-      let cols = [];
-      try { cols = typeof r.getAllColumns === 'function' ? (r.getAllColumns() || []) : []; }
-      catch (e) { cols = []; }
-      const candidates = [];
-      cols.forEach(col => {
-        const hint = columnDescriptor(col);
-        const rawValue = readColumnValue(r, col, false);
-        const rawText = readColumnValue(r, col, true);
-        const value = parseLoadCountValue(rawValue);
-        const textValue = parseLoadCountValue(rawText);
-        const count = value != null ? value : textValue;
-        if (count == null) return;
-        if (/assignee|consultant|employee|manager|email|name|region|vertical|team/i.test(hint)) return;
-
-        let score = 0;
-        if (/\b(scr|request|load)\b/i.test(hint)) score += 25;
-        if (/(last|lst)\s*7|7\s*(?:days|dys)|assigned.*7/i.test(hint)) score += 80;
-        if (/count|sum|formula|numeric/i.test(hint)) score += 30;
-        if (/\bcount\b|\bsum\b/i.test(hint)) score += 20;
-        if (score > 0) candidates.push({ score, count, hint });
-      });
-      if (!candidates.length) return null;
-      candidates.sort((a, b) => b.score - a.score);
-      return candidates[0].count;
-    }
-
-    function rosterIdFromNameText(text) {
-      const nameKey = normalizeLoose(text);
-      if (!nameKey) return '';
-      if (rosterByName[nameKey]) return rosterByName[nameKey];
-      const matchedKey = Object.keys(rosterByName).find(key =>
-        key && (nameKey === key || nameKey.includes(key) || key.includes(nameKey)));
-      return matchedKey ? rosterByName[matchedKey] : '';
-    }
-
-    function readColumnValue(r, col, asText) {
-      try {
-        return asText ? r.getText(col) : r.getValue(col);
-      } catch (e) { /* fall through */ }
-      try {
-        const name = col && typeof col.getName === 'function' ? col.getName() : '';
-        const join = col && typeof col.getJoin === 'function' ? col.getJoin() : null;
-        const summary = col && typeof col.getSummary === 'function' ? col.getSummary() : null;
-        return asText ? r.getText(name, join, summary) : r.getValue(name, join, summary);
-      } catch (e) { return ''; }
-    }
-
-    function rosterIdFromSavedSearchColumns(r) {
-      let cols = [];
-      try { cols = typeof r.getAllColumns === 'function' ? (r.getAllColumns() || []) : []; }
-      catch (e) { cols = []; }
-      for (const col of cols) {
-        const hint = columnDescriptor(col);
-        const value = String(readColumnValue(r, col, false) || '').trim();
-        const text = String(readColumnValue(r, col, true) || '').trim();
-        const byName = rosterIdFromNameText(text) || rosterIdFromNameText(value);
-        if (byName) return byName;
-        if (/assignee|employee|consultant|staff/i.test(hint)) {
-          if (value && missingSet.has(value)) return value;
-          if (value && rosterByEmployee[value]) return rosterByEmployee[value];
-        }
-      }
-      return '';
-    }
-
-    function sampleLoadRow(r, rowCount, searchId, recordType) {
-      if (loadDebugSamples.length >= 4) return;
-      let cols = [];
-      try { cols = typeof r.getAllColumns === 'function' ? (r.getAllColumns() || []) : []; }
-      catch (e) { cols = []; }
-      loadDebugSamples.push({
-        searchId,
-        recordType,
-        rowCount,
-        columns: cols.slice(0, 12).map(col => ({
-          hint: columnDescriptor(col),
-          value: readColumnValue(r, col, false),
-          text: readColumnValue(r, col, true),
-        })),
-      });
-    }
-
-    function rosterIdFromLoadRow(r) {
-      const directRosterId = readSearchValue(r, SCR_FIELD_ASSIGNEE);
-      if (directRosterId && missingSet.has(directRosterId)) return directRosterId;
-
-      const employeeId = readSearchValue(r, SCR_FIELD_ASSIGNEE_EMPLOYEE) ||
-        readSearchValue(r, 'custrecord_emproster_emp', SCR_FIELD_ASSIGNEE);
-      if (employeeId && rosterByEmployee[employeeId]) return rosterByEmployee[employeeId];
-
-      const assigneeName = normalizeLoose(readSearchText(r, SCR_FIELD_ASSIGNEE) ||
-        readSearchText(r, SCR_FIELD_ASSIGNEE_EMPLOYEE));
-      const byName = rosterIdFromNameText(assigneeName);
-      if (byName) return byName;
-
-      return rosterIdFromSavedSearchColumns(r);
-    }
-
-    function addRows(rows, opts) {
-      const options = opts || {};
-      let matched = 0;
-      (rows || []).forEach(r => {
-        const assignee = rosterIdFromLoadRow(r);
-        if (!assignee || !missingSet.has(assignee)) return;
-        const savedSearchMetric = options.useSavedSearchMetric ? loadCountFromSavedSearchColumns(r) : null;
-        if (savedSearchMetric != null) {
-          counts[assignee] = Math.max(Number(counts[assignee] || 0), savedSearchMetric);
-          matched += 1;
-          return;
-        }
-        const scrId = r.getValue('internalid') || `${assignee}:${counts[assignee]}`;
-        const seenKey = `${assignee}:${scrId}`;
-        if (seenScrs.has(seenKey)) return;
-        seenScrs.add(seenKey);
-        counts[assignee] = (counts[assignee] || 0) + 1;
-        matched += 1;
-      });
-      return matched;
-    }
-
-    function runLoadSearch(searchId, filters, cols, opts) {
-      const searchTypes = searchId ? [SCR_RECORD_TYPE, null] : [SCR_RECORD_TYPE];
-      for (const recordType of searchTypes) {
-        try {
-          const rows = nlapiSearchRecord(recordType, searchId || null, filters, cols) || [];
-          if (searchId && recordType && rows.length === 0) continue;
-          if (searchId && rows.length) sampleLoadRow(rows[0], rows.length, searchId, recordType);
-          const matched = addRows(rows, opts);
-          return { ok: true, rows: rows.length, matched };
-        } catch (e) {
-          console.warn('[Staffing Helper] Recent SCR load lookup failed:', {
-            searchId,
-            recordType,
-            message: e.message || e,
-          });
-        }
-      }
-      return { ok: false, rows: 0, matched: 0 };
-    }
-
-    function hasAnyLoadCount() {
-      return missing.some(id => Number(counts[id] || 0) > 0);
-    }
-
-    const savedSearchResult = runLoadSearch(RECENT_LOAD_SEARCH_ID, null, null, { useSavedSearchMetric: true });
-    if (!savedSearchResult.ok) {
-      console.warn('[Staffing Helper] Recent SCR load saved search was unavailable. Counts defaulted to zero.', {
-        searchId: RECENT_LOAD_SEARCH_ID,
-      });
-    }
-    if (!hasAnyLoadCount() && loadDebugSamples.length) {
-      console.warn('[Staffing Helper] SCR load search returned rows but none matched the visible roster cards.', {
-        searchId: RECENT_LOAD_SEARCH_ID,
-        visibleRosterIds: missing,
-        visibleEmployeeIds: employeeIds,
-        visibleNameKeys: Object.keys(rosterByName).slice(0, 20),
-        samples: loadDebugSamples,
-      });
-    }
-    missing.forEach(id => RECENT_LOAD_CACHE.set(id, { count: counts[id] || 0, ts: Date.now() }));
-    return counts;
-  }
-
-  function enrichRecentScrLoad(members) {
-    if (!members || !members.length) return;
-    const loadMap = getRecentScrLoad(members);
-    members.forEach(m => { m.recentLoad = loadMap[m.employeeId] || 0; });
-  }
-
   /**
    * Enrich member objects (from getRequestedSCRoster / loadQuickAssignCard) with
    * availability and email fetched directly from customrecord_emproster.
@@ -8618,31 +8336,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     return m ? m[0] : text;
   }
 
-  function updateRecentLoadBadges(containerId, employees) {
-    const area = document.getElementById(containerId);
-    if (!area) return;
-    const byId = {};
-    (employees || []).forEach(e => { if (e && e.employeeId) byId[String(e.employeeId)] = e; });
-    area.querySelectorAll('.sc-load-badge[data-load-empid]').forEach(badge => {
-      const member = byId[String(badge.dataset.loadEmpid || '')];
-      if (!member || member.recentLoad == null) return;
-      badge.textContent = `SCR Lst 7 dys ${Number(member.recentLoad || 0)}`;
-    });
-  }
-
-  function scheduleRecentLoadRefresh(employees, containerId) {
-    const pending = (employees || []).filter(e => e && e.employeeId && e.recentLoad == null);
-    if (!pending.length) return;
-    setTimeout(() => {
-      try {
-        enrichRecentScrLoad(pending);
-        updateRecentLoadBadges(containerId, pending);
-      } catch (e) {
-        console.warn('[Staffing Helper] Deferred SCR load lookup failed:', e.message || e);
-      }
-    }, 250);
-  }
-
   function updateResultEmailControls(containerId, employees) {
     const area = document.getElementById(containerId);
     if (!area) return;
@@ -8714,13 +8407,10 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       const region      = escHtml(e.region);
       const location    = escHtml(e.location);
       const locationAtr = escAttr(e.location);
-      const avail       = availabilityClass(e.availability);
-      const availLabel  = availabilityLabel(e.availability);
       const nameTone    = scNameToneClass(e);
       const stackRank   = Math.max(0, Math.min(100, Number(e.stackRank) || 0));
       const indRating   = Math.max(0, Math.min(4, Number(e.industryRating) || 0));
       const indLabel    = ratingLabel(indRating);
-      const recentLoad  = e.recentLoad == null ? '...' : Number(e.recentLoad || 0);
       const skillParts  = Object.entries(e.skills || {})
         .map(([s, r]) => {
           const skill = String(s || '');
@@ -8760,13 +8450,9 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                 ${e.tier     ? `<span class="sc-attr-badge">${tier}</span>`     : ''}
                 ${e.region   ? `<span class="sc-attr-badge">${region}</span>`   : ''}
                 ${e.location ? `<span class="sc-attr-badge">${location}</span>` : ''}
-                <span class="sc-load-badge" data-load-empid="${empId}">SCR Lst 7 dys ${recentLoad}</span>
               </div>
             </div>
             <div class="sc-card-right">
-              <span class="sc-avail-pill ${avail}" title="${avail}">
-                <span class="sc-avail-dot ${avail}"></span>${availLabel}
-              </span>
               <div class="sc-card-btn-row">
                 <button class="sc-viewcal-btn"
                   data-empid="${empId}"
@@ -8784,7 +8470,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
             </div>
           </div>
           <div class="sc-card-body">
-            ${e.availNotes ? `<div class="sc-card-avail-notes">${escHtml(e.availNotes)}${e.availRes ? `<div class="sc-card-avail-res">${escHtml(e.availRes)}</div>` : ''}</div>` : ''}
             ${skillTags    ? `<div class="sc-card-skills">${skillTags}</div>` : ''}
             <div class="sc-card-footer">
               <div class="sc-rank-inline">
@@ -8830,7 +8515,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     if (prevBtn) prevBtn.addEventListener('click', () => renderResults(employees, hasIndustry, empName, containerId, mode, page - 1));
     if (nextBtn) nextBtn.addEventListener('click', () => renderResults(employees, hasIndustry, empName, containerId, mode, page + 1));
     scheduleResultEmailRefresh(employees, containerId);
-    scheduleRecentLoadRefresh(pageEmployees, containerId);
 
     // Wire per-card View Cal buttons (single consultant)
     area.querySelectorAll('.sc-viewcal-btn').forEach(btn => {
@@ -8871,8 +8555,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       area.innerHTML = '<div class="sc-status">No team members found.</div>';
       return;
     }
-    if (team.some(e => e.recentLoad == null)) enrichRecentScrLoad(team);
-
     const cards = team.map(e => {
       const empId       = escAttr(e.employeeId);
       const empHrefId   = encodeURIComponent(String(e.employeeId || ''));
@@ -8890,8 +8572,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       const nameTone    = scNameToneClass(e);
       const cardTone    = isAmoMember ? ' sc-team-card-amo' : '';
       const staffBtnClass = isAmoMember ? 'sc-amo-staff-btn' : 'sc-staff-btn';
-      const avail       = availabilityClass(e.availability);
-      const availLabel  = availabilityLabel(e.availability);
       return `
         <div class="sc-result-card${cardTone}">
           <div class="sc-card-head">
@@ -8914,13 +8594,9 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                 ${e.tier     ? `<span class="sc-attr-badge">${tier}</span>`     : ''}
                 ${e.region   ? `<span class="sc-attr-badge">${region}</span>`   : ''}
                 ${e.location ? `<span class="sc-attr-badge">${location}</span>` : ''}
-                <span class="sc-load-badge">SCR Lst 7 dys ${Number(e.recentLoad || 0)}</span>
               </div>
             </div>
             <div class="sc-card-right">
-              <span class="sc-avail-pill ${avail}">
-                <span class="sc-avail-dot ${avail}"></span>${availLabel}
-              </span>
               <div class="sc-card-btn-row">
                 <button class="sc-viewcal-btn"
                   data-email="${email}"
@@ -8936,11 +8612,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               </div>
             </div>
           </div>
-          ${e.availNotes ? `
-          <div class="sc-card-body">
-            <div class="sc-card-avail-notes">${escHtml(e.availNotes)}${e.availRes
-              ? `<div class="sc-card-avail-res">${escHtml(e.availRes)}</div>` : ''}</div>
-          </div>` : ''}
         </div>`;
     }).join('');
 
@@ -9624,16 +9295,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     return escHtml(str).replace(/'/g, '&#39;');
   }
 
-  function availabilityClass(raw) {
-    const v = String(raw || '').trim().toLowerCase();
-    return /^(green|yellow|red)$/.test(v) ? v : 'unknown';
-  }
-
-  function availabilityLabel(raw) {
-    const v = availabilityClass(raw);
-    return v.charAt(0).toUpperCase() + v.slice(1);
-  }
-
   /**
    * Scan request details text for patterns indicating a specific SC was requested.
    * Returns the SC name string or null.
@@ -10014,7 +9675,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       }
 
       if (!result.enriched) enrichMembersWithRosterData(members);
-      enrichRecentScrLoad(members);
       label.textContent = members[0].employee || requestedSCName;
       wrapper.style.display = 'block';
 
@@ -10033,8 +9693,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         const location    = escHtml(e.location);
         const locationAtr = escAttr(e.location);
         const nameTone    = scNameToneClass(e);
-        const avail       = availabilityClass(e.availability);
-        const availLabel  = availabilityLabel(e.availability);
         return `
           <div class="sc-result-card">
             <div class="sc-card-head">
@@ -10057,13 +9715,9 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                   ${e.tier     ? `<span class="sc-attr-badge">${tier}</span>`     : ''}
                   ${e.region   ? `<span class="sc-attr-badge">${region}</span>`   : ''}
                   ${e.location ? `<span class="sc-attr-badge">${location}</span>` : ''}
-                  <span class="sc-load-badge">SCR Lst 7 dys ${Number(e.recentLoad || 0)}</span>
                 </div>
               </div>
               <div class="sc-card-right">
-                <span class="sc-avail-pill ${avail}">
-                  <span class="sc-avail-dot ${avail}"></span>${availLabel}
-                </span>
                 <div class="sc-card-btn-row">
                   <button class="sc-viewcal-btn"
                     data-email="${email}"
@@ -10079,11 +9733,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                 </div>
               </div>
             </div>
-            ${e.availNotes ? `
-            <div class="sc-card-body">
-              <div class="sc-card-avail-notes">${escHtml(e.availNotes)}${e.availRes
-                ? `<div class="sc-card-avail-res">${escHtml(e.availRes)}</div>` : ''}</div>
-            </div>` : ''}
           </div>`;
       }).join('');
 
@@ -10151,7 +9800,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         }
 
         if (!result.enriched) enrichMembersWithRosterData(members);
-        enrichRecentScrLoad(members);
 
         const displayMembers = members.slice(0, QUICK_ASSIGN_RESULT_LIMIT);
         const cards = displayMembers.map(function (e) {
@@ -10168,8 +9816,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           const location    = escHtml(e.location);
           const locationAtr = escAttr(e.location);
           const nameTone    = scNameToneClass(e);
-          const avail       = availabilityClass(e.availability);
-          const availLabel  = availabilityLabel(e.availability);
           return `
             <div class="sc-result-card">
               <div class="sc-card-head">
@@ -10192,13 +9838,9 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                     ${e.tier     ? `<span class="sc-attr-badge">${tier}</span>`     : ''}
                     ${e.region   ? `<span class="sc-attr-badge">${region}</span>`   : ''}
                     ${e.location ? `<span class="sc-attr-badge">${location}</span>` : ''}
-                    <span class="sc-load-badge">SCR Lst 7 dys ${Number(e.recentLoad || 0)}</span>
                   </div>
                 </div>
                 <div class="sc-card-right">
-                  <span class="sc-avail-pill ${avail}">
-                    <span class="sc-avail-dot ${avail}"></span>${availLabel}
-                  </span>
                   <div class="sc-card-btn-row">
                     <button class="sc-viewcal-btn"
                       data-email="${email}"
@@ -10214,11 +9856,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                   </div>
                 </div>
               </div>
-              ${e.availNotes ? `
-              <div class="sc-card-body">
-                <div class="sc-card-avail-notes">${escHtml(e.availNotes)}${e.availRes
-                  ? `<div class="sc-card-avail-res">${escHtml(e.availRes)}</div>` : ''}</div>
-              </div>` : ''}
             </div>`;
         }).join('');
 
