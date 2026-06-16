@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT Staffing Load Cache Bridge
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.7
+// @version      27.0.8
 // @description  Refreshes the SCOUT staffing-dashboard workload cache from NetSuite saved search 1324335.
 // @author       Michael Anderson
 // @homepageURL  https://github.com/mcanderson14/ns_scm_tools_fy27/tree/main/SCOUT
@@ -150,14 +150,35 @@
     }
   }
 
+  function reportRefreshedMs(report) {
+    if (!report) return 0;
+    const candidates = [report.refreshedAt, report.cachedAt, report.generatedAt, report.createdAt];
+    for (const candidate of candidates) {
+      if (!candidate) continue;
+      if (typeof candidate === "number" && Number.isFinite(candidate)) return candidate;
+      const parsed = new Date(candidate).getTime();
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    return 0;
+  }
+
+  function isSameBrowserDay(report) {
+    return Boolean(report?.cacheDate && report.cacheDate === getBrowserDateStamp());
+  }
+
   function isReportFresh(report) {
-    if (!report?.rows?.length || !report.refreshedAt) return false;
-    return Date.now() - new Date(report.refreshedAt).getTime() < STALE_AFTER_MS;
+    if (!report?.rows?.length) return false;
+    const refreshedMs = reportRefreshedMs(report);
+    if (refreshedMs) {
+      const ageMs = Math.max(0, Date.now() - refreshedMs);
+      return ageMs < STALE_AFTER_MS;
+    }
+    return isSameBrowserDay(report);
   }
 
   function isReportNewer(left, right) {
-    const leftMs = left?.refreshedAt ? new Date(left.refreshedAt).getTime() : 0;
-    const rightMs = right?.refreshedAt ? new Date(right.refreshedAt).getTime() : 0;
+    const leftMs = reportRefreshedMs(left);
+    const rightMs = reportRefreshedMs(right);
     return leftMs > rightMs;
   }
 
@@ -278,6 +299,9 @@
   function latestReport() {
     const pageReport = readPageStorageReport();
     const gmReport = gmGet(GM_CACHE_KEY, null);
+    const pageFresh = isReportFresh(pageReport);
+    const gmFresh = isReportFresh(gmReport);
+    if (pageFresh !== gmFresh) return pageFresh ? pageReport : gmReport;
     return isReportNewer(pageReport, gmReport) ? pageReport : gmReport;
   }
 
@@ -429,7 +453,7 @@
   function publishBridgeApi() {
     pageWindow().__SCOUT_STAFFING_LOAD_BRIDGE = {
       installed: true,
-      version: "27.0.6",
+      version: "27.0.8",
       searchId: SAVED_SEARCH_ID,
       installedAt: new Date().toISOString()
     };
@@ -468,7 +492,7 @@
       window.__SCOUT_STAFFING_LOAD_BRIDGE = Object.assign({}, window.__SCOUT_STAFFING_LOAD_BRIDGE, {
         installed: true,
         mode: "postMessage",
-        version: "27.0.6",
+        version: "27.0.8",
         searchId: ${JSON.stringify(SAVED_SEARCH_ID)},
         installedAt: new Date().toISOString()
       });
