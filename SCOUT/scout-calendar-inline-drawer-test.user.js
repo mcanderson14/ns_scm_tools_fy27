@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT Inline Calendar Drawer TEST
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0-test.2
+// @version      27.0.0-test.5
 // @description  Test-only lazy inline SC calendar/workload drawer for NetSuite SCOUT cards.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -24,20 +24,30 @@
 (function () {
   "use strict";
 
-  const VERSION = "27.0.0-test.2";
+  const VERSION = "27.0.0-test.5";
   const CALENDAR_CACHE_KEY = "scout-inline-calendar-drawer-calendar-cache-v1";
   const LOCAL_GRAPH_CACHE_KEY = "sc-staffing-dashboard-local-graph-cache-v1";
   const LEGACY_CALENDAR_CACHE_KEY = "sc-staffing-dashboard-calendar-cache-direct-connector-202605062230";
   const STAFFING_LOAD_STORAGE_KEY = "scout-staffing-dashboard-load-report-v1";
   const DASHBOARD_URL = "https://mcanderson14.github.io/ns_scm_tools_fy27/testing/staffing-dashboard.html";
+  const CALENDAR_REFRESH_URL = "https://mcanderson14.github.io/ns_scm_tools_fy27/testing/calendar-refresh.html";
+  const CALENDAR_STALE_AFTER_MS = 24 * 60 * 60 * 1000;
   const WORKDAY_START_MINUTES = 8 * 60;
   const WORKDAY_END_MINUTES = 17 * 60;
   const WORKDAY_MINUTES = WORKDAY_END_MINUTES - WORKDAY_START_MINUTES;
   const DRAWER_ID = "scout-inline-calendar-drawer";
   const STYLE_ID = "scout-inline-calendar-drawer-style";
+  const CALENDAR_PROMPT_ID = "scout-inline-calendar-stale-prompt";
   const INLINE_SELECTED_BUTTON_CLASS = "scid-inline-selected-btn";
+  const SOURCE_CARD_CLASS_SELECTOR = ".sc-card,.sc-result-card,.sc-staff-card,.scout-card";
+  const SOURCE_CARD_SELECTOR = "[data-email],[data-empname],[data-employee],[data-name],.sc-card,.sc-result-card,.sc-staff-card,.scout-card";
+  const LOAD_NAME_ALIASES = ["SC NAME", "SC", "Name", "Consultant"];
+  const LOAD_EMAIL_ALIASES = ["Email", "Email Address", "SC Email", "Work Email"];
+  const LOAD_MANAGER_ALIASES = ["SC MANAGER", "Manager", "Manager Name", "SC Manager"];
+  const LOAD_ORG_ALIASES = ["Type", "A/D", "Direct/AMO", "Legacy Org", "Legacy Team"];
   let calendarCacheMemo = undefined;
   let loadReportMemo = undefined;
+  const sourceElementByKey = new Map();
 
   function pageWindow() {
     return typeof unsafeWindow !== "undefined" ? unsafeWindow : window;
@@ -101,6 +111,31 @@
     return [...keys].filter(Boolean);
   }
 
+  function emailNameKeys(email) {
+    const local = normalizeEmail(email).split("@")[0] || "";
+    if (!local) return [];
+    const normalized = local.replace(/[._-]+/g, " ").replace(/\s+/g, " ").trim();
+    if (!normalized) return [];
+    const parts = normalized.split(/\s+/).filter(Boolean);
+    const names = [normalized];
+    if (parts.length >= 2) names.push(`${parts[parts.length - 1]}, ${parts.slice(0, -1).join(" ")}`);
+    return names.flatMap(nameKeys);
+  }
+
+  function personNameKeySet(person) {
+    return new Set([
+      ...nameKeys(person?.name),
+      ...emailNameKeys(person?.email)
+    ].filter(Boolean));
+  }
+
+  function keySetsOverlap(left, right) {
+    for (const key of left) {
+      if (right.has(key)) return true;
+    }
+    return false;
+  }
+
   function readField(record, aliases) {
     if (!record || typeof record !== "object") return "";
     const wanted = aliases.map(normalizeKey);
@@ -126,6 +161,16 @@
     } catch (error) {
       return null;
     }
+  }
+
+  function latestIsoDate(values) {
+    let latest = 0;
+    arrayFrom(values).forEach(value => {
+      if (!value) return;
+      const time = new Date(value).getTime();
+      if (Number.isFinite(time) && time > latest) latest = time;
+    });
+    return latest ? new Date(latest).toISOString() : "";
   }
 
   function scanLocalStorageForCalendarCaches() {
@@ -256,12 +301,18 @@
     })).filter(person => person.email || person.name);
 
     if (!events.length && !loadedEmails.size && !roster.length) return null;
+    const discoveredRefreshedAt = latestIsoDate(discovered.flatMap(item => [
+      item.parsed.refreshedAt,
+      item.parsed.cachedAt,
+      item.parsed.capturedAt,
+      item.parsed.updatedAt
+    ]));
     const payload = {
       version: 1,
       capturedBy: `SCOUT Inline Calendar Drawer TEST ${VERSION}`,
       capturedAt: new Date().toISOString(),
       pageUrl: window.location.href,
-      sourceRefreshedAt: localGraph.refreshedAt || legacy.refreshedAt || "",
+      sourceRefreshedAt: localGraph.refreshedAt || legacy.refreshedAt || discoveredRefreshedAt,
       windowStart: localGraph.start || "",
       windowEnd: localGraph.end || "",
       discoveredStorageKeys: discovered.map(item => item.key),
@@ -299,6 +350,62 @@
     return calendarCacheMemo;
   }
 
+  function refreshCalendarCacheMemo() {
+    calendarCacheMemo = gmGet(CALENDAR_CACHE_KEY, null) || null;
+    return calendarCacheMemo;
+  }
+
+  function calendarCacheTimestamp(cache) {
+    const candidates = [
+      cache?.sourceRefreshedAt,
+      cache?.refreshedAt,
+      cache?.capturedAt
+    ];
+    for (const value of candidates) {
+      if (!value) continue;
+      const time = new Date(value).getTime();
+      if (Number.isFinite(time)) return time;
+    }
+    return 0;
+  }
+
+  function getCalendarCacheFreshness(cache = refreshCalendarCacheMemo()) {
+    const timestamp = calendarCacheTimestamp(cache);
+    const hasData = Boolean(cache && (arrayFrom(cache.events).length || arrayFrom(cache.loadedEmails).length));
+    if (!hasData || !timestamp) {
+      return {
+        fresh: false,
+        missing: !hasData,
+        timestamp,
+        ageMs: Infinity,
+        message: hasData ? "Calendar data refresh time is unknown." : "Calendar data cache is missing."
+      };
+    }
+    const ageMs = Date.now() - timestamp;
+    const fresh = ageMs < CALENDAR_STALE_AFTER_MS;
+    return {
+      fresh,
+      missing: false,
+      timestamp,
+      ageMs,
+      message: fresh
+        ? `Calendar data refreshed ${formatAge(ageMs)} ago.`
+        : `Calendar data is ${formatAge(ageMs)} old.`
+    };
+  }
+
+  function formatAge(ageMs) {
+    if (!Number.isFinite(ageMs)) return "unknown";
+    const minutes = Math.max(0, Math.round(ageMs / 60000));
+    if (minutes < 60) return `${minutes} min`;
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    if (hours < 48) return remainingMinutes ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
+    const days = Math.floor(hours / 24);
+    const remainingHours = hours % 24;
+    return remainingHours ? `${days}d ${remainingHours}h` : `${days}d`;
+  }
+
   function getStaffingLoadReport() {
     if (loadReportMemo !== undefined) return loadReportMemo;
     const win = pageWindow();
@@ -319,23 +426,33 @@
   }
 
   function getLoadRowIdentity(row) {
-    const name = readField(row, ["SC NAME", "SC", "Name", "Consultant"]);
-    const email = normalizeEmail(readField(row, ["Email", "Email Address", "SC Email", "Work Email"]));
-    return { name, email };
+    const name = readField(row, LOAD_NAME_ALIASES);
+    const email = normalizeEmail(readField(row, LOAD_EMAIL_ALIASES));
+    const manager = readField(row, LOAD_MANAGER_ALIASES);
+    const legacyOrg = readField(row, LOAD_ORG_ALIASES);
+    return { name, email, manager, legacyOrg };
   }
 
-  function findLoadForPerson(person) {
+  function findLoadForPerson(person, options = {}) {
     const report = getStaffingLoadReport();
     const rows = arrayFrom(report?.rows);
     if (!rows.length) return null;
     const email = normalizeEmail(person.email);
-    const keys = new Set(nameKeys(person.name));
-    return rows.find(row => {
+    const keys = personNameKeySet(person);
+    const scored = rows.map(row => {
       const identity = getLoadRowIdentity(row);
-      if (email && identity.email === email) return true;
-      const rowKeys = nameKeys(identity.name);
-      return rowKeys.some(key => keys.has(key));
-    }) || null;
+      const emailMatch = Boolean(email && identity.email === email);
+      const nameMatch = Boolean(keys.size && keySetsOverlap(personNameKeySet(identity), keys));
+      let score = 0;
+      if (emailMatch) score += options.preferName ? 20 : 80;
+      if (nameMatch) score += options.preferName ? 60 : 40;
+      if (identity.email && isCalendarLoadedForEmail(identity.email)) score += 30;
+      if (identity.manager && normalizeName(identity.manager) === normalizeName(person.manager)) score += 5;
+      if (identity.legacyOrg && normalizeName(identity.legacyOrg) === normalizeName(person.vertical || person.legacyOrg)) score += 4;
+      return { row, score };
+    }).filter(candidate => candidate.score > 0)
+      .sort((left, right) => right.score - left.score);
+    return scored[0]?.row || null;
   }
 
   function summarizeLoad(load, legacyOrg) {
@@ -479,16 +596,84 @@
   }
 
   function getPersonEvents(person, cache = getCalendarCache()) {
-    const email = normalizeEmail(person.email);
+    return getEventsForEmail(person.email, cache);
+  }
+
+  function getEventsForEmail(emailValue, cache = getCalendarCache()) {
+    const email = normalizeEmail(emailValue);
     if (!email || !cache) return [];
     return compactEvents(cache.events).filter(event => normalizeEmail(event.email) === email);
   }
 
   function isCalendarLoaded(person, cache = getCalendarCache()) {
-    const email = normalizeEmail(person.email);
+    return isCalendarLoadedForEmail(person.email, cache);
+  }
+
+  function isCalendarLoadedForEmail(emailValue, cache = getCalendarCache()) {
+    const email = normalizeEmail(emailValue);
     if (!email || !cache) return false;
     return arrayFrom(cache.loadedEmails).map(normalizeEmail).includes(email)
-      || getPersonEvents(person, cache).length > 0;
+      || getEventsForEmail(email, cache).length > 0;
+  }
+
+  function findRosterForPerson(person, cache = getCalendarCache()) {
+    const roster = arrayFrom(cache?.roster);
+    if (!roster.length) return null;
+    const sourceKeys = personNameKeySet(person);
+    const sourceEmail = normalizeEmail(person.email);
+    const sourceManager = normalizeName(person.manager);
+    const sourceOrg = normalizeName(person.vertical || person.legacyOrg);
+    const score = candidate => {
+      let value = 0;
+      if (isCalendarLoadedForEmail(candidate.email, cache)) value += 30;
+      if (sourceEmail && normalizeEmail(candidate.email) === sourceEmail) value += 8;
+      if (sourceManager && normalizeName(candidate.manager) === sourceManager) value += 6;
+      if (sourceOrg && normalizeName(candidate.legacyOrg) === sourceOrg) value += 4;
+      if (candidate.legacyOrg) value += 2;
+      return value;
+    };
+    const nameMatches = roster
+      .filter(candidate => sourceKeys.size && keySetsOverlap(personNameKeySet(candidate), sourceKeys))
+      .sort((left, right) => score(right) - score(left));
+    if (nameMatches.length) return nameMatches[0];
+    if (!sourceEmail) return null;
+    return roster.find(candidate => normalizeEmail(candidate.email) === sourceEmail) || null;
+  }
+
+  function resolvePersonFromCaches(person) {
+    const cache = getCalendarCache();
+    const sourceKey = person.sourceKey || personIdentityKey(person);
+    const rosterMatch = findRosterForPerson(person, cache);
+    let resolved = {
+      ...person,
+      sourceKey,
+      originalName: person.originalName || person.name || "",
+      originalEmail: person.originalEmail || person.email || ""
+    };
+    if (rosterMatch) {
+      resolved = {
+        ...resolved,
+        name: rosterMatch.name || resolved.name,
+        email: normalizeEmail(rosterMatch.email) || resolved.email,
+        manager: rosterMatch.manager || resolved.manager,
+        legacyOrg: rosterMatch.legacyOrg || resolved.legacyOrg || resolved.vertical,
+        vertical: rosterMatch.legacyOrg || resolved.vertical || resolved.legacyOrg,
+        timeZone: rosterMatch.timeZone || resolved.timeZone,
+        resolvedFromCache: true
+      };
+    }
+    const load = findLoadForPerson(resolved, { preferName: !rosterMatch && !isCalendarLoadedForEmail(resolved.email, cache) });
+    const identity = getLoadRowIdentity(load);
+    if (load) {
+      const currentLoaded = isCalendarLoadedForEmail(resolved.email, cache);
+      const loadLoaded = isCalendarLoadedForEmail(identity.email, cache);
+      if (identity.name && !resolved.name) resolved.name = identity.name;
+      if (identity.email && (!resolved.email || (!currentLoaded && loadLoaded))) resolved.email = identity.email;
+      if (identity.manager && !resolved.manager) resolved.manager = identity.manager;
+      if (identity.legacyOrg && !resolved.legacyOrg) resolved.legacyOrg = identity.legacyOrg;
+      if (identity.legacyOrg && !resolved.vertical) resolved.vertical = identity.legacyOrg;
+    }
+    return resolved;
   }
 
   function dayStats(events, dateValue) {
@@ -702,26 +887,28 @@
   function renderDrawerContent(person) {
     const selectedDate = getSelectedScrDate();
     const cache = getCalendarCache();
-    const events = getPersonEvents(person, cache);
-    const calendarLoaded = isCalendarLoaded(person, cache);
+    const resolvedPerson = resolvePersonFromCaches(person);
+    const events = getPersonEvents(resolvedPerson, cache);
+    const calendarLoaded = isCalendarLoaded(resolvedPerson, cache);
     const selectedStats = calendarLoaded ? dayStats(events, selectedDate) : { open: 0, pto: 0, hard: 0, soft: 0, review: 0, busy: 0, workdayMinutes: WORKDAY_MINUTES };
     const calendarSignal = calendarLoaded
-      ? getCalendarSignal(person, events, selectedDate)
+      ? getCalendarSignal(resolvedPerson, events, selectedDate)
       : { level: "unknown", label: "Unknown", note: "Calendar cache has not been captured for this SC.", primaryBlocks: 0, secondaryBlocks: 0, primaryHours: 0, secondaryHours: 0, travel: false };
-    const load = findLoadForPerson(person);
-    const workload = summarizeLoad(load, person.vertical || person.legacyOrg);
+    const load = findLoadForPerson(resolvedPerson);
+    const workload = summarizeLoad(load, resolvedPerson.vertical || resolvedPerson.legacyOrg);
     const recommendation = scoreFromSignals(calendarSignal, workload);
-    const badgeClass = /amo/i.test(person.vertical || person.legacyOrg) ? "amo" : "direct";
-    const fullUrl = buildFullDashboardUrl(person, selectedDate);
+    const badgeClass = /amo/i.test(resolvedPerson.vertical || resolvedPerson.legacyOrg) ? "amo" : "direct";
+    const fullUrl = buildFullDashboardUrl(resolvedPerson, selectedDate);
+    const staffKey = resolvedPerson.sourceKey || personIdentityKey(resolvedPerson);
 
     return `
-      <div class="scid-card scid-rec-${recommendation.className}" data-scid-email="${escapeHtml(normalizeEmail(person.email))}">
+      <div class="scid-card scid-rec-${recommendation.className}" data-scid-email="${escapeHtml(normalizeEmail(resolvedPerson.email))}">
         <section class="scid-person">
           <div class="scid-person-top">
             <div>
-              <h3>${escapeHtml(person.name || person.email || "Selected SC")} <span class="scid-badge ${badgeClass}">${badgeClass === "amo" ? "AMO" : "Direct"}</span></h3>
-              <p>${escapeHtml(person.manager || "Manager unavailable")}</p>
-              <p>${escapeHtml(person.email || "")}</p>
+              <h3>${escapeHtml(resolvedPerson.name || resolvedPerson.email || "Selected SC")} <span class="scid-badge ${badgeClass}">${badgeClass === "amo" ? "AMO" : "Direct"}</span></h3>
+              <p>${escapeHtml(resolvedPerson.manager || "Manager unavailable")}</p>
+              <p>${escapeHtml(resolvedPerson.email || "")}</p>
             </div>
             <div class="scid-score scid-score-${recommendation.className}" title="Higher score means easier to staff.">
               <strong>${recommendation.score}</strong>
@@ -759,12 +946,15 @@
           </div>
           <strong class="scid-date-open">${calendarLoaded ? `${(selectedStats.open / 60).toFixed(1)}h open on ${formatLongDate(selectedDate)}` : "Calendar cache unavailable"}</strong>
           ${renderCalendarLoadBar(selectedStats)}
-          ${calendarLoaded ? renderMiniStrip(person, events, selectedDate) : ""}
+          ${calendarLoaded ? renderMiniStrip(resolvedPerson, events, selectedDate) : ""}
         </section>
       </div>
       <div class="scid-footer">
         <span>${cache?.capturedAt ? `Calendar cache captured ${new Date(cache.capturedAt).toLocaleString()}` : "Calendar cache not captured yet."}</span>
-        <button type="button" data-scid-full-dashboard="${escapeHtml(fullUrl)}">Open full dashboard</button>
+        <div class="scid-footer-actions">
+          <button type="button" class="scid-staff-action" data-scid-staff="${escapeHtml(staffKey)}">Staff this SC</button>
+          <button type="button" data-scid-full-dashboard="${escapeHtml(fullUrl)}">Open full dashboard</button>
+        </div>
       </div>
     `;
   }
@@ -819,9 +1009,15 @@
       .scid-date-open{display:block;margin:10px 0 8px;color:#526274}.scid-load-bar{height:18px;border-radius:999px;overflow:hidden;background:#e4eef3;display:flex;border:1px solid #c9d8e2}.scid-load-bar span{height:100%;display:block}.scid-pto{background:#8957e5}.scid-hard{background:#cf4c4a}.scid-soft{background:#c98500}.scid-review{background:#95a3b3}.scid-open{background:#2ca56f}
       .scid-mini-strip{margin-top:12px;display:flex;gap:5px;overflow-x:auto;padding:2px 2px 9px}.scid-mini-day{border:0;background:transparent;padding:0;cursor:pointer;min-width:31px;color:#4b5c6e}.scid-mini-day.is-weekend{min-width:12px}.scid-mini-day>span{display:flex;flex-direction:column-reverse;height:44px;border:1px solid #d2e3ec;background:#e9f6f9;border-radius:5px;overflow:hidden}.scid-mini-day.is-weekend>span{background:#e8f2f5}.scid-mini-day i{display:block;width:100%;flex:0 0 auto}.scid-open-fill{background:#2ca56f}.scid-busy-fill{background:#cf4c4a}.scid-pto-fill{background:#8957e5}.scid-mini-day em{display:block;font-style:normal;font-size:10px;font-weight:800;line-height:1.05;margin-top:4px}.scid-mini-day b{display:block}.scid-mini-day.is-selected>span{outline:2px solid #1e88d1;outline-offset:1px}
       .scid-meeting-panel{margin-top:10px;border:1px solid #d7e1e8;background:#f9fbfc;border-radius:8px;padding:10px}.scid-panel-heading{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:8px}.scid-panel-heading button{border:1px solid #d7e1e8;background:#fff;border-radius:6px;padding:5px 9px;font-weight:800;cursor:pointer}.scid-meeting{border-left:3px solid #8ca0b3;padding:4px 0 6px 10px;margin:5px 0}.scid-meeting strong{display:block}.scid-meeting span{font-size:11px;text-transform:uppercase;color:#697778}.scid-meeting p{margin:3px 0 0;color:#526274}.scid-meeting-pto{border-left-color:#8957e5}.scid-meeting-hard{border-left-color:#cf4c4a}.scid-meeting-soft{border-left-color:#c98500}.scid-meeting-review{border-left-color:#95a3b3}
-      .scid-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:12px;color:#526274;font-size:12px}.scid-footer button{background:#e2c06b;color:#13212c}
+      .scid-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:12px;color:#526274;font-size:12px}.scid-footer-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.scid-footer button{background:#e2c06b;color:#13212c}.scid-footer .scid-staff-action{background:#4c825c;color:#fff}
       .${INLINE_SELECTED_BUTTON_CLASS}{margin-left:6px;border:1px solid #d8c077!important;background:#fff7d7!important;color:#13212c!important;border-radius:7px!important;padding:6px 9px!important;font-weight:800!important;font-size:12px!important;line-height:1.1!important;cursor:pointer!important}
       .${INLINE_SELECTED_BUTTON_CLASS}:hover{background:#e2c06b!important}
+      #${CALENDAR_PROMPT_ID}{display:flex;align-items:center;gap:8px;border-radius:9px;background:rgba(19,33,44,.92);box-shadow:0 10px 28px rgba(0,0,0,.24);padding:8px;color:#fff;font-family:Arial,Helvetica,sans-serif}
+      #${CALENDAR_PROMPT_ID}[hidden]{display:none}
+      #${CALENDAR_PROMPT_ID}.scid-calendar-prompt-inline{box-shadow:none;background:transparent;padding:0;color:inherit}
+      #${CALENDAR_PROMPT_ID}.scid-calendar-prompt-floating{position:fixed;top:122px;right:18px;z-index:999999}
+      #${CALENDAR_PROMPT_ID} button{border:1px solid rgba(19,33,44,.18);border-radius:7px;background:#e2c06b;color:#13212c;cursor:pointer;font-weight:900;font-size:12px;line-height:1.1;min-height:32px;padding:7px 10px;white-space:nowrap}
+      #${CALENDAR_PROMPT_ID} span{color:#ffe8a3;font-size:11px;font-weight:800;line-height:1.2;max-width:210px}
       @media(max-width:980px){.scid-drawer{width:100vw}.scid-card{grid-template-columns:1fr}.scid-workload,.scid-calendar{border-left:0;border-top:1px solid #d7e1e8;padding-left:0;padding-top:12px}.scid-signal-grid{grid-template-columns:1fr}.scid-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
     `;
     document.head.appendChild(style);
@@ -851,10 +1047,21 @@
     `;
     document.body.appendChild(root);
     root.addEventListener("click", event => {
-      if (event.target === root || event.target.closest("[data-scid-close]")) closeDrawer();
+      if (event.target === root || event.target.closest("[data-scid-close]")) {
+        closeDrawer();
+        return;
+      }
+      const staffButton = event.target.closest("[data-scid-staff]");
+      if (staffButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        triggerOriginalStaffAction(staffButton.dataset.scidStaff);
+        return;
+      }
       const fullButton = event.target.closest("[data-scid-full-dashboard]");
       if (fullButton) {
         openUrl(fullButton.dataset.scidFullDashboard);
+        return;
       }
       const dayButton = event.target.closest("[data-scid-date]");
       if (dayButton) {
@@ -875,6 +1082,7 @@
         panel.dataset.activeDate = dayButton.dataset.scidDate;
         panel.hidden = false;
         dayButton.classList.add("is-selected");
+        return;
       }
       if (event.target.closest("[data-scid-close-day]")) {
         const card = event.target.closest(".scid-card");
@@ -885,12 +1093,73 @@
           delete panel.dataset.activeDate;
         }
         root.querySelectorAll(".scid-mini-day.is-selected").forEach(item => item.classList.remove("is-selected"));
+        return;
       }
     });
     document.addEventListener("keydown", event => {
       if (event.key === "Escape" && !root.hidden) closeDrawer();
     });
     return root;
+  }
+
+  function ensureCalendarStalePrompt() {
+    ensureStyles();
+    const headerTarget = document.querySelector(".sc-header-actions, .scout-header-actions, #scout-header-actions, [data-scout-header-actions]");
+    let prompt = document.getElementById(CALENDAR_PROMPT_ID);
+    if (prompt) {
+      if (headerTarget && !prompt.classList.contains("scid-calendar-prompt-inline")) {
+        prompt.className = "scid-calendar-prompt-inline";
+        headerTarget.prepend(prompt);
+      }
+      return prompt;
+    }
+
+    prompt = document.createElement("div");
+    prompt.id = CALENDAR_PROMPT_ID;
+    prompt.hidden = true;
+    prompt.innerHTML = `
+      <button type="button" data-scid-open-calendar-refresh>Open Calendar Refresh</button>
+      <span data-scid-calendar-status></span>
+    `;
+
+    if (headerTarget) {
+      prompt.className = "scid-calendar-prompt-inline";
+      headerTarget.prepend(prompt);
+    } else {
+      prompt.className = "scid-calendar-prompt-floating";
+      document.body.appendChild(prompt);
+    }
+
+    prompt.querySelector("[data-scid-open-calendar-refresh]")?.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      openUrl(CALENDAR_REFRESH_URL);
+    });
+    return prompt;
+  }
+
+  function updateCalendarStalePrompt() {
+    const prompt = ensureCalendarStalePrompt();
+    const status = prompt.querySelector("[data-scid-calendar-status]");
+    const button = prompt.querySelector("[data-scid-open-calendar-refresh]");
+    const freshness = getCalendarCacheFreshness();
+    prompt.hidden = freshness.fresh;
+    if (freshness.fresh) return freshness;
+
+    const message = freshness.missing
+      ? "Calendar data cache is missing."
+      : `${freshness.message} Refresh calendar data.`;
+    if (status) status.textContent = message;
+    if (button) {
+      button.title = message;
+      button.textContent = freshness.missing ? "Load Calendar Data" : "Refresh Calendar Data";
+    }
+    return freshness;
+  }
+
+  function installCalendarStalePrompt() {
+    updateCalendarStalePrompt();
+    window.setInterval(updateCalendarStalePrompt, 60 * 1000);
   }
 
   function closeDrawer() {
@@ -922,8 +1191,85 @@
     });
   }
 
+  function personIdentityKey(person) {
+    return normalizeEmail(person?.email) || looseName(person?.name);
+  }
+
+  function findSourceCard(element) {
+    if (!element) return null;
+    return element.closest?.(SOURCE_CARD_CLASS_SELECTOR)
+      || element.parentElement?.closest?.(SOURCE_CARD_SELECTOR)
+      || element.closest?.(SOURCE_CARD_SELECTOR)
+      || element;
+  }
+
+  function rememberSourceElement(person, element) {
+    const key = personIdentityKey(person);
+    const source = findSourceCard(element);
+    if (key && source) {
+      sourceElementByKey.set(key, source);
+      person.sourceKey = key;
+    }
+    return person;
+  }
+
+  function elementText(element) {
+    return String([
+      element?.textContent,
+      element?.value,
+      element?.title,
+      element?.getAttribute?.("aria-label")
+    ].filter(Boolean).join(" ")).replace(/\s+/g, " ").trim();
+  }
+
+  function isUsableButton(element) {
+    if (!element || element.disabled || element.getAttribute("aria-disabled") === "true") return false;
+    if (element.closest?.(`#${DRAWER_ID}`)) return false;
+    const style = window.getComputedStyle ? window.getComputedStyle(element) : null;
+    if (style && (style.display === "none" || style.visibility === "hidden")) return false;
+    return true;
+  }
+
+  function findStaffButtonInElement(root) {
+    if (!root?.querySelectorAll) return null;
+    const candidates = [...root.querySelectorAll("button,a,input[type='button'],input[type='submit']")];
+    return candidates.find(element => {
+      if (!isUsableButton(element)) return false;
+      const text = elementText(element);
+      const className = String(element.className || "");
+      const dataValues = Object.values(element.dataset || {}).join(" ");
+      const haystack = `${text} ${className} ${dataValues}`;
+      if (!/\bstaff\b/i.test(haystack)) return false;
+      return !/view\s*cal|calendar|dashboard|compare|inline/i.test(text);
+    }) || null;
+  }
+
+  function findSourceElementByEmail(email) {
+    const normalized = normalizeEmail(email);
+    if (!normalized) return null;
+    const directMatch = [...document.querySelectorAll("[data-email]")]
+      .find(element => normalizeEmail(element.dataset?.email || element.getAttribute("data-email")) === normalized);
+    return findSourceCard(directMatch);
+  }
+
+  function triggerOriginalStaffAction(personKey) {
+    const key = normalizeEmail(personKey) || String(personKey || "");
+    const source = sourceElementByKey.get(key) || findSourceElementByEmail(key);
+    const staffButton = findStaffButtonInElement(source);
+    if (!staffButton) {
+      alert("SCOUT could not find the original Staff button for this SC card. Close the drawer and use the card's green Staff button.");
+      return false;
+    }
+    closeDrawer();
+    window.setTimeout(() => {
+      staffButton.click();
+    }, 0);
+    return true;
+  }
+
   function openDrawer(personOrPeople) {
-    const people = uniquePeople(Array.isArray(personOrPeople) ? personOrPeople : [personOrPeople]);
+    const sourcePeople = uniquePeople(Array.isArray(personOrPeople) ? personOrPeople : [personOrPeople]);
+    const people = uniquePeople(sourcePeople.map(resolvePersonFromCaches));
     if (!people.length) return;
     const root = ensureDrawer();
     const title = root.querySelector("#scid-title");
@@ -960,7 +1306,7 @@
 
   function personFromElement(element) {
     const source = element?.dataset || {};
-    const card = element?.closest?.("[data-email],[data-empname],[data-employee],[data-name],.sc-card,.sc-result-card,.sc-staff-card,.scout-card");
+    const card = element?.closest?.(SOURCE_CARD_SELECTOR);
     const cardData = card?.dataset || {};
     return {
       email: normalizeEmail(source.email || cardData.email || card?.getAttribute?.("data-email")),
@@ -979,7 +1325,7 @@
       "input[type='checkbox'][data-employee]:checked"
     ];
     return uniquePeople([...document.querySelectorAll(selectors.join(","))]
-      .map(personFromElement)
+      .map(element => rememberSourceElement(personFromElement(element), element))
       .filter(person => person.email));
   }
 
@@ -1016,10 +1362,11 @@
 
   function installNetSuiteClickInterceptor() {
     ensureStyles();
+    installCalendarStalePrompt();
     document.addEventListener("click", event => {
       const button = event.target.closest(".sc-viewcal-btn,[data-scout-view-cal],[data-view-cal]");
       if (!button) return;
-      const person = personFromElement(button);
+      const person = rememberSourceElement(personFromElement(button), button);
       if (!person.email) return;
       event.preventDefault();
       event.stopPropagation();
@@ -1039,8 +1386,10 @@
     pageWindow().__SCOUT_INLINE_CALENDAR_DRAWER_TEST = {
       version: VERSION,
       getCalendarCache,
+      getCalendarCacheFreshness,
       captureCalendarCacheFromDashboard,
       getStaffingLoadReport,
+      resolvePersonFromCaches,
       collectSelectedPeople,
       openSelected() {
         openDrawer(collectSelectedPeople());
