@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT Inline Calendar Drawer TEST
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0-test.1
+// @version      27.0.0-test.2
 // @description  Test-only lazy inline SC calendar/workload drawer for NetSuite SCOUT cards.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -24,7 +24,7 @@
 (function () {
   "use strict";
 
-  const VERSION = "27.0.0-test.1";
+  const VERSION = "27.0.0-test.2";
   const CALENDAR_CACHE_KEY = "scout-inline-calendar-drawer-calendar-cache-v1";
   const LOCAL_GRAPH_CACHE_KEY = "sc-staffing-dashboard-local-graph-cache-v1";
   const LEGACY_CALENDAR_CACHE_KEY = "sc-staffing-dashboard-calendar-cache-direct-connector-202605062230";
@@ -35,6 +35,9 @@
   const WORKDAY_MINUTES = WORKDAY_END_MINUTES - WORKDAY_START_MINUTES;
   const DRAWER_ID = "scout-inline-calendar-drawer";
   const STYLE_ID = "scout-inline-calendar-drawer-style";
+  const INLINE_SELECTED_BUTTON_CLASS = "scid-inline-selected-btn";
+  let calendarCacheMemo = undefined;
+  let loadReportMemo = undefined;
 
   function pageWindow() {
     return typeof unsafeWindow !== "undefined" ? unsafeWindow : window;
@@ -125,6 +128,29 @@
     }
   }
 
+  function scanLocalStorageForCalendarCaches() {
+    const found = [];
+    try {
+      const storage = pageWindow().localStorage;
+      if (!storage) return found;
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index);
+        if (!/calendar|graph|staffing-dashboard/i.test(key || "")) continue;
+        const parsed = readJsonLocalStorage(key);
+        if (!parsed || typeof parsed !== "object") continue;
+        const eventCount = arrayFrom(parsed.directEvents).length + arrayFrom(parsed.events).length;
+        const availabilityCount = arrayFrom(parsed.availability).length;
+        const loadedCount = arrayFrom(parsed.loadedEmails).length;
+        if (eventCount || availabilityCount || loadedCount) {
+          found.push({ key, parsed, eventCount, availabilityCount, loadedCount });
+        }
+      }
+    } catch (error) {
+      console.warn("SCOUT inline calendar drawer: localStorage calendar scan failed", error);
+    }
+    return found;
+  }
+
   function gmGet(key, fallback = null) {
     try {
       if (typeof GM_getValue === "function") return GM_getValue(key, fallback);
@@ -147,6 +173,7 @@
   }
 
   function arrayFrom(value) {
+    if (value instanceof Set) return [...value];
     return Array.isArray(value) ? value : [];
   }
 
@@ -195,19 +222,32 @@
     const win = pageWindow();
     const localGraph = readJsonLocalStorage(LOCAL_GRAPH_CACHE_KEY) || {};
     const legacy = readJsonLocalStorage(LEGACY_CALENDAR_CACHE_KEY) || {};
+    const discovered = scanLocalStorageForCalendarCaches();
     const events = compactEvents([
       ...arrayFrom(localGraph.directEvents),
       ...arrayFrom(localGraph.events),
       ...arrayFrom(legacy.events),
-      ...arrayFrom(win.DIRECT_CONNECTOR_EVENTS)
+      ...arrayFrom(win.DIRECT_CONNECTOR_EVENTS),
+      ...discovered.flatMap(item => [
+        ...arrayFrom(item.parsed.directEvents),
+        ...arrayFrom(item.parsed.events)
+      ])
     ]);
-    const availability = arrayFrom(localGraph.availability).concat(arrayFrom(win.DIRECT_CONNECTOR_AVAILABILITY));
+    const availability = [
+      ...arrayFrom(localGraph.availability),
+      ...arrayFrom(win.DIRECT_CONNECTOR_AVAILABILITY),
+      ...discovered.flatMap(item => arrayFrom(item.parsed.availability))
+    ];
     const loadedEmails = new Set();
     arrayFrom(localGraph.loadedEmails).forEach(email => collectEmail(email, loadedEmails));
     arrayFrom(win.DIRECT_CONNECTOR_LOADED_EMAILS).forEach(email => collectEmail(email, loadedEmails));
+    discovered.flatMap(item => arrayFrom(item.parsed.loadedEmails)).forEach(email => collectEmail(email, loadedEmails));
     events.forEach(event => collectEmail(event.email, loadedEmails));
     availability.forEach(item => collectEmail(item.email, loadedEmails));
-    const roster = arrayFrom(win.SC_STAFFING_IMPORTED_ROSTER).map(person => ({
+    const roster = [
+      ...arrayFrom(win.SC_STAFFING_IMPORTED_ROSTER),
+      ...discovered.flatMap(item => arrayFrom(item.parsed.roster))
+    ].map(person => ({
       name: person.name || person.employee || person.consultant || "",
       email: normalizeEmail(person.email),
       manager: person.manager || person.team || "",
@@ -224,12 +264,14 @@
       sourceRefreshedAt: localGraph.refreshedAt || legacy.refreshedAt || "",
       windowStart: localGraph.start || "",
       windowEnd: localGraph.end || "",
+      discoveredStorageKeys: discovered.map(item => item.key),
       loadedEmails: [...loadedEmails].sort(),
       roster,
       availability,
       events
     };
     gmSet(CALENDAR_CACHE_KEY, payload);
+    calendarCacheMemo = payload;
     win.__SCOUT_INLINE_CALENDAR_DRAWER_CACHE = payload;
     return payload;
   }
@@ -252,21 +294,28 @@
   }
 
   function getCalendarCache() {
-    return gmGet(CALENDAR_CACHE_KEY, null) || null;
+    if (calendarCacheMemo !== undefined) return calendarCacheMemo;
+    calendarCacheMemo = gmGet(CALENDAR_CACHE_KEY, null) || null;
+    return calendarCacheMemo;
   }
 
   function getStaffingLoadReport() {
+    if (loadReportMemo !== undefined) return loadReportMemo;
     const win = pageWindow();
     try {
       if (typeof win.getScoutStaffingLoadCache === "function") {
         const report = win.getScoutStaffingLoadCache();
-        if (report?.rows?.length) return report;
+        if (report?.rows?.length) {
+          loadReportMemo = report;
+          return loadReportMemo;
+        }
       }
     } catch (error) {
       console.warn("SCOUT inline calendar drawer: could not read workload bridge", error);
     }
     const stored = readJsonLocalStorage(STAFFING_LOAD_STORAGE_KEY);
-    return stored?.rows?.length ? stored : null;
+    loadReportMemo = stored?.rows?.length ? stored : null;
+    return loadReportMemo;
   }
 
   function getLoadRowIdentity(row) {
@@ -666,7 +715,7 @@
     const fullUrl = buildFullDashboardUrl(person, selectedDate);
 
     return `
-      <div class="scid-card scid-rec-${recommendation.className}">
+      <div class="scid-card scid-rec-${recommendation.className}" data-scid-email="${escapeHtml(normalizeEmail(person.email))}">
         <section class="scid-person">
           <div class="scid-person-top">
             <div>
@@ -729,6 +778,18 @@
     return url.href;
   }
 
+  function buildMultiDashboardUrl(people, selectedDate = getSelectedScrDate()) {
+    const url = new URL(DASHBOARD_URL);
+    const emails = uniquePeople(people).map(person => normalizeEmail(person.email)).filter(Boolean);
+    if (emails.length === 1) {
+      const person = uniquePeople(people)[0];
+      return buildFullDashboardUrl(person, selectedDate);
+    }
+    if (emails.length) url.searchParams.set("emails", emails.join(","));
+    if (selectedDate) url.searchParams.set("date", selectedDate);
+    return url.href;
+  }
+
   function ensureStyles() {
     if (document.getElementById(STYLE_ID)) return;
     const style = document.createElement("style");
@@ -759,6 +820,8 @@
       .scid-mini-strip{margin-top:12px;display:flex;gap:5px;overflow-x:auto;padding:2px 2px 9px}.scid-mini-day{border:0;background:transparent;padding:0;cursor:pointer;min-width:31px;color:#4b5c6e}.scid-mini-day.is-weekend{min-width:12px}.scid-mini-day>span{display:flex;flex-direction:column-reverse;height:44px;border:1px solid #d2e3ec;background:#e9f6f9;border-radius:5px;overflow:hidden}.scid-mini-day.is-weekend>span{background:#e8f2f5}.scid-mini-day i{display:block;width:100%;flex:0 0 auto}.scid-open-fill{background:#2ca56f}.scid-busy-fill{background:#cf4c4a}.scid-pto-fill{background:#8957e5}.scid-mini-day em{display:block;font-style:normal;font-size:10px;font-weight:800;line-height:1.05;margin-top:4px}.scid-mini-day b{display:block}.scid-mini-day.is-selected>span{outline:2px solid #1e88d1;outline-offset:1px}
       .scid-meeting-panel{margin-top:10px;border:1px solid #d7e1e8;background:#f9fbfc;border-radius:8px;padding:10px}.scid-panel-heading{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:8px}.scid-panel-heading button{border:1px solid #d7e1e8;background:#fff;border-radius:6px;padding:5px 9px;font-weight:800;cursor:pointer}.scid-meeting{border-left:3px solid #8ca0b3;padding:4px 0 6px 10px;margin:5px 0}.scid-meeting strong{display:block}.scid-meeting span{font-size:11px;text-transform:uppercase;color:#697778}.scid-meeting p{margin:3px 0 0;color:#526274}.scid-meeting-pto{border-left-color:#8957e5}.scid-meeting-hard{border-left-color:#cf4c4a}.scid-meeting-soft{border-left-color:#c98500}.scid-meeting-review{border-left-color:#95a3b3}
       .scid-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:12px;color:#526274;font-size:12px}.scid-footer button{background:#e2c06b;color:#13212c}
+      .${INLINE_SELECTED_BUTTON_CLASS}{margin-left:6px;border:1px solid #d8c077!important;background:#fff7d7!important;color:#13212c!important;border-radius:7px!important;padding:6px 9px!important;font-weight:800!important;font-size:12px!important;line-height:1.1!important;cursor:pointer!important}
+      .${INLINE_SELECTED_BUTTON_CLASS}:hover{background:#e2c06b!important}
       @media(max-width:980px){.scid-drawer{width:100vw}.scid-card{grid-template-columns:1fr}.scid-workload,.scid-calendar{border-left:0;border-top:1px solid #d7e1e8;padding-left:0;padding-top:12px}.scid-signal-grid{grid-template-columns:1fr}.scid-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
     `;
     document.head.appendChild(style);
@@ -795,7 +858,8 @@
       }
       const dayButton = event.target.closest("[data-scid-date]");
       if (dayButton) {
-        const panel = root.querySelector("[data-scid-meeting-panel]");
+        const card = dayButton.closest(".scid-card");
+        const panel = card?.querySelector("[data-scid-meeting-panel]");
         const current = panel?.dataset.activeDate;
         root.querySelectorAll(".scid-mini-day.is-selected").forEach(item => item.classList.remove("is-selected"));
         if (!panel) return;
@@ -805,15 +869,16 @@
           delete panel.dataset.activeDate;
           return;
         }
-        const person = root.__scidPerson || {};
-        const events = root.__scidEvents || [];
+        const email = normalizeEmail(card?.dataset.scidEmail);
+        const events = root.__scidEventsByEmail?.get(email) || [];
         panel.innerHTML = renderMeetings(events, dayButton.dataset.scidDate);
         panel.dataset.activeDate = dayButton.dataset.scidDate;
         panel.hidden = false;
         dayButton.classList.add("is-selected");
       }
       if (event.target.closest("[data-scid-close-day]")) {
-        const panel = root.querySelector("[data-scid-meeting-panel]");
+        const card = event.target.closest(".scid-card");
+        const panel = card?.querySelector("[data-scid-meeting-panel]");
         if (panel) {
           panel.hidden = true;
           panel.innerHTML = "";
@@ -846,33 +911,107 @@
     window.open(url, "_blank", "noopener");
   }
 
-  function openDrawer(person) {
+  function uniquePeople(people) {
+    const seen = new Set();
+    return arrayFrom(people).filter(person => {
+      const email = normalizeEmail(person?.email);
+      const key = email || looseName(person?.name);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  function openDrawer(personOrPeople) {
+    const people = uniquePeople(Array.isArray(personOrPeople) ? personOrPeople : [personOrPeople]);
+    if (!people.length) return;
     const root = ensureDrawer();
     const title = root.querySelector("#scid-title");
     const subtitle = root.querySelector("[data-scid-subtitle]");
     const body = root.querySelector("[data-scid-body]");
-    title.textContent = person.name || person.email || "Selected SC";
-    subtitle.textContent = "Rendering cached workload and calendar data for one SC.";
+    title.textContent = people.length === 1
+      ? (people[0].name || people[0].email || "Selected SC")
+      : `${people.length} selected SCs`;
+    subtitle.textContent = people.length === 1
+      ? "Rendering cached workload and calendar data for one SC."
+      : "Rendering selected SCs from the same cached calendar/workload data.";
     body.innerHTML = `<div class="scid-loading">Loading cached SC calendar and workload...</div>`;
     root.hidden = false;
 
     window.setTimeout(() => {
       const cache = getCalendarCache();
-      const events = getPersonEvents(person, cache);
-      root.__scidPerson = person;
-      root.__scidEvents = events;
-      body.innerHTML = renderDrawerContent(person);
+      const eventsByEmail = new Map();
+      people.forEach(person => {
+        eventsByEmail.set(normalizeEmail(person.email), getPersonEvents(person, cache));
+      });
+      root.__scidPeople = people;
+      root.__scidEventsByEmail = eventsByEmail;
+      body.innerHTML = `
+        ${people.map(person => renderDrawerContent(person)).join("")}
+        ${people.length > 1 ? `
+          <div class="scid-footer">
+            <span>${cache?.capturedAt ? `Calendar cache captured ${new Date(cache.capturedAt).toLocaleString()}` : "Calendar cache not captured yet."}</span>
+            <button type="button" data-scid-full-dashboard="${escapeHtml(buildMultiDashboardUrl(people))}">Open selected in dashboard</button>
+          </div>
+        ` : ""}
+      `;
     }, 0);
   }
 
-  function personFromButton(button) {
+  function personFromElement(element) {
+    const source = element?.dataset || {};
+    const card = element?.closest?.("[data-email],[data-empname],[data-employee],[data-name],.sc-card,.sc-result-card,.sc-staff-card,.scout-card");
+    const cardData = card?.dataset || {};
     return {
-      email: normalizeEmail(button.dataset.email || button.getAttribute("data-email")),
-      name: button.dataset.empname || button.dataset.employee || button.dataset.name || "",
-      manager: button.dataset.manager || "",
-      vertical: button.dataset.vertical || button.dataset.org || button.dataset.legacyOrg || "",
-      legacyOrg: button.dataset.vertical || button.dataset.org || button.dataset.legacyOrg || ""
+      email: normalizeEmail(source.email || cardData.email || card?.getAttribute?.("data-email")),
+      name: source.empname || source.employee || source.name || cardData.empname || cardData.employee || cardData.name || "",
+      manager: source.manager || cardData.manager || "",
+      vertical: source.vertical || source.org || source.legacyOrg || cardData.vertical || cardData.org || cardData.legacyOrg || "",
+      legacyOrg: source.vertical || source.org || source.legacyOrg || cardData.vertical || cardData.org || cardData.legacyOrg || ""
     };
+  }
+
+  function collectSelectedPeople() {
+    const selectors = [
+      ".sc-consultant-checkbox:checked",
+      "input[type='checkbox'][data-email]:checked",
+      "input[type='checkbox'][data-empname]:checked",
+      "input[type='checkbox'][data-employee]:checked"
+    ];
+    return uniquePeople([...document.querySelectorAll(selectors.join(","))]
+      .map(personFromElement)
+      .filter(person => person.email));
+  }
+
+  function isCalendarCompareButton(element) {
+    if (!element || element.classList?.contains(INLINE_SELECTED_BUTTON_CLASS)) return false;
+    const text = String(element.textContent || element.value || "").replace(/\s+/g, " ").trim();
+    return /view all calendars|open selected calendars|open multiple calendars|compare calendars/i.test(text);
+  }
+
+  function installInlineSelectedButtons() {
+    const buttons = [...document.querySelectorAll("button,a,input[type='button'],input[type='submit']")]
+      .filter(isCalendarCompareButton);
+    buttons.forEach(button => {
+      const parent = button.parentElement;
+      if (!parent || parent.querySelector(`.${INLINE_SELECTED_BUTTON_CLASS}`)) return;
+      const inlineButton = document.createElement("button");
+      inlineButton.type = "button";
+      inlineButton.className = INLINE_SELECTED_BUTTON_CLASS;
+      inlineButton.textContent = "Inline";
+      inlineButton.title = "Open selected SC calendar cards in the test drawer";
+      inlineButton.addEventListener("click", event => {
+        event.preventDefault();
+        event.stopPropagation();
+        const people = collectSelectedPeople();
+        if (!people.length) {
+          alert("Select one or more SC checkboxes first.");
+          return;
+        }
+        openDrawer(people);
+      });
+      button.insertAdjacentElement("afterend", inlineButton);
+    });
   }
 
   function installNetSuiteClickInterceptor() {
@@ -880,13 +1019,20 @@
     document.addEventListener("click", event => {
       const button = event.target.closest(".sc-viewcal-btn,[data-scout-view-cal],[data-view-cal]");
       if (!button) return;
-      const person = personFromButton(button);
+      const person = personFromElement(button);
       if (!person.email) return;
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
       openDrawer(person);
     }, true);
+
+    let attempts = 0;
+    const timer = window.setInterval(() => {
+      installInlineSelectedButtons();
+      attempts += 1;
+      if (attempts >= 30) window.clearInterval(timer);
+    }, 1000);
   }
 
   function exposeDiagnostics() {
@@ -895,6 +1041,10 @@
       getCalendarCache,
       captureCalendarCacheFromDashboard,
       getStaffingLoadReport,
+      collectSelectedPeople,
+      openSelected() {
+        openDrawer(collectSelectedPeople());
+      },
       openByEmail(email) {
         const cache = getCalendarCache();
         const rosterMatch = arrayFrom(cache?.roster).find(person => normalizeEmail(person.email) === normalizeEmail(email));
