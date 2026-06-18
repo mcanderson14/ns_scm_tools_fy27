@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT Inline Calendar Drawer TEST
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0-test.5
+// @version      27.0.0-test.7
 // @description  Test-only lazy inline SC calendar/workload drawer for NetSuite SCOUT cards.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -845,7 +845,10 @@
   }
 
   function renderMeetings(events, dateValue) {
-    const rows = eventsForDay(events, dateValue);
+    const dayRows = eventsForDay(events, dateValue);
+    const rows = dayRows.some(event => !isFreeBusyOnlyEvent(event))
+      ? dayRows.filter(event => !isFreeBusyOnlyEvent(event))
+      : dayRows;
     if (!rows.length) {
       return `
         <div class="scid-panel-heading">
@@ -884,6 +887,10 @@
     return `<span class="scid-dot scid-${escapeHtml(level || "unknown")}"></span>`;
   }
 
+  function isFreeBusyOnlyEvent(event) {
+    return /^free\/busy:/i.test(String(event?.subject || "").trim());
+  }
+
   function renderDrawerContent(person) {
     const selectedDate = getSelectedScrDate();
     const cache = getCalendarCache();
@@ -919,7 +926,7 @@
 
           <div class="scid-signal-grid">
             <div><span>Proposed Meeting Time</span><strong>${signalDot(calendarLoaded && selectedStats.hard + selectedStats.pto > 0 ? "red" : selectedStats.soft + selectedStats.review > 0 ? "yellow" : "green")}${calendarLoaded ? (selectedStats.hard + selectedStats.pto > 0 ? "Unavailable" : selectedStats.soft + selectedStats.review > 0 ? "Soft conflict" : "Available") : "Unknown"}</strong><p>Uses SC date needed from the SCR.</p></div>
-            <div><span>Calendar Availability</span><strong>${signalDot(calendarSignal.level)}${escapeHtml(calendarSignal.label)}</strong><p>${calendarLoaded ? `${(selectedStats.open / 60).toFixed(1)}h open on ${formatLongDate(selectedDate)}` : "Open dashboard once to seed cache."}</p></div>
+            <div><span>Calendar Availability</span><strong>${signalDot(calendarSignal.level)}${escapeHtml(calendarSignal.label)}</strong><p>${calendarLoaded ? escapeHtml(calendarSignal.note) : "Open dashboard once to seed cache."}</p></div>
             <div><span>Workload</span><strong>${signalDot(workload?.level || "unknown")}${escapeHtml(workload?.label || "Unknown")}</strong><p>${escapeHtml(workload?.note || "No workload cache row matched.")}</p></div>
             <div><span>Staffability Score</span><strong>${recommendation.score}/100 ${escapeHtml(recommendation.label)}</strong><p>Higher score is easier to staff.</p></div>
           </div>
@@ -939,11 +946,6 @@
 
         <section class="scid-calendar">
           <p class="scid-section-label">Calendar Detail</p>
-          <div class="scid-signal-box">
-            <span>Calendar Heat</span>
-            <strong>${signalDot(calendarSignal.level)}${escapeHtml(calendarSignal.label)}</strong>
-            <p>${escapeHtml(calendarSignal.note)}</p>
-          </div>
           <strong class="scid-date-open">${calendarLoaded ? `${(selectedStats.open / 60).toFixed(1)}h open on ${formatLongDate(selectedDate)}` : "Calendar cache unavailable"}</strong>
           ${renderCalendarLoadBar(selectedStats)}
           ${calendarLoaded ? renderMiniStrip(resolvedPerson, events, selectedDate) : ""}
