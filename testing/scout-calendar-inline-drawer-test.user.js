@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT Inline Calendar Drawer TEST
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0-test.8
+// @version      27.0.0-test.9
 // @description  Test-only lazy inline SC calendar/workload drawer for NetSuite SCOUT cards.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -24,7 +24,7 @@
 (function () {
   "use strict";
 
-  const VERSION = "27.0.0-test.8";
+  const VERSION = "27.0.0-test.9";
   const CALENDAR_CACHE_KEY = "scout-inline-calendar-drawer-calendar-cache-v1";
   const LOCAL_GRAPH_CACHE_KEY = "sc-staffing-dashboard-local-graph-cache-v1";
   const LEGACY_CALENDAR_CACHE_KEY = "sc-staffing-dashboard-calendar-cache-direct-connector-202605062230";
@@ -45,6 +45,49 @@
   const LOAD_EMAIL_ALIASES = ["Email", "Email Address", "SC Email", "Work Email"];
   const LOAD_MANAGER_ALIASES = ["SC MANAGER", "Manager", "Manager Name", "SC Manager"];
   const LOAD_ORG_ALIASES = ["Type", "A/D", "Direct/AMO", "Legacy Org", "Legacy Team"];
+  const LOAD_SCM_NOTE_ALIASES = [
+    "SCM Notes",
+    "SCM Note",
+    "SCM Staffing Notes",
+    "SCM Staffing Note",
+    "SC Manager Staffing Notes",
+    "SC Manager Staffing Note",
+    "SC Staffing Notes",
+    "SC Staffing Note",
+    "Staffing Notes",
+    "Staffing Note",
+    "Manager Notes",
+    "Manager Note",
+    "Comments",
+    "Comment",
+    "Notes",
+    "Formula (Text)",
+    "Formula Text",
+    "Formula"
+  ];
+  const LOAD_AVAILABILITY_NOTE_ALIASES = [
+    "SC Availability Notes",
+    "SC Availability Note",
+    "SC Availability Notes Restricted",
+    "SC Availability Notes (Restricted)",
+    "Availability Notes",
+    "Availability Note",
+    "Availability Manager Notes",
+    "Availability Manager Note",
+    "Manager Availability Notes",
+    "Manager Availability Note",
+    "Resource Availability Notes",
+    "Resource Availability Note",
+    "Roster Availability Notes",
+    "Roster Availability Note",
+    "Avail Notes",
+    "Avail Note",
+    "SC Avail Notes",
+    "SC Avail Note",
+    "custrecord_emproster_avail_notes",
+    "custrecord_emproster_avail_notes_res",
+    "custrecord_emproster_availability_notes"
+  ];
   let calendarCacheMemo = undefined;
   let loadReportMemo = undefined;
   const sourceElementByKey = new Map();
@@ -141,6 +184,38 @@
     const wanted = aliases.map(normalizeKey);
     const key = Object.keys(record).find(item => wanted.includes(normalizeKey(item)));
     return key ? record[key] : "";
+  }
+
+  function readFields(record, aliases) {
+    if (!record || typeof record !== "object") return [];
+    const wanted = aliases.map(normalizeKey).filter(Boolean);
+    return Object.entries(record)
+      .filter(([key]) => {
+        const normalizedKey = normalizeKey(key);
+        return wanted.some(alias => normalizedKey === alias || new RegExp(`^${alias}\\d+$`).test(normalizedKey));
+      })
+      .map(([, value]) => value);
+  }
+
+  function cleanLoadNote(value) {
+    const text = String(value ?? "")
+      .replace(/\r\n?/g, "\n")
+      .split("\n")
+      .map(line => line.replace(/\s+/g, " ").trim())
+      .filter(Boolean)
+      .join("\n")
+      .trim();
+    if (!text || /^(?:none|- none -|--|-|n\/a|na)$/i.test(text)) return "";
+    return text;
+  }
+
+  function readLoadNotes(record, aliases) {
+    const notes = [];
+    readFields(record, aliases).forEach(value => {
+      const note = cleanLoadNote(value);
+      if (note && !notes.includes(note)) notes.push(note);
+    });
+    return notes.join("\n");
   }
 
   function numberFrom(value) {
@@ -795,6 +870,25 @@
     `;
   }
 
+  function renderLoadNoteBlock(title, value) {
+    const note = cleanLoadNote(value);
+    if (!note) return "";
+    return `
+      <div class="scid-load-note">
+        <span>${escapeHtml(title)}</span>
+        <p>${escapeHtml(note)}</p>
+      </div>
+    `;
+  }
+
+  function renderLoadNotes(load) {
+    if (!load) return "";
+    return [
+      renderLoadNoteBlock("SCM notes", readLoadNotes(load, LOAD_SCM_NOTE_ALIASES)),
+      renderLoadNoteBlock("SC Availability Notes", readLoadNotes(load, LOAD_AVAILABILITY_NOTE_ALIASES))
+    ].join("");
+  }
+
   function renderCalendarLoadBar(stats) {
     const pct = value => Math.max(0, Math.round((value / WORKDAY_MINUTES) * 100));
     const pto = pct(stats.pto);
@@ -950,6 +1044,7 @@
             <p>${escapeHtml(workload?.note || "No workload cache row matched this consultant.")}</p>
           </div>
           ${renderLoadStats(workload)}
+          ${renderLoadNotes(load)}
         </section>
 
         <section class="scid-calendar">
@@ -1016,7 +1111,7 @@
       .scid-signal-grid span,.scid-signal-box span,.scid-section-label,.scid-stat span{text-transform:uppercase;font-size:11px;letter-spacing:.1em;color:#697778;font-weight:900}.scid-signal-grid strong,.scid-signal-box strong{display:block;margin-top:5px}.scid-signal-grid p,.scid-signal-box p{margin:4px 0 0;color:#5f6f80;font-size:12px}
       .scid-dot{display:inline-block;width:10px;height:10px;border-radius:999px;margin-right:7px;background:#8b98a5}.scid-green{background:#23915c}.scid-yellow{background:#d28a00}.scid-red{background:#c74634}.scid-unknown{background:#8b98a5}
       .scid-summary{font-size:13px;color:#526274;margin:12px 0 0}.scid-section-label{margin:0 0 8px}.scid-stat-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}.scid-stat strong{display:block;font-size:20px;margin-top:5px}
-      .scid-date-open{display:block;margin:10px 0 8px;color:#526274}.scid-load-bar{height:18px;border-radius:999px;overflow:hidden;background:#e4eef3;display:flex;border:1px solid #c9d8e2}.scid-load-bar span{height:100%;display:block}.scid-pto{background:#8957e5}.scid-hard{background:#cf4c4a}.scid-soft{background:#c98500}.scid-review{background:#95a3b3}.scid-open{background:#2ca56f}
+      .scid-date-open{display:block;margin:10px 0 8px;color:#526274}.scid-load-bar{height:18px;border-radius:999px;overflow:hidden;background:#e4eef3;display:flex;border:1px solid #c9d8e2}.scid-load-bar span{height:100%;display:block}.scid-pto{background:#8957e5}.scid-hard{background:#cf4c4a}.scid-soft{background:#c98500}.scid-review{background:#95a3b3}.scid-open{background:#2ca56f}.scid-load-note{margin-top:10px;border:1px solid #d5e1ea;background:#f7fafc;border-radius:8px;padding:10px;color:#263847}.scid-load-note span{display:block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;font-weight:900;color:#617082;margin-bottom:5px}.scid-load-note p{margin:0;white-space:pre-wrap;font-size:12px;line-height:1.35}
       .scid-mini-strip{margin-top:12px;display:flex;gap:5px;overflow-x:auto;padding:2px 2px 9px}.scid-mini-day{border:0;background:transparent;padding:0;cursor:pointer;min-width:31px;color:#4b5c6e}.scid-mini-day.is-weekend{min-width:12px}.scid-mini-day>span{display:flex;flex-direction:column-reverse;height:44px;border:1px solid #d2e3ec;background:#e9f6f9;border-radius:5px;overflow:hidden}.scid-mini-day.is-weekend>span{background:#e8f2f5}.scid-mini-day i{display:block;width:100%;flex:0 0 auto}.scid-open-fill{background:#2ca56f}.scid-busy-fill{background:#cf4c4a}.scid-pto-fill{background:#8957e5}.scid-mini-day em{display:block;font-style:normal;font-size:10px;font-weight:800;line-height:1.05;margin-top:4px}.scid-mini-day b{display:block}.scid-mini-day.is-selected>span{outline:2px solid #1e88d1;outline-offset:1px}
       .scid-meeting-panel{margin-top:10px;border:1px solid #d7e1e8;background:#f9fbfc;border-radius:8px;padding:10px}.scid-panel-heading{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:8px}.scid-panel-heading button{border:1px solid #d7e1e8;background:#fff;border-radius:6px;padding:5px 9px;font-weight:800;cursor:pointer}.scid-meeting{border-left:3px solid #8ca0b3;padding:4px 0 6px 10px;margin:5px 0}.scid-meeting strong{display:block}.scid-meeting span{font-size:11px;text-transform:uppercase;color:#697778}.scid-meeting p{margin:3px 0 0;color:#526274}.scid-meeting-pto{border-left-color:#8957e5}.scid-meeting-hard{border-left-color:#cf4c4a}.scid-meeting-soft{border-left-color:#c98500}.scid-meeting-review{border-left-color:#95a3b3}
       .scid-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:12px;color:#526274;font-size:12px}.scid-footer-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.scid-footer button{background:#e2c06b;color:#13212c}.scid-footer .scid-staff-action{background:#4c825c;color:#fff}
