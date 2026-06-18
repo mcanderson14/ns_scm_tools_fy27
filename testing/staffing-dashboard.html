@@ -1085,6 +1085,28 @@
       line-height: 1;
     }
 
+    .staffing-load-comments {
+      border: 1px solid #d3e2ee;
+      border-radius: 7px;
+      background: #f6fbff;
+      color: #33465a;
+      font-size: 12px;
+      line-height: 1.35;
+      margin: 0 0 10px;
+      padding: 8px 9px;
+      white-space: pre-wrap;
+    }
+
+    .staffing-load-comments span {
+      display: block;
+      color: var(--muted);
+      font-size: 9px;
+      font-weight: 850;
+      letter-spacing: 0.06em;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+    }
+
     .staffing-signal-box {
       border: 1px solid var(--line);
       border-radius: 7px;
@@ -1509,7 +1531,7 @@
     <div class="header-inner">
       <div class="brand-row">
         <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
-        <span class="version-pill">v27.0.42</span>
+        <span class="version-pill">v27.0.43</span>
       </div>
       <div class="header-actions">
         <div class="refresh-panel">
@@ -11286,11 +11308,103 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       return Number(value || 0).toLocaleString("en-US");
     }
 
+    function cleanLoadComment(value) {
+      const text = String(value ?? "")
+        .replace(/\r\n?/g, "\n")
+        .split("\n")
+        .map(line => line.replace(/\s+/g, " ").trim())
+        .filter(Boolean)
+        .join("\n")
+        .trim();
+      if (!text || /^(?:none|- none -|--|-|n\/a|na)$/i.test(text)) return "";
+      return text;
+    }
+
     function readLoadField(record, aliases) {
       if (!record || typeof record !== "object") return "";
       const wanted = aliases.map(normalizeLoadKey);
       const key = Object.keys(record).find(item => wanted.includes(normalizeLoadKey(item)));
       return key ? record[key] : "";
+    }
+
+    function readLoadFields(record, aliases) {
+      if (!record || typeof record !== "object") return [];
+      const wanted = aliases.map(normalizeLoadKey).filter(Boolean);
+      return Object.entries(record)
+        .filter(([key]) => {
+          const normalizedKey = normalizeLoadKey(key);
+          return wanted.some(alias => normalizedKey === alias || new RegExp(`^${alias}\\d+$`).test(normalizedKey));
+        })
+        .map(([, value]) => value);
+    }
+
+    const loadCommentAliases = [
+      "COMMENTS",
+      "Comments",
+      "Comment",
+      "NOTES",
+      "Notes",
+      "Staffing Notes",
+      "Staffing Note",
+      "SC Staffing Notes",
+      "SC Staffing Note",
+      "SCM Staffing Notes",
+      "SCM Staffing Note",
+      "SC Manager Staffing Notes",
+      "SC Manager Staffing Note",
+      "Staffing Comments",
+      "Staffing Comment",
+      "Workload Notes",
+      "Workload Note",
+      "Workload Comments",
+      "Workload Comment",
+      "SC Notes",
+      "SC Note",
+      "SCM Notes",
+      "SCM Note",
+      "Manager Notes",
+      "Manager Note",
+      "Availability Notes",
+      "Availability Note",
+      "Availability Manager Notes",
+      "Availability Manager Note",
+      "Manager Availability Notes",
+      "Manager Availability Note",
+      "Resource Notes",
+      "Resource Note",
+      "Formula (Text)",
+      "Formula Text",
+      "Formula"
+    ];
+
+    function looksLikeLoadComment(key, value) {
+      const normalizedKey = normalizeLoadKey(key);
+      const comment = cleanLoadComment(value);
+      if (!comment || comment.length < 12) return false;
+      if (/(systemnote|internalid|externalid|id|date|time|count|total|scrs|week|month|progress|hold|email|name|manager|industry|team|legacy|type|vertical|region|timezone|availability|deliverable|calendarheat|score|status)/.test(normalizedKey)) return false;
+      if (/^(?:\d+|\d+(?:\.\d+)?%|\d{1,2}\/\d{1,2}\/\d{2,4})$/.test(comment)) return false;
+      if (/^[\w.+-]+@[\w.-]+\.[a-z]{2,}$/i.test(comment)) return false;
+      if (/^(?:direct|amo|green|yellow|red|available|unavailable|review|light|heavy)$/i.test(comment)) return false;
+      if (/(comment|note|staffing|availability|resource|formula|text)/.test(normalizedKey)) return true;
+      if (/\b(ooo|pto|support|wants?|please|availab|vacation|holiday|calendar|travel|onsite|on-site|ask before|before booking|skill|cert|language|returning|returns?|manager note)\b/i.test(comment)) return true;
+      return comment.length >= 60 && /\s/.test(comment);
+    }
+
+    function readLoadCommentField(record) {
+      if (!record || typeof record !== "object") return "";
+      const comments = [];
+
+      readLoadFields(record, loadCommentAliases).forEach(value => {
+        const comment = cleanLoadComment(value);
+        if (comment && !comments.includes(comment)) comments.push(comment);
+      });
+
+      Object.entries(record).forEach(([key, value]) => {
+        if (!looksLikeLoadComment(key, value)) return;
+        const comment = cleanLoadComment(value);
+        if (comment && !comments.includes(comment)) comments.push(comment);
+      });
+      return comments.join("\n");
     }
 
     function getRawStaffingLoadRows() {
@@ -11620,7 +11734,8 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         upsell: loadNumber(readLoadField(record, ["UPSELL", "Upsell"])),
         validation: loadNumber(readLoadField(record, ["VALIDATION", "Validation"])),
         whitespacing: loadNumber(readLoadField(record, ["WHITESPACING", "Whitespacing"])),
-        suiteSuccess: loadNumber(readLoadField(record, ["SUITESUCCESS", "SuiteSuccess"]))
+        suiteSuccess: loadNumber(readLoadField(record, ["SUITESUCCESS", "SuiteSuccess"])),
+        comments: readLoadCommentField(record)
       };
 
       return row.name || row.email ? row : null;
@@ -12251,6 +12366,17 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       `;
     }
 
+    function renderWorkloadComments(load) {
+      const comments = cleanLoadComment(load?.comments);
+      if (!comments) return "";
+      return `
+        <div class="staffing-load-comments">
+          <span>Saved Search Notes</span>
+          ${escapeHtml(comments)}
+        </div>
+      `;
+    }
+
     function bindCardDayMeetings(container, rows) {
       container.__scoutRowByEmail = new Map(rows.map(row => [normalizeEmail(row.email), row]));
       if (container.__scoutDayMeetingsBound) return;
@@ -12333,6 +12459,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
             <p class="staffing-section-label">Workload</p>
             ${renderSignalBox("Workload Signal", recommendation.workload)}
             ${renderWorkloadStats(load)}
+            ${renderWorkloadComments(load)}
             ${renderLoadMix(load, row)}
           </div>
 
@@ -12501,7 +12628,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         .slice(0, 20)
         .map(person => ({ name: person.name, email: person.email, manager: getManagerLabel(person) }));
       return {
-        dashboardVersion: "v27.0.42",
+        dashboardVersion: "v27.0.43",
         pageUrl: window.location.href,
         bridgeStatus: getStaffingLoadBridgeStatus(),
         storedRows: stored?.rows?.length || 0,
@@ -12548,7 +12675,13 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
           calendarLoaded: hasLoadedCalendar(person),
           workloadMatch: getStaffingLoadForPerson(person, loadLookup)
         })),
-        loadMatches,
+        loadMatches: loadMatches.map(row => ({
+          ...row,
+          debugComments: row.comments || "",
+          debugTextColumns: Object.entries(row)
+            .filter(([, value]) => cleanLoadComment(value).length >= 12)
+            .map(([key, value]) => ({ key, value: cleanLoadComment(value).slice(0, 240) }))
+        })),
         cacheRows: loadLookup.rows.length,
         visibleRosterRows: selectedRoster().length
       };
