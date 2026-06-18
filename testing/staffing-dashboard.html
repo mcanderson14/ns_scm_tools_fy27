@@ -1531,7 +1531,7 @@
     <div class="header-inner">
       <div class="brand-row">
         <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
-        <span class="version-pill">v27.0.43</span>
+        <span class="version-pill">v27.0.46</span>
       </div>
       <div class="header-actions">
         <div class="refresh-panel">
@@ -9928,6 +9928,14 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         window.localStorage.removeItem(CACHE_KEY);
         window.localStorage.removeItem(LOCAL_GRAPH_CACHE_KEY);
         writeJsonStorage(LOCAL_GRAPH_CACHE_KEY, storageCache);
+        window.dispatchEvent(new CustomEvent("scout-calendar-cache-updated", {
+          detail: {
+            source: storageCache.source || "dashboard-graph-cache",
+            refreshedAt: storageCache.refreshedAt || "",
+            directEvents: Array.isArray(storageCache.directEvents) ? storageCache.directEvents.length : 0,
+            availability: Array.isArray(storageCache.availability) ? storageCache.availability.length : 0
+          }
+        }));
       };
       const compactCache = {
         ...cache,
@@ -11047,10 +11055,18 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       if (!personEmail) return [];
       const zone = document.getElementById("planningZone").value;
       const dayWindow = getFullDayWindow(dateValue, zone);
-      return normalizedEvents
+      const meetings = normalizedEvents
         .filter(event => normalizeEmail(event.email) === personEmail)
         .filter(event => overlapMinutes(dayWindow.start, dayWindow.end, event.startDate, event.endDate) > 0)
         .sort((a, b) => a.startDate - b.startDate || String(a.subject || "").localeCompare(String(b.subject || "")));
+      const hasDetailedMeetings = meetings.some(event => !isFreeBusyOnlyEvent(event));
+      return hasDetailedMeetings
+        ? meetings.filter(event => !isFreeBusyOnlyEvent(event))
+        : meetings;
+    }
+
+    function isFreeBusyOnlyEvent(event) {
+      return /^free\/busy:/i.test(String(event?.subject || "").trim());
     }
 
     function getMeetingSeverityClass(event) {
@@ -12076,7 +12092,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const selectedDate = formatIsoDate(getSelectedMeetingDate());
       const ptoSummary = getPtoAvailabilitySummary(row, eventsByEmail);
       const calendarDetail = stats.calendarLoaded
-        ? `${(stats.open / 60).toFixed(1)}h open on ${selectedDate}`
+        ? recommendation.calendar.note
         : missingCalendarLabel(row);
       const workloadDetail = recommendation.workload?.note || "No workload signal found.";
       return `
@@ -12465,7 +12481,6 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
 
           <div class="staffing-cell">
             <p class="staffing-section-label">Calendar Detail</p>
-            ${renderSignalBox("Calendar Heat", recommendation.calendar)}
             <div class="subtle"><strong>${stats.calendarLoaded ? `${(stats.open / 60).toFixed(1)}h open on ${formatIsoDate(getSelectedMeetingDate())}` : missingCalendarLabel(row)}</strong></div>
             ${renderCalendarLoadBar(stats)}
             <div class="subtle">${(stats.pto / 60).toFixed(1)} PTO/OOO; ${(stats.hard / 60).toFixed(1)} hard; ${(stats.soft / 60).toFixed(1)} soft; ${(stats.other / 60).toFixed(1)} review; ${stats.calendarLoaded ? `${(stats.open / 60).toFixed(1)} open` : missingCalendarSubtle(row)}</div>
@@ -12628,7 +12643,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         .slice(0, 20)
         .map(person => ({ name: person.name, email: person.email, manager: getManagerLabel(person) }));
       return {
-        dashboardVersion: "v27.0.43",
+        dashboardVersion: "v27.0.46",
         pageUrl: window.location.href,
         bridgeStatus: getStaffingLoadBridgeStatus(),
         storedRows: stored?.rows?.length || 0,

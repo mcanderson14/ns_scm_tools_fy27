@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT Inline Calendar Drawer TEST
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0-test.7
+// @version      27.0.0-test.8
 // @description  Test-only lazy inline SC calendar/workload drawer for NetSuite SCOUT cards.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -24,7 +24,7 @@
 (function () {
   "use strict";
 
-  const VERSION = "27.0.0-test.5";
+  const VERSION = "27.0.0-test.8";
   const CALENDAR_CACHE_KEY = "scout-inline-calendar-drawer-calendar-cache-v1";
   const LOCAL_GRAPH_CACHE_KEY = "sc-staffing-dashboard-local-graph-cache-v1";
   const LEGACY_CALENDAR_CACHE_KEY = "sc-staffing-dashboard-calendar-cache-direct-connector-202605062230";
@@ -337,6 +337,14 @@
     window.setTimeout(capture, 2500);
     window.setTimeout(capture, 9000);
     window.addEventListener("scout-calendar-cache-updated", () => window.setTimeout(capture, 500));
+    window.addEventListener("click", event => {
+      const label = String(event.target?.textContent || event.target?.value || "");
+      if (/refresh.*(token|calendar|selected)/i.test(label)) {
+        window.setTimeout(capture, 5000);
+        window.setTimeout(capture, 20000);
+        window.setTimeout(capture, 60000);
+      }
+    }, true);
     window.addEventListener("storage", event => {
       if (event.key === LOCAL_GRAPH_CACHE_KEY || event.key === LEGACY_CALENDAR_CACHE_KEY) {
         window.setTimeout(capture, 500);
