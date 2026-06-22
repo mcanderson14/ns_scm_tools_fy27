@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT Inline Calendar Drawer TEST
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0-test.10
+// @version      27.0.0-test.12
 // @description  Test-only lazy inline SC calendar/workload drawer for NetSuite SCOUT cards.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -24,17 +24,56 @@
 (function () {
   "use strict";
 
-  const VERSION = "27.0.0-test.10";
+  const VERSION = "27.0.0-test.12";
   const CALENDAR_CACHE_KEY = "scout-inline-calendar-drawer-calendar-cache-v1";
   const LOCAL_GRAPH_CACHE_KEY = "sc-staffing-dashboard-local-graph-cache-v1";
   const LEGACY_CALENDAR_CACHE_KEY = "sc-staffing-dashboard-calendar-cache-direct-connector-202605062230";
   const STAFFING_LOAD_STORAGE_KEY = "scout-staffing-dashboard-load-report-v1";
+  const GRAPH_EXPLORER_TOKEN_VAULT_KEY = "sc-staffing-dashboard-graph-explorer-token-vault-v2";
+  const GRAPH_EXPLORER_LOCAL_KEY_KEY = "sc-staffing-dashboard-graph-explorer-local-key-v1";
+  const GRAPH_TOKEN_BRIDGE_KEY = "scout-inline-calendar-drawer-graph-token-bridge-v1";
+  const GRAPH_GET_SCHEDULE_URL = "https://graph.microsoft.com/v1.0/me/calendar/getSchedule";
+  const GRAPH_REFRESH_DAYS = 21;
+  const GRAPH_REFRESH_BATCH_SIZE = 20;
+  const GRAPH_CALENDAR_VIEW_DETAIL_LIMIT = 30;
+  const GRAPH_CALENDAR_VIEW_DETAIL_CONCURRENCY = 4;
+  const GRAPH_CALENDAR_VIEW_PAGE_LIMIT = 3;
+  const GRAPH_TIME_ZONE_MAP = {
+    "UTC": "UTC",
+    "Etc/UTC": "UTC",
+    "America/New_York": "Eastern Standard Time",
+    "America/Chicago": "Central Standard Time",
+    "America/Denver": "Mountain Standard Time",
+    "America/Phoenix": "US Mountain Standard Time",
+    "America/Los_Angeles": "Pacific Standard Time",
+    "America/Halifax": "Atlantic Standard Time",
+    "America/Anchorage": "Alaskan Standard Time",
+    "Pacific/Honolulu": "Hawaiian Standard Time",
+    "America/St_Johns": "Newfoundland Standard Time"
+  };
+  const GRAPH_AVAILABILITY_STATUS_MAP = {
+    "1": { status: "tentative", subject: "Free/busy: Tentative hold" },
+    "2": { status: "busy", subject: "Free/busy: Busy; subject unavailable" },
+    "3": { status: "oof", subject: "Free/busy: Out of office; subject unavailable" },
+    "4": { status: "workingElsewhere", subject: "Free/busy: Working elsewhere; subject unavailable" }
+  };
   const DASHBOARD_URL = "https://mcanderson14.github.io/ns_scm_tools_fy27/testing/staffing-dashboard.html";
   const CALENDAR_REFRESH_URL = "https://mcanderson14.github.io/ns_scm_tools_fy27/testing/calendar-refresh.html";
   const CALENDAR_STALE_AFTER_MS = 24 * 60 * 60 * 1000;
   const DEFAULT_DRAWER_START_MINUTES = 13 * 60;
   const DEFAULT_DRAWER_DURATION_MINUTES = 60;
   const DEFAULT_DRAWER_BUFFER_MINUTES = 60;
+  const DRAWER_TIME_ZONES = [
+    ["America/New_York", "Eastern (ET)"],
+    ["America/Chicago", "Central (CT)"],
+    ["America/Denver", "Mountain (MT)"],
+    ["America/Phoenix", "Arizona (MST)"],
+    ["America/Los_Angeles", "Pacific (PT)"],
+    ["America/Halifax", "Atlantic (AT)"],
+    ["America/Anchorage", "Alaska (AKT)"],
+    ["Pacific/Honolulu", "Hawaii (HT)"],
+    ["America/St_Johns", "Newfoundland (NT)"]
+  ];
   const WORKDAY_START_MINUTES = 8 * 60;
   const WORKDAY_END_MINUTES = 17 * 60;
   const WORKDAY_MINUTES = WORKDAY_END_MINUTES - WORKDAY_START_MINUTES;
@@ -93,6 +132,8 @@
   ];
   let calendarCacheMemo = undefined;
   let loadReportMemo = undefined;
+  const formatterCache = new Map();
+  const zonedDateTimeCache = new Map();
   const sourceElementByKey = new Map();
 
   function pageWindow() {
@@ -241,6 +282,15 @@
     }
   }
 
+  function writeJsonLocalStorage(key, value) {
+    try {
+      pageWindow().localStorage?.setItem(key, JSON.stringify(value));
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
   function latestIsoDate(values) {
     let latest = 0;
     arrayFrom(values).forEach(value => {
@@ -293,6 +343,126 @@
       console.warn("SCOUT inline calendar drawer: GM_setValue failed", error);
     }
     return false;
+  }
+
+  function decodeBase64Url(value) {
+    const base64 = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+    const binary = atob(padded);
+    const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  }
+
+  function base64ToBytes(value) {
+    const binary = atob(String(value || ""));
+    return Uint8Array.from(binary, char => char.charCodeAt(0));
+  }
+
+  function ensureGraphCrypto() {
+    if (!window.crypto?.subtle) {
+      throw new Error("Encrypted token storage requires Web Crypto. Use Chrome or Edge.");
+    }
+  }
+
+  function getGraphExplorerTokenExpiry(token) {
+    try {
+      const parts = String(token || "").split(".");
+      if (parts.length < 2) return null;
+      const payload = JSON.parse(decodeBase64Url(parts[1]));
+      const exp = Number(payload.exp || 0);
+      return exp ? exp * 1000 : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function captureGraphTokenBridge() {
+    try {
+      const storage = pageWindow().localStorage;
+      if (!storage) return null;
+      const tokenVault = readJsonLocalStorage(GRAPH_EXPLORER_TOKEN_VAULT_KEY);
+      const localKey = storage.getItem(GRAPH_EXPLORER_LOCAL_KEY_KEY);
+      if (!tokenVault || !localKey) return null;
+      const bridged = {
+        capturedAt: new Date().toISOString(),
+        pageUrl: window.location.href,
+        tokenVault,
+        localKey
+      };
+      gmSet(GRAPH_TOKEN_BRIDGE_KEY, bridged);
+      return bridged;
+    } catch (error) {
+      console.warn("SCOUT inline calendar drawer: token bridge capture failed", error);
+      return null;
+    }
+  }
+
+  function installGraphTokenBridgeCapture() {
+    const capture = () => captureGraphTokenBridge();
+    window.setTimeout(capture, 1000);
+    window.setTimeout(capture, 6000);
+    let attempts = 0;
+    const timer = window.setInterval(() => {
+      attempts += 1;
+      capture();
+      if (attempts >= 12) window.clearInterval(timer);
+    }, 5000);
+    window.addEventListener("storage", event => {
+      if (event.key === GRAPH_EXPLORER_TOKEN_VAULT_KEY || event.key === GRAPH_EXPLORER_LOCAL_KEY_KEY) {
+        window.setTimeout(capture, 200);
+      }
+    });
+    window.addEventListener("click", event => {
+      const label = String(event.target?.textContent || event.target?.value || "");
+      if (/save.*token|refresh.*token|open token refresh/i.test(label)) {
+        window.setTimeout(capture, 1000);
+        window.setTimeout(capture, 5000);
+      }
+    }, true);
+  }
+
+  async function decryptGraphTokenRecord(record, localKey) {
+    ensureGraphCrypto();
+    if (!record || record.kind !== "sc-calendar-graph-explorer-token-vault" || !record.ciphertext || !record.iv) {
+      throw new Error("No saved Graph token was found. Open calendar refresh, save a token, then try Refresh Calendars again.");
+    }
+    if (record.keyMode === "passphrase") {
+      throw new Error("The saved token requires a passphrase. Load it on the calendar refresh page first.");
+    }
+    if (!localKey) {
+      throw new Error("The saved token key was not captured yet. Open the calendar refresh or dashboard page once, then return to NetSuite.");
+    }
+
+    const cryptoKey = await window.crypto.subtle.importKey(
+      "raw",
+      base64ToBytes(localKey),
+      { name: "AES-GCM" },
+      false,
+      ["decrypt"]
+    );
+    const plaintext = await window.crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: base64ToBytes(record.iv) },
+      cryptoKey,
+      base64ToBytes(record.ciphertext)
+    );
+    const payload = JSON.parse(new TextDecoder().decode(plaintext));
+    const expiresAt = Number(payload.expiresAt || getGraphExplorerTokenExpiry(payload.token) || 0);
+    if (expiresAt && expiresAt <= Date.now()) {
+      throw new Error("The saved Graph token expired. Open calendar refresh and save a fresh token.");
+    }
+    return String(payload.token || "");
+  }
+
+  async function getStoredGraphToken() {
+    const localVault = readJsonLocalStorage(GRAPH_EXPLORER_TOKEN_VAULT_KEY);
+    const localKey = pageWindow().localStorage?.getItem(GRAPH_EXPLORER_LOCAL_KEY_KEY);
+    if (localVault && localKey) return decryptGraphTokenRecord(localVault, localKey);
+
+    const bridged = gmGet(GRAPH_TOKEN_BRIDGE_KEY, null);
+    if (bridged?.tokenVault && bridged?.localKey) {
+      return decryptGraphTokenRecord(bridged.tokenVault, bridged.localKey);
+    }
+    throw new Error("No saved Graph token is available to the drawer. Open the calendar refresh/dashboard page once after saving a token so SCOUT can bridge it to NetSuite.");
   }
 
   function arrayFrom(value) {
@@ -439,6 +609,201 @@
   function refreshCalendarCacheMemo() {
     calendarCacheMemo = gmGet(CALENDAR_CACHE_KEY, null) || null;
     return calendarCacheMemo;
+  }
+
+  function mergeAndWriteDrawerGraphCache(next) {
+    const existing = getCalendarCache() || {};
+    const refreshedEmails = new Set(arrayFrom(next.loadedEmails).map(normalizeEmail).filter(Boolean));
+    const keepForOtherEmailOrDate = item => {
+      const email = normalizeEmail(item.email);
+      return !refreshedEmails.has(email) || !calendarRecordOverlapsDateWindow(item, next.start, next.end);
+    };
+    const retainAvailability = item => {
+      const email = normalizeEmail(item.email);
+      return refreshedEmails.has(email)
+        ? splitAvailabilityOutsideDateWindow(item, next.start, next.end)
+        : [item];
+    };
+    const rosterMap = new Map(arrayFrom(existing.roster).map(person => [normalizeEmail(person.email), person]));
+    arrayFrom(next.roster).forEach(person => {
+      const email = normalizeEmail(person.email);
+      if (email) rosterMap.set(email, { ...person, email });
+    });
+
+    const availability = [
+      ...arrayFrom(existing.availability).flatMap(retainAvailability),
+      ...arrayFrom(next.availability)
+    ];
+    const directEvents = [
+      ...arrayFrom(existing.events).filter(keepForOtherEmailOrDate),
+      ...arrayFrom(next.directEvents)
+    ];
+    const events = compactEvents([
+      ...directEvents,
+      ...eventsWithDetailedFallback(next.availability, next.directEvents)
+    ]);
+    const payload = {
+      version: 1,
+      capturedBy: `SCOUT Inline Calendar Drawer TEST ${VERSION}`,
+      capturedAt: new Date().toISOString(),
+      refreshedAt: next.refreshedAt,
+      sourceRefreshedAt: next.refreshedAt,
+      pageUrl: window.location.href,
+      windowStart: next.start,
+      windowEnd: next.end,
+      loadedEmails: [...new Set([
+        ...arrayFrom(existing.loadedEmails),
+        ...arrayFrom(next.loadedEmails)
+      ].map(normalizeEmail).filter(Boolean))].sort(),
+      roster: [...rosterMap.values()].sort((a, b) => String(a.name || a.email).localeCompare(String(b.name || b.email))),
+      availability,
+      events,
+      errors: [
+        ...arrayFrom(existing.errors),
+        ...arrayFrom(next.errors)
+      ].slice(-50)
+    };
+
+    gmSet(CALENDAR_CACHE_KEY, payload);
+    calendarCacheMemo = payload;
+    try {
+      pageWindow().__SCOUT_INLINE_CALENDAR_DRAWER_CACHE = payload;
+      writeJsonLocalStorage(LOCAL_GRAPH_CACHE_KEY, {
+        version: 1,
+        source: "scout-inline-drawer-graph-refresh",
+        refreshedAt: next.refreshedAt,
+        start: next.start,
+        end: next.end,
+        intervalMinutes: next.intervalMinutes,
+        roster: payload.roster,
+        loadedEmails: payload.loadedEmails,
+        availability,
+        directEvents: arrayFrom(next.directEvents),
+        events: [],
+        errors: payload.errors
+      });
+      window.dispatchEvent(new CustomEvent("scout-calendar-cache-updated", {
+        detail: {
+          source: "scout-inline-drawer-graph-refresh",
+          refreshedAt: next.refreshedAt,
+          loadedEmails: next.loadedEmails
+        }
+      }));
+    } catch (_) {
+      // LocalStorage is best-effort here; Tampermonkey storage is the drawer source of truth.
+    }
+    return payload;
+  }
+
+  function setDrawerRefreshStatus(root, message, tone = "") {
+    const status = root?.querySelector("[data-scid-refresh-status]");
+    if (!status) return;
+    status.textContent = message || "";
+    status.dataset.tone = tone || "";
+  }
+
+  function buildDrawerGraphContext(root, people) {
+    const filters = getDrawerFilters(root);
+    const emails = [...new Set(uniquePeople(people).map(person => normalizeEmail(person.email)).filter(Boolean))];
+    if (!emails.length) throw new Error("No consultant email was available for the drawer refresh.");
+    const rosterByEmail = {};
+    uniquePeople(people).forEach(person => {
+      const email = normalizeEmail(person.email);
+      if (!email) return;
+      rosterByEmail[email] = {
+        name: person.name || email,
+        email,
+        manager: person.manager || "",
+        legacyOrg: person.legacyOrg || person.vertical || "",
+        timeZone: person.timeZone || filters.timeZone || ""
+      };
+    });
+    return {
+      emails,
+      rosterByEmail,
+      start: filters.date,
+      end: addDaysIso(filters.date, GRAPH_REFRESH_DAYS),
+      intervalMinutes: 30,
+      timeZone: filters.timeZone
+    };
+  }
+
+  async function refreshDrawerCalendars(root = document.getElementById(DRAWER_ID)) {
+    if (!root || root.hidden) return;
+    const refreshButton = root.querySelector("[data-scid-refresh-token]");
+    const originalText = refreshButton?.textContent || "Refresh Calendars";
+    const people = uniquePeople(root.__scidPeople || []);
+    let context = null;
+    try {
+      context = buildDrawerGraphContext(root, people);
+      if (refreshButton) {
+        refreshButton.disabled = true;
+        refreshButton.textContent = "Refreshing...";
+      }
+      setDrawerRefreshStatus(root, `Refreshing ${context.emails.length} SC${context.emails.length === 1 ? "" : "s"} from Graph...`);
+      const token = await getStoredGraphToken();
+      const chunks = chunkArray(context.emails, GRAPH_REFRESH_BATCH_SIZE);
+      const combined = {
+        refreshedAt: new Date().toISOString(),
+        start: context.start,
+        end: context.end,
+        intervalMinutes: context.intervalMinutes,
+        loadedEmails: [],
+        availability: [],
+        directEvents: [],
+        events: [],
+        errors: [],
+        roster: []
+      };
+
+      for (let index = 0; index < chunks.length; index += 1) {
+        const emails = chunks[index];
+        const payload = await fetchGraphSchedule(token, context, emails);
+        const normalized = normalizeGraphSchedules(payload, context, emails, context.rosterByEmail);
+        combined.loadedEmails.push(...normalized.loadedEmails);
+        combined.availability.push(...normalized.availability);
+        combined.directEvents.push(...normalized.directEvents);
+        combined.errors.push(...normalized.errors);
+        combined.roster.push(...normalized.roster);
+        setDrawerRefreshStatus(root, `Graph schedule ${index + 1}/${chunks.length}: ${combined.directEvents.length} detailed item${combined.directEvents.length === 1 ? "" : "s"}...`);
+      }
+
+      if (context.emails.length <= GRAPH_CALENDAR_VIEW_DETAIL_LIMIT) {
+        const detailResults = await mapWithConcurrency(
+          context.emails,
+          GRAPH_CALENDAR_VIEW_DETAIL_CONCURRENCY,
+          async (email, index) => {
+            const result = await fetchGraphCalendarView(token, context, email);
+            setDrawerRefreshStatus(root, `Calendar detail ${index + 1}/${context.emails.length}: ${combined.directEvents.length + result.events.length} item${combined.directEvents.length + result.events.length === 1 ? "" : "s"}...`);
+            return result;
+          }
+        );
+        detailResults.forEach(result => {
+          combined.directEvents.push(...arrayFrom(result?.events));
+          combined.errors.push(...arrayFrom(result?.errors));
+        });
+      }
+
+      combined.loadedEmails = [...new Set(combined.loadedEmails.map(normalizeEmail).filter(Boolean))].sort();
+      combined.roster = [...new Map(combined.roster.map(person => [normalizeEmail(person.email), person])).values()];
+      combined.directEvents = [...new Map(combined.directEvents.map(event => [
+        `${normalizeEmail(event.email)}|${event.status}|${event.subject}|${event.start}|${event.end}`,
+        event
+      ])).values()];
+      combined.events = eventsWithDetailedFallback(combined.availability, combined.directEvents);
+      mergeAndWriteDrawerGraphCache(combined);
+      refreshCalendarCacheMemo();
+      renderDrawerPeople(root);
+      setDrawerRefreshStatus(root, `Refreshed ${combined.loadedEmails.length} SC${combined.loadedEmails.length === 1 ? "" : "s"} at ${new Date(combined.refreshedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.`, "ok");
+      updateCalendarStalePrompt();
+    } catch (error) {
+      setDrawerRefreshStatus(root, error.message || "Calendar refresh failed.", "error");
+    } finally {
+      if (refreshButton) {
+        refreshButton.disabled = false;
+        refreshButton.textContent = originalText;
+      }
+    }
   }
 
   function calendarCacheTimestamp(cache) {
@@ -625,19 +990,404 @@
     return day === 0 || day === 6;
   }
 
-  function workdayWindow(dateValue) {
+  function getCachedFormatter(key, options) {
+    const cacheKey = `${key}|${JSON.stringify(options)}`;
+    if (!formatterCache.has(cacheKey)) {
+      formatterCache.set(cacheKey, new Intl.DateTimeFormat("en-US", options));
+    }
+    return formatterCache.get(cacheKey);
+  }
+
+  function getBrowserTimeZone() {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York";
+    } catch (_) {
+      return "America/New_York";
+    }
+  }
+
+  function isValidTimeZone(value) {
+    if (!value) return false;
+    try {
+      new Intl.DateTimeFormat("en-US", { timeZone: value }).format(new Date());
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function normalizeTimeZoneValue(value, fallback = getBrowserTimeZone()) {
+    const text = String(value || "").trim();
+    if (isValidTimeZone(text)) return text;
+    const lower = text.toLowerCase();
+    const match = DRAWER_TIME_ZONES.find(([zone, label]) => zone.toLowerCase() === lower || label.toLowerCase() === lower);
+    return match?.[0] || fallback || "America/New_York";
+  }
+
+  function getZoneLabel(timeZone) {
+    const normalized = normalizeTimeZoneValue(timeZone, "America/New_York");
+    return DRAWER_TIME_ZONES.find(([value]) => value === normalized)?.[1] || normalized || "Local time";
+  }
+
+  function getTimeZoneOffset(date, timeZone) {
+    timeZone = normalizeTimeZoneValue(timeZone, "America/New_York");
+    const parts = getCachedFormatter(`offset|${timeZone}`, {
+      timeZone,
+      hour12: false,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit"
+    }).formatToParts(date).reduce((acc, part) => {
+      if (part.type !== "literal") acc[part.type] = part.value;
+      return acc;
+    }, {});
+
+    const hour = Number(parts.hour) === 24 ? 0 : Number(parts.hour);
+    const localAsUtc = Date.UTC(
+      Number(parts.year),
+      Number(parts.month) - 1,
+      Number(parts.day),
+      hour,
+      Number(parts.minute),
+      Number(parts.second)
+    );
+    return localAsUtc - date.getTime();
+  }
+
+  function zonedDateTime(dateValue, minutes, timeZone) {
+    timeZone = normalizeTimeZoneValue(timeZone, "America/New_York");
+    const cacheKey = `${dateValue}|${minutes}|${timeZone}`;
+    if (zonedDateTimeCache.has(cacheKey)) return new Date(zonedDateTimeCache.get(cacheKey));
     const [year, month, day] = String(dateValue).split("-").map(Number);
-    const start = new Date(year, month - 1, day, 8, 0, 0, 0);
-    const end = new Date(year, month - 1, day, 17, 0, 0, 0);
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    const guess = new Date(Date.UTC(year, month - 1, day, hours, mins, 0));
+    const timestamp = guess.getTime() - getTimeZoneOffset(guess, timeZone);
+    zonedDateTimeCache.set(cacheKey, timestamp);
+    return new Date(timestamp);
+  }
+
+  function workdayWindow(dateValue, timeZone = getDefaultDrawerTimeZone()) {
+    const start = zonedDateTime(dateValue, WORKDAY_START_MINUTES, timeZone);
+    const end = zonedDateTime(dateValue, WORKDAY_END_MINUTES, timeZone);
     return { start, end, minutes: WORKDAY_MINUTES };
   }
 
-  function fullDayWindow(dateValue) {
-    const [year, month, day] = String(dateValue).split("-").map(Number);
+  function fullDayWindow(dateValue, timeZone = getDefaultDrawerTimeZone()) {
     return {
-      start: new Date(year, month - 1, day, 0, 0, 0, 0),
-      end: new Date(year, month - 1, day + 1, 0, 0, 0, 0)
+      start: zonedDateTime(dateValue, 0, timeZone),
+      end: zonedDateTime(addDaysIso(dateValue, 1), 0, timeZone)
     };
+  }
+
+  function graphExplorerTimeZone(value) {
+    const text = normalizeTimeZoneValue(value || "America/New_York", "America/New_York");
+    return GRAPH_TIME_ZONE_MAP[text] || text;
+  }
+
+  function graphDateTimeToIso(value, timeZone) {
+    const raw = String(value?.dateTime || value || "").trim();
+    if (!raw) return "";
+    if (/[zZ]$|[+-]\d{2}:?\d{2}$/.test(raw)) return new Date(raw).toISOString();
+
+    const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?/);
+    if (!match) return new Date(raw).toISOString();
+
+    const [, year, month, day, hour, minute, second = "0"] = match;
+    const guess = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second)));
+    return new Date(guess.getTime() - getTimeZoneOffset(guess, timeZone)).toISOString();
+  }
+
+  function getScheduleItemLocation(item) {
+    const location = item?.location;
+    if (!location) return "";
+    if (typeof location === "string") return location;
+    return location.displayName || location.locationUri || "";
+  }
+
+  function normalizeGraphScheduleItem(item, email, context) {
+    const status = String(item?.status || item?.showAs || "busy");
+    const start = graphDateTimeToIso(item?.start, context.timeZone);
+    const end = graphDateTimeToIso(item?.end, context.timeZone);
+    if (!start || !end || Number.isNaN(Date.parse(start)) || Number.isNaN(Date.parse(end))) return null;
+    return {
+      email: normalizeEmail(email),
+      status,
+      subject: String(item?.subject || (item?.isPrivate ? "Private calendar item" : "Calendar item")),
+      location: getScheduleItemLocation(item),
+      isPrivate: Boolean(item?.isPrivate),
+      isAllDay: Boolean(item?.isAllDay),
+      start,
+      end,
+      source: "Graph scheduleItems"
+    };
+  }
+
+  function normalizeGraphCalendarViewItem(item, email, context) {
+    if (!item || item.isCancelled) return null;
+    const status = String(item.showAs || item.status || "busy");
+    const start = graphDateTimeToIso(item.start, context.timeZone);
+    const end = graphDateTimeToIso(item.end, context.timeZone);
+    if (!start || !end || Number.isNaN(Date.parse(start)) || Number.isNaN(Date.parse(end))) return null;
+    return {
+      email: normalizeEmail(email),
+      status,
+      subject: String(item.subject || (item.isPrivate ? "Private calendar item" : "Calendar item")),
+      location: getScheduleItemLocation(item),
+      isPrivate: Boolean(item.isPrivate || item.sensitivity === "private"),
+      isAllDay: Boolean(item.isAllDay),
+      start,
+      end,
+      source: "Graph calendarView"
+    };
+  }
+
+  async function fetchGraphSchedule(token, context, emails) {
+    const timeZone = graphExplorerTimeZone(context.timeZone);
+    const response = await fetch(GRAPH_GET_SCHEDULE_URL, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "Prefer": `outlook.timezone="${timeZone}"`
+      },
+      body: JSON.stringify({
+        schedules: emails,
+        startTime: {
+          dateTime: `${context.start}T00:00:00`,
+          timeZone
+        },
+        endTime: {
+          dateTime: `${context.end}T00:00:00`,
+          timeZone
+        },
+        availabilityViewInterval: Number(context.intervalMinutes || 30)
+      })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error?.message || payload.message || `Microsoft Graph returned ${response.status}`);
+    }
+    return payload;
+  }
+
+  async function fetchGraphCalendarView(token, context, email) {
+    const timeZone = graphExplorerTimeZone(context.timeZone);
+    const events = [];
+    const errors = [];
+    let page = 0;
+    let url = new URL(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(email)}/calendarView`);
+    url.searchParams.set("startDateTime", `${context.start}T00:00:00`);
+    url.searchParams.set("endDateTime", `${context.end}T00:00:00`);
+    url.searchParams.set("$select", "subject,start,end,showAs,isAllDay,isCancelled,isPrivate,sensitivity,location");
+    url.searchParams.set("$top", "100");
+
+    while (url && page < GRAPH_CALENDAR_VIEW_PAGE_LIMIT) {
+      page += 1;
+      try {
+        const response = await fetch(url.toString(), {
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Prefer": `outlook.timezone="${timeZone}"`
+          }
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          errors.push({
+            email: normalizeEmail(email),
+            responseCode: String(response.status),
+            message: payload.error?.message || payload.message || `CalendarView returned ${response.status}`,
+            start: `${context.start}T00:00:00.000Z`,
+            end: `${context.end}T00:00:00.000Z`
+          });
+          break;
+        }
+        arrayFrom(payload.value).forEach(item => {
+          const normalized = normalizeGraphCalendarViewItem(item, email, context);
+          if (normalized) events.push(normalized);
+        });
+        url = payload["@odata.nextLink"] ? new URL(payload["@odata.nextLink"]) : null;
+      } catch (error) {
+        errors.push({
+          email: normalizeEmail(email),
+          message: error.message || "CalendarView request failed.",
+          start: `${context.start}T00:00:00.000Z`,
+          end: `${context.end}T00:00:00.000Z`
+        });
+        break;
+      }
+    }
+    return { email: normalizeEmail(email), events, errors };
+  }
+
+  function chunkArray(values, size) {
+    const chunks = [];
+    for (let index = 0; index < values.length; index += size) {
+      chunks.push(values.slice(index, index + size));
+    }
+    return chunks.length ? chunks : [[]];
+  }
+
+  async function mapWithConcurrency(values, limit, mapper) {
+    const results = new Array(values.length);
+    let nextIndex = 0;
+    const workerCount = Math.min(limit, values.length);
+    await Promise.all(Array.from({ length: workerCount }, async () => {
+      while (nextIndex < values.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        results[index] = await mapper(values[index], index);
+      }
+    }));
+    return results;
+  }
+
+  function expandGraphAvailability(snapshot) {
+    const view = String(snapshot.view || "");
+    const intervalMs = Number(snapshot.intervalMinutes || 30) * 60 * 1000;
+    const startMs = Date.parse(snapshot.start);
+    const expanded = [];
+    if (!view || !Number.isFinite(startMs) || !intervalMs) return expanded;
+
+    let blockCode = null;
+    let blockStart = 0;
+    const flush = endIndex => {
+      if (!blockCode || !GRAPH_AVAILABILITY_STATUS_MAP[blockCode]) return;
+      expanded.push({
+        email: normalizeEmail(snapshot.email),
+        status: GRAPH_AVAILABILITY_STATUS_MAP[blockCode].status,
+        subject: GRAPH_AVAILABILITY_STATUS_MAP[blockCode].subject,
+        start: new Date(startMs + blockStart * intervalMs).toISOString(),
+        end: new Date(startMs + endIndex * intervalMs).toISOString(),
+        source: "Graph availabilityView"
+      });
+    };
+
+    for (let index = 0; index <= view.length; index += 1) {
+      const code = view[index] || "0";
+      if (code === blockCode) continue;
+      flush(index);
+      blockCode = GRAPH_AVAILABILITY_STATUS_MAP[code] ? code : null;
+      blockStart = index;
+    }
+    return expanded;
+  }
+
+  function normalizeGraphSchedules(payload, context, emails, rosterByEmail) {
+    const expected = new Set(emails.map(normalizeEmail));
+    const returned = new Set();
+    const availability = [];
+    const directEvents = [];
+    const errors = [];
+    const intervalMinutes = Number(context.intervalMinutes || 30);
+
+    arrayFrom(payload.value).forEach(schedule => {
+      const email = normalizeEmail(schedule.scheduleId || schedule.schedule_id);
+      if (!expected.has(email)) return;
+      returned.add(email);
+
+      if (schedule.error) {
+        errors.push({
+          email,
+          responseCode: schedule.error.responseCode || schedule.error.code || null,
+          message: schedule.error.message || "Microsoft Graph returned an error for this schedule.",
+          start: `${context.start}T00:00:00.000Z`,
+          end: `${context.end}T00:00:00.000Z`
+        });
+      }
+
+      const view = schedule.availabilityView || schedule.availability_view || "";
+      if (view) {
+        availability.push({
+          email,
+          start: `${context.start}T00:00:00.000Z`,
+          intervalMinutes,
+          view: String(view)
+        });
+      }
+
+      const scheduleItems = Array.isArray(schedule.scheduleItems)
+        ? schedule.scheduleItems
+        : Array.isArray(schedule.schedule_items)
+        ? schedule.schedule_items
+        : [];
+      scheduleItems.forEach(item => {
+        const normalized = normalizeGraphScheduleItem(item, email, context);
+        if (normalized) directEvents.push(normalized);
+      });
+    });
+
+    [...expected].filter(email => !returned.has(email)).forEach(email => {
+      errors.push({
+        email,
+        message: "Microsoft Graph did not return this schedule in the getSchedule response.",
+        start: `${context.start}T00:00:00.000Z`,
+        end: `${context.end}T00:00:00.000Z`
+      });
+    });
+
+    return {
+      loadedEmails: [...expected].sort(),
+      availability,
+      directEvents,
+      errors,
+      roster: [...expected].map(email => rosterByEmail[email]).filter(Boolean)
+    };
+  }
+
+  function dateWindowStartMs(dateValue) {
+    return Date.parse(`${dateValue}T00:00:00.000Z`);
+  }
+
+  function calendarRecordOverlapsDateWindow(record, startDate, endDate) {
+    const refreshStartMs = dateWindowStartMs(startDate);
+    const refreshEndMs = dateWindowStartMs(endDate);
+    const recordStartMs = Date.parse(record?.start);
+    const recordEndMs = Date.parse(record?.end || record?.start);
+    if (![refreshStartMs, refreshEndMs, recordStartMs, recordEndMs].every(Number.isFinite)) return true;
+    return recordStartMs < refreshEndMs && recordEndMs > refreshStartMs;
+  }
+
+  function splitAvailabilityOutsideDateWindow(snapshot, startDate, endDate) {
+    const view = String(snapshot?.view || "");
+    const intervalMs = Number(snapshot?.intervalMinutes || 30) * 60 * 1000;
+    const snapshotStartMs = Date.parse(snapshot?.start);
+    const refreshStartMs = dateWindowStartMs(startDate);
+    const refreshEndMs = dateWindowStartMs(endDate);
+    if (!view || !intervalMs || ![snapshotStartMs, refreshStartMs, refreshEndMs].every(Number.isFinite)) {
+      return [snapshot];
+    }
+
+    const snapshotEndMs = snapshotStartMs + view.length * intervalMs;
+    if (snapshotEndMs <= refreshStartMs || snapshotStartMs >= refreshEndMs) return [snapshot];
+
+    const pieces = [];
+    const pushPiece = (startIndex, endIndex) => {
+      if (endIndex <= startIndex) return;
+      pieces.push({
+        ...snapshot,
+        start: new Date(snapshotStartMs + startIndex * intervalMs).toISOString(),
+        view: view.slice(startIndex, endIndex)
+      });
+    };
+    const overlapStartIndex = Math.max(0, Math.floor((refreshStartMs - snapshotStartMs) / intervalMs));
+    const overlapEndIndex = Math.min(view.length, Math.ceil((refreshEndMs - snapshotStartMs) / intervalMs));
+    pushPiece(0, overlapStartIndex);
+    pushPiece(overlapEndIndex, view.length);
+    return pieces;
+  }
+
+  function eventsWithDetailedFallback(availability, directEvents) {
+    const detailedEmails = new Set(directEvents.map(event => normalizeEmail(event.email)).filter(Boolean));
+    return [
+      ...directEvents,
+      ...availability
+        .flatMap(expandGraphAvailability)
+        .filter(event => !detailedEmails.has(normalizeEmail(event.email)))
+    ];
   }
 
   function overlapMinutes(start, end, eventStart, eventEnd) {
@@ -762,8 +1512,8 @@
     return resolved;
   }
 
-  function dayStats(events, dateValue) {
-    const windowConfig = workdayWindow(dateValue);
+  function dayStats(events, dateValue, timeZone = getDefaultDrawerTimeZone()) {
+    const windowConfig = workdayWindow(dateValue, timeZone);
     const totals = { pto: 0, hard: 0, soft: 0, review: 0, open: 0, busy: 0, workdayMinutes: WORKDAY_MINUTES };
     events.forEach(event => {
       const dates = eventDates(event);
@@ -792,14 +1542,13 @@
     return Boolean(dates && overlapMinutes(start, end, dates.start, dates.end) > 0);
   }
 
-  function countCleanBlocks(events, startDate, days, durationMinutes) {
+  function countCleanBlocks(events, startDate, days, durationMinutes, timeZone = getDefaultDrawerTimeZone()) {
     let count = 0;
     for (let index = 0; index < days; index += 1) {
       const dateValue = addDaysIso(startDate, index);
       if (isWeekend(dateValue)) continue;
-      const [year, month, day] = dateValue.split("-").map(Number);
       for (let startMinutes = WORKDAY_START_MINUTES; startMinutes <= WORKDAY_END_MINUTES - durationMinutes; startMinutes += 30) {
-        const start = new Date(year, month - 1, day, 0, startMinutes, 0, 0);
+        const start = zonedDateTime(dateValue, startMinutes, timeZone);
         const end = new Date(start.getTime() + durationMinutes * 60000);
         if (!events.some(event => eventOverlapsRange(event, start, end))) count += 1;
       }
@@ -807,12 +1556,12 @@
     return count;
   }
 
-  function getCalendarSignal(person, events, startDate) {
+  function getCalendarSignal(person, events, startDate, timeZone = getDefaultDrawerTimeZone()) {
     const isAmo = /amo/i.test(person.vertical || person.legacyOrg || "");
     const primaryDuration = isAmo ? 180 : 240;
     const secondaryDuration = isAmo ? 120 : 180;
-    const primaryBlocks = countCleanBlocks(events, startDate, 14, primaryDuration);
-    const secondaryBlocks = countCleanBlocks(events, startDate, 14, secondaryDuration);
+    const primaryBlocks = countCleanBlocks(events, startDate, 14, primaryDuration, timeZone);
+    const secondaryBlocks = countCleanBlocks(events, startDate, 14, secondaryDuration, timeZone);
     let level = "red";
     let label = "Red";
     if (primaryBlocks >= 5) {
@@ -877,8 +1626,8 @@
     return `${minutes} min`;
   }
 
-  function formatTimeRange(start, end) {
-    return `${formatTime(start)} - ${formatTime(end)}`;
+  function formatTimeRange(start, end, timeZone = getDefaultDrawerTimeZone()) {
+    return `${formatTime(start, timeZone)} - ${formatTime(end, timeZone)}`;
   }
 
   function populateDrawerStartOptions(select) {
@@ -891,40 +1640,79 @@
     }
   }
 
+  function ensureSelectOption(select, value, label = value) {
+    if (!select || !value) return;
+    if ([...select.options].some(option => option.value === value)) return;
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label || value;
+    select.appendChild(option);
+  }
+
+  function populateDrawerTimeZoneOptions(select) {
+    if (!select || select.options.length) return;
+    DRAWER_TIME_ZONES.forEach(([value, label]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      select.appendChild(option);
+    });
+  }
+
+  function getDefaultDrawerTimeZone(people = []) {
+    const dashboardZone = document.getElementById("planningZone")?.value;
+    if (dashboardZone) return normalizeTimeZoneValue(dashboardZone);
+    const zones = uniquePeople(people)
+      .map(person => person?.timeZone ? normalizeTimeZoneValue(person.timeZone, "") : "")
+      .filter(Boolean);
+    const uniqueZones = [...new Set(zones)];
+    if (uniqueZones.length === 1) return uniqueZones[0];
+    if (uniqueZones.length && people.length === 1) return uniqueZones[0];
+    return normalizeTimeZoneValue(getBrowserTimeZone());
+  }
+
   function getDrawerFilters(root = document.getElementById(DRAWER_ID)) {
     const durationValues = [30, 45, 60, 90, 120, 180];
     const bufferValues = [0, 15, 30, 45, 60, 90];
     const dateInput = root?.querySelector("[data-scid-filter-date]");
+    const zoneSelect = root?.querySelector("[data-scid-filter-zone]");
     const startSelect = root?.querySelector("[data-scid-filter-start]");
     const durationSelect = root?.querySelector("[data-scid-filter-duration]");
     const bufferSelect = root?.querySelector("[data-scid-filter-buffer]");
     const selectedDate = isIsoDate(dateInput?.value) ? dateInput.value : getSelectedScrDate();
+    const timeZone = normalizeTimeZoneValue(zoneSelect?.value || getDefaultDrawerTimeZone(root?.__scidPeople || []));
     return {
       date: selectedDate,
+      timeZone,
       startMinutes: clampDrawerNumber(startSelect?.value, DEFAULT_DRAWER_START_MINUTES),
       durationMinutes: clampDrawerNumber(durationSelect?.value, DEFAULT_DRAWER_DURATION_MINUTES, durationValues),
       bufferMinutes: clampDrawerNumber(bufferSelect?.value, DEFAULT_DRAWER_BUFFER_MINUTES, bufferValues)
     };
   }
 
-  function setDrawerControlDefaults(root, selectedDate = getSelectedScrDate()) {
+  function setDrawerControlDefaults(root, selectedDate = getSelectedScrDate(), people = []) {
     const dateInput = root?.querySelector("[data-scid-filter-date]");
+    const zoneSelect = root?.querySelector("[data-scid-filter-zone]");
     const startSelect = root?.querySelector("[data-scid-filter-start]");
     const durationSelect = root?.querySelector("[data-scid-filter-duration]");
     const bufferSelect = root?.querySelector("[data-scid-filter-buffer]");
+    const dashboardZone = document.getElementById("planningZone")?.value;
     const dashboardStart = document.getElementById("meetingStart")?.value;
     const dashboardDuration = document.getElementById("meetingDuration")?.value;
     const dashboardBuffer = document.getElementById("bufferMinutes")?.value;
+    const defaultZone = normalizeTimeZoneValue(dashboardZone || getDefaultDrawerTimeZone(people));
+    populateDrawerTimeZoneOptions(zoneSelect);
     populateDrawerStartOptions(startSelect);
     if (dateInput) dateInput.value = isIsoDate(selectedDate) ? selectedDate : getSelectedScrDate();
+    ensureSelectOption(zoneSelect, defaultZone, getZoneLabel(defaultZone));
+    if (zoneSelect) zoneSelect.value = defaultZone;
     if (startSelect) startSelect.value = String(clampDrawerNumber(dashboardStart, DEFAULT_DRAWER_START_MINUTES));
     if (durationSelect) durationSelect.value = String(clampDrawerNumber(dashboardDuration, DEFAULT_DRAWER_DURATION_MINUTES, [30, 45, 60, 90, 120, 180]));
     if (bufferSelect) bufferSelect.value = String(clampDrawerNumber(dashboardBuffer, DEFAULT_DRAWER_BUFFER_MINUTES, [0, 15, 30, 45, 60, 90]));
   }
 
   function drawerMeetingWindow(filters) {
-    const [year, month, day] = String(filters.date).split("-").map(Number);
-    const meetingStart = new Date(year, month - 1, day, 0, filters.startMinutes, 0, 0);
+    const meetingStart = zonedDateTime(filters.date, filters.startMinutes, filters.timeZone);
     const meetingEnd = new Date(meetingStart.getTime() + filters.durationMinutes * 60000);
     const protectedStart = new Date(meetingStart.getTime() - filters.bufferMinutes * 60000);
     const protectedEnd = new Date(meetingEnd.getTime() + filters.bufferMinutes * 60000);
@@ -995,12 +1783,17 @@
       review,
       level,
       label,
-      note: `${formatTimeRange(windowConfig.meetingStart, windowConfig.meetingEnd)}; ${filters.bufferMinutes} min buffer before and after.`
+      note: `${formatTimeRange(windowConfig.meetingStart, windowConfig.meetingEnd, filters.timeZone)} ${getZoneLabel(filters.timeZone)}; ${filters.bufferMinutes} min buffer before and after.`
     };
   }
 
-  function formatTime(date) {
-    return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  function formatTime(date, timeZone = getDefaultDrawerTimeZone()) {
+    timeZone = normalizeTimeZoneValue(timeZone, "America/New_York");
+    return getCachedFormatter(`time|${timeZone}`, {
+      timeZone,
+      hour: "numeric",
+      minute: "2-digit"
+    }).format(date);
   }
 
   function renderLoadStats(loadSummary) {
@@ -1060,7 +1853,7 @@
     `;
   }
 
-  function renderMiniStrip(person, events, startDate) {
+  function renderMiniStrip(person, events, startDate, timeZone = getDefaultDrawerTimeZone()) {
     const days = Array.from({ length: 21 }, (_, index) => addDaysIso(startDate, index));
     return `
       <div class="scid-mini-strip" aria-label="21-day calendar strip">
@@ -1068,7 +1861,7 @@
           if (isWeekend(dateValue)) {
             return `<button class="scid-mini-day is-weekend" type="button" data-scid-date="${dateValue}" title="${weekdayLabel(dateValue)} ${formatShortDate(dateValue)}: weekend"><span></span><em>${weekdayLabel(dateValue)}<b>${formatShortDate(dateValue)}</b></em></button>`;
           }
-          const stats = dayStats(events, dateValue);
+          const stats = dayStats(events, dateValue, timeZone);
           const busyHeight = Math.min(100, Math.round(((stats.hard + stats.soft + stats.review) / WORKDAY_MINUTES) * 100));
           const ptoHeight = Math.min(100, Math.round((stats.pto / WORKDAY_MINUTES) * 100));
           const openHeight = Math.max(0, 100 - busyHeight - ptoHeight);
@@ -1089,16 +1882,16 @@
     `;
   }
 
-  function eventsForDay(events, dateValue) {
-    const windowConfig = fullDayWindow(dateValue);
+  function eventsForDay(events, dateValue, timeZone = getDefaultDrawerTimeZone()) {
+    const windowConfig = fullDayWindow(dateValue, timeZone);
     return events.filter(event => {
       const dates = eventDates(event);
       return dates && overlapMinutes(windowConfig.start, windowConfig.end, dates.start, dates.end) > 0;
     }).sort((a, b) => parseDate(a.start) - parseDate(b.start));
   }
 
-  function renderMeetings(events, dateValue) {
-    const dayRows = eventsForDay(events, dateValue);
+  function renderMeetings(events, dateValue, timeZone = getDefaultDrawerTimeZone()) {
+    const dayRows = eventsForDay(events, dateValue, timeZone);
     const rows = dayRows.some(event => !isFreeBusyOnlyEvent(event))
       ? dayRows.filter(event => !isFreeBusyOnlyEvent(event))
       : dayRows;
@@ -1121,7 +1914,7 @@
           const dates = eventDates(event);
           return `
             <div class="scid-meeting scid-meeting-${eventSeverity(event)}">
-              <strong>${formatTime(dates.start)} - ${formatTime(dates.end)} <span>${escapeHtml(event.status || "busy")}</span></strong>
+              <strong>${formatTime(dates.start, timeZone)} - ${formatTime(dates.end, timeZone)} <span>${escapeHtml(event.status || "busy")}</span></strong>
               <p>${escapeHtml(event.subject || "Calendar item")}</p>
             </div>
           `;
@@ -1150,12 +1943,12 @@
     const resolvedPerson = resolvePersonFromCaches(person);
     const events = getPersonEvents(resolvedPerson, cache);
     const calendarLoaded = isCalendarLoaded(resolvedPerson, cache);
-    const selectedStats = calendarLoaded ? dayStats(events, selectedDate) : { open: 0, pto: 0, hard: 0, soft: 0, review: 0, busy: 0, workdayMinutes: WORKDAY_MINUTES };
+    const selectedStats = calendarLoaded ? dayStats(events, selectedDate, filters.timeZone) : { open: 0, pto: 0, hard: 0, soft: 0, review: 0, busy: 0, workdayMinutes: WORKDAY_MINUTES };
     const meetingAnalysis = calendarLoaded
       ? analyzeDrawerMeetingWindow(events, filters)
       : { level: "unknown", label: "Unknown", note: "Calendar cache has not been captured for this SC." };
     const calendarSignal = calendarLoaded
-      ? getCalendarSignal(resolvedPerson, events, selectedDate)
+      ? getCalendarSignal(resolvedPerson, events, selectedDate, filters.timeZone)
       : { level: "unknown", label: "Unknown", note: "Calendar cache has not been captured for this SC.", primaryBlocks: 0, secondaryBlocks: 0, primaryHours: 0, secondaryHours: 0, travel: false };
     const load = findLoadForPerson(resolvedPerson);
     const workload = summarizeLoad(load, resolvedPerson.vertical || resolvedPerson.legacyOrg);
@@ -1203,9 +1996,9 @@
 
         <section class="scid-calendar">
           <p class="scid-section-label">Calendar Detail</p>
-          <strong class="scid-date-open">${calendarLoaded ? `${(selectedStats.open / 60).toFixed(1)}h open on ${formatLongDate(selectedDate)}` : "Calendar cache unavailable"}</strong>
+          <strong class="scid-date-open">${calendarLoaded ? `${(selectedStats.open / 60).toFixed(1)}h open on ${formatLongDate(selectedDate)} (${escapeHtml(getZoneLabel(filters.timeZone))})` : "Calendar cache unavailable"}</strong>
           ${renderCalendarLoadBar(selectedStats)}
-          ${calendarLoaded ? renderMiniStrip(resolvedPerson, events, selectedDate) : ""}
+          ${calendarLoaded ? renderMiniStrip(resolvedPerson, events, selectedDate, filters.timeZone) : ""}
         </section>
       </div>
       <div class="scid-footer">
@@ -1224,6 +2017,7 @@
     if (person.name) url.searchParams.set("consultant", person.name);
     if (person.manager) url.searchParams.set("manager", person.manager);
     if (filters?.date) url.searchParams.set("date", filters.date);
+    if (filters?.timeZone) url.searchParams.set("zone", filters.timeZone);
     if (filters?.startMinutes != null) url.searchParams.set("start", String(filters.startMinutes));
     if (filters?.durationMinutes != null) url.searchParams.set("duration", String(filters.durationMinutes));
     if (filters?.bufferMinutes != null) url.searchParams.set("buffer", String(filters.bufferMinutes));
@@ -1239,6 +2033,7 @@
     }
     if (emails.length) url.searchParams.set("emails", emails.join(","));
     if (filters?.date) url.searchParams.set("date", filters.date);
+    if (filters?.timeZone) url.searchParams.set("zone", filters.timeZone);
     if (filters?.startMinutes != null) url.searchParams.set("start", String(filters.startMinutes));
     if (filters?.durationMinutes != null) url.searchParams.set("duration", String(filters.durationMinutes));
     if (filters?.bufferMinutes != null) url.searchParams.set("buffer", String(filters.bufferMinutes));
@@ -1260,8 +2055,13 @@
       .scid-filter-bar label{display:flex;flex-direction:column;gap:3px;color:#cbd7df;font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
       .scid-filter-bar input,.scid-filter-bar select{height:31px;border:1px solid rgba(226,192,107,.38);border-radius:7px;background:#fff;color:#13212c;font:700 12px/1 Arial,Helvetica,sans-serif;padding:4px 8px;min-width:96px}
       .scid-filter-bar input[type="date"]{min-width:132px}
+      .scid-filter-bar [data-scid-filter-zone]{min-width:135px}
       .scid-header-actions{display:flex;align-items:center;gap:8px}
       .scid-header button,.scid-footer button{border:0;border-radius:7px;padding:8px 11px;font-weight:800;cursor:pointer}
+      .scid-refresh-token{background:#e2c06b;color:#13212c}
+      .scid-refresh-token:disabled{opacity:.72;cursor:wait}
+      .scid-refresh-status{max-width:280px;color:#d8e5ec;font-size:12px;line-height:1.25}
+      .scid-refresh-status[data-tone="ok"]{color:#bdf2ce}.scid-refresh-status[data-tone="error"]{color:#ffd0d0}
       .scid-close{background:#c74634;color:#fff;font-size:16px;line-height:1}
       .scid-body{padding:16px;overflow:auto}
       .scid-loading{border:1px solid #bfd0dc;background:#fff;border-radius:9px;padding:18px;font-weight:800;color:#31475a}
@@ -1309,6 +2109,7 @@
           </div>
           <div class="scid-filter-bar" data-scid-filters aria-label="Calendar drawer filters">
             <label>Date <input type="date" data-scid-filter data-scid-filter-date></label>
+            <label>Time Zone <select data-scid-filter data-scid-filter-zone></select></label>
             <label>Start <select data-scid-filter data-scid-filter-start></select></label>
             <label>Duration
               <select data-scid-filter data-scid-filter-duration>
@@ -1332,6 +2133,8 @@
             </label>
           </div>
           <div class="scid-header-actions">
+            <button type="button" class="scid-refresh-token" data-scid-refresh-token>Refresh Calendars</button>
+            <span class="scid-refresh-status" data-scid-refresh-status></span>
             <button type="button" class="scid-close" data-scid-close aria-label="Close">X</button>
           </div>
         </header>
@@ -1356,6 +2159,13 @@
         openUrl(fullButton.dataset.scidFullDashboard);
         return;
       }
+      const refreshButton = event.target.closest("[data-scid-refresh-token]");
+      if (refreshButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        refreshDrawerCalendars(root);
+        return;
+      }
       const dayButton = event.target.closest("[data-scid-date]");
       if (dayButton) {
         const card = dayButton.closest(".scid-card");
@@ -1371,7 +2181,7 @@
         }
         const email = normalizeEmail(card?.dataset.scidEmail);
         const events = root.__scidEventsByEmail?.get(email) || [];
-        panel.innerHTML = renderMeetings(events, dayButton.dataset.scidDate);
+        panel.innerHTML = renderMeetings(events, dayButton.dataset.scidDate, getDrawerFilters(root).timeZone);
         panel.dataset.activeDate = dayButton.dataset.scidDate;
         panel.hidden = false;
         dayButton.classList.add("is-selected");
@@ -1477,6 +2287,10 @@
     const body = root?.querySelector("[data-scid-body]");
     if (!root || !body || !people.length) return;
     const filters = getDrawerFilters(root);
+    const subtitle = root.querySelector("[data-scid-subtitle]");
+    if (subtitle) {
+      subtitle.textContent = `${people.length === 1 ? "Rendering one SC" : `Rendering ${people.length} selected SCs`} in ${getZoneLabel(filters.timeZone)}.`;
+    }
     const cache = getCalendarCache();
     const eventsByEmail = new Map();
     people.forEach(person => {
@@ -1610,7 +2424,7 @@
       : "Rendering selected SCs from the same cached calendar/workload data.";
     body.innerHTML = `<div class="scid-loading">Loading cached SC calendar and workload...</div>`;
     root.__scidPeople = people;
-    setDrawerControlDefaults(root, getSelectedScrDate());
+    setDrawerControlDefaults(root, getSelectedScrDate(), people);
     root.hidden = false;
     scheduleDrawerRender(root);
   }
@@ -1702,6 +2516,10 @@
       getStaffingLoadReport,
       resolvePersonFromCaches,
       collectSelectedPeople,
+      captureGraphTokenBridge,
+      refreshOpenDrawerCalendars() {
+        return refreshDrawerCalendars();
+      },
       openSelected() {
         openDrawer(collectSelectedPeople());
       },
@@ -1714,6 +2532,9 @@
   }
 
   exposeDiagnostics();
-  if (isDashboardLikePage()) installDashboardCapture();
+  if (isDashboardLikePage()) {
+    installGraphTokenBridgeCapture();
+    installDashboardCapture();
+  }
   if (isNetSuiteScrPage()) installNetSuiteClickInterceptor();
 })();
