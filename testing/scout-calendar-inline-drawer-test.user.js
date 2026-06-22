@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT Inline Calendar Drawer TEST
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0-test.9
+// @version      27.0.0-test.10
 // @description  Test-only lazy inline SC calendar/workload drawer for NetSuite SCOUT cards.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -24,7 +24,7 @@
 (function () {
   "use strict";
 
-  const VERSION = "27.0.0-test.9";
+  const VERSION = "27.0.0-test.10";
   const CALENDAR_CACHE_KEY = "scout-inline-calendar-drawer-calendar-cache-v1";
   const LOCAL_GRAPH_CACHE_KEY = "sc-staffing-dashboard-local-graph-cache-v1";
   const LEGACY_CALENDAR_CACHE_KEY = "sc-staffing-dashboard-calendar-cache-direct-connector-202605062230";
@@ -32,6 +32,9 @@
   const DASHBOARD_URL = "https://mcanderson14.github.io/ns_scm_tools_fy27/testing/staffing-dashboard.html";
   const CALENDAR_REFRESH_URL = "https://mcanderson14.github.io/ns_scm_tools_fy27/testing/calendar-refresh.html";
   const CALENDAR_STALE_AFTER_MS = 24 * 60 * 60 * 1000;
+  const DEFAULT_DRAWER_START_MINUTES = 13 * 60;
+  const DEFAULT_DRAWER_DURATION_MINUTES = 60;
+  const DEFAULT_DRAWER_BUFFER_MINUTES = 60;
   const WORKDAY_START_MINUTES = 8 * 60;
   const WORKDAY_END_MINUTES = 17 * 60;
   const WORKDAY_MINUTES = WORKDAY_END_MINUTES - WORKDAY_START_MINUTES;
@@ -834,6 +837,7 @@
 
   function getSelectedScrDate() {
     const ids = [
+      "meetingDate",
       "custrecord_screq_date_sc_needed",
       "custrecord_screq_date_needed",
       "custrecord_screq_meeting_date",
@@ -846,6 +850,153 @@
       if (parsed) return isoDate(parsed);
     }
     return isoDate(new Date());
+  }
+
+  function isIsoDate(value) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
+  }
+
+  function clampDrawerNumber(value, fallback, allowedValues = null) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return fallback;
+    if (allowedValues && !allowedValues.includes(number)) return fallback;
+    return number;
+  }
+
+  function minutesToLabel(minutes) {
+    const hour24 = Math.floor(minutes / 60);
+    const minute = minutes % 60;
+    const suffix = hour24 >= 12 ? "PM" : "AM";
+    const hour12 = hour24 % 12 || 12;
+    return `${hour12}:${String(minute).padStart(2, "0")} ${suffix}`;
+  }
+
+  function durationToLabel(minutes) {
+    if (minutes < 60) return `${minutes} min`;
+    if (minutes % 60 === 0) return `${minutes / 60} hour${minutes === 60 ? "" : "s"}`;
+    return `${minutes} min`;
+  }
+
+  function formatTimeRange(start, end) {
+    return `${formatTime(start)} - ${formatTime(end)}`;
+  }
+
+  function populateDrawerStartOptions(select) {
+    if (!select || select.options.length) return;
+    for (let minutes = 7 * 60; minutes <= 18 * 60; minutes += 15) {
+      const option = document.createElement("option");
+      option.value = String(minutes);
+      option.textContent = minutesToLabel(minutes);
+      select.appendChild(option);
+    }
+  }
+
+  function getDrawerFilters(root = document.getElementById(DRAWER_ID)) {
+    const durationValues = [30, 45, 60, 90, 120, 180];
+    const bufferValues = [0, 15, 30, 45, 60, 90];
+    const dateInput = root?.querySelector("[data-scid-filter-date]");
+    const startSelect = root?.querySelector("[data-scid-filter-start]");
+    const durationSelect = root?.querySelector("[data-scid-filter-duration]");
+    const bufferSelect = root?.querySelector("[data-scid-filter-buffer]");
+    const selectedDate = isIsoDate(dateInput?.value) ? dateInput.value : getSelectedScrDate();
+    return {
+      date: selectedDate,
+      startMinutes: clampDrawerNumber(startSelect?.value, DEFAULT_DRAWER_START_MINUTES),
+      durationMinutes: clampDrawerNumber(durationSelect?.value, DEFAULT_DRAWER_DURATION_MINUTES, durationValues),
+      bufferMinutes: clampDrawerNumber(bufferSelect?.value, DEFAULT_DRAWER_BUFFER_MINUTES, bufferValues)
+    };
+  }
+
+  function setDrawerControlDefaults(root, selectedDate = getSelectedScrDate()) {
+    const dateInput = root?.querySelector("[data-scid-filter-date]");
+    const startSelect = root?.querySelector("[data-scid-filter-start]");
+    const durationSelect = root?.querySelector("[data-scid-filter-duration]");
+    const bufferSelect = root?.querySelector("[data-scid-filter-buffer]");
+    const dashboardStart = document.getElementById("meetingStart")?.value;
+    const dashboardDuration = document.getElementById("meetingDuration")?.value;
+    const dashboardBuffer = document.getElementById("bufferMinutes")?.value;
+    populateDrawerStartOptions(startSelect);
+    if (dateInput) dateInput.value = isIsoDate(selectedDate) ? selectedDate : getSelectedScrDate();
+    if (startSelect) startSelect.value = String(clampDrawerNumber(dashboardStart, DEFAULT_DRAWER_START_MINUTES));
+    if (durationSelect) durationSelect.value = String(clampDrawerNumber(dashboardDuration, DEFAULT_DRAWER_DURATION_MINUTES, [30, 45, 60, 90, 120, 180]));
+    if (bufferSelect) bufferSelect.value = String(clampDrawerNumber(dashboardBuffer, DEFAULT_DRAWER_BUFFER_MINUTES, [0, 15, 30, 45, 60, 90]));
+  }
+
+  function drawerMeetingWindow(filters) {
+    const [year, month, day] = String(filters.date).split("-").map(Number);
+    const meetingStart = new Date(year, month - 1, day, 0, filters.startMinutes, 0, 0);
+    const meetingEnd = new Date(meetingStart.getTime() + filters.durationMinutes * 60000);
+    const protectedStart = new Date(meetingStart.getTime() - filters.bufferMinutes * 60000);
+    const protectedEnd = new Date(meetingEnd.getTime() + filters.bufferMinutes * 60000);
+    return {
+      ...filters,
+      meetingStart,
+      meetingEnd,
+      protectedStart,
+      protectedEnd
+    };
+  }
+
+  function analyzeDrawerMeetingWindow(events, filters) {
+    const windowConfig = drawerMeetingWindow(filters);
+    const conflicts = events
+      .filter(event => !isFreeEvent(event))
+      .map(event => {
+        const dates = eventDates(event);
+        if (!dates) return null;
+        const protectedOverlap = overlapMinutes(windowConfig.protectedStart, windowConfig.protectedEnd, dates.start, dates.end);
+        if (!protectedOverlap) return null;
+        const meetingOverlap = overlapMinutes(windowConfig.meetingStart, windowConfig.meetingEnd, dates.start, dates.end);
+        return {
+          ...event,
+          dates,
+          severity: eventSeverity(event),
+          protectedOverlap,
+          meetingOverlap
+        };
+      })
+      .filter(Boolean);
+
+    const hardMeeting = conflicts
+      .filter(item => ["hard", "pto"].includes(item.severity))
+      .reduce((sum, item) => sum + item.meetingOverlap, 0);
+    const hardBuffer = conflicts
+      .filter(item => ["hard", "pto"].includes(item.severity) && item.meetingOverlap === 0)
+      .reduce((sum, item) => sum + item.protectedOverlap, 0);
+    const soft = conflicts
+      .filter(item => item.severity === "soft")
+      .reduce((sum, item) => sum + item.protectedOverlap, 0);
+    const review = conflicts
+      .filter(item => item.severity === "review")
+      .reduce((sum, item) => sum + item.protectedOverlap, 0);
+
+    let level = "green";
+    let label = "Available";
+    if (hardMeeting > 0) {
+      level = "red";
+      label = "Unavailable";
+    } else if (hardBuffer > 0) {
+      level = "yellow";
+      label = "Buffer risk";
+    } else if (soft > 0) {
+      level = "yellow";
+      label = "Soft conflict";
+    } else if (review > 0) {
+      level = "yellow";
+      label = "Needs review";
+    }
+
+    return {
+      ...windowConfig,
+      conflicts,
+      hardMeeting,
+      hardBuffer,
+      soft,
+      review,
+      level,
+      label,
+      note: `${formatTimeRange(windowConfig.meetingStart, windowConfig.meetingEnd)}; ${filters.bufferMinutes} min buffer before and after.`
+    };
   }
 
   function formatTime(date) {
@@ -993,13 +1144,16 @@
     return /^free\/busy:/i.test(String(event?.subject || "").trim());
   }
 
-  function renderDrawerContent(person) {
-    const selectedDate = getSelectedScrDate();
+  function renderDrawerContent(person, filters = getDrawerFilters()) {
+    const selectedDate = filters.date;
     const cache = getCalendarCache();
     const resolvedPerson = resolvePersonFromCaches(person);
     const events = getPersonEvents(resolvedPerson, cache);
     const calendarLoaded = isCalendarLoaded(resolvedPerson, cache);
     const selectedStats = calendarLoaded ? dayStats(events, selectedDate) : { open: 0, pto: 0, hard: 0, soft: 0, review: 0, busy: 0, workdayMinutes: WORKDAY_MINUTES };
+    const meetingAnalysis = calendarLoaded
+      ? analyzeDrawerMeetingWindow(events, filters)
+      : { level: "unknown", label: "Unknown", note: "Calendar cache has not been captured for this SC." };
     const calendarSignal = calendarLoaded
       ? getCalendarSignal(resolvedPerson, events, selectedDate)
       : { level: "unknown", label: "Unknown", note: "Calendar cache has not been captured for this SC.", primaryBlocks: 0, secondaryBlocks: 0, primaryHours: 0, secondaryHours: 0, travel: false };
@@ -1007,7 +1161,7 @@
     const workload = summarizeLoad(load, resolvedPerson.vertical || resolvedPerson.legacyOrg);
     const recommendation = scoreFromSignals(calendarSignal, workload);
     const badgeClass = /amo/i.test(resolvedPerson.vertical || resolvedPerson.legacyOrg) ? "amo" : "direct";
-    const fullUrl = buildFullDashboardUrl(resolvedPerson, selectedDate);
+    const fullUrl = buildFullDashboardUrl(resolvedPerson, filters);
     const staffKey = resolvedPerson.sourceKey || personIdentityKey(resolvedPerson);
 
     return `
@@ -1027,7 +1181,7 @@
           </div>
 
           <div class="scid-signal-grid">
-            <div><span>Proposed Meeting Time</span><strong>${signalDot(calendarLoaded && selectedStats.hard + selectedStats.pto > 0 ? "red" : selectedStats.soft + selectedStats.review > 0 ? "yellow" : "green")}${calendarLoaded ? (selectedStats.hard + selectedStats.pto > 0 ? "Unavailable" : selectedStats.soft + selectedStats.review > 0 ? "Soft conflict" : "Available") : "Unknown"}</strong><p>Uses SC date needed from the SCR.</p></div>
+            <div><span>Proposed Meeting Time</span><strong>${signalDot(meetingAnalysis.level)}${escapeHtml(meetingAnalysis.label)}</strong><p>${calendarLoaded ? escapeHtml(meetingAnalysis.note) : "Calendar cache has not been captured for this SC."}</p></div>
             <div><span>Calendar Availability</span><strong>${signalDot(calendarSignal.level)}${escapeHtml(calendarSignal.label)}</strong><p>${calendarLoaded ? escapeHtml(calendarSignal.note) : "Open dashboard once to seed cache."}</p></div>
             <div><span>Workload</span><strong>${signalDot(workload?.level || "unknown")}${escapeHtml(workload?.label || "Unknown")}</strong><p>${escapeHtml(workload?.note || "No workload cache row matched.")}</p></div>
             <div><span>Staffability Score</span><strong>${recommendation.score}/100 ${escapeHtml(recommendation.label)}</strong><p>Higher score is easier to staff.</p></div>
@@ -1064,24 +1218,30 @@
     `;
   }
 
-  function buildFullDashboardUrl(person, selectedDate) {
+  function buildFullDashboardUrl(person, filters = getDrawerFilters()) {
     const url = new URL(DASHBOARD_URL);
     if (person.email) url.searchParams.set("email", person.email);
     if (person.name) url.searchParams.set("consultant", person.name);
     if (person.manager) url.searchParams.set("manager", person.manager);
-    if (selectedDate) url.searchParams.set("date", selectedDate);
+    if (filters?.date) url.searchParams.set("date", filters.date);
+    if (filters?.startMinutes != null) url.searchParams.set("start", String(filters.startMinutes));
+    if (filters?.durationMinutes != null) url.searchParams.set("duration", String(filters.durationMinutes));
+    if (filters?.bufferMinutes != null) url.searchParams.set("buffer", String(filters.bufferMinutes));
     return url.href;
   }
 
-  function buildMultiDashboardUrl(people, selectedDate = getSelectedScrDate()) {
+  function buildMultiDashboardUrl(people, filters = getDrawerFilters()) {
     const url = new URL(DASHBOARD_URL);
     const emails = uniquePeople(people).map(person => normalizeEmail(person.email)).filter(Boolean);
     if (emails.length === 1) {
       const person = uniquePeople(people)[0];
-      return buildFullDashboardUrl(person, selectedDate);
+      return buildFullDashboardUrl(person, filters);
     }
     if (emails.length) url.searchParams.set("emails", emails.join(","));
-    if (selectedDate) url.searchParams.set("date", selectedDate);
+    if (filters?.date) url.searchParams.set("date", filters.date);
+    if (filters?.startMinutes != null) url.searchParams.set("start", String(filters.startMinutes));
+    if (filters?.durationMinutes != null) url.searchParams.set("duration", String(filters.durationMinutes));
+    if (filters?.bufferMinutes != null) url.searchParams.set("buffer", String(filters.bufferMinutes));
     return url.href;
   }
 
@@ -1093,9 +1253,13 @@
       .scid-backdrop{position:fixed;inset:0;background:rgba(19,33,44,.42);z-index:2147483000;display:flex;justify-content:flex-end;align-items:stretch}
       .scid-backdrop[hidden]{display:none}
       .scid-drawer{width:min(1240px,calc(100vw - 44px));background:#f7f9fb;color:#182434;box-shadow:-16px 0 38px rgba(0,0,0,.28);display:flex;flex-direction:column;font-family:Arial,Helvetica,sans-serif}
-      .scid-header{display:flex;align-items:center;gap:12px;justify-content:space-between;background:#13212c;color:#fff;padding:14px 18px;border-bottom:4px solid #e2c06b}
+      .scid-header{display:flex;align-items:center;gap:14px;justify-content:space-between;background:#13212c;color:#fff;padding:14px 18px;border-bottom:4px solid #e2c06b;flex-wrap:wrap}
       .scid-header h2{margin:0;font-size:18px;line-height:1.15}
       .scid-header p{margin:3px 0 0;color:#cbd7df;font-size:12px}
+      .scid-filter-bar{display:flex;align-items:flex-end;gap:8px;flex:1 1 560px;justify-content:flex-end}
+      .scid-filter-bar label{display:flex;flex-direction:column;gap:3px;color:#cbd7df;font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
+      .scid-filter-bar input,.scid-filter-bar select{height:31px;border:1px solid rgba(226,192,107,.38);border-radius:7px;background:#fff;color:#13212c;font:700 12px/1 Arial,Helvetica,sans-serif;padding:4px 8px;min-width:96px}
+      .scid-filter-bar input[type="date"]{min-width:132px}
       .scid-header-actions{display:flex;align-items:center;gap:8px}
       .scid-header button,.scid-footer button{border:0;border-radius:7px;padding:8px 11px;font-weight:800;cursor:pointer}
       .scid-close{background:#c74634;color:#fff;font-size:16px;line-height:1}
@@ -1142,6 +1306,30 @@
           <div>
             <h2 id="scid-title">SCOUT Calendar Drawer</h2>
             <p data-scid-subtitle>Lazy test view. Nothing loads until you click View Cal.</p>
+          </div>
+          <div class="scid-filter-bar" data-scid-filters aria-label="Calendar drawer filters">
+            <label>Date <input type="date" data-scid-filter data-scid-filter-date></label>
+            <label>Start <select data-scid-filter data-scid-filter-start></select></label>
+            <label>Duration
+              <select data-scid-filter data-scid-filter-duration>
+                <option value="30">30 min</option>
+                <option value="45">45 min</option>
+                <option value="60">60 min</option>
+                <option value="90">90 min</option>
+                <option value="120">2 hours</option>
+                <option value="180">3 hours</option>
+              </select>
+            </label>
+            <label>Buffer
+              <select data-scid-filter data-scid-filter-buffer>
+                <option value="0">None</option>
+                <option value="15">15 min</option>
+                <option value="30">30 min</option>
+                <option value="45">45 min</option>
+                <option value="60">60 min</option>
+                <option value="90">90 min</option>
+              </select>
+            </label>
           </div>
           <div class="scid-header-actions">
             <button type="button" class="scid-close" data-scid-close aria-label="Close">X</button>
@@ -1201,6 +1389,12 @@
         return;
       }
     });
+    const handleFilterChange = event => {
+      if (!event.target.closest?.("[data-scid-filter]") || root.hidden) return;
+      scheduleDrawerRender(root);
+    };
+    root.addEventListener("change", handleFilterChange);
+    root.addEventListener("input", handleFilterChange);
     document.addEventListener("keydown", event => {
       if (event.key === "Escape" && !root.hidden) closeDrawer();
     });
@@ -1270,6 +1464,34 @@
   function closeDrawer() {
     const root = document.getElementById(DRAWER_ID);
     if (root) root.hidden = true;
+  }
+
+  function scheduleDrawerRender(root = document.getElementById(DRAWER_ID)) {
+    if (!root || root.hidden) return;
+    window.clearTimeout(root.__scidRenderTimer);
+    root.__scidRenderTimer = window.setTimeout(() => renderDrawerPeople(root), 0);
+  }
+
+  function renderDrawerPeople(root = document.getElementById(DRAWER_ID)) {
+    const people = uniquePeople(root?.__scidPeople || []);
+    const body = root?.querySelector("[data-scid-body]");
+    if (!root || !body || !people.length) return;
+    const filters = getDrawerFilters(root);
+    const cache = getCalendarCache();
+    const eventsByEmail = new Map();
+    people.forEach(person => {
+      eventsByEmail.set(normalizeEmail(person.email), getPersonEvents(person, cache));
+    });
+    root.__scidEventsByEmail = eventsByEmail;
+    body.innerHTML = `
+      ${people.map(person => renderDrawerContent(person, filters)).join("")}
+      ${people.length > 1 ? `
+        <div class="scid-footer">
+          <span>${cache?.capturedAt ? `Calendar cache captured ${new Date(cache.capturedAt).toLocaleString()}` : "Calendar cache not captured yet."}</span>
+          <button type="button" data-scid-full-dashboard="${escapeHtml(buildMultiDashboardUrl(people, filters))}">Open selected in dashboard</button>
+        </div>
+      ` : ""}
+    `;
   }
 
   function openUrl(url) {
@@ -1387,26 +1609,10 @@
       ? "Rendering cached workload and calendar data for one SC."
       : "Rendering selected SCs from the same cached calendar/workload data.";
     body.innerHTML = `<div class="scid-loading">Loading cached SC calendar and workload...</div>`;
+    root.__scidPeople = people;
+    setDrawerControlDefaults(root, getSelectedScrDate());
     root.hidden = false;
-
-    window.setTimeout(() => {
-      const cache = getCalendarCache();
-      const eventsByEmail = new Map();
-      people.forEach(person => {
-        eventsByEmail.set(normalizeEmail(person.email), getPersonEvents(person, cache));
-      });
-      root.__scidPeople = people;
-      root.__scidEventsByEmail = eventsByEmail;
-      body.innerHTML = `
-        ${people.map(person => renderDrawerContent(person)).join("")}
-        ${people.length > 1 ? `
-          <div class="scid-footer">
-            <span>${cache?.capturedAt ? `Calendar cache captured ${new Date(cache.capturedAt).toLocaleString()}` : "Calendar cache not captured yet."}</span>
-            <button type="button" data-scid-full-dashboard="${escapeHtml(buildMultiDashboardUrl(people))}">Open selected in dashboard</button>
-          </div>
-        ` : ""}
-      `;
-    }, 0);
+    scheduleDrawerRender(root);
   }
 
   function personFromElement(element) {
