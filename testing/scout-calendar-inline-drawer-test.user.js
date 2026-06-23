@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT Inline Calendar Drawer TEST
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.0-test.12
+// @version      27.0.0-test.13
 // @description  Test-only lazy inline SC calendar/workload drawer for NetSuite SCOUT cards.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -24,7 +24,7 @@
 (function () {
   "use strict";
 
-  const VERSION = "27.0.0-test.12";
+  const VERSION = "27.0.0-test.13";
   const CALENDAR_CACHE_KEY = "scout-inline-calendar-drawer-calendar-cache-v1";
   const LOCAL_GRAPH_CACHE_KEY = "sc-staffing-dashboard-local-graph-cache-v1";
   const LEGACY_CALENDAR_CACHE_KEY = "sc-staffing-dashboard-calendar-cache-direct-connector-202605062230";
@@ -87,6 +87,30 @@
   const LOAD_EMAIL_ALIASES = ["Email", "Email Address", "SC Email", "Work Email"];
   const LOAD_MANAGER_ALIASES = ["SC MANAGER", "Manager", "Manager Name", "SC Manager"];
   const LOAD_ORG_ALIASES = ["Type", "A/D", "Direct/AMO", "Legacy Org", "Legacy Team"];
+  const LOAD_IN_PROGRESS_ALIASES = [
+    "IN PROGRESS",
+    "In Progress",
+    "IN PROG",
+    "In Prog",
+    "SCRS IN PROGRESS",
+    "SCRs IN PROGRESS",
+    "SCRs In Progress",
+    "SCR IN PROGRESS",
+    "SCR In Progress",
+    "SCRS IN PROG",
+    "SCRs In Prog",
+    "IN PROGRESS SCRS",
+    "In Progress SCRs",
+    "IN PROGRESS SCR",
+    "In Progress SCR",
+    "Current In Progress",
+    "Current IP",
+    "IP SCRs",
+    "IP",
+    "Active SCRs",
+    "Active Requests",
+    "Current Active Load"
+  ];
   const LOAD_SCM_NOTE_ALIASES = [
     "SCM Notes",
     "SCM Note",
@@ -223,10 +247,20 @@
     return false;
   }
 
-  function readField(record, aliases) {
+  function findFieldKey(record, aliases) {
     if (!record || typeof record !== "object") return "";
-    const wanted = aliases.map(normalizeKey);
-    const key = Object.keys(record).find(item => wanted.includes(normalizeKey(item)));
+    const wanted = aliases.map(normalizeKey).filter(Boolean);
+    const keys = Object.keys(record);
+    const exact = keys.find(item => wanted.includes(normalizeKey(item)));
+    if (exact) return exact;
+    return keys.find(item => {
+      const normalizedKey = normalizeKey(item);
+      return wanted.some(alias => normalizedKey === alias || new RegExp(`^${alias}\\d+$`).test(normalizedKey));
+    }) || "";
+  }
+
+  function readField(record, aliases) {
+    const key = findFieldKey(record, aliases);
     return key ? record[key] : "";
   }
 
@@ -264,8 +298,10 @@
 
   function numberFrom(value) {
     if (value == null || value === "") return 0;
-    const parsed = Number(String(value).replace(/,/g, "").trim());
-    return Number.isFinite(parsed) ? parsed : 0;
+    const clean = String(value).replace(/,/g, "").trim();
+    const match = clean.match(/-?\d+(?:\.\d+)?/);
+    const parsed = match ? Number(match[0]) : Number(clean);
+    return Number.isFinite(parsed) ? Math.max(0, Math.round(parsed)) : 0;
   }
 
   function formatNumber(value) {
@@ -908,7 +944,9 @@
 
   function summarizeLoad(load, legacyOrg) {
     if (!load) return null;
-    const inProgress = numberFrom(readField(load, ["IN PROGRESS SCRS", "In Progress SCRs", "In Prog", "SCRs In Progress"]));
+    const inProgressSource = findFieldKey(load, LOAD_IN_PROGRESS_ALIASES);
+    const rawInProgressValue = inProgressSource ? load[inProgressSource] : "";
+    const inProgress = numberFrom(rawInProgressValue);
     const thisMonth = numberFrom(readField(load, ["SCRs THIS MONTH", "This Month", "This Mo"]));
     const nextMonth = numberFrom(readField(load, ["SCRs NEXT MONTH", "Next Month", "Next Mo"]));
     const maxMonth = Math.max(thisMonth, nextMonth);
@@ -937,6 +975,8 @@
       total: numberFrom(readField(load, ["Total SCRs", "Total", "SCRs"])),
       assignedLast10Days: numberFrom(readField(load, ["SCRS ASGND -10 DAYS", "SCRs ASGND -10 DAYS", "Assigned Last 10 Days", "-10 Days"])),
       inProgress,
+      inProgressSource,
+      rawInProgressValue,
       nextWeek: numberFrom(readField(load, ["SCRs NEXT WEEK", "Next Week", "Next Wk"])),
       thisMonth,
       nextMonth,
