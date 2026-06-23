@@ -222,7 +222,7 @@
 
     .summary-grid {
       display: grid;
-      grid-template-columns: repeat(7, minmax(120px, 1fr));
+      grid-template-columns: repeat(6, minmax(120px, 1fr));
       gap: 10px;
       margin: 14px 0;
     }
@@ -518,7 +518,10 @@
       <div class="header-actions">
         <div class="refresh-panel">
           <div class="refresh-row">
-            <button class="refresh-button" id="refreshButton" type="button">Refresh now</button>
+            <button class="refresh-button workload-refresh-button is-stale" id="scout-staffing-load-cache-refresh" type="button" title="Refresh workload data from NetSuite saved search 1324335">Refresh Staffing Data</button>
+            <span id="scout-staffing-load-cache-status" class="cache-note">Staffing data cache status pending</span>
+            <button class="refresh-button" id="refreshButton" type="button" title="Refresh the current dashboard scope with the saved Graph token">Refresh selected via token</button>
+            <button class="refresh-button" id="openRefreshConsoleButton" type="button" title="Open the calendar refresh page with the current dashboard scope">Open token refresh</button>
             <div class="snapshot-pill" id="lastRefreshLabel">Last refresh pending</div>
           </div>
           <div class="cache-note" id="cacheStatusLabel">3-week staffing snapshot: May 6 - May 26, 2026</div>
@@ -635,10 +638,6 @@
       <div class="metric">
         <div class="metric-value" id="metricConsidered">0</div>
         <div class="metric-label">Consultants</div>
-      </div>
-      <div class="metric" title="Sum of SCRs currently in progress from NetSuite saved search 1324335 for the consultants in the current filter.">
-        <div class="metric-value" id="metricInProgress">0</div>
-        <div class="metric-label">SCRs in progress</div>
       </div>
     </section>
 
@@ -7945,7 +7944,6 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
 
     const CACHE_KEY = "sc-staffing-dashboard-calendar-cache-direct-connector-202605062230";
     const SKILL_CACHE_KEY = "sc-staffing-dashboard-skills-cache-v1";
-    const STAFFING_LOAD_STORAGE_KEY = "scout-staffing-dashboard-load-report-v1";
     const CACHE_TTL_MS = 5 * 60 * 1000;
     let rawEvents = [];
     let normalizedEvents = [];
@@ -7962,95 +7960,6 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         "\"": "&quot;",
         "'": "&#39;"
       }[character]));
-    }
-
-    function normalizeLoadKey(value) {
-      return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-    }
-
-    function readLoadField(record, aliases) {
-      if (!record || typeof record !== "object") return "";
-      const wanted = aliases.map(normalizeLoadKey);
-      const key = Object.keys(record).find(item => wanted.includes(normalizeLoadKey(item)));
-      return key ? record[key] : "";
-    }
-
-    function loadNumber(value) {
-      const raw = String(value == null ? "" : value).replace(/,/g, "").trim();
-      if (!raw || raw === "--" || /^- none -$/i.test(raw)) return 0;
-      const match = raw.match(/-?\d+(?:\.\d+)?/);
-      return match ? Math.max(0, Math.round(Number(match[0]))) : 0;
-    }
-
-    function readStaffingLoadReport() {
-      try {
-        if (typeof window === "undefined" || !window.localStorage) return null;
-        const payload = window.localStorage.getItem(STAFFING_LOAD_STORAGE_KEY);
-        const report = payload ? JSON.parse(payload) : null;
-        return report && Array.isArray(report.rows) ? report : null;
-      } catch (error) {
-        return null;
-      }
-    }
-
-    function staffingLoadNameKeys(value) {
-      const raw = String(value || "").trim();
-      if (!raw) return [];
-      const keys = new Set([canonicalName(raw)]);
-      if (raw.includes(",")) {
-        const parts = raw.split(",").map(part => part.trim()).filter(Boolean);
-        if (parts.length >= 2) keys.add(canonicalName(`${parts[1]} ${parts[0]}`));
-      } else {
-        const parts = raw.split(/\s+/).filter(Boolean);
-        if (parts.length >= 2) keys.add(canonicalName(`${parts.slice(-1)[0]}, ${parts.slice(0, -1).join(" ")}`));
-      }
-      return [...keys].filter(Boolean);
-    }
-
-    function buildStaffingLoadInProgressLookup() {
-      const report = readStaffingLoadReport();
-      const rows = report && Array.isArray(report.rows) ? report.rows : [];
-      const byEmail = new Map();
-      const byName = new Map();
-
-      rows.forEach(record => {
-        const inProgress = loadNumber(readLoadField(record, [
-          "IN PROGRESS",
-          "In Progress",
-          "IN PROGRESS SCRS",
-          "In Progress SCRs",
-          "SCRs In Progress",
-          "In Prog"
-        ]));
-        const email = String(readLoadField(record, [
-          "EMAIL",
-          "Email",
-          "Email Address",
-          "SC Email",
-          "Work Email"
-        ]) || "").trim().toLowerCase();
-        const name = readLoadField(record, [
-          "SC NAME",
-          "SC",
-          "Name",
-          "Consultant"
-        ]);
-
-        if (email) byEmail.set(email, inProgress);
-        staffingLoadNameKeys(name).forEach(key => byName.set(key, inProgress));
-      });
-
-      return { byEmail, byName };
-    }
-
-    function inProgressForRows(rows) {
-      const lookup = buildStaffingLoadInProgressLookup();
-      return rows.reduce((total, row) => {
-        const email = String(row.email || "").trim().toLowerCase();
-        if (email && lookup.byEmail.has(email)) return total + lookup.byEmail.get(email);
-        const nameKey = staffingLoadNameKeys(row.name).find(key => lookup.byName.has(key));
-        return total + (nameKey ? lookup.byName.get(nameKey) : 0);
-      }, 0);
     }
 
     function addDaysIso(dateValue, days) {
@@ -8708,7 +8617,6 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       document.getElementById("metricBusy").textContent = rows.filter(row => row.rank === 4).length;
       document.getElementById("metricUnknown").textContent = rows.filter(row => !row.calendarLoaded).length;
       document.getElementById("metricConsidered").textContent = rows.length;
-      document.getElementById("metricInProgress").textContent = inProgressForRows(rows).toLocaleString();
     }
 
     function renderRecommendation(rows, windowConfig) {
