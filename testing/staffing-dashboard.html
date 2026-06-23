@@ -1531,7 +1531,7 @@
     <div class="header-inner">
       <div class="brand-row">
         <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
-        <span class="version-pill">v27.0.48</span>
+        <span class="version-pill">v27.0.49</span>
       </div>
       <div class="header-actions">
         <div class="refresh-panel">
@@ -11334,8 +11334,9 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
     function loadNumber(value) {
       const clean = String(value ?? "").replace(/,/g, "").trim();
       if (!clean || clean === "--" || clean === "- None -") return 0;
-      const parsed = Number(clean);
-      return Number.isFinite(parsed) ? parsed : 0;
+      const match = clean.match(/-?\d+(?:\.\d+)?/);
+      const parsed = match ? Number(match[0]) : Number(clean);
+      return Number.isFinite(parsed) ? Math.max(0, Math.round(parsed)) : 0;
     }
 
     function formatLoadNumber(value) {
@@ -11354,10 +11355,15 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       return text;
     }
 
-    function readLoadField(record, aliases) {
+    function findLoadFieldKey(record, aliases) {
       if (!record || typeof record !== "object") return "";
       const wanted = aliases.map(normalizeLoadKey);
       const key = Object.keys(record).find(item => wanted.includes(normalizeLoadKey(item)));
+      return key || "";
+    }
+
+    function readLoadField(record, aliases) {
+      const key = findLoadFieldKey(record, aliases);
       return key ? record[key] : "";
     }
 
@@ -11371,6 +11377,31 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         })
         .map(([, value]) => value);
     }
+
+    const inProgressLoadAliases = [
+      "IN PROGRESS",
+      "In Progress",
+      "IN PROG",
+      "In Prog",
+      "SCRS IN PROGRESS",
+      "SCRs IN PROGRESS",
+      "SCRs In Progress",
+      "SCR IN PROGRESS",
+      "SCR In Progress",
+      "SCRS IN PROG",
+      "SCRs In Prog",
+      "IN PROGRESS SCRS",
+      "In Progress SCRs",
+      "IN PROGRESS SCR",
+      "In Progress SCR",
+      "Current In Progress",
+      "Current IP",
+      "IP SCRs",
+      "IP",
+      "Active SCRs",
+      "Active Requests",
+      "Current Active Load"
+    ];
 
     const scmNoteAliases = [
       "COMMENTS",
@@ -11777,7 +11808,9 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         nextWeek: loadNumber(readLoadField(record, ["SCRs NEXT WEEK", "Next Week"])),
         thisMonth: loadNumber(readLoadField(record, ["SCRs THIS MONTH", "This Month"])),
         nextMonth: loadNumber(readLoadField(record, ["SCRs NEXT MONTH", "Next Month"])),
-        inProgress: loadNumber(readLoadField(record, ["IN PROGRESS", "In Progress"])),
+        inProgress: loadNumber(readLoadField(record, inProgressLoadAliases)),
+        inProgressSource: findLoadFieldKey(record, inProgressLoadAliases),
+        rawInProgressValue: readLoadField(record, inProgressLoadAliases),
         onHold: loadNumber(readLoadField(record, ["ON HOLD", "On Hold"])),
         acsLcs: loadNumber(readLoadField(record, ["ACS/LCS", "ACS LCS"])),
         aiOverview: loadNumber(readLoadField(record, ["AI OVERVIEW", "AI Overview"])),
@@ -12691,7 +12724,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         .slice(0, 20)
         .map(person => ({ name: person.name, email: person.email, manager: getManagerLabel(person) }));
       return {
-        dashboardVersion: "v27.0.48",
+        dashboardVersion: "v27.0.49",
         pageUrl: window.location.href,
         bridgeStatus: getStaffingLoadBridgeStatus(),
         storedRows: stored?.rows?.length || 0,
@@ -12740,6 +12773,11 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         })),
         loadMatches: loadMatches.map(row => ({
           ...row,
+          debugInProgress: {
+            value: row.inProgress,
+            matchedHeader: row.inProgressSource || "",
+            rawValue: row.rawInProgressValue ?? ""
+          },
           debugComments: row.comments || "",
           debugScmNotes: row.scmNotes || "",
           debugAvailabilityNotes: row.availabilityNotes || "",
