@@ -1531,7 +1531,7 @@
     <div class="header-inner">
       <div class="brand-row">
         <img class="scout-logo" src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo">
-        <span class="version-pill">v27.0.49</span>
+        <span class="version-pill">v27.0.50</span>
       </div>
       <div class="header-actions">
         <div class="refresh-panel">
@@ -11729,6 +11729,9 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
           const token = await getStoredGraphExplorerToken();
           const report = await fetchSharePointStaffingLoadReport(token);
           writeJsonStorage(STAFFING_LOAD_STORAGE_KEY, report);
+          addStaffingLoadRosterEntries();
+          populateRosterFilterOptions();
+          populatePersonFilter();
           logCalendarActivity("staffing-load-refresh-complete", {
             source: report.source,
             rows: report.rows.length,
@@ -11771,6 +11774,9 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
           const report = await requestStaffingLoadFromBridge();
           if (report?.rows?.length) {
             writeJsonStorage(STAFFING_LOAD_STORAGE_KEY, report);
+            addStaffingLoadRosterEntries();
+            populateRosterFilterOptions();
+            populatePersonFilter();
             logCalendarActivity("staffing-load-refresh-complete", {
               source: report.source || "NetSuite saved search",
               searchId: report.searchId || STAFFING_LOAD_NETSUITE_SEARCH_ID,
@@ -11800,8 +11806,11 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       const row = {
         name: String(readLoadField(record, ["SC NAME", "SC", "Name", "Consultant"]) || "").trim(),
         email: normalizeEmail(readLoadField(record, ["EMAIL", "Email Address", "SC Email", "Work Email"])),
+        manager: String(readLoadField(record, ["SC MANAGER", "Manager", "Manager Name", "SC Manager"]) || "").trim(),
         scIndustry: String(readLoadField(record, ["SC INDUSTRY", "Industry", "SC Industry"]) || "").trim(),
         legacyTeam: String(readLoadField(record, ["LEGACY TEAM", "Direct/AMO", "Type", "Legacy Org"]) || "").trim(),
+        location: String(readLoadField(record, ["STATE", "State", "Location", "SC State", "Office State"]) || "").trim(),
+        timeZone: String(readLoadField(record, ["TIME ZONE", "Time Zone", "Timezone", "TZ"]) || "").trim(),
         totalScrs: loadNumber(readLoadField(record, ["Total SCRs", "Total SCR", "Total"])),
         assignedLast10Days: loadNumber(readLoadField(record, ["SCRS ASGND -10 DAYS", "Assigned -10 Days", "Assigned Last 10 Days"])),
         thisWeek: loadNumber(readLoadField(record, ["SCRs THIS WEEK", "This Week"])),
@@ -11829,6 +11838,25 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
       row.comments = row.scmNotes;
 
       return row.name || row.email ? row : null;
+    }
+
+    function addStaffingLoadRosterEntries() {
+      const lookup = getStaffingLoadLookup();
+      lookup.rows.forEach(row => {
+        if (!row.email) return;
+        const legacyOrg = row.legacyTeam || row.scIndustry || "Staffing Load";
+        addRuntimeRosterPerson({
+          name: row.name || row.email,
+          email: row.email,
+          manager: row.manager || "",
+          team: row.manager || row.scIndustry || "Staffing Load",
+          industryFamily: row.scIndustry || "",
+          legacyOrg,
+          location: row.location || "",
+          timeZone: row.timeZone || "",
+          source: "NetSuite staffing load"
+        });
+      });
     }
 
     function getStaffingLoadLookup() {
@@ -12724,7 +12752,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
         .slice(0, 20)
         .map(person => ({ name: person.name, email: person.email, manager: getManagerLabel(person) }));
       return {
-        dashboardVersion: "v27.0.49",
+        dashboardVersion: "v27.0.50",
         pageUrl: window.location.href,
         bridgeStatus: getStaffingLoadBridgeStatus(),
         storedRows: stored?.rows?.length || 0,
@@ -13648,6 +13676,7 @@ const SNAPSHOT_LOADED_EMAILS = new Set([
 
     mergeLaunchRosterPeople();
     addCalendarDataRosterEntries();
+    addStaffingLoadRosterEntries();
     populateTimeOptions();
     configureDateWindow();
     populateRosterFilterOptions();
