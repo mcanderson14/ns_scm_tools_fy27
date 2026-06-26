@@ -777,10 +777,10 @@
       "email": "brad.schwandt@oracle.com",
       "role": "Sales Consulting Manager",
       "groups": [
-        "Construction & Energy"
+        "Products"
       ],
       "groupKeys": [
-        "constructionandenergy"
+        "products"
       ],
       "canOwn": true,
       "canView": true,
@@ -795,10 +795,10 @@
       "email": "meagan.wheeler@oracle.com",
       "role": "Sales Consulting Senior Manager",
       "groups": [
-        "General Business"
+        "Construction & Energy"
       ],
       "groupKeys": [
-        "generalbusiness"
+        "constructionandenergy"
       ],
       "canOwn": true,
       "canView": true,
@@ -1668,10 +1668,10 @@
       "email": "brad.schwandt@oracle.com",
       "role": "Sales Consulting Manager",
       "groups": [
-        "Construction & Energy"
+        "Products"
       ],
       "groupKeys": [
-        "constructionandenergy"
+        "products"
       ],
       "canOwn": true,
       "canView": true,
@@ -1686,10 +1686,10 @@
       "email": "meagan.wheeler@oracle.com",
       "role": "Sales Consulting Senior Manager",
       "groups": [
-        "General Business"
+        "Construction & Energy"
       ],
       "groupKeys": [
-        "generalbusiness"
+        "constructionandenergy"
       ],
       "canOwn": true,
       "canView": true,
@@ -1779,7 +1779,7 @@
       "Belle Isle, Matthew J",
       "Heyne, Robert",
       "Malone, Moira",
-      "Schwandt, Brad"
+      "Simon, Meagan"
     ],
     "consumerservices": [
       "Garrison, Allison I",
@@ -1790,9 +1790,6 @@
       "Anderson, Dennis",
       "Cecchini, Corey",
       "Chapman, Trey"
-    ],
-    "generalbusiness": [
-      "Simon, Meagan"
     ],
     "healthandhospitality": [
       "Hudema, Raul",
