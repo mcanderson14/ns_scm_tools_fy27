@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT ZERO
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      z27.0.5
+// @version      z27.0.6
 // @description  Minimal SCOUT staffing tool for NetSuite SC Request pages.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -31,7 +31,7 @@
 (function () {
   "use strict";
 
-  const SCRIPT_VERSION = "z27.0.5";
+  const SCRIPT_VERSION = "z27.0.6";
   const LOG_PREFIX = "[SCOUT ZERO]";
   const SCOUT_ZERO_LOGO_URL = "https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT-Zero.png";
   const SC_ROSTER_SEARCH_URL = "https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl?rectype=1572&searchtype=Custom&style=REPORT&sortcol=Custom_NAME_raw&sortdir=ASC&csv=HTML&OfficeXML=F&pdf=&size=50&twbx=F&report=T&grid=&searchid=1311451&dle=T";
@@ -187,6 +187,10 @@ Good luck with ${sc}!
       .replace(/\s+/g, " ")
       .replace(/\s*,\s*/g, ", ")
       .trim();
+  }
+
+  function normalizeRosterDisplayName(value) {
+    return normalizeName(value).replace(/^\d{3,}\s+/, "");
   }
 
   function normalizeAmoDeliverableName(value) {
@@ -1006,7 +1010,7 @@ Good luck with ${sc}!
   function normalizeRosterRow(row) {
     return {
       id: String(row && (row.id || row.employeeId || row.internalid) || "").trim(),
-      name: normalizeName(row && (row.name || row.employee || row.text)),
+      name: normalizeRosterDisplayName(row && (row.name || row.employee || row.text)),
       manager: normalizeName(row && row.manager),
       email: String(row && row.email || "").trim(),
       team: String(row && (row.team || row.vertical || row.salesTeam || row.salesteam) || "").trim(),
@@ -1018,7 +1022,7 @@ Good luck with ${sc}!
   }
 
   function isScrLikeResultName(name) {
-    const text = String(name || "");
+    const text = normalizeRosterDisplayName(name);
     return /\b(?:opportunity|opp(?:ortunity)?\s*#|sc\s*request|scr)\b/i.test(text) ||
       /\|\s*opportunity\b/i.test(text);
   }
@@ -1128,6 +1132,44 @@ Good luck with ${sc}!
     ], label || "Employee roster lookup");
   }
 
+  function lookupRosterCardById(rosterId, fallbackName) {
+    const id = String(rosterId || "").trim();
+    if (!/^\d+$/.test(id)) return null;
+
+    try {
+      const valueFields = [
+        "name",
+        "custrecord_emproster_emp",
+      ];
+      const textFields = [
+        "custrecord_emproster_mgrroster",
+        "custrecord_emproster_salesteam",
+        "custrecord_emproster_olocation",
+        "custrecord_emproster_sales_tier",
+      ];
+      const values = nlapiLookupField(SC_ROSTER_RECORD_TYPE, id, valueFields, false) || {};
+      const texts = nlapiLookupField(SC_ROSTER_RECORD_TYPE, id, textFields, true) || {};
+      const row = normalizeRosterRow({
+        id,
+        name: values.name || fallbackName,
+        manager: texts.custrecord_emproster_mgrroster,
+        team: texts.custrecord_emproster_salesteam,
+        location: texts.custrecord_emproster_olocation,
+        tier: normalizeName(texts.custrecord_emproster_sales_tier).replace("Solution Consultant - ", ""),
+        employeeRecId: values.custrecord_emproster_emp,
+      });
+      return isValidRosterRow(row) ? row : null;
+    } catch (e) {
+      try {
+        const name = nlapiLookupField(SC_ROSTER_RECORD_TYPE, id, "name", false) || fallbackName;
+        const row = normalizeRosterRow({ id, name });
+        return isValidRosterRow(row) ? row : null;
+      } catch (inner) {
+        return null;
+      }
+    }
+  }
+
   function readGlobalResultId(result) {
     try {
       if (result && typeof result.getId === "function") return String(result.getId() || "").trim();
@@ -1173,7 +1215,7 @@ Good luck with ${sc}!
 
   function globalResultToRosterRows(result) {
     const id = readGlobalResultId(result);
-    const name = readGlobalResultName(result);
+    const name = normalizeRosterDisplayName(readGlobalResultName(result));
     const type = readGlobalResultType(result);
     const typeLoose = normalizeLoose(type);
     if (!id) return [];
@@ -1188,6 +1230,12 @@ Good luck with ${sc}!
 
     if (/\bemployee\b/.test(typeLoose) || typeLoose === "employee") {
       return runRosterSearchForEmployee(id, "Global employee roster lookup");
+    }
+
+    if (!typeLoose && isLikelyPersonName(name)) {
+      const rosterCard = lookupRosterCardById(id, name);
+      if (rosterCard) return [rosterCard];
+      return runRosterSearchForEmployee(id, "Global person roster lookup");
     }
 
     return [];
