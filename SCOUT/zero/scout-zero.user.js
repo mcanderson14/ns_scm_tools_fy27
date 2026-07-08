@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT ZERO
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      z27.0.6
+// @version      z27.0.7
 // @description  Minimal SCOUT staffing tool for NetSuite SC Request pages.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -31,7 +31,7 @@
 (function () {
   "use strict";
 
-  const SCRIPT_VERSION = "z27.0.6";
+  const SCRIPT_VERSION = "z27.0.7";
   const LOG_PREFIX = "[SCOUT ZERO]";
   const SCOUT_ZERO_LOGO_URL = "https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT-Zero.png";
   const SC_ROSTER_SEARCH_URL = "https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl?rectype=1572&searchtype=Custom&style=REPORT&sortcol=Custom_NAME_raw&sortdir=ASC&csv=HTML&OfficeXML=F&pdf=&size=50&twbx=F&report=T&grid=&searchid=1311451&dle=T";
@@ -1556,6 +1556,11 @@ Good luck with ${sc}!
     });
   }
 
+  function clearLookupResults() {
+    const box = document.getElementById("scout-zero-results");
+    if (box) box.innerHTML = "";
+  }
+
   function selectRosterRowById(id, name) {
     let row = (rosterCache.rows || []).find(item => String(item.id) === String(id));
     if (!row) row = normalizeRosterRow({ id, name });
@@ -1569,6 +1574,7 @@ Good luck with ${sc}!
     if (input) input.value = row.name;
     if (hidden) hidden.value = row.id;
     renderSelectedCard(row);
+    clearLookupResults();
     setPanelStatus(`Selected ${row.name}.`, "info");
   }
 
