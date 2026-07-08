@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT ZERO
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      z27.0.1
+// @version      z27.0.2
 // @description  Minimal SCOUT staffing tool for NetSuite SC Request pages.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -31,7 +31,7 @@
 (function () {
   "use strict";
 
-  const SCRIPT_VERSION = "z27.0.1";
+  const SCRIPT_VERSION = "z27.0.2";
   const LOG_PREFIX = "[SCOUT ZERO]";
   const SCOUT_ZERO_LOGO_URL = "https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT-Zero.png";
   const SC_ROSTER_SEARCH_URL = "https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl?rectype=1572&searchtype=Custom&style=REPORT&sortcol=Custom_NAME_raw&sortdir=ASC&csv=HTML&OfficeXML=F&pdf=&size=50&twbx=F&report=T&grid=&searchid=1311451&dle=T";
@@ -999,6 +999,89 @@ Good luck with ${sc}!
     };
   }
 
+  function readResultValue(result, fieldId, join) {
+    try {
+      return (join ? result.getValue(fieldId, join) : result.getValue(fieldId)) || "";
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function readResultText(result, fieldId, join) {
+    try {
+      return (join ? result.getText(fieldId, join) : result.getText(fieldId)) || "";
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function rosterRowsFromSearchResults(rows) {
+    return (rows || []).map(r => normalizeRosterRow({
+      id: readResultValue(r, "internalid"),
+      name: readResultValue(r, "name"),
+      manager: readResultText(r, "custrecord_emproster_mgrroster"),
+      email: readResultValue(r, "email", "custrecord_emproster_emp"),
+      team: readResultText(r, "custrecord_emproster_salesteam"),
+      location: readResultText(r, "custrecord_emproster_olocation"),
+      tier: readResultText(r, "custrecord_emproster_sales_tier").replace("Solution Consultant - ", ""),
+      employeeRecId: readResultValue(r, "custrecord_emproster_emp"),
+    }));
+  }
+
+  function rosterColumnSetBuilders() {
+    return [
+      () => [
+        new nlobjSearchColumn("internalid"),
+        new nlobjSearchColumn("name"),
+        new nlobjSearchColumn("custrecord_emproster_emp"),
+        new nlobjSearchColumn("custrecord_emproster_mgrroster"),
+        new nlobjSearchColumn("custrecord_emproster_salesteam"),
+        new nlobjSearchColumn("custrecord_emproster_olocation"),
+        new nlobjSearchColumn("custrecord_emproster_sales_tier"),
+        new nlobjSearchColumn("email", "custrecord_emproster_emp"),
+      ],
+      () => [
+        new nlobjSearchColumn("internalid"),
+        new nlobjSearchColumn("name"),
+        new nlobjSearchColumn("custrecord_emproster_emp"),
+      ],
+      () => [
+        new nlobjSearchColumn("internalid"),
+        new nlobjSearchColumn("name"),
+      ],
+    ];
+  }
+
+  function runRosterSearch(searchId, filterBuilders, label) {
+    const builders = filterBuilders && filterBuilders.length ? filterBuilders : [() => null];
+    for (const buildFilters of builders) {
+      let filters = null;
+      try {
+        filters = buildFilters ? buildFilters() : null;
+      } catch (e) {
+        console.warn(LOG_PREFIX, `${label || "Roster"} filter build failed:`, e.message || e);
+        continue;
+      }
+      for (const buildCols of rosterColumnSetBuilders()) {
+        let cols = [];
+        try {
+          cols = buildCols();
+        } catch (e) {
+          console.warn(LOG_PREFIX, `${label || "Roster"} column build failed:`, e.message || e);
+          continue;
+        }
+        try {
+          const rows = nlapiSearchRecord(SC_ROSTER_RECORD_TYPE, searchId || null, filters, cols) || [];
+          const normalized = dedupeRosterRows(rosterRowsFromSearchResults(rows));
+          if (normalized.length) return normalized;
+        } catch (e) {
+          console.warn(LOG_PREFIX, `${label || "Roster"} search attempt failed:`, e.message || e);
+        }
+      }
+    }
+    return [];
+  }
+
   function getSearchUrlForCurrentHost() {
     try {
       const url = new URL(SC_ROSTER_SEARCH_URL);
@@ -1130,32 +1213,7 @@ Good luck with ${sc}!
   }
 
   function loadRowsFromSavedSearchApi() {
-    try {
-      const cols = [
-        new nlobjSearchColumn("internalid"),
-        new nlobjSearchColumn("name"),
-        new nlobjSearchColumn("custrecord_emproster_emp"),
-        new nlobjSearchColumn("custrecord_emproster_mgrroster"),
-        new nlobjSearchColumn("custrecord_emproster_salesteam"),
-        new nlobjSearchColumn("custrecord_emproster_olocation"),
-        new nlobjSearchColumn("custrecord_emproster_sales_tier"),
-        new nlobjSearchColumn("email", "custrecord_emproster_emp"),
-      ];
-      const rows = nlapiSearchRecord(SC_ROSTER_RECORD_TYPE, SC_ROSTER_SEARCH_ID, null, cols) || [];
-      return rows.map(r => normalizeRosterRow({
-        id: r.getValue("internalid"),
-        name: r.getValue("name"),
-        manager: r.getText("custrecord_emproster_mgrroster"),
-        email: r.getValue("email", "custrecord_emproster_emp"),
-        team: r.getText("custrecord_emproster_salesteam"),
-        location: r.getText("custrecord_emproster_olocation"),
-        tier: (r.getText("custrecord_emproster_sales_tier") || "").replace("Solution Consultant - ", ""),
-        employeeRecId: r.getValue("custrecord_emproster_emp"),
-      }));
-    } catch (e) {
-      console.warn(LOG_PREFIX, "Saved search API load failed:", e.message || e);
-      return [];
-    }
+    return runRosterSearch(SC_ROSTER_SEARCH_ID, [() => null], "Saved search API");
   }
 
   async function refreshRosterCache(force) {
@@ -1247,38 +1305,22 @@ Good luck with ${sc}!
   function searchRosterByName(searchTerm) {
     const term = String(searchTerm || "").trim();
     if (!term) return [];
-    try {
-      const filters = [
+    return runRosterSearch(null, [
+      () => [
         new nlobjSearchFilter("name", null, "contains", term),
         new nlobjSearchFilter("custrecord_emproster_rosterstatus", null, "is", 1),
         new nlobjSearchFilter("custrecord_emproster_eminactive", null, "is", "F"),
         new nlobjSearchFilter("custrecord_emproster_sales_qb", null, "is", 25),
-      ];
-      const cols = [
-        new nlobjSearchColumn("internalid"),
-        new nlobjSearchColumn("name"),
-        new nlobjSearchColumn("custrecord_emproster_emp"),
-        new nlobjSearchColumn("custrecord_emproster_mgrroster"),
-        new nlobjSearchColumn("custrecord_emproster_salesteam"),
-        new nlobjSearchColumn("custrecord_emproster_olocation"),
-        new nlobjSearchColumn("custrecord_emproster_sales_tier"),
-        new nlobjSearchColumn("email", "custrecord_emproster_emp"),
-      ];
-      const rows = nlapiSearchRecord(SC_ROSTER_RECORD_TYPE, null, filters, cols) || [];
-      return rows.map(r => normalizeRosterRow({
-        id: r.getValue("internalid"),
-        name: r.getValue("name"),
-        manager: r.getText("custrecord_emproster_mgrroster"),
-        email: r.getValue("email", "custrecord_emproster_emp"),
-        team: r.getText("custrecord_emproster_salesteam"),
-        location: r.getText("custrecord_emproster_olocation"),
-        tier: (r.getText("custrecord_emproster_sales_tier") || "").replace("Solution Consultant - ", ""),
-        employeeRecId: r.getValue("custrecord_emproster_emp"),
-      }));
-    } catch (e) {
-      console.warn(LOG_PREFIX, "Roster lookup failed:", e.message || e);
-      return [];
-    }
+      ],
+      () => [
+        new nlobjSearchFilter("name", null, "contains", term),
+        new nlobjSearchFilter("custrecord_emproster_rosterstatus", null, "is", 1),
+        new nlobjSearchFilter("custrecord_emproster_eminactive", null, "is", "F"),
+      ],
+      () => [
+        new nlobjSearchFilter("name", null, "contains", term),
+      ],
+    ], "Roster lookup");
   }
 
   function lookupRoster(query) {
@@ -1363,7 +1405,8 @@ Good luck with ${sc}!
     renderSelectedCard(null);
     const seq = ++lookupSeq;
     if (!query) {
-      renderLookupResults([]);
+      const box = document.getElementById("scout-zero-results");
+      if (box) box.innerHTML = "";
       return;
     }
     window.setTimeout(() => {
