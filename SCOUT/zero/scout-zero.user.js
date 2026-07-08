@@ -18,7 +18,7 @@
 
 /* ================================================================
    SCOUT ZERO
-   Upgrade path: ns_scm_tools_fy27/SCOUT/zero/scout-zero.user.js
+   Upgrade path: https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/zero/scout-zero.user.js
 
    A stripped SC staffing surface:
    - cache/select a Solution Consultant
