@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT ZERO
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      z27.0.2
+// @version      z27.0.4
 // @description  Minimal SCOUT staffing tool for NetSuite SC Request pages.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -31,7 +31,7 @@
 (function () {
   "use strict";
 
-  const SCRIPT_VERSION = "z27.0.2";
+  const SCRIPT_VERSION = "z27.0.4";
   const LOG_PREFIX = "[SCOUT ZERO]";
   const SCOUT_ZERO_LOGO_URL = "https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT-Zero.png";
   const SC_ROSTER_SEARCH_URL = "https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl?rectype=1572&searchtype=Custom&style=REPORT&sortcol=Custom_NAME_raw&sortdir=ASC&csv=HTML&OfficeXML=F&pdf=&size=50&twbx=F&report=T&grid=&searchid=1311451&dle=T";
@@ -52,7 +52,7 @@
   const CACHE_KEY = "scout-zero-sc-card-cache-v1";
   const PENDING_KEY = "scout-zero-pending-staff-action-v1";
   const PANEL_OPEN_KEY = "scout-zero-panel-open-v1";
-  const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+  const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // refresh SC names at least once every 24 hours
   const NETSUITE_FORM_INIT_TIMEOUT_MS = 20000;
   const NETSUITE_FORM_INIT_POLL_MS = 250;
   const PENDING_STAFFING_SAVE_DELAY_MS = 1600;
@@ -150,6 +150,7 @@ Good luck with ${sc}!
   var nlapiSetFieldValue = function (f, v, fire, sync) { return ns().nlapiSetFieldValue(f, v, fire, sync); };
   var nlapiSetFieldText = function (f, t, fire, sync) { return ns().nlapiSetFieldText(f, t, fire, sync); };
   var nlapiSearchRecord = function (type, id, filters, cols) { return ns().nlapiSearchRecord(type, id, filters, cols); };
+  var nlapiSearchGlobal = function (keywords) { return ns().nlapiSearchGlobal ? ns().nlapiSearchGlobal(keywords) : []; };
   var nlapiLookupField = function (type, id, fields, text) {
     if (!ns().nlapiLookupField) throw new Error("nlapiLookupField unavailable");
     return ns().nlapiLookupField(type, id, fields, text);
@@ -1082,6 +1083,107 @@ Good luck with ${sc}!
     return [];
   }
 
+  function runRosterSearchForEmployee(employeeId, label) {
+    const id = String(employeeId || "").trim();
+    if (!id) return [];
+    return runRosterSearch(null, [
+      () => [
+        new nlobjSearchFilter("custrecord_emproster_emp", null, "is", id),
+        new nlobjSearchFilter("custrecord_emproster_rosterstatus", null, "is", 1),
+        new nlobjSearchFilter("custrecord_emproster_eminactive", null, "is", "F"),
+      ],
+      () => [
+        new nlobjSearchFilter("custrecord_emproster_emp", null, "is", id),
+      ],
+    ], label || "Employee roster lookup");
+  }
+
+  function readGlobalResultId(result) {
+    try {
+      if (result && typeof result.getId === "function") return String(result.getId() || "").trim();
+    } catch (e) {
+      /* try field fallback */
+    }
+    return readResultValue(result, "internalid") || readResultValue(result, "id");
+  }
+
+  function readGlobalResultType(result) {
+    const readers = [
+      () => result && typeof result.getRecordType === "function" ? result.getRecordType() : "",
+      () => readResultValue(result, "recordtype"),
+      () => readResultText(result, "recordtype"),
+      () => readResultValue(result, "type"),
+      () => readResultText(result, "type"),
+    ];
+    for (const reader of readers) {
+      try {
+        const value = String(reader() || "").trim();
+        if (value) return value;
+      } catch (e) {
+        /* try next */
+      }
+    }
+    return "";
+  }
+
+  function readGlobalResultName(result) {
+    const fields = ["name", "entityid", "altname", "title"];
+    for (const field of fields) {
+      const text = normalizeName(readResultText(result, field) || readResultValue(result, field));
+      if (text) return text;
+    }
+    try {
+      const value = normalizeName(result && (result.name || result.text || result.entityid));
+      if (value) return value;
+    } catch (e) {
+      /* ignore */
+    }
+    return "";
+  }
+
+  function globalResultToRosterRows(result) {
+    const id = readGlobalResultId(result);
+    const name = readGlobalResultName(result);
+    const type = readGlobalResultType(result).toLowerCase();
+    const haystack = normalizeLoose(`${type} ${name}`);
+    if (!id) return [];
+
+    if (/\bemployee\b/.test(haystack) || type === "employee") {
+      return runRosterSearchForEmployee(id, "Global employee roster lookup");
+    }
+
+    if (/emproster|employee roster|solution consultant roster|customrecord.*1572|1572/.test(haystack)) {
+      return [normalizeRosterRow({ id, name })];
+    }
+
+    return [];
+  }
+
+  function searchGlobalRosterByName(searchTerm) {
+    const term = String(searchTerm || "").trim();
+    if (!term || typeof nlapiSearchGlobal !== "function") return [];
+    const keywords = [`"${term}"`, term];
+    const rows = [];
+    const seenGlobalIds = new Set();
+
+    for (const keyword of keywords) {
+      try {
+        const results = nlapiSearchGlobal(keyword) || [];
+        for (const result of results) {
+          const globalKey = `${readGlobalResultType(result)}:${readGlobalResultId(result)}`;
+          if (seenGlobalIds.has(globalKey)) continue;
+          seenGlobalIds.add(globalKey);
+          rows.push(...globalResultToRosterRows(result));
+          if (rows.length >= QUICK_RESULT_LIMIT) return dedupeRosterRows(rows);
+        }
+      } catch (e) {
+        console.warn(LOG_PREFIX, "Global roster lookup failed:", e.message || e);
+      }
+    }
+
+    return dedupeRosterRows(rows);
+  }
+
   function getSearchUrlForCurrentHost() {
     try {
       const url = new URL(SC_ROSTER_SEARCH_URL);
@@ -1328,7 +1430,9 @@ Good luck with ${sc}!
     if (cached.length) return cached;
     const parts = String(query || "").trim().split(/\s+/).filter(Boolean);
     const term = parts.length > 1 ? parts[parts.length - 1] : String(query || "").trim();
-    return searchRosterByName(term);
+    const direct = searchRosterByName(term);
+    if (direct.length) return direct;
+    return searchGlobalRosterByName(query);
   }
 
   function focusScInput() {
