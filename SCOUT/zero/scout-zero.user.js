@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT ZERO
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      z27.0.4
+// @version      z27.0.5
 // @description  Minimal SCOUT staffing tool for NetSuite SC Request pages.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -31,7 +31,7 @@
 (function () {
   "use strict";
 
-  const SCRIPT_VERSION = "z27.0.4";
+  const SCRIPT_VERSION = "z27.0.5";
   const LOG_PREFIX = "[SCOUT ZERO]";
   const SCOUT_ZERO_LOGO_URL = "https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT-Zero.png";
   const SC_ROSTER_SEARCH_URL = "https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl?rectype=1572&searchtype=Custom&style=REPORT&sortcol=Custom_NAME_raw&sortdir=ASC&csv=HTML&OfficeXML=F&pdf=&size=50&twbx=F&report=T&grid=&searchid=1311451&dle=T";
@@ -873,7 +873,7 @@ Good luck with ${sc}!
 
   function staffSelectedSc(empName) {
     const selected = getSelectedRosterFromInput();
-    if (!selected || !selected.id) {
+    if (!selected || !isValidRosterRow(selected)) {
       setPanelStatus("Select an SC before staffing.", "error");
       focusScInput();
       return;
@@ -955,6 +955,23 @@ Good luck with ${sc}!
     return rosterCache;
   }
 
+  function cacheRosterCard(row) {
+    const normalized = normalizeRosterRow(row);
+    if (!isValidRosterRow(normalized)) return;
+    rosterCache = {
+      rows: dedupeRosterRows([...(rosterCache.rows || []), normalized]),
+      fetchedAt: rosterCache.fetchedAt || Date.now(),
+      source: rosterCache.source || "selected roster card",
+    };
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify(rosterCache));
+    } catch (e) {
+      console.warn(LOG_PREFIX, "Could not cache selected roster card:", e.message || e);
+    }
+    renderDatalist(rosterCache.rows);
+    setCacheMeta();
+  }
+
   function loadStoredRosterCache() {
     try {
       const stored = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
@@ -979,7 +996,7 @@ Good luck with ${sc}!
     const byId = new Map();
     (rows || []).forEach(row => {
       const normalized = normalizeRosterRow(row);
-      if (!normalized.id || !normalized.name) return;
+      if (!isValidRosterRow(normalized)) return;
       const existing = byId.get(normalized.id);
       byId.set(normalized.id, { ...(existing || {}), ...normalized });
     });
@@ -998,6 +1015,19 @@ Good luck with ${sc}!
       region: String(row && row.region || "").trim(),
       employeeRecId: String(row && row.employeeRecId || "").trim(),
     };
+  }
+
+  function isScrLikeResultName(name) {
+    const text = String(name || "");
+    return /\b(?:opportunity|opp(?:ortunity)?\s*#|sc\s*request|scr)\b/i.test(text) ||
+      /\|\s*opportunity\b/i.test(text);
+  }
+
+  function isValidRosterRow(row) {
+    if (!row || !row.id || !row.name) return false;
+    if (!/^\d+$/.test(String(row.id))) return false;
+    if (isScrLikeResultName(row.name)) return false;
+    return isLikelyPersonName(row.name);
   }
 
   function readResultValue(result, fieldId, join) {
@@ -1144,16 +1174,20 @@ Good luck with ${sc}!
   function globalResultToRosterRows(result) {
     const id = readGlobalResultId(result);
     const name = readGlobalResultName(result);
-    const type = readGlobalResultType(result).toLowerCase();
-    const haystack = normalizeLoose(`${type} ${name}`);
+    const type = readGlobalResultType(result);
+    const typeLoose = normalizeLoose(type);
     if (!id) return [];
 
-    if (/\bemployee\b/.test(haystack) || type === "employee") {
-      return runRosterSearchForEmployee(id, "Global employee roster lookup");
+    if (/customrecord\s*2840|customrecord2840|sc\s*request|scr/i.test(type) || isScrLikeResultName(name)) {
+      return [];
     }
 
-    if (/emproster|employee roster|solution consultant roster|customrecord.*1572|1572/.test(haystack)) {
+    if (/emproster|employee roster|solution consultant roster|customrecord.*1572/.test(typeLoose)) {
       return [normalizeRosterRow({ id, name })];
+    }
+
+    if (/\bemployee\b/.test(typeLoose) || typeLoose === "employee") {
+      return runRosterSearchForEmployee(id, "Global employee roster lookup");
     }
 
     return [];
@@ -1447,11 +1481,11 @@ Good luck with ${sc}!
     const hiddenId = hidden && hidden.value;
     if (hiddenId) {
       const row = (rosterCache.rows || []).find(item => String(item.id) === String(hiddenId));
-      if (row && normalizeLoose(row.name) === normalizeLoose(value)) return row;
+      if (row && isValidRosterRow(row) && normalizeLoose(row.name) === normalizeLoose(value)) return row;
     }
-    const exact = (rosterCache.rows || []).find(row => normalizeLoose(row.name) === normalizeLoose(value));
+    const exact = (rosterCache.rows || []).find(row => isValidRosterRow(row) && normalizeLoose(row.name) === normalizeLoose(value));
     if (exact) return exact;
-    const result = lookupRoster(value).find(row => normalizeLoose(row.name) === normalizeLoose(value));
+    const result = lookupRoster(value).find(row => isValidRosterRow(row) && normalizeLoose(row.name) === normalizeLoose(value));
     return result || null;
   }
 
@@ -1477,6 +1511,11 @@ Good luck with ${sc}!
   function selectRosterRowById(id, name) {
     let row = (rosterCache.rows || []).find(item => String(item.id) === String(id));
     if (!row) row = normalizeRosterRow({ id, name });
+    if (!isValidRosterRow(row)) {
+      setPanelStatus("That result is not an SC roster card. Choose an SC card result.", "error");
+      return;
+    }
+    cacheRosterCard(row);
     const input = document.getElementById("scout-zero-sc-input");
     const hidden = document.getElementById("scout-zero-sc-id");
     if (input) input.value = row.name;
@@ -1497,7 +1536,7 @@ Good luck with ${sc}!
     const meta = [row.team, row.manager, row.location, row.email].filter(Boolean).join(" - ");
     card.innerHTML = `
       <div class="scout-zero-card-name">${escHtml(row.name)}</div>
-      <div class="scout-zero-card-meta">${escHtml(meta || "Roster card cached")}</div>
+      <div class="scout-zero-card-meta">${escHtml(meta || "SC roster card")}</div>
     `;
   }
 
