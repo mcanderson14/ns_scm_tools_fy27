@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.44
+// @version      27.0.45
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -42,7 +42,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.44";
+  const HELPER_VERSION = "27.0.45";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -5544,6 +5544,9 @@ Health & Hospitality	DIRECT	NL	West	West
       const projectedAcv = getByIndex(paddedCells, indexes, "projectedAcv") || getConciseFieldValue(fields, [
         /acv.*commit/, /projected.*acv/, /\bacv\b/
       ], [], labeledValuePatterns.projectedAcv);
+      const billingZip = billingZipFromText(getConciseFieldValue(fields, [
+        /billing.*(?:zip|postal)/, /bill.*(?:zip|postal)/, /zip\s*code/, /\bzip\b/, /postal/
+      ], [], labeledValuePatterns.billingZip));
       const salesVertical = getConciseFieldValue(fields, [
         /sales.*vertical/, /\bvertical\b/
       ], [/cross/], labeledValuePatterns.salesVertical);
@@ -5579,7 +5582,8 @@ Health & Hospitality	DIRECT	NL	West	West
           scrDisplayId,
           hashtags,
           staffingNotes,
-          assignedTo
+          assignedTo,
+          billingZip
         ]);
       const allText = allTextParts.join(" ").toLowerCase();
       const allKeyText = normalizeKey(allTextParts.join(" "));
@@ -5608,6 +5612,7 @@ Health & Hospitality	DIRECT	NL	West	West
         crossVertical,
         scrAge,
         projectedAcv,
+        billingZip,
         submittedDate,
         salesVertical,
         mappedSalesRegion: override ? override.salesRegion : "",
@@ -5873,6 +5878,7 @@ Health & Hospitality	DIRECT	NL	West	West
     billingAddress: [/Billing\s*Address/i, /Bill\s*Address/i],
     billingCity: [/Billing\s*City/i, /Bill\s*City/i],
     billingState: [/Billing\s*State/i, /Bill\s*State/i, /Billing\s*Province/i, /Bill\s*Province/i],
+    billingZip: [/Billing\s*Zip/i, /Bill\s*Zip/i, /Billing\s*Postal/i, /Bill\s*Postal/i, /Zip\s*Code/i, /\bZip\b/i, /Postal\s*Code/i],
     corpStructure: [/Corp\/Subsidiary\s*Structure/i, /Corporate\s*Structure/i, /Subsidiary\s*Structure/i],
     productsServices: [/Products\/Services\s*They\s*Provide/i, /Products\s*Services/i],
     whyNow: [/Why\s*Now/i],
@@ -6437,12 +6443,12 @@ Health & Hospitality	DIRECT	NL	West	West
     ], [], labeledValuePatterns.billingState);
     const zip = getConciseFieldValue(fields, [
       /billing.*(?:zip|postal)/, /bill.*(?:zip|postal)/, /\bzip\b/, /postal/
-    ]);
+    ], [], labeledValuePatterns.billingZip);
 
     return {
       city,
       state,
-      zip: billingZipFromText(zip) || billingZipFromText([city, state].join(" "))
+      zip: billingZipFromText(zip) || billingZipFromText([city, state].join(" ")) || normalizeSpaces(zip)
     };
   }
 
@@ -6890,7 +6896,7 @@ Health & Hospitality	DIRECT	NL	West	West
       annualRevenue,
       billingCity: billingLocation.city,
       billingState: billingLocation.state,
-      billingZip: billingLocation.zip,
+      billingZip: row.billingZip || billingLocation.zip,
       prospectRegion,
       leadSource,
       leadFit,
@@ -7129,6 +7135,7 @@ Health & Hospitality	DIRECT	NL	West	West
         renderSummaryItem("Company Size", summary.companySize),
         renderSummaryItem("Annual Revenue", summary.annualRevenue || "Unknown"),
         renderSummaryItem("Billing City/State", billingLocation),
+        renderSummaryItem("Zip Code", summary.billingZip),
         renderSummaryItem("Prospect Region", summary.prospectRegion),
         renderSummaryItem("Lead Source", summary.leadSource),
         renderSummaryItem("Lead Fit", summary.leadFit),
@@ -10192,8 +10199,8 @@ Health & Hospitality	DIRECT	NL	West	West
   }
 
   function updateRowSearchText(row) {
-    const allTextParts = row.fields.map(item => `${item.label} ${item.value}`)
-      .concat([
+      const allTextParts = row.fields.map(item => `${item.label} ${item.value}`)
+        .concat([
         row.industryFamily,
         row.industrySubgroup,
         row.gtmIndustry,
@@ -10211,9 +10218,10 @@ Health & Hospitality	DIRECT	NL	West	West
         row.salesVertical,
         row.amoDirect,
         row.hashtags,
-        row.staffingNotes,
-        row.assignedTo
-      ]);
+          row.staffingNotes,
+          row.assignedTo,
+          row.billingZip
+        ]);
     row.allText = allTextParts.join(" ").toLowerCase();
     row.allKeyText = normalizeKey(allTextParts.join(" "));
   }
