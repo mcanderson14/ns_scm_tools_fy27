@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.47
+// @version      27.0.48
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -42,7 +42,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.47";
+  const HELPER_VERSION = "27.0.48";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -1891,14 +1891,9 @@ Health & Hospitality	DIRECT	NL	West	West
     };
   }
 
-  function productsScmOwnerForRow(row) {
+  function productsScmRelationshipOwnerForRow(row) {
     if (!rowIsProductsScmCandidate(row)) return null;
-
-    const explicitOwner = productsScmExplicitOwner(row);
-    if (explicitOwner) return explicitOwner;
     if (!productsScmRelationships.length) {
-      const territoryOwner = productsScmTerritoryOwnerForRow(row);
-      if (territoryOwner) return territoryOwner;
       return {
         scm: "",
         scmKey: "",
@@ -1910,8 +1905,6 @@ Health & Hospitality	DIRECT	NL	West	West
     const requestTypeKey = normalizeKey(normalizeAmoDirect(row.amoDirect));
     const directorKey = normalizeKey(row.salesDirector);
     if (!requestTypeKey || !directorKey) {
-      const territoryOwner = productsScmTerritoryOwnerForRow(row);
-      if (territoryOwner) return territoryOwner;
       return {
         scm: "",
         scmKey: "",
@@ -1943,6 +1936,29 @@ Health & Hospitality	DIRECT	NL	West	West
       source: "unmapped",
       sourceLabel: "No SCM relationship mapping"
     };
+  }
+
+  function productsScmOwnerForRow(row) {
+    if (!rowIsProductsScmCandidate(row)) return null;
+
+    const explicitOwner = productsScmExplicitOwner(row);
+    if (explicitOwner) return explicitOwner;
+
+    const relationshipOwner = productsScmRelationshipOwnerForRow(row);
+    const territoryOwner = productsScmTerritoryOwnerForRow(row);
+    if (territoryOwner) {
+      const relationshipDiffers = relationshipOwner && relationshipOwner.scm
+        && normalizeKey(relationshipOwner.scm) !== normalizeKey(territoryOwner.scm);
+      return relationshipDiffers
+        ? {
+          ...territoryOwner,
+          relationshipOwner: relationshipOwner.scm,
+          relationshipSourceLabel: relationshipOwner.sourceLabel || "Relationship owner"
+        }
+        : territoryOwner;
+    }
+
+    return relationshipOwner;
   }
 
   function productsScmOwnerMatchesName(row, ownerName) {
@@ -6628,10 +6644,14 @@ Health & Hospitality	DIRECT	NL	West	West
     const owner = productsScmOwnerForRow(row);
     if (!owner) return "";
     if (owner.scm) {
+      const relationshipNote = owner.relationshipOwner
+        ? `<span class="scr-helper-muted">Relationship owner: ${escapeHtml(owner.relationshipOwner)}${owner.relationshipSourceLabel ? ` (${escapeHtml(owner.relationshipSourceLabel)})` : ""}</span>`
+        : "";
       return `
         <span class="scr-helper-products-scm-owner">
           <strong>${escapeHtml(owner.scm)}</strong>
           <span class="scr-helper-muted">${escapeHtml(owner.sourceLabel || "SCM owner")}</span>
+          ${relationshipNote}
         </span>
       `;
     }
