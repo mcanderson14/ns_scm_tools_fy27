@@ -3,24 +3,28 @@
 
   const SCHEMA = "ns-scm-tools.region-map.v3";
   const PRODUCTS_SCM_SCHEMA = "ns-scm-tools.scm-relationships.v3";
+  const PRODUCTS_SCM_TERRITORY_SCHEMA = "ns-scm-tools.products-scm-territories.v1";
   const AUTHORIZED_MANAGERS_SCHEMA = "ns-scm-tools.authorized-managers.v1";
   const GTM_SC_INDUSTRY_SCHEMA = "ns-scm-tools.gtm-sc-industry.v1";
-  const TOOL_VERSION = "27.0.9";
+  const TOOL_VERSION = "27.0.10";
   const TOOL_NAME = "FY27 Queue Mapping JSON Maker";
   const CONFIG_STORAGE_KEY = "ns-scm-tools-region-map-industry-config-v1";
   const EMOJI_CONFIG_STORAGE_KEY = "ns-scm-tools-emoji-config-v1";
   const REGION_MAPPING_TYPE = "region";
   const PRODUCTS_SCM_MAPPING_TYPE = "productsScm";
+  const PRODUCTS_SCM_TERRITORY_MAPPING_TYPE = "productsScmTerritories";
   const AUTHORIZED_MANAGERS_MAPPING_TYPE = "authorizedManagers";
   const GTM_SC_INDUSTRY_MAPPING_TYPE = "gtmScIndustry";
   const REGION_OUTPUT_FILE_NAME = "SC_Industry_State_Region_Mapping.json";
   const PRODUCTS_SCM_OUTPUT_FILE_NAME = "Products_SCM_Relationship_Mapping.json";
+  const PRODUCTS_SCM_TERRITORY_OUTPUT_FILE_NAME = "Products_SCM_Territory_Mapping.json";
   const AUTHORIZED_MANAGERS_OUTPUT_FILE_NAME = "Authorized_Managers.json";
   const GTM_SC_INDUSTRY_OUTPUT_FILE_NAME = "GTM_to_SC_Industry_Mapping.json";
   const AUTHORIZED_MANAGERS_SEARCH_URL = "https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl?searchid=1319617";
   const SOURCE_DESCRIPTIONS = {
     [REGION_MAPPING_TYPE]: "Use an Excel workbook where row 1 contains SC industry groups, row 2 contains Direct/AMO, and column A contains state/province codes.",
     [PRODUCTS_SCM_MAPPING_TYPE]: "Use an Excel workbook with columns for Sales Region, AMO/Direct, Regional Director or RSM, SCM owner or Raw SCM Name, and optional SCM Director. SCM ownership applies across SC Industry Groups.",
+    [PRODUCTS_SCM_TERRITORY_MAPPING_TYPE]: "Use an Excel workbook with Products territory rows: Territory, SCM Owner, Include/Exclude, State, optional ZIP Min, ZIP Max, Priority, and optional Active. Territory rules are used only when Products SCM relationship mapping has no owner.",
     [AUTHORIZED_MANAGERS_MAPPING_TYPE]: "Use an Excel export from NetSuite saved search 1319617. Expected columns include Manager/Name, Email, Role, SC Industry/Group, Sales Vertical, Can Own, Can View, and Active.",
     [GTM_SC_INDUSTRY_MAPPING_TYPE]: "Use an Excel workbook with columns for SC Industry Group, GTM Industry, and GTM Industry Subgroup. Optional emoji columns can override default display icons."
   };
@@ -30,6 +34,17 @@
     regionalDirector: ["rd", "regionaldirector", "regionalsalesmanager", "rsm", "salesdirector", "salesdir", "regionaldirectorregionalsalesmanager"],
     scm: ["scm", "scmname", "rawscm", "rawscmname", "scmanager", "solutionconsultingmanager", "productsscm", "productsscmmanager", "scmowner", "scmownername", "queueowner", "productsscmqueueowner"],
     scmDirector: ["scmdirector", "scmdirectors", "scdirector", "scdirectors", "queuedirector", "queuedirectors", "managerdirector", "managerdirectors", "authorizeddirector", "authorizeddirectors", "director", "directors"]
+  };
+  const PRODUCTS_SCM_TERRITORY_HEADER_ALIASES = {
+    territory: ["territory", "geography", "geo", "region", "regionname", "territoryname", "geographyname", "alignment"],
+    scm: ["scm", "scmowner", "scmownername", "scmanager", "productsscm", "productsscmmanager", "owner", "queueowner"],
+    action: ["action", "type", "includeexclude", "incexc", "rule", "ruleincexc", "ruletype", "condition", "includeorexclude"],
+    state: ["state", "states", "province", "stateprovince", "territorycode"],
+    zipMin: ["zipmin", "minzip", "zipfrom", "fromzip", "startzip", "zipstart", "postalmin", "postalfrom"],
+    zipMax: ["zipmax", "maxzip", "zipto", "tozip", "endzip", "zipend", "postalmax", "postalto"],
+    priority: ["priority", "sort", "sortorder", "order", "sequence"],
+    active: ["active", "enabled", "isinactive", "inactive", "status"],
+    notes: ["notes", "note", "comments", "comment"]
   };
   const AUTHORIZED_MANAGER_HEADER_ALIASES = {
     name: ["name", "manager", "scm", "scmanager", "solutionconsultingmanager", "authorizedmanager", "employee", "employeename", "owner", "queueowner"],
@@ -250,6 +265,7 @@
 
   function outputFileNameForMode() {
     if (state.mappingType === PRODUCTS_SCM_MAPPING_TYPE) return PRODUCTS_SCM_OUTPUT_FILE_NAME;
+    if (state.mappingType === PRODUCTS_SCM_TERRITORY_MAPPING_TYPE) return PRODUCTS_SCM_TERRITORY_OUTPUT_FILE_NAME;
     if (state.mappingType === AUTHORIZED_MANAGERS_MAPPING_TYPE) return AUTHORIZED_MANAGERS_OUTPUT_FILE_NAME;
     if (state.mappingType === GTM_SC_INDUSTRY_MAPPING_TYPE) return GTM_SC_INDUSTRY_OUTPUT_FILE_NAME;
     return REGION_OUTPUT_FILE_NAME;
@@ -257,6 +273,7 @@
 
   function updateMappingTypeUi() {
     const usesFlatWorkbook = state.mappingType === PRODUCTS_SCM_MAPPING_TYPE
+      || state.mappingType === PRODUCTS_SCM_TERRITORY_MAPPING_TYPE
       || state.mappingType === AUTHORIZED_MANAGERS_MAPPING_TYPE
       || state.mappingType === GTM_SC_INDUSTRY_MAPPING_TYPE;
     if (elements["source-description"]) {
@@ -321,6 +338,8 @@
       } else if (output.schema === PRODUCTS_SCM_SCHEMA && (output.counts.incompleteRows || output.counts.duplicateExactKeys)) {
         const reviewCount = output.counts.incompleteRows + output.counts.duplicateExactKeys;
         setStatus(`Review ${reviewCount} SCM relationship issue${reviewCount === 1 ? "" : "s"}`, true);
+      } else if (output.schema === PRODUCTS_SCM_TERRITORY_SCHEMA && output.counts.incompleteRows) {
+        setStatus(`Review ${output.counts.incompleteRows} Products territory issue${output.counts.incompleteRows === 1 ? "" : "s"}`, true);
       } else if (output.schema === GTM_SC_INDUSTRY_SCHEMA && (output.counts.incompleteRows || output.counts.duplicateMappings || output.counts.missingEmojiMappings)) {
         const reviewCount = output.counts.incompleteRows + output.counts.duplicateMappings + output.counts.missingEmojiMappings;
         setStatus(`Review ${reviewCount} GTM mapping issue${reviewCount === 1 ? "" : "s"}`, true);
@@ -337,6 +356,7 @@
 
   function buildJsonForCurrentMode(workbook, fileName) {
     if (state.mappingType === PRODUCTS_SCM_MAPPING_TYPE) return buildProductsScmJson(workbook, fileName);
+    if (state.mappingType === PRODUCTS_SCM_TERRITORY_MAPPING_TYPE) return buildProductsScmTerritoryJson(workbook, fileName);
     if (state.mappingType === AUTHORIZED_MANAGERS_MAPPING_TYPE) return buildAuthorizedManagersJson(workbook, fileName);
     if (state.mappingType === GTM_SC_INDUSTRY_MAPPING_TYPE) return buildGtmScIndustryJson(workbook, fileName);
     return buildMappingJson(workbook, fileName);
@@ -593,6 +613,119 @@
         incompleteRows,
         duplicateExactKeys,
         ambiguousDirectorKeys
+      }
+    };
+  }
+
+  function buildProductsScmTerritoryJson(workbook, fileName) {
+    const detected = workbook.SheetNames.map(sheetName => {
+      const sheet = workbook.Sheets[sheetName];
+      const matrix = window.XLSX.utils.sheet_to_json(sheet, {
+        header: 1,
+        blankrows: false,
+        raw: false
+      });
+      return { sheetName, matrix, header: detectProductsScmTerritoryHeader(matrix) };
+    }).find(candidate => candidate.header);
+    if (!detected) throw new Error("No Products SCM territory header row was found.");
+
+    const { sheetName, matrix, header } = detected;
+    if (!header) throw new Error("No Products SCM territory header row was found.");
+
+    const rows = [];
+    const incompleteRows = [];
+    const scms = new Set();
+    const territories = new Set();
+    const states = new Set();
+    let nextPriority = 100;
+
+    for (let rowIndex = header.rowIndex + 1; rowIndex < matrix.length; rowIndex += 1) {
+      const row = matrix[rowIndex] || [];
+      if (!row.some(cleanCell)) continue;
+
+      const active = header.indexes.active >= 0
+        ? parseBooleanCell(row[header.indexes.active], true, { inactiveMeansFalse: true })
+        : true;
+      if (!active) continue;
+
+      const territory = cleanCell(row[header.indexes.territory]) || "Products Territory";
+      const scm = cleanPersonName(row[header.indexes.scm]);
+      const action = normalizeTerritoryAction(row[header.indexes.action]);
+      const stateValues = splitListCell(row[header.indexes.state]).map(normalizeStateCode).filter(Boolean);
+      const zipMin = normalizeZipValue(row[header.indexes.zipMin]);
+      const zipMax = normalizeZipValue(row[header.indexes.zipMax]);
+      const priority = positiveInteger(row[header.indexes.priority], nextPriority);
+      const notes = header.indexes.notes >= 0 ? cleanCell(row[header.indexes.notes]) : "";
+      const missing = [];
+      if (!scm) missing.push("SCM Owner");
+      if (!stateValues.length) missing.push("State");
+      if (!action) missing.push("Include/Exclude");
+      if ((zipMin && !zipMax) || (!zipMin && zipMax)) missing.push("ZIP Min and ZIP Max");
+
+      if (missing.length) {
+        incompleteRows.push({
+          sourceRow: rowIndex + 1,
+          missing,
+          values: row.map(cleanCell).filter(Boolean)
+        });
+        continue;
+      }
+
+      stateValues.forEach(stateValue => {
+        const rule = {
+          sourceRow: rowIndex + 1,
+          industryFamily: "Products",
+          industryKey: "products",
+          territory,
+          territoryKey: normalizeKey(territory),
+          scm,
+          scmKey: normalizePersonKey(scm),
+          action,
+          state: stateValue,
+          stateKey: stateValue,
+          zipMin,
+          zipMax,
+          priority,
+          notes
+        };
+        rows.push(rule);
+        scms.add(scm);
+        territories.add(territory);
+        states.add(stateValue);
+      });
+      nextPriority = Math.max(nextPriority + 10, priority + 10);
+    }
+
+    rows.sort((left, right) => left.priority - right.priority || alphaSort(left.territory, right.territory) || alphaSort(left.state, right.state));
+    const grouped = buildProductsScmTerritorySummaries(rows);
+
+    return {
+      schema: PRODUCTS_SCM_TERRITORY_SCHEMA,
+      generator: {
+        name: TOOL_NAME,
+        version: TOOL_VERSION
+      },
+      generatedAt: new Date().toISOString(),
+      outputFileName: outputFileNameForMode(),
+      source: {
+        fileName: fileName || "",
+        sheetName,
+        headerRow: header.rowIndex + 1,
+        firstDataRow: header.rowIndex + 2,
+        detectedHeaders: header.detectedHeaders
+      },
+      counts: {
+        rules: rows.length,
+        territories: territories.size,
+        scms: scms.size,
+        states: states.size,
+        incompleteRows: incompleteRows.length
+      },
+      industryFamily: "Products",
+      territories: grouped,
+      rules: rows,
+      review: {
+        incompleteRows
       }
     };
   }
@@ -957,6 +1090,50 @@
     };
   }
 
+  function detectProductsScmTerritoryHeader(matrix) {
+    const maxRows = Math.min(matrix.length, 15);
+    const candidates = [];
+
+    for (let rowIndex = 0; rowIndex < maxRows; rowIndex += 1) {
+      const row = matrix[rowIndex] || [];
+      const normalizedHeaders = row.map(normalizeKey);
+      const indexes = {
+        territory: findProductsHeaderIndex(normalizedHeaders, PRODUCTS_SCM_TERRITORY_HEADER_ALIASES.territory),
+        scm: findProductsHeaderIndex(normalizedHeaders, PRODUCTS_SCM_TERRITORY_HEADER_ALIASES.scm),
+        action: findProductsHeaderIndex(normalizedHeaders, PRODUCTS_SCM_TERRITORY_HEADER_ALIASES.action),
+        state: findProductsHeaderIndex(normalizedHeaders, PRODUCTS_SCM_TERRITORY_HEADER_ALIASES.state)
+      };
+      indexes.zipMin = findProductsHeaderIndex(normalizedHeaders, PRODUCTS_SCM_TERRITORY_HEADER_ALIASES.zipMin);
+      indexes.zipMax = findProductsHeaderIndex(normalizedHeaders, PRODUCTS_SCM_TERRITORY_HEADER_ALIASES.zipMax);
+      indexes.priority = findProductsHeaderIndex(normalizedHeaders, PRODUCTS_SCM_TERRITORY_HEADER_ALIASES.priority);
+      indexes.active = findProductsHeaderIndex(normalizedHeaders, PRODUCTS_SCM_TERRITORY_HEADER_ALIASES.active);
+      indexes.notes = findProductsHeaderIndex(normalizedHeaders, PRODUCTS_SCM_TERRITORY_HEADER_ALIASES.notes);
+      const requiredCount = ["scm", "action", "state"].filter(key => indexes[key] >= 0).length;
+      const score = requiredCount * 5 + (indexes.territory >= 0 ? 2 : 0) + (indexes.zipMin >= 0 || indexes.zipMax >= 0 ? 1 : 0);
+      if (requiredCount === 3) candidates.push({ rowIndex, row, indexes, score });
+    }
+
+    candidates.sort((left, right) => right.score - left.score || left.rowIndex - right.rowIndex);
+    const winner = candidates[0];
+    if (!winner) return null;
+
+    return {
+      rowIndex: winner.rowIndex,
+      indexes: winner.indexes,
+      detectedHeaders: {
+        territory: productsHeaderCellInfo(winner.row, winner.indexes.territory),
+        scm: productsHeaderCellInfo(winner.row, winner.indexes.scm),
+        action: productsHeaderCellInfo(winner.row, winner.indexes.action),
+        state: productsHeaderCellInfo(winner.row, winner.indexes.state),
+        zipMin: productsHeaderCellInfo(winner.row, winner.indexes.zipMin),
+        zipMax: productsHeaderCellInfo(winner.row, winner.indexes.zipMax),
+        priority: productsHeaderCellInfo(winner.row, winner.indexes.priority),
+        active: productsHeaderCellInfo(winner.row, winner.indexes.active),
+        notes: productsHeaderCellInfo(winner.row, winner.indexes.notes)
+      }
+    };
+  }
+
   function findProductsHeaderIndex(normalizedHeaders, aliases, options = {}) {
     const excluded = new Set((options.exclude || []).filter(index => index >= 0));
     const exact = normalizedHeaders.findIndex((header, index) => !excluded.has(index) && aliases.includes(header));
@@ -1208,6 +1385,64 @@
     return Boolean(fallback);
   }
 
+  function splitListCell(value) {
+    const text = cleanCell(value);
+    if (!text) return [];
+    return text
+      .split(/\s*(?:,|;|\||\n|\r|\t)\s*/g)
+      .map(cleanCell)
+      .filter(Boolean);
+  }
+
+  function normalizeStateCode(value) {
+    return cleanCell(value).toUpperCase().replace(/[^A-Z0-9]/g, "");
+  }
+
+  function normalizeZipValue(value) {
+    const text = cleanCell(value);
+    if (!text) return "";
+    const match = text.match(/\d{1,5}/);
+    return match ? match[0].padStart(5, "0").slice(0, 5) : "";
+  }
+
+  function normalizeTerritoryAction(value) {
+    const text = cleanCell(value);
+    if (!text) return "include";
+    if (/^(?:exc|exclude|except|omit|remove|out)$/i.test(text)) return "exclude";
+    if (/^(?:inc|include|add|in|yes|y)$/i.test(text)) return "include";
+    if (/exclude|except|omit|remove/i.test(text)) return "exclude";
+    if (/include/i.test(text)) return "include";
+    return "";
+  }
+
+  function territoryRuleLabel(rule) {
+    const zip = rule.zipMin || rule.zipMax
+      ? `${rule.state} ${rule.zipMin || "00000"}-${rule.zipMax || "99999"}`
+      : rule.state;
+    return zip;
+  }
+
+  function buildProductsScmTerritorySummaries(rows) {
+    const grouped = new Map();
+    rows.forEach(row => {
+      const key = `${row.territoryKey}|${row.scmKey}`;
+      const summary = grouped.get(key) || {
+        territory: row.territory,
+        territoryKey: row.territoryKey,
+        scm: row.scm,
+        scmKey: row.scmKey,
+        includes: [],
+        excludes: [],
+        rules: 0
+      };
+      if (row.action === "exclude") summary.excludes.push(territoryRuleLabel(row));
+      else summary.includes.push(territoryRuleLabel(row));
+      summary.rules += 1;
+      grouped.set(key, summary);
+    });
+    return Array.from(grouped.values()).sort((left, right) => alphaSort(left.territory, right.territory) || alphaSort(left.scm, right.scm));
+  }
+
   function defaultCanOwnForRole(role) {
     const text = cleanCell(role);
     if (!text) return true;
@@ -1251,6 +1486,10 @@
 
     if (output.schema === PRODUCTS_SCM_SCHEMA) {
       renderProductsScmOutput(output);
+      return;
+    }
+    if (output.schema === PRODUCTS_SCM_TERRITORY_SCHEMA) {
+      renderProductsScmTerritoryOutput(output);
       return;
     }
     if (output.schema === AUTHORIZED_MANAGERS_SCHEMA) {
@@ -1342,6 +1581,44 @@
         row.requestTypes.join(", "),
         row.salesRegions.join(", "),
         row.regionalDirectors.join(", ")
+      ])
+    );
+  }
+
+  function renderProductsScmTerritoryOutput(output) {
+    elements["columns-preview-title"].textContent = "Generated Territory Rules";
+    elements["spot-checks-title"].textContent = "Territory Coverage";
+    elements["summary-text"].textContent = `${output.counts.rules.toLocaleString()} Products territory rule${output.counts.rules === 1 ? "" : "s"} generated from ${output.source.sheetName}. JSON file: ${outputFileNameForOutput(output)}.`;
+
+    renderStats([
+      ["JSON File", outputFileNameForOutput(output)],
+      ["Rules", output.counts.rules],
+      ["Territories", output.counts.territories],
+      ["SCM Owners", output.counts.scms],
+      ["States", output.counts.states],
+      ["Review Items", output.counts.incompleteRows]
+    ]);
+
+    elements["columns-preview"].innerHTML = renderTable(
+      ["Priority", "Action", "Territory", "State", "ZIP Range", "SCM Owner", "Source Row"],
+      output.rules.map(row => [
+        row.priority,
+        row.action,
+        row.territory,
+        row.state,
+        row.zipMin || row.zipMax ? `${row.zipMin || "00000"}-${row.zipMax || "99999"}` : "All",
+        row.scm,
+        row.sourceRow
+      ])
+    );
+
+    elements["spot-checks"].innerHTML = renderTable(
+      ["Territory", "SCM Owner", "Included", "Excluded"],
+      output.territories.map(row => [
+        row.territory,
+        row.scm,
+        row.includes.join(", ") || "None",
+        row.excludes.join(", ") || "None"
       ])
     );
   }

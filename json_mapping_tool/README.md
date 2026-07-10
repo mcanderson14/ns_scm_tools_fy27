@@ -2,12 +2,13 @@
 
 Static browser tool for converting FY27 queue mapping Excel workbooks into JSON mapping files.
 
-Current tool version: `27.0.9`.
+Current tool version: `27.0.10`.
 
 The tool currently supports these outputs:
 
 - `SC_Industry_State_Region_Mapping.json`
 - `Products_SCM_Relationship_Mapping.json`
+- `Products_SCM_Territory_Mapping.json`
 - `Authorized_Managers.json`
 - `GTM_to_SC_Industry_Mapping.json`
 
@@ -40,6 +41,27 @@ The generated JSON uses schema `ns-scm-tools.scm-relationships.v3` and includes:
 - `directorLookup`: fallback lookup keyed as `requestTypeKey|regionalDirectorKey`.
 - `scmLookup`: all relationships by SCM owner.
 - `review`: skipped or ambiguous rows to inspect before uploading.
+
+## Products SCM Territories
+
+Use the `Products SCM Territories` mode for Products-only fallback owner rules by state and ZIP range. Recommended columns:
+
+- `Territory` or `Geography`
+- `SCM Owner`
+- `Action` with `include` or `exclude`
+- `State`
+- Optional `ZIP Min`
+- Optional `ZIP Max`
+- Optional `Priority`
+- Optional `Active`
+
+Use one row per condition. For example:
+
+- `include | OH | 44000 | 45999` for the Ohio ZIP carve-in.
+- `exclude | OH | 44000 | 45999` for the opposite territory that owns Ohio except that range.
+- Leave ZIP Min/Max blank for a whole-state rule.
+
+The generated JSON uses schema `ns-scm-tools.products-scm-territories.v1`. IQUEUE uses it only for Products requests when the regular SCM relationship mapping does not identify an owner.
 
 ## Use
 
