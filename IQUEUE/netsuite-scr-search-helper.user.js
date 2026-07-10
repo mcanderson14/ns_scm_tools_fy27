@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.42
+// @version      27.0.43
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -42,7 +42,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.42";
+  const HELPER_VERSION = "27.0.43";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -2054,6 +2054,19 @@ Health & Hospitality	DIRECT	NL	West	West
     const cleaned = stripScmOwnerTags(value);
     const tag = scmOwnerTag(ownerName);
     return [cleaned, tag].filter(Boolean).join(", ");
+  }
+
+  function valueWithHashtag(value, tag) {
+    const normalizedTag = normalizeSpaces(tag);
+    if (!normalizedTag) return normalizeMultiline(value);
+    const parts = normalizeMultiline(value)
+      .split(/[\n,;]+/)
+      .map(normalizeSpaces)
+      .filter(Boolean);
+    if (parts.some(part => normalizeKey(part) === normalizeKey(normalizedTag))) {
+      return parts.join(", ");
+    }
+    return parts.concat(normalizedTag).join(", ");
   }
 
   function cleanPersonName(value) {
@@ -6399,6 +6412,7 @@ Health & Hospitality	DIRECT	NL	West	West
           <div class="scr-helper-notes-button-stack">
             <button type="button" class="scr-helper-notes-save" data-row-id="${escapeHtml(row.id)}" ${disabled}>Save notes</button>
             <button type="button" class="scr-helper-request-info" data-row-id="${escapeHtml(row.id)}" ${disabled}>Email Sales</button>
+            <button type="button" class="scr-helper-redirect-sales" data-row-id="${escapeHtml(row.id)}" ${disabled}>Redirect to sales</button>
           </div>
           <span class="scr-helper-notes-status${notice && notice.state ? ` is-${escapeHtml(notice.state)}` : ""}" aria-live="polite">${notice ? escapeHtml(notice.message) : ""}</span>
           ${noticeLinks}
@@ -7906,13 +7920,13 @@ Health & Hospitality	DIRECT	NL	West	West
   }
 
   function redirectDetailsRows(details = {}, routeNoteLine = "") {
-    return [
-      ["Redirect Note", routeNoteLine],
+    const rows = [
       ["Redirected To", details.targetFamily],
       ["Reason", details.redirectReason],
       ["Specific SC Requested", details.requestedSc],
       ["Additional Information", details.additionalInfo]
     ].filter(([, value]) => normalizeSpaces(value));
+    return rows.length ? rows : [["Redirect Note", routeNoteLine]].filter(([, value]) => normalizeSpaces(value));
   }
 
   function redirectDetailsTextBlock(details = {}, routeNoteLine = "") {
@@ -8072,6 +8086,13 @@ Health & Hospitality	DIRECT	NL	West	West
     const namedLink = employeeLinks.find(link => personKeyListsOverlap(personNameKeys(link.text), targetKeys));
     const link = namedLink || (employeeLinks.length === 1 ? employeeLinks[0] : null);
     return recordIdFromUrl(link && link.href);
+  }
+
+  function salesRepEmployeeIdForRow(row) {
+    const summary = buildRowSummary(row);
+    const salesRepName = cleanPersonName(summary.salesRep);
+    const fields = row && (row.allFields || row.fields) || [];
+    return salesRepEmployeeIdFromField(findSalesRepField(fields), salesRepName);
   }
 
   function pickEmployeeEmailMatch(rows, names) {
@@ -8326,6 +8347,44 @@ Health & Hospitality	DIRECT	NL	West	West
     return lines.filter(line => line !== "").join("\r\n");
   }
 
+  function redirectToSalesRequestTitle(row) {
+    const summary = buildRowSummary(row);
+    const scrLabel = formatScrTitlePrefix(row.scrDisplayId) || row.title || "SC Request";
+    return [scrLabel, summary.opportunityDisplay || "Missing Opportunity", summary.companyDisplay]
+      .filter(Boolean)
+      .join(" | ");
+  }
+
+  function redirectToSalesMailSubject(row) {
+    return normalizeSpaces(`Additional information needed - ${redirectToSalesRequestTitle(row)}`).slice(0, 240);
+  }
+
+  function redirectToSalesMailText(row, messageText) {
+    const summary = buildRowSummary(row);
+    const ownerName = requestInfoOwnerName(row);
+    const editUrl = editUrlForRow(row);
+    const requestTitle = redirectToSalesRequestTitle(row);
+    const lines = [
+      `We need additional information regarding SC Request ${requestTitle}.`,
+      "",
+      normalizeMultiline(messageText),
+      "",
+      "Request details:",
+      `SCM Owner: ${ownerName}`,
+      `SC Staffing Industry: ${requestInfoQueueLabel(row)}`,
+      `Request Type: ${requestTypeLabel(row.amoDirect) || "Unknown"}`,
+      `Date Needed: ${summary.dateNeeded || "Unknown"}`,
+      `Company: ${summary.companyDisplay || "Unknown"}`,
+      `Opportunity: ${summary.opportunityDisplay || "Missing Opportunity"}`,
+      `Sales Rep: ${summary.salesRep || "Unknown"}`,
+      `Regional Director: ${summary.salesDirector || "Unknown"}`,
+      editUrl ? `Open SCR: ${editUrl}` : "",
+      "",
+      "Once you have provided the requested information, please reassign the SCR back to the SC Manager for staffing."
+    ];
+    return lines.filter(line => line !== "").join("\r\n");
+  }
+
   function normalizedEmailList(values) {
     return (Array.isArray(values) ? values : [values])
       .map(value => normalizeSpaces(value))
@@ -8373,6 +8432,23 @@ Health & Hospitality	DIRECT	NL	West	West
       recipient.email,
       requesterInfoMailSubject(row),
       requesterInfoMailText(row),
+      {
+        cc: ccRecipients,
+        labels: {
+          mailto: "Open email compose",
+          outlook: "Open Outlook web compose"
+        }
+      }
+    );
+    draft.autoOpened = openEmailDraftUrl(draft);
+    return draft;
+  }
+
+  function openRedirectToSalesDraft(row, recipient, ccRecipients = [], messageText = "") {
+    const draft = buildEmailComposeDraft(
+      recipient.email,
+      redirectToSalesMailSubject(row),
+      redirectToSalesMailText(row, messageText),
       {
         cc: ccRecipients,
         labels: {
@@ -9927,6 +10003,84 @@ Health & Hospitality	DIRECT	NL	West	West
     updateRowSearchText(row);
   }
 
+  function showRedirectToSalesDialog(row) {
+    const title = redirectToSalesRequestTitle(row);
+    return new Promise(resolve => {
+      const backdrop = document.createElement("div");
+      backdrop.className = "scr-helper-owner-modal-backdrop";
+      backdrop.innerHTML = `
+        <div class="scr-helper-owner-modal" role="dialog" aria-modal="true" aria-labelledby="scr-helper-redirect-sales-title">
+          <div class="scr-helper-owner-modal-head">
+            <div>
+              <div id="scr-helper-redirect-sales-title" class="scr-helper-owner-modal-title">Redirect to sales</div>
+              <div class="scr-helper-owner-modal-subtitle">${escapeHtml(title)}</div>
+            </div>
+            <button type="button" class="scr-helper-owner-modal-close" title="Cancel">×</button>
+          </div>
+          <label class="scr-helper-owner-modal-field">
+            <span>Email body <strong>Required</strong></span>
+            <textarea class="scr-helper-owner-modal-input scr-helper-redirect-sales-body" placeholder="Describe the missing information needed before this SCR can be staffed." required aria-required="true"></textarea>
+          </label>
+          <div class="scr-helper-owner-modal-message" aria-live="polite"></div>
+          <div class="scr-helper-owner-modal-actions">
+            <button type="button" class="scr-helper-owner-cancel">Cancel</button>
+            <button type="button" class="scr-helper-owner-save scr-helper-redirect-sales-send" title="Open Outlook message for sending.">📧 Send</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(backdrop);
+
+      const bodyInput = backdrop.querySelector(".scr-helper-redirect-sales-body");
+      const message = backdrop.querySelector(".scr-helper-owner-modal-message");
+      const send = backdrop.querySelector(".scr-helper-redirect-sales-send");
+
+      function close(value) {
+        backdrop.remove();
+        resolve(value);
+      }
+
+      function currentBody() {
+        return normalizeMultiline(bodyInput && bodyInput.value);
+      }
+
+      function updateSendState() {
+        const hasBody = Boolean(currentBody());
+        send.disabled = !hasBody;
+        if (bodyInput) bodyInput.classList.toggle("is-missing", !hasBody && document.activeElement === bodyInput);
+      }
+
+      function submit() {
+        const body = currentBody();
+        if (!body) {
+          message.textContent = "Add the message body before redirecting to sales.";
+          message.style.color = "#b3261e";
+          updateSendState();
+          if (bodyInput) bodyInput.focus();
+          return;
+        }
+        close({ body });
+      }
+
+      backdrop.querySelector(".scr-helper-owner-modal-close").addEventListener("click", () => close(null));
+      backdrop.querySelector(".scr-helper-owner-cancel").addEventListener("click", () => close(null));
+      send.addEventListener("click", submit);
+      bodyInput.addEventListener("input", () => {
+        message.textContent = "";
+        message.style.color = "";
+        updateSendState();
+      });
+      bodyInput.addEventListener("keydown", event => {
+        if (event.key === "Escape") close(null);
+        if ((event.metaKey || event.ctrlKey) && event.key === "Enter") submit();
+      });
+      backdrop.addEventListener("click", event => {
+        if (event.target === backdrop) close(null);
+      });
+      updateSendState();
+      window.setTimeout(() => bodyInput.focus(), 0);
+    });
+  }
+
   function crossIndustryOwnerOptions(row, target) {
     const family = target && target.family || "";
     const keys = scIndustryGroupKeyVariants(family);
@@ -10344,6 +10498,71 @@ Health & Hospitality	DIRECT	NL	West	West
       console.warn("IQUEUE could not compose requester info email", error);
       row.routingNotice = {
         message: `Could not compose requester email: ${error.message || error}`,
+        state: "error"
+      };
+      renderResults();
+    }
+  }
+
+  async function handleRedirectToSales(button) {
+    const card = button.closest(".scr-helper-card");
+    const row = searchRows.find(item => item.id === button.dataset.rowId);
+    if (!row) return;
+
+    const dialog = await showRedirectToSalesDialog(row);
+    if (!dialog) return;
+
+    const editUrl = editUrlForRow(row);
+    button.disabled = true;
+    setStaffingNotesStatus(card, "⏳ Resolving Sales Rep email...", "working");
+
+    try {
+      const recipient = await resolveSalesRepEmail(row);
+      setStaffingNotesStatus(card, "⏳ Adding #gravity and assigning SCR back to Sales Rep...", "working");
+
+      const currentHashtags = row.hashtags || await lookupSingleField(row, HASHTAGS_FIELD_ID);
+      const nextHashtags = valueWithHashtag(currentHashtags, "#gravity");
+      if (nextHashtags !== normalizeMultiline(currentHashtags)) {
+        await submitHashtags(row, nextHashtags);
+        updateRowHashtags(row, nextHashtags);
+      }
+
+      let assignmentMessage = "";
+      const employeeId = salesRepEmployeeIdForRow(row);
+      if (employeeId) {
+        try {
+          await submitAssignee(row, employeeId);
+          updateRowAssignedTo(row, recipient.name || buildRowSummary(row).salesRep);
+          assignmentMessage = `SCR assigned back to ${recipient.name || recipient.email}.`;
+        } catch (assignmentError) {
+          console.warn("IQUEUE could not assign SCR back to Sales Rep", assignmentError);
+          assignmentMessage = "SCR opened, but automatic reassignment failed. Assign it back to the Sales Rep from the opened SCR.";
+        }
+      } else {
+        assignmentMessage = "SCR opened; Sales Rep employee id was not available for automatic reassignment.";
+      }
+
+      if (editUrl) {
+        setStaffingNotesStatus(card, "⏳ Opening SCR...", "working");
+        openEditUrlWithGm(editUrl);
+      }
+
+      setStaffingNotesStatus(card, "⏳ Resolving Regional Director email...", "working");
+      const ccRecipient = await resolveSalesDirectorEmail(row);
+      const draft = openRedirectToSalesDraft(row, recipient, ccRecipient ? [ccRecipient.email] : [], dialog.body);
+      const openedText = draft.autoOpened === "mailto"
+        ? "email compose opened using the Firefox fallback"
+        : "Outlook compose opened";
+      row.routingNotice = {
+        message: `${assignmentMessage} Redirect-to-sales ${openedText} for ${draft.email}${draft.cc && draft.cc.length ? `, cc ${draft.cc.join(", ")}` : ""}. Review and send it. If it did not appear, use the links below.`,
+        state: assignmentMessage.includes("failed") || assignmentMessage.includes("not available") ? "warning" : "success",
+        links: draft.links || []
+      };
+      renderResults();
+    } catch (error) {
+      console.warn("IQUEUE could not redirect SCR to sales", error);
+      row.routingNotice = {
+        message: `Could not redirect to sales: ${error.message || error}`,
         state: "error"
       };
       renderResults();
@@ -10960,6 +11179,12 @@ Health & Hospitality	DIRECT	NL	West	West
       const requestInfoButton = closestElement(event.target, ".scr-helper-request-info");
       if (requestInfoButton) {
         handleRequesterInfoEmail(requestInfoButton);
+        return;
+      }
+
+      const redirectSalesButton = closestElement(event.target, ".scr-helper-redirect-sales");
+      if (redirectSalesButton) {
+        handleRedirectToSales(redirectSalesButton);
         return;
       }
 
@@ -12978,7 +13203,8 @@ Health & Hospitality	DIRECT	NL	West	West
         cursor: not-allowed;
       }
 
-      #${HELPER_ID} .scr-helper-request-info {
+      #${HELPER_ID} .scr-helper-request-info,
+      #${HELPER_ID} .scr-helper-redirect-sales {
         flex: 0 0 auto;
         border: 1px solid var(--ns-ui-primary-mid);
         border-radius: 4px;
@@ -12990,12 +13216,20 @@ Health & Hospitality	DIRECT	NL	West	West
         cursor: pointer;
       }
 
-      #${HELPER_ID} .scr-helper-request-info:hover {
+      #${HELPER_ID} .scr-helper-redirect-sales {
+        border-color: #6f4e00;
+        background: #fff7d6;
+        color: #6f4e00;
+      }
+
+      #${HELPER_ID} .scr-helper-request-info:hover,
+      #${HELPER_ID} .scr-helper-redirect-sales:hover {
         border-color: var(--ns-ui-primary);
         color: var(--ns-ui-primary);
       }
 
-      #${HELPER_ID} .scr-helper-request-info:disabled {
+      #${HELPER_ID} .scr-helper-request-info:disabled,
+      #${HELPER_ID} .scr-helper-redirect-sales:disabled {
         border-color: var(--rw-slate-50);
         background: var(--rw-neutral-30);
         color: var(--rw-slate-100);
@@ -13016,6 +13250,11 @@ Health & Hospitality	DIRECT	NL	West	West
 
       #${HELPER_ID} .scr-helper-notes-status.is-error {
         color: var(--rw-oracle-red);
+        font-weight: 700;
+      }
+
+      #${HELPER_ID} .scr-helper-notes-status.is-warning {
+        color: #6f4e00;
         font-weight: 700;
       }
 
