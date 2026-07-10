@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT Staffing Load Cache Bridge
 // @namespace    ns-scm-tools-fy27
-// @version      2.0.0
+// @version      27.2.0
 // @description  Refreshes the SCOUT staffing-dashboard workload cache from NetSuite saved search 1324335.
 // @author       Michael Anderson
 // @homepageURL  https://github.com/mcanderson14/ns_scm_tools_fy27/tree/main/SCOUT/2.0
