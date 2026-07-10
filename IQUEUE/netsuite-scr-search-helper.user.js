@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.41
+// @version      27.0.42
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -42,7 +42,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.41";
+  const HELPER_VERSION = "27.0.42";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -254,6 +254,12 @@
     { family: "Products", tag: "#xvr-products" },
     { family: "Software", tag: "#xvr-software" },
     { family: "Health & Hospitality", tag: "#xvr-healthhosp" }
+  ];
+  const CROSS_INDUSTRY_REDIRECT_REASONS = [
+    "Industry Alignment",
+    "Product Knowledge",
+    "Continuity",
+    "Proximity to another SC"
   ];
   const CROSS_INDUSTRY_GLOBAL_TAGS = ["#xvr-other", "#xvr-unmapped", "#xvr-otherunmapped"];
   const PEOPLE_FILTERS = [
@@ -7899,7 +7905,26 @@ Health & Hospitality	DIRECT	NL	West	West
     });
   }
 
-  function graphMailHtmlForOwnerRoute(row, ownerName, target, routeNoteLine = "") {
+  function redirectDetailsRows(details = {}, routeNoteLine = "") {
+    return [
+      ["Redirect Note", routeNoteLine],
+      ["Redirected To", details.targetFamily],
+      ["Reason", details.redirectReason],
+      ["Specific SC Requested", details.requestedSc],
+      ["Additional Information", details.additionalInfo]
+    ].filter(([, value]) => normalizeSpaces(value));
+  }
+
+  function redirectDetailsTextBlock(details = {}, routeNoteLine = "") {
+    const rows = redirectDetailsRows(details, routeNoteLine);
+    if (!rows.length) return "";
+    return [
+      "REDIRECT DETAILS",
+      ...rows.map(([label, value]) => `${label}: ${value}`)
+    ].join("\r\n");
+  }
+
+  function graphMailHtmlForOwnerRoute(row, ownerName, target, routeNoteLine = "", details = {}) {
     const summary = buildRowSummary(row);
     const scrLabel = formatScrTitlePrefix(row.scrDisplayId) || row.title || "SC Request";
     const opportunity = summary.opportunityDisplay || "Missing Opportunity";
@@ -7907,10 +7932,10 @@ Health & Hospitality	DIRECT	NL	West	West
     const editUrl = editUrlForRow(row);
     const routedBy = getCurrentUserName() || "IQUEUE user";
     const targetFamily = target && target.family || primaryDisplayedIndustryFamily(row) || "selected queue";
+    const redirectRows = redirectDetailsRows(details, routeNoteLine);
     const rows = [
-      ["SCM Owner", ownerName],
+      ["SC Manager", ownerName],
       ["Routed By", routedBy],
-      ["Redirect Note", routeNoteLine],
       ["SC Staffing Industry", targetFamily],
       ["Request Type", requestTypeLabel(row.amoDirect)],
       ["Date Needed", summary.dateNeeded],
@@ -7922,6 +7947,21 @@ Health & Hospitality	DIRECT	NL	West	West
 
     return `
       <div style="font-family: Arial, Helvetica, sans-serif; color: #3C4545; font-size: 14px; line-height: 1.45;">
+        ${redirectRows.length ? `
+          <div style="border-left: 4px solid #36677D; background: #E7F2F5; padding: 10px 12px; margin-bottom: 14px;">
+            <div style="font-weight: 700; color: #24495A; margin-bottom: 6px;">Redirect details</div>
+            <table style="border-collapse: collapse;">
+              <tbody>
+                ${redirectRows.map(([label, value]) => `
+                  <tr>
+                    <td style="padding: 3px 10px 3px 0; color: #697778; font-weight: 700; vertical-align: top;">${escapeHtml(label)}</td>
+                    <td style="padding: 3px 0; white-space: pre-wrap;">${escapeHtml(value)}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          </div>
+        ` : ""}
         <p>${escapeHtml(routedBy)} routed an SCR to your IQUEUE owner view.</p>
         <p>
           <strong>${escapeHtml(scrLabel)}</strong>
@@ -7952,19 +7992,21 @@ Health & Hospitality	DIRECT	NL	West	West
     return normalizeSpaces(`IQUEUE: ${targetFamily} SCR routed to you - ${scrLabel}${opportunity ? ` | ${opportunity}` : ""}${company ? ` | ${company}` : ""}`).slice(0, 240);
   }
 
-  function ownerRouteMailText(row, ownerName, target, routeNoteLine = "") {
+  function ownerRouteMailText(row, ownerName, target, routeNoteLine = "", details = {}) {
     const summary = buildRowSummary(row);
     const scrLabel = formatScrTitlePrefix(row.scrDisplayId) || row.title || "SC Request";
     const routedBy = getCurrentUserName() || "IQUEUE user";
     const targetFamily = target && target.family || primaryDisplayedIndustryFamily(row) || "selected queue";
     const editUrl = editUrlForRow(row);
+    const redirectBlock = redirectDetailsTextBlock(details, routeNoteLine);
     const lines = [
+      redirectBlock,
+      redirectBlock ? "" : "",
       `${routedBy} routed an SCR to your IQUEUE owner view.`,
       "",
       `${scrLabel}${summary.opportunityDisplay ? ` | ${summary.opportunityDisplay}` : ""}${summary.companyDisplay ? ` | ${summary.companyDisplay}` : ""}`,
       "",
-      `SCM Owner: ${ownerName}`,
-      routeNoteLine ? `Redirect Note: ${routeNoteLine}` : "",
+      `SC Manager: ${ownerName}`,
       `SC Staffing Industry: ${targetFamily}`,
       `Request Type: ${requestTypeLabel(row.amoDirect) || "Unknown"}`,
       `Date Needed: ${summary.dateNeeded || "Unknown"}`,
@@ -7977,9 +8019,9 @@ Health & Hospitality	DIRECT	NL	West	West
     return lines.filter(line => line !== "").join("\r\n");
   }
 
-  function openOwnerRouteEmailDraft(row, ownerName, target, email, reason = "", routeNoteLine = "") {
+  function openOwnerRouteEmailDraft(row, ownerName, target, email, reason = "", routeNoteLine = "", details = {}) {
     const subject = graphMailSubjectForOwnerRoute(row, target);
-    const fullBody = ownerRouteMailText(row, ownerName, target, routeNoteLine);
+    const fullBody = ownerRouteMailText(row, ownerName, target, routeNoteLine, details);
     const compactBody = fullBody.length > 1200
       ? `${fullBody.slice(0, 1150)}\r\n\r\n[Details trimmed for draft length. Open the SCR for full context.]`
       : fullBody;
@@ -7999,10 +8041,10 @@ Health & Hospitality	DIRECT	NL	West	West
     };
   }
 
-  async function sendOwnerRouteEmail(row, ownerName, target, routeNoteLine = "") {
+  async function sendOwnerRouteEmail(row, ownerName, target, routeNoteLine = "", details = {}) {
     const email = authorizedManagerEmailForName(ownerName);
     if (!email) throw new Error(`No email address found for ${ownerName} in Authorized Managers.`);
-    return openOwnerRouteEmailDraft(row, ownerName, target, email, "Owner notifications use Outlook drafts.", routeNoteLine);
+    return openOwnerRouteEmailDraft(row, ownerName, target, email, "Owner notifications use Outlook drafts.", routeNoteLine, details);
   }
 
   function findSalesRepField(fields) {
@@ -9924,6 +9966,14 @@ Health & Hospitality	DIRECT	NL	West	West
     const defaultOwner = defaultCrossIndustryOwner(row, target);
     const options = uniqueSorted([defaultOwner].concat(crossIndustryOwnerOptions(row, target)).filter(Boolean));
     const routeNotePrefix = `${formatShortNumericDate()} [${currentRouteNoteUserName()}]:`;
+    const ownerOptionsHtml = [
+      `<option value="">Route to industry queue only</option>`,
+      ...options.map(option => `<option value="${escapeHtml(option)}"${normalizeKey(option) === normalizeKey(defaultOwner) ? " selected" : ""}>${escapeHtml(option)}</option>`)
+    ].join("");
+    const reasonOptionsHtml = [
+      `<option value="">Choose a reason</option>`,
+      ...CROSS_INDUSTRY_REDIRECT_REASONS.map(reason => `<option value="${escapeHtml(reason)}">${escapeHtml(reason)}</option>`)
+    ].join("");
 
     return new Promise(resolve => {
       const backdrop = document.createElement("div");
@@ -9933,42 +9983,49 @@ Health & Hospitality	DIRECT	NL	West	West
           <div class="scr-helper-owner-modal-head">
             <div>
               <div id="scr-helper-owner-modal-title" class="scr-helper-owner-modal-title">Cross-staff to ${escapeHtml(family)}</div>
-              <div class="scr-helper-owner-modal-subtitle">${escapeHtml(options.length ? "Choose an SCM owner, or route to the industry queue only. A redirect note is required." : "No authorized SCM owners are loaded for this industry. You can still route to the industry queue, but a redirect note is required.")}</div>
+              <div class="scr-helper-owner-modal-subtitle">${escapeHtml(options.length ? "Choose an SC Manager, or route to the industry queue only. Redirect details are required." : "No authorized SC Managers are loaded for this industry. You can still route to the industry queue, but redirect details are required.")}</div>
             </div>
             <button type="button" class="scr-helper-owner-modal-close" title="Cancel">×</button>
           </div>
           <label class="scr-helper-owner-modal-field">
-            <span>SCM Owner</span>
-            <input class="scr-helper-owner-modal-input" type="search" placeholder="Start typing a manager name" autocomplete="off" value="${escapeHtml(defaultOwner)}">
+            <span>SC Manager</span>
+            <select class="scr-helper-owner-modal-input scr-helper-owner-select">${ownerOptionsHtml}</select>
           </label>
-          <div class="scr-helper-owner-modal-list" role="listbox"></div>
           <label class="scr-helper-owner-modal-field">
-            <span>Redirect note <strong>Required</strong></span>
-            <textarea class="scr-helper-owner-note-input" placeholder="Why is this cross-industry redirect happening?" required aria-required="true"></textarea>
-            <span class="scr-helper-owner-note-help">Saved to staffing notes as: ${escapeHtml(routeNotePrefix)} &lt;your note&gt;</span>
+            <span>Why is this request being redirected to ${escapeHtml(family)}? <strong>Required</strong></span>
+            <select class="scr-helper-owner-reason-select" required aria-required="true">${reasonOptionsHtml}</select>
+          </label>
+          <label class="scr-helper-owner-modal-field">
+            <span>Specific SC requested</span>
+            <input class="scr-helper-requested-sc-input" type="text" placeholder="Optional SC name">
+          </label>
+          <label class="scr-helper-owner-modal-field">
+            <span>Additional information <strong>Required</strong></span>
+            <textarea class="scr-helper-owner-note-input" placeholder="Add context for the redirect, customer need, timing, or relevant background." required aria-required="true"></textarea>
+            <span class="scr-helper-owner-note-help">Saved to staffing notes as: ${escapeHtml(routeNotePrefix)} REDIRECT TO ${escapeHtml(family)}...</span>
           </label>
           <label class="scr-helper-owner-notify">
             <input class="scr-helper-owner-notify-input" type="checkbox" disabled>
-            <span>Open email notification draft for SCM owner</span>
+            <span>Open email notification draft for SC Manager</span>
           </label>
           <div class="scr-helper-owner-modal-message" aria-live="polite"></div>
           <div class="scr-helper-owner-modal-actions">
             <button type="button" class="scr-helper-owner-route-only" title="${escapeHtml(routeOnlyLabel)} without assigning an SCM owner.">${escapeHtml(routeOnlyLabel)}</button>
             <button type="button" class="scr-helper-owner-cancel">Cancel</button>
-            <button type="button" class="scr-helper-owner-save" title="Route to the selected SCM owner.">Route to SCM Owner</button>
+            <button type="button" class="scr-helper-owner-save" title="Route to the selected SC Manager.">Route to SC Manager</button>
           </div>
         </div>
       `;
       document.body.appendChild(backdrop);
 
       const input = backdrop.querySelector(".scr-helper-owner-modal-input");
+      const reasonInput = backdrop.querySelector(".scr-helper-owner-reason-select");
+      const requestedScInput = backdrop.querySelector(".scr-helper-requested-sc-input");
       const noteInput = backdrop.querySelector(".scr-helper-owner-note-input");
-      const list = backdrop.querySelector(".scr-helper-owner-modal-list");
       const message = backdrop.querySelector(".scr-helper-owner-modal-message");
       const save = backdrop.querySelector(".scr-helper-owner-save");
       const routeOnly = backdrop.querySelector(".scr-helper-owner-route-only");
       const notifyInput = backdrop.querySelector(".scr-helper-owner-notify-input");
-      let selectedOwnerName = defaultOwner || "";
       let notifyTouched = false;
 
       function close(value) {
@@ -9978,16 +10035,17 @@ Health & Hospitality	DIRECT	NL	West	West
 
       function updateSaveLabel() {
         const ownerName = selectedOwner();
-        const hasRedirectNote = Boolean(redirectNote());
+        const hasRedirectDetails = Boolean(redirectReason() && redirectNote());
         routeOnly.textContent = routeOnlyLabel;
-        routeOnly.disabled = !hasRedirectNote;
-        routeOnly.title = hasRedirectNote
-          ? `${routeOnlyLabel} without assigning an SCM owner.`
-          : "Add a redirect note before saving the route.";
-        save.textContent = ownerName ? `Route to ${ownerName}` : "Route to SCM Owner";
-        save.disabled = !ownerName || !hasRedirectNote;
-        save.classList.toggle("is-ready", Boolean(ownerName && hasRedirectNote));
-        if (noteInput) noteInput.classList.toggle("is-missing", !hasRedirectNote && document.activeElement === noteInput);
+        routeOnly.disabled = !hasRedirectDetails;
+        routeOnly.title = hasRedirectDetails
+          ? `${routeOnlyLabel} without assigning an SC Manager.`
+          : "Choose a reason and add additional information before saving the route.";
+        save.textContent = ownerName ? `Route to ${ownerName}` : "Route to SC Manager";
+        save.disabled = !ownerName || !hasRedirectDetails;
+        save.classList.toggle("is-ready", Boolean(ownerName && hasRedirectDetails));
+        if (noteInput) noteInput.classList.toggle("is-missing", !redirectNote() && document.activeElement === noteInput);
+        if (reasonInput) reasonInput.classList.toggle("is-missing", !redirectReason() && document.activeElement === reasonInput);
         if (notifyInput) {
           notifyInput.disabled = !ownerName;
           if (!ownerName) {
@@ -9999,37 +10057,16 @@ Health & Hospitality	DIRECT	NL	West	West
         }
       }
 
-      function filteredOptions() {
-        const key = normalizeKey(input.value);
-        return options
-          .filter(option => !key || normalizeKey(option).includes(key))
-          .slice(0, 80);
-      }
-
       function renderOptions() {
-        const visible = filteredOptions();
-        list.innerHTML = visible.map(option => `
-          <button
-            type="button"
-            class="scr-helper-owner-option${normalizeKey(option) === normalizeKey(selectedOwnerName) ? " is-selected" : ""}"
-            data-owner-name="${escapeHtml(option)}"
-            role="option"
-            aria-selected="${normalizeKey(option) === normalizeKey(selectedOwnerName) ? "true" : "false"}"
-          >
-            ${escapeHtml(option)}
-          </button>
-        `).join("");
-        list.hidden = !visible.length;
-        message.textContent = options.length || normalizeSpaces(input.value)
+        message.textContent = options.length
           ? ""
-          : "Upload or load Authorized_Managers.json to show filtered SCM owners.";
+          : "Upload or load Authorized_Managers.json to show SC Managers in the dropdown.";
         updateSaveLabel();
       }
 
       function selectedOwner() {
         const value = normalizeSpaces(input.value);
         if (!value) return "";
-        if (selectedOwnerName && normalizeKey(value) === normalizeKey(selectedOwnerName)) return selectedOwnerName;
         return matchOwnerOption(value, options);
       }
 
@@ -10041,10 +10078,34 @@ Health & Hospitality	DIRECT	NL	West	West
         return normalizeSpaces(noteInput && noteInput.value);
       }
 
-      function requireRedirectNote() {
-        if (redirectNote()) return true;
-        message.textContent = "Add a redirect note before saving the cross-industry redirect.";
-        if (noteInput) {
+      function redirectReason() {
+        return normalizeSpaces(reasonInput && reasonInput.value);
+      }
+
+      function requestedSc() {
+        return normalizeSpaces(requestedScInput && requestedScInput.value);
+      }
+
+      function assignmentDetails() {
+        return {
+          targetFamily: family,
+          redirectReason: redirectReason(),
+          requestedSc: requestedSc(),
+          additionalInfo: redirectNote()
+        };
+      }
+
+      function requireRedirectDetails() {
+        const reason = redirectReason();
+        const note = redirectNote();
+        if (reason && note) return true;
+        message.textContent = reason
+          ? "Add additional information before saving the cross-industry redirect."
+          : "Choose why this request is being redirected before saving.";
+        if (!reason && reasonInput) {
+          reasonInput.classList.add("is-missing");
+          reasonInput.focus();
+        } else if (noteInput) {
           noteInput.classList.add("is-missing");
           noteInput.focus();
         }
@@ -10052,39 +10113,52 @@ Health & Hospitality	DIRECT	NL	West	West
         return false;
       }
 
+      function requireRedirectNote() {
+        if (requireRedirectDetails()) return true;
+        if (noteInput) {
+          noteInput.classList.toggle("is-missing", !redirectNote());
+        }
+        return true;
+      }
+
       function saveSelection() {
-        if (!requireRedirectNote()) return;
+        if (!requireRedirectDetails()) return;
         const value = normalizeSpaces(input.value);
         if (!value) {
-          message.textContent = "Choose an SCM owner first, or use Route to Industry.";
+          message.textContent = "Choose an SC Manager first, or use Route to Industry.";
           input.focus();
           return;
         }
         const ownerName = selectedOwner();
         if (!ownerName) {
-          message.textContent = `No authorized manager matched "${value}".`;
+          message.textContent = `No authorized SC Manager matched "${value}".`;
           input.focus();
           return;
         }
-        close({ ownerName, notifyOwner: notifyOwner(), redirectNote: redirectNote() });
+        close({ ownerName, notifyOwner: notifyOwner(), redirectDetails: assignmentDetails() });
       }
 
       function routeSelectionWithoutAssignment() {
-        if (!requireRedirectNote()) return;
-        close({ ownerName: "", notifyOwner: false, redirectNote: redirectNote() });
+        if (!requireRedirectDetails()) return;
+        close({ ownerName: "", notifyOwner: false, redirectDetails: assignmentDetails() });
       }
 
-      input.addEventListener("input", () => {
-        const matched = matchOwnerOption(input.value, options);
-        const nextOwnerName = matched && normalizeKey(matched) === normalizeKey(input.value) ? matched : "";
-        if (nextOwnerName && normalizeKey(nextOwnerName) !== normalizeKey(selectedOwnerName)) notifyTouched = false;
-        selectedOwnerName = nextOwnerName;
+      input.addEventListener("change", () => {
+        notifyTouched = false;
         renderOptions();
       });
+      reasonInput.addEventListener("change", () => {
+        if (redirectReason()) {
+          reasonInput.classList.remove("is-missing");
+          if (/redirected/i.test(message.textContent || "")) message.textContent = "";
+        }
+        updateSaveLabel();
+      });
+      requestedScInput.addEventListener("input", updateSaveLabel);
       noteInput.addEventListener("input", () => {
         if (redirectNote()) {
           noteInput.classList.remove("is-missing");
-          if (/redirect note/i.test(message.textContent || "")) message.textContent = "";
+          if (/additional information|redirect/i.test(message.textContent || "")) message.textContent = "";
         }
         updateSaveLabel();
       });
@@ -10096,20 +10170,8 @@ Health & Hospitality	DIRECT	NL	West	West
         }
         if (event.key === "Enter") {
           event.preventDefault();
-          const visible = filteredOptions();
-          if (visible.length === 1) input.value = visible[0];
           saveSelection();
         }
-      });
-      list.addEventListener("click", event => {
-        const option = closestElement(event.target, ".scr-helper-owner-option");
-        if (!option) return;
-        selectedOwnerName = option.dataset.ownerName || "";
-        notifyTouched = false;
-        input.value = selectedOwnerName;
-        renderOptions();
-        message.textContent = selectedOwnerName ? `Selected ${selectedOwnerName}.` : "";
-        save.focus();
       });
       if (notifyInput) notifyInput.addEventListener("change", () => { notifyTouched = true; });
       routeOnly.addEventListener("click", routeSelectionWithoutAssignment);
@@ -10122,7 +10184,6 @@ Health & Hospitality	DIRECT	NL	West	West
 
       renderOptions();
       input.focus();
-      if (defaultOwner) input.select();
     });
   }
 
@@ -10178,14 +10239,30 @@ Health & Hospitality	DIRECT	NL	West	West
     return cleanPersonName(getCurrentUserName()) || "IQUEUE User";
   }
 
-  function formatCrossIndustryRouteNote(noteText) {
-    const text = normalizeSpaces(noteText);
-    return text ? `${formatShortNumericDate()} [${currentRouteNoteUserName()}]: ${text}` : "";
+  function formatCrossIndustryRouteNote(details) {
+    if (typeof details === "string") {
+      const text = normalizeSpaces(details);
+      return text ? `${formatShortNumericDate()} [${currentRouteNoteUserName()}]: ${text}` : "";
+    }
+
+    const targetFamily = normalizeSpaces(details && details.targetFamily) || "selected group";
+    const reason = normalizeSpaces(details && details.redirectReason);
+    const requestedSc = normalizeSpaces(details && details.requestedSc);
+    const additionalInfo = normalizeMultiline(details && details.additionalInfo);
+    if (!reason || !additionalInfo) return "";
+
+    return [
+      `${formatShortNumericDate()} [${currentRouteNoteUserName()}]: REDIRECT TO ${targetFamily}`,
+      `Reason: ${reason}`,
+      requestedSc ? `Specific SC Requested: ${requestedSc}` : "",
+      "ADDITIONAL INFORMATION:",
+      additionalInfo
+    ].filter(Boolean).join("\n");
   }
 
   function prependStaffingNoteLine(currentNotes, noteLine) {
     const current = normalizeMultiline(currentNotes);
-    const line = normalizeSpaces(noteLine);
+    const line = normalizeMultiline(noteLine);
     if (!line) return current;
     if (current === line || current.startsWith(`${line}\n`)) return current;
     return current ? `${line}\n\n${current}` : line;
@@ -10331,7 +10408,13 @@ Health & Hospitality	DIRECT	NL	West	West
     }
     const assignment = await showCrossIndustryAssignmentDialog(row, target);
     if (!assignment) return;
-    const routeNoteLine = formatCrossIndustryRouteNote(assignment.redirectNote);
+    const routeDetails = assignment.redirectDetails || {
+      targetFamily: target && target.family || "selected group",
+      redirectReason: "",
+      requestedSc: "",
+      additionalInfo: assignment.redirectNote || ""
+    };
+    const routeNoteLine = formatCrossIndustryRouteNote(routeDetails);
     if (!routeNoteLine) {
       row.routingNotice = {
         message: "Cross-industry route not saved. Add a redirect note before saving the redirect.",
@@ -10374,14 +10457,14 @@ Health & Hospitality	DIRECT	NL	West	West
         };
       } else if (assignment.notifyOwner === false) {
         row.routingNotice = {
-          message: `Route saved${routeNoteLine ? "; redirect note added" : ""}; SCM email notification skipped.`,
+          message: `Route saved${routeNoteLine ? "; redirect note added" : ""}; SC Manager email notification skipped.`,
           state: "success",
           links: []
         };
       } else if (assignment.ownerName) {
         try {
           setStaffingNotesStatus(card, "⏳ Route saved. Opening owner notification draft...", "working");
-          const notice = await sendOwnerRouteEmail(row, assignment.ownerName, target, routeNoteLine);
+          const notice = await sendOwnerRouteEmail(row, assignment.ownerName, target, routeNoteLine, routeDetails);
           const openedText = notice.autoOpened === "mailto"
             ? "email compose opened using the Firefox fallback"
             : "Outlook compose opened";
@@ -12670,10 +12753,11 @@ Health & Hospitality	DIRECT	NL	West	West
 
       .scr-helper-owner-modal {
         width: min(520px, calc(100vw - 40px));
-        max-height: min(620px, calc(100vh - 40px));
+        max-height: min(720px, calc(100vh - 40px));
         display: flex;
         flex-direction: column;
         gap: 12px;
+        overflow-y: auto;
         border: 1px solid var(--rw-slate-50);
         border-radius: 8px;
         box-shadow: 0 16px 38px rgba(15, 31, 35, 0.22);
@@ -12733,6 +12817,8 @@ Health & Hospitality	DIRECT	NL	West	West
       }
 
       .scr-helper-owner-modal-input,
+      .scr-helper-owner-reason-select,
+      .scr-helper-requested-sc-input,
       .scr-helper-owner-note-input {
         min-height: 34px;
         border: 1px solid var(--rw-slate-50);
@@ -12751,6 +12837,16 @@ Health & Hospitality	DIRECT	NL	West	West
         font-family: Arial, Helvetica, sans-serif;
       }
 
+      .scr-helper-owner-modal-input,
+      .scr-helper-owner-reason-select {
+        background: #ffffff;
+      }
+
+      .scr-helper-owner-select {
+        cursor: pointer;
+      }
+
+      .scr-helper-owner-reason-select.is-missing,
       .scr-helper-owner-note-input.is-missing {
         border-color: var(--rw-brand-yellow);
         box-shadow: 0 0 0 2px rgba(241, 177, 63, 0.32);
@@ -12764,6 +12860,8 @@ Health & Hospitality	DIRECT	NL	West	West
       }
 
       .scr-helper-owner-modal-input:focus,
+      .scr-helper-owner-reason-select:focus,
+      .scr-helper-requested-sc-input:focus,
       .scr-helper-owner-note-input:focus {
         border-color: var(--ns-ui-primary);
         outline: 2px solid var(--ns-ui-primary-soft);
