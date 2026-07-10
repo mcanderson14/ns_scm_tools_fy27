@@ -6,7 +6,7 @@
   const PRODUCTS_SCM_TERRITORY_SCHEMA = "ns-scm-tools.products-scm-territories.v1";
   const AUTHORIZED_MANAGERS_SCHEMA = "ns-scm-tools.authorized-managers.v1";
   const GTM_SC_INDUSTRY_SCHEMA = "ns-scm-tools.gtm-sc-industry.v1";
-  const TOOL_VERSION = "27.0.10";
+  const TOOL_VERSION = "27.0.11";
   const TOOL_NAME = "FY27 Queue Mapping JSON Maker";
   const CONFIG_STORAGE_KEY = "ns-scm-tools-region-map-industry-config-v1";
   const EMOJI_CONFIG_STORAGE_KEY = "ns-scm-tools-emoji-config-v1";
@@ -2095,7 +2095,34 @@
   }
 
   function cleanPersonName(value) {
-    return cleanCell(value).replace(/\s+,/g, ",").replace(/,\s+/g, ", ");
+    const cleaned = cleanCell(value).replace(/\s+,/g, ",").replace(/,\s+/g, ", ");
+    return normalizePersonNameCase(cleaned);
+  }
+
+  function normalizePersonNameCase(value) {
+    const text = cleanCell(value);
+    if (!text || /[a-z]/.test(text) || !/[A-Z]/.test(text)) return text;
+    return text.split(",").map(displayCasePersonNamePart).join(", ");
+  }
+
+  function displayCasePersonNamePart(value) {
+    return cleanCell(value).split(/\s+/g).map(displayCasePersonNameToken).join(" ");
+  }
+
+  function displayCasePersonNameToken(value) {
+    const token = cleanCell(value);
+    if (!token) return "";
+    if (/^[A-Z]\.?$/i.test(token)) return token.charAt(0).toUpperCase();
+    if (/^(?:II|III|IV|V|VI|VII|VIII|IX|JR|SR)$/i.test(token)) return token.toUpperCase();
+    return token
+      .toLowerCase()
+      .split(/([-'’])/g)
+      .map(part => {
+        if (!part || /^[-'’]$/.test(part)) return part;
+        return part.charAt(0).toUpperCase() + part.slice(1);
+      })
+      .join("")
+      .replace(/\bMc([a-z])/g, (_, letter) => `Mc${letter.toUpperCase()}`);
   }
 
   function cleanPersonList(value) {

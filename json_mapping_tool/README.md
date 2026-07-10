@@ -2,7 +2,7 @@
 
 Static browser tool for converting FY27 queue mapping Excel workbooks into JSON mapping files.
 
-Current tool version: `27.0.10`.
+Current tool version: `27.0.11`.
 
 The tool currently supports these outputs:
 
