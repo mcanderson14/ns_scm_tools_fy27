@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT Inline Calendar Drawer
 // @namespace    ns-scm-tools-fy27
-// @version      27.2.1
+// @version      27.2.2
 // @description  Lazy inline SC calendar/workload drawer for NetSuite SCOUT cards.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -24,7 +24,7 @@
 (function () {
   "use strict";
 
-  const VERSION = "27.2.1";
+  const VERSION = "27.2.2";
   const CALENDAR_CACHE_KEY = "scout-inline-calendar-drawer-calendar-cache-v1";
   const LOCAL_GRAPH_CACHE_KEY = "sc-staffing-dashboard-local-graph-cache-v1";
   const LEGACY_CALENDAR_CACHE_KEY = "sc-staffing-dashboard-calendar-cache-direct-connector-202605062230";
@@ -876,7 +876,13 @@
 
   function getCalendarCacheFreshness(cache = refreshCalendarCacheMemo()) {
     const timestamp = calendarCacheTimestamp(cache);
-    const hasData = Boolean(cache && (arrayFrom(cache.events).length || arrayFrom(cache.loadedEmails).length));
+    const hasData = Boolean(cache && (
+      arrayFrom(cache.events).length ||
+      arrayFrom(cache.directEvents).length ||
+      arrayFrom(cache.availability).length ||
+      arrayFrom(cache.loadedEmails).length ||
+      arrayFrom(cache.roster).length
+    ));
     if (!hasData || !timestamp) {
       return {
         fresh: false,
