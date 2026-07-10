@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.43
+// @version      27.0.44
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -42,7 +42,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.43";
+  const HELPER_VERSION = "27.0.44";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -73,6 +73,9 @@
   const PRODUCTS_SCM_MAPPING_FILE_URL = "https://nlcorp.app.netsuite.com/app/common/media/482833928?folder=482833928&ifrmcntnr=T";
   const PRODUCTS_SCM_MAPPING_CACHE_KEY = "iqueue-products-scm-relationship-mapping-v3";
   const PRODUCTS_SCM_MAPPING_REFRESH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
+  const PRODUCTS_SCM_TERRITORY_MAPPING_FILE_NAME = "Products_SCM_Territory_Mapping.json";
+  const PRODUCTS_SCM_TERRITORY_MAPPING_CACHE_KEY = "iqueue-products-scm-territory-mapping-v1";
+  const PRODUCTS_SCM_TERRITORY_MAPPING_REFRESH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
   const PRODUCTS_SCM_OWNER_TAG_PREFIX = "#scm-owner-";
   const AUTHORIZED_MANAGERS_FILE_NAME = "Authorized_Managers.json";
   const AUTHORIZED_MANAGERS_FILE_NAMES = [AUTHORIZED_MANAGERS_FILE_NAME, "Authorized Managers.json", "Authorized_Users.json", "Authorized Users.json"];
@@ -1230,6 +1233,7 @@ Health & Hospitality	DIRECT	NL	West	West
     schema: "embedded"
   };
   let productsScmRelationships = [];
+  let productsScmTerritoryRules = [];
   let productsScmAuthorizedScms = [];
   let productsScmAuthorizedDirectors = [];
   let productsScmAuthorizedViewers = [];
@@ -1243,6 +1247,15 @@ Health & Hospitality	DIRECT	NL	West	West
     schema: "",
     authorizedDirectorCount: 0,
     authorizedViewerCount: 0,
+    stale: false,
+    error: ""
+  };
+  let productsScmTerritoryMetadata = {
+    source: "not-loaded",
+    label: "Not loaded",
+    rowCount: 0,
+    loadedAt: 0,
+    schema: "",
     stale: false,
     error: ""
   };
@@ -1835,12 +1848,56 @@ Health & Hospitality	DIRECT	NL	West	West
     ].map(normalizeKey).filter(Boolean);
   }
 
+  function productsTerritoryLocationForRow(row) {
+    const summary = buildRowSummary(row);
+    const state = normalizeState(summary.billingState || row && row.state || "");
+    const zip = normalizeZipCode(summary.billingZip || "");
+    return { state, zip };
+  }
+
+  function productsTerritoryRuleMatches(rule, location) {
+    if (!rule || !location || !location.state || rule.stateKey !== location.state) return false;
+    if (!rule.zipMin && !rule.zipMax) return true;
+    if (!location.zip) return false;
+    const zip = Number(location.zip);
+    const min = Number(rule.zipMin || "00000");
+    const max = Number(rule.zipMax || "99999");
+    return zip >= min && zip <= max;
+  }
+
+  function productsScmTerritoryOwnerForRow(row) {
+    if (!productsScmTerritoryRules.length) return null;
+    const location = productsTerritoryLocationForRow(row);
+    if (!location.state) return null;
+
+    const includeMatches = productsScmTerritoryRules
+      .filter(rule => rule.action === "include" && productsTerritoryRuleMatches(rule, location));
+    const candidate = includeMatches.find(rule => {
+      return !productsScmTerritoryRules.some(exclude => (
+        exclude.action === "exclude"
+        && exclude.territoryKey === rule.territoryKey
+        && exclude.scmKey === rule.scmKey
+        && productsTerritoryRuleMatches(exclude, location)
+      ));
+    });
+    if (!candidate) return null;
+
+    return {
+      scm: candidate.scm,
+      scmKey: candidate.scmKey,
+      source: "territory",
+      sourceLabel: `Products territory: ${candidate.territory}`
+    };
+  }
+
   function productsScmOwnerForRow(row) {
     if (!rowIsProductsScmCandidate(row)) return null;
 
     const explicitOwner = productsScmExplicitOwner(row);
     if (explicitOwner) return explicitOwner;
     if (!productsScmRelationships.length) {
+      const territoryOwner = productsScmTerritoryOwnerForRow(row);
+      if (territoryOwner) return territoryOwner;
       return {
         scm: "",
         scmKey: "",
@@ -1852,6 +1909,8 @@ Health & Hospitality	DIRECT	NL	West	West
     const requestTypeKey = normalizeKey(normalizeAmoDirect(row.amoDirect));
     const directorKey = normalizeKey(row.salesDirector);
     if (!requestTypeKey || !directorKey) {
+      const territoryOwner = productsScmTerritoryOwnerForRow(row);
+      if (territoryOwner) return territoryOwner;
       return {
         scm: "",
         scmKey: "",
@@ -1873,6 +1932,9 @@ Health & Hospitality	DIRECT	NL	West	West
       "director"
     );
     if (directorOwner) return directorOwner;
+
+    const territoryOwner = productsScmTerritoryOwnerForRow(row);
+    if (territoryOwner) return territoryOwner;
 
     return {
       scm: "",
@@ -2889,6 +2951,12 @@ Health & Hospitality	DIRECT	NL	West	West
     ]);
   }
 
+  function productsScmTerritoryMappingUrlCandidates() {
+    return orderedUnique([
+      githubMappingUrl(PRODUCTS_SCM_TERRITORY_MAPPING_FILE_NAME)
+    ]);
+  }
+
   function gtmScIndustryMappingUrlCandidates() {
     return orderedUnique([
       GTM_SC_INDUSTRY_MAPPING_GITHUB_URL
@@ -3135,6 +3203,14 @@ Health & Hospitality	DIRECT	NL	West	West
         ]
       },
       {
+        name: "Products Territories",
+        metadata: productsScmTerritoryMetadata,
+        metrics: [
+          productsScmTerritoryMetadata.rowCount ? `${productsScmTerritoryMetadata.rowCount.toLocaleString()} rules` : "",
+          productsScmTerritoryMetadata.schema || ""
+        ]
+      },
+      {
         name: "Authorized Managers",
         metadata: authorizedManagersMetadata,
         metrics: [
@@ -3227,6 +3303,25 @@ Health & Hospitality	DIRECT	NL	West	West
           { key: "scm", label: "SCM Owner" },
           { key: "directors", label: "Director Viewers" },
           { key: "lookupKey", label: "Lookup Key" }
+        ]
+      },
+      {
+        key: "territories",
+        label: "Products Territories",
+        emptyLabel: "No Products territory rows matched.",
+        filters: [
+          { key: "territory", label: "Territory" },
+          { key: "scm", label: "SCM Owner" },
+          { key: "action", label: "Action" },
+          { key: "state", label: "State" }
+        ],
+        columns: [
+          { key: "priority", label: "Priority" },
+          { key: "action", label: "Action" },
+          { key: "territory", label: "Territory" },
+          { key: "state", label: "State" },
+          { key: "zipRange", label: "ZIP Range" },
+          { key: "scm", label: "SCM Owner" }
         ]
       },
       {
@@ -3344,6 +3439,27 @@ Health & Hospitality	DIRECT	NL	West	West
           groups: row.groups || [],
           canOwn: [row.canOwn ? "Yes" : "No"],
           canView: [row.canView ? "Yes" : "No"]
+        },
+        detail: { ...row }
+      }));
+    }
+
+    if (tabKey === "territories") {
+      return productsScmTerritoryRules.map((row, index) => ({
+        key: `territory-${index}`,
+        values: {
+          priority: row.priority,
+          action: row.action,
+          territory: row.territory,
+          state: row.state,
+          zipRange: row.zipMin || row.zipMax ? `${row.zipMin || "00000"}-${row.zipMax || "99999"}` : "All",
+          scm: row.scm
+        },
+        filterValues: {
+          territory: [row.territory],
+          scm: [row.scm],
+          action: [row.action],
+          state: [row.state]
         },
         detail: { ...row }
       }));
@@ -3707,6 +3823,10 @@ Health & Hospitality	DIRECT	NL	West	West
     if (productsScmMetadata.authorizedViewerCount) productsParts.push(`${productsScmMetadata.authorizedViewerCount.toLocaleString()} extra viewers`);
     if (productsScmMetadata.stale) productsParts.push("cached");
     if (productsScmMetadata.error) productsParts.push(`not loaded: ${shortMappingError(productsScmMetadata.error)}`);
+    const productsTerritoryParts = [`Products Territories: ${productsScmTerritoryMetadata.label}`];
+    if (productsScmTerritoryMetadata.rowCount) productsTerritoryParts.push(`${productsScmTerritoryMetadata.rowCount.toLocaleString()} rules`);
+    if (productsScmTerritoryMetadata.stale) productsTerritoryParts.push("cached");
+    if (productsScmTerritoryMetadata.error) productsTerritoryParts.push(`not loaded: ${shortMappingError(productsScmTerritoryMetadata.error)}`);
     const gtmParts = [`GTM Mapping: ${gtmScIndustryMappingMetadata.label}`];
     if (gtmScIndustryMappingMetadata.rowCount) gtmParts.push(`${gtmScIndustryMappingMetadata.rowCount.toLocaleString()} rows`);
     if (gtmScIndustryMappingMetadata.stale) gtmParts.push("cached");
@@ -3716,7 +3836,7 @@ Health & Hospitality	DIRECT	NL	West	West
     if (authorizedManagersMetadata.canOwnCount) managerParts.push(`${authorizedManagersMetadata.canOwnCount.toLocaleString()} can own`);
     if (authorizedManagersMetadata.stale) managerParts.push("cached");
     if (authorizedManagersMetadata.error) managerParts.push(`not loaded: ${shortMappingError(authorizedManagersMetadata.error)}`);
-    return `${parts.join(" · ")}. ${gtmParts.join(" · ")}. ${productsParts.join(" · ")}. ${managerParts.join(" · ")}`;
+    return `${parts.join(" · ")}. ${gtmParts.join(" · ")}. ${productsParts.join(" · ")}. ${productsTerritoryParts.join(" · ")}. ${managerParts.join(" · ")}`;
   }
 
   async function loadExternalMapping(options = {}) {
@@ -3768,6 +3888,62 @@ Health & Hospitality	DIRECT	NL	West	West
     }).filter(row => row.requestType && row.regionalDirector && row.scm);
   }
 
+  function normalizeTerritoryAction(value) {
+    const text = normalizeSpaces(value);
+    if (/exclude|except|omit|remove|out/i.test(text)) return "exclude";
+    if (/include|add|in|yes|y/i.test(text) || !text) return "include";
+    return "";
+  }
+
+  function normalizeZipCode(value) {
+    const match = String(value || "").match(/\d{1,5}/);
+    return match ? match[0].padStart(5, "0").slice(0, 5) : "";
+  }
+
+  function parseProductsScmTerritoryRules(data) {
+    const rows = Array.isArray(data && data.rules) ? data.rules : [];
+    return rows.map(record => {
+      const state = normalizeState(record.stateKey || record.state || record.province || "");
+      const zipMin = normalizeZipCode(record.zipMin || record.minZip || record.zipFrom || "");
+      const zipMax = normalizeZipCode(record.zipMax || record.maxZip || record.zipTo || "");
+      const scm = cleanPersonName(record.scm || record.productsScmOwner || record.queueOwner || record.owner || "");
+      const territory = normalizeSpaces(record.territory || record.geography || record.name || "Products Territory");
+      const action = normalizeTerritoryAction(record.action || record.type || record.ruleType || "include");
+      return {
+        sourceRow: record.sourceRow || "",
+        industryFamily: "Products",
+        territory,
+        territoryKey: normalizeKey(territory),
+        scm,
+        scmKey: normalizeKey(scm),
+        action,
+        state,
+        stateKey: state,
+        zipMin,
+        zipMax,
+        priority: Number(record.priority) || 100,
+        notes: normalizeSpaces(record.notes || "")
+      };
+    }).filter(row => row.scm && row.state && row.action);
+  }
+
+  function applyProductsScmTerritoryMappingData(data, options = {}) {
+    const rows = parseProductsScmTerritoryRules(data);
+    if (!rows.length) throw new Error("Products SCM territory JSON did not produce any usable rows.");
+
+    productsScmTerritoryRules = rows.sort((left, right) => left.priority - right.priority || alphaSort(left.territory, right.territory));
+    productsScmAuthorizedScms = uniqueSorted(productsScmAuthorizedScms.concat(rows.map(row => row.scm)));
+    productsScmTerritoryMetadata = {
+      source: options.fromCache ? "cache" : "github",
+      label: options.label || (options.fromCache ? `Cached ${PRODUCTS_SCM_TERRITORY_MAPPING_FILE_NAME}` : `GitHub ${PRODUCTS_SCM_TERRITORY_MAPPING_FILE_NAME}`),
+      rowCount: rows.length,
+      loadedAt: options.loadedAt || Date.now(),
+      schema: data.schema || "",
+      stale: Boolean(options.stale),
+      error: ""
+    };
+  }
+
   function cleanAuthorizedPersonList(values) {
     if (!Array.isArray(values)) return [];
     return uniqueSorted(values.flatMap(value => {
@@ -3802,7 +3978,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const authorizedViewers = cleanAuthorizedPersonList(data.authorizedViewers);
 
     productsScmRelationships = rows;
-    productsScmAuthorizedScms = uniqueSorted(authorized.concat(rows.map(row => row.scm)));
+    productsScmAuthorizedScms = uniqueSorted(authorized.concat(rows.map(row => row.scm)).concat(productsScmTerritoryRules.map(row => row.scm)));
     productsScmAuthorizedDirectors = uniqueSorted(authorizedDirectors);
     productsScmAuthorizedViewers = uniqueSorted(authorizedViewers);
     productsScmByExactKey = buildProductsScmRelationshipMap(
@@ -3866,10 +4042,55 @@ Health & Hospitality	DIRECT	NL	West	West
     }
   }
 
+  function readCachedProductsScmTerritoryMapping() {
+    try {
+      const cached = JSON.parse(localStorage.getItem(PRODUCTS_SCM_TERRITORY_MAPPING_CACHE_KEY) || "null");
+      if (!cached || !cached.data || !cached.loadedAt) return null;
+      return cached;
+    } catch (error) {
+      console.warn("IQUEUE could not read cached Products SCM territory JSON", error);
+      return null;
+    }
+  }
+
+  function writeCachedProductsScmTerritoryMapping(data) {
+    try {
+      localStorage.setItem(PRODUCTS_SCM_TERRITORY_MAPPING_CACHE_KEY, JSON.stringify({
+        loadedAt: Date.now(),
+        data
+      }));
+    } catch (error) {
+      console.warn("IQUEUE could not cache Products SCM territory JSON", error);
+    }
+  }
+
+  function applyCachedProductsScmTerritoryMapping() {
+    const cached = readCachedProductsScmTerritoryMapping();
+    if (!cached) return false;
+    const stale = Date.now() - cached.loadedAt > PRODUCTS_SCM_TERRITORY_MAPPING_REFRESH_INTERVAL_MS;
+    try {
+      applyProductsScmTerritoryMappingData(cached.data, {
+        fromCache: true,
+        loadedAt: cached.loadedAt,
+        stale
+      });
+      return true;
+    } catch (error) {
+      console.warn("IQUEUE ignored invalid cached Products SCM territory JSON", error);
+      return false;
+    }
+  }
+
   function shouldFetchProductsScmMapping() {
     const cached = readCachedProductsScmMapping();
     if (!cached) return true;
     return Date.now() - cached.loadedAt > PRODUCTS_SCM_MAPPING_REFRESH_INTERVAL_MS;
+  }
+
+  function shouldFetchProductsScmTerritoryMapping() {
+    const cached = readCachedProductsScmTerritoryMapping();
+    if (!cached) return true;
+    return Date.now() - cached.loadedAt > PRODUCTS_SCM_TERRITORY_MAPPING_REFRESH_INTERVAL_MS;
   }
 
   function loadProductsScmMappingWithSuiteScript() {
@@ -3936,6 +4157,27 @@ Health & Hospitality	DIRECT	NL	West	West
     throw new Error(errors.join(" | "));
   }
 
+  async function fetchProductsScmTerritoryMappingData() {
+    const errors = [];
+
+    for (const url of productsScmTerritoryMappingUrlCandidates()) {
+      try {
+        const data = await fetchMappingJsonFromUrl(url, new Set(), PRODUCTS_SCM_TERRITORY_MAPPING_FILE_NAME, "");
+        if (!parseProductsScmTerritoryRules(data).length) {
+          throw new Error(`${url}: Products SCM territory JSON did not produce any usable rows.`);
+        }
+        return {
+          data,
+          label: mappingJsonSourceLabel(url, PRODUCTS_SCM_TERRITORY_MAPPING_FILE_NAME)
+        };
+      } catch (error) {
+        errors.push(error.message || String(error));
+      }
+    }
+
+    throw new Error(errors.join(" | "));
+  }
+
   async function loadProductsScmMapping(options = {}) {
     const force = Boolean(options.force);
     if (!force && !shouldFetchProductsScmMapping()) return;
@@ -3959,6 +4201,32 @@ Health & Hospitality	DIRECT	NL	West	West
         error: error.message || "SCM relationship load failed"
       };
       updateProductsScmControls();
+      renderResults();
+    }
+  }
+
+  async function loadProductsScmTerritoryMapping(options = {}) {
+    const force = Boolean(options.force);
+    if (!force && !shouldFetchProductsScmTerritoryMapping()) return;
+
+    try {
+      const result = await fetchProductsScmTerritoryMappingData();
+      const data = result.data || result;
+      writeCachedProductsScmTerritoryMapping(data);
+      applyProductsScmTerritoryMappingData(data, {
+        fromCache: false,
+        loadedAt: Date.now(),
+        label: result.label
+      });
+      updateProductsScmControls();
+      updateFilterSummary();
+      renderResults();
+    } catch (error) {
+      console.warn("IQUEUE could not load Products SCM territory JSON", error);
+      productsScmTerritoryMetadata = {
+        ...productsScmTerritoryMetadata,
+        error: error.message || "Products SCM territory load failed"
+      };
       renderResults();
     }
   }
@@ -6128,25 +6396,33 @@ Health & Hospitality	DIRECT	NL	West	West
 
   function splitBillingLocation(value) {
     const text = cleanExtractedValue(value);
-    if (!text) return { city: "", state: "" };
+    if (!text) return { city: "", state: "", zip: "" };
+    const zip = billingZipFromText(text);
 
     const parts = text.split(",").map(part => normalizeSpaces(part)).filter(Boolean);
     if (parts.length >= 2) {
       return {
         city: parts[0],
-        state: parts[1].split(/\s+/)[0] || ""
+        state: parts[1].split(/\s+/)[0] || "",
+        zip
       };
     }
 
-    const cityState = text.match(/\b([^,|]+?)\s+([A-Z]{2})(?:\b|$)/);
+    const cityState = text.match(/\b([^,|]+?)\s+([A-Z]{2})(?:\s+\d{5}(?:-\d{4})?)?(?:\b|$)/);
     if (cityState) {
       return {
         city: normalizeSpaces(cityState[1]),
-        state: cityState[2]
+        state: cityState[2],
+        zip
       };
     }
 
-    return { city: text, state: "" };
+    return { city: text, state: "", zip };
+  }
+
+  function billingZipFromText(value) {
+    const match = String(value || "").match(/\b(\d{5})(?:-\d{4})?\b/);
+    return match ? match[1] : "";
   }
 
   function getBillingLocation(fields) {
@@ -6159,10 +6435,14 @@ Health & Hospitality	DIRECT	NL	West	West
     const state = getConciseFieldValue(fields, [
       /billing.*state/, /bill.*state/, /billing.*province/, /bill.*province/
     ], [], labeledValuePatterns.billingState);
+    const zip = getConciseFieldValue(fields, [
+      /billing.*(?:zip|postal)/, /bill.*(?:zip|postal)/, /\bzip\b/, /postal/
+    ]);
 
     return {
       city,
-      state
+      state,
+      zip: billingZipFromText(zip) || billingZipFromText([city, state].join(" "))
     };
   }
 
@@ -6610,6 +6890,7 @@ Health & Hospitality	DIRECT	NL	West	West
       annualRevenue,
       billingCity: billingLocation.city,
       billingState: billingLocation.state,
+      billingZip: billingLocation.zip,
       prospectRegion,
       leadSource,
       leadFit,
@@ -11097,6 +11378,7 @@ Health & Hospitality	DIRECT	NL	West	West
       loadExternalMapping({ force: true });
       loadGtmScIndustryMapping({ force: true });
       loadProductsScmMapping({ force: true });
+      loadProductsScmTerritoryMapping({ force: true });
       loadAuthorizedManagers({ force: true });
     });
     document.getElementById("scr-helper-check-update").addEventListener("click", async event => {
@@ -13382,6 +13664,7 @@ Health & Hospitality	DIRECT	NL	West	West
     applyCachedExternalMapping();
     applyCachedGtmScIndustryMapping();
     applyCachedProductsScmMapping();
+    applyCachedProductsScmTerritoryMapping();
     applyCachedAuthorizedManagers();
     updateMappingFilterOptions();
     updateProductsScmControls();
@@ -13392,6 +13675,7 @@ Health & Hospitality	DIRECT	NL	West	West
     loadExternalMapping({ force: true });
     loadGtmScIndustryMapping({ force: true });
     loadProductsScmMapping({ force: true });
+    loadProductsScmTerritoryMapping({ force: true });
     loadAuthorizedManagers({ force: true });
   }
 
