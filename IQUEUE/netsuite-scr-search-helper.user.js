@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.48
+// @version      27.0.49
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -42,7 +42,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.48";
+  const HELPER_VERSION = "27.0.49";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -1891,6 +1891,10 @@ Health & Hospitality	DIRECT	NL	West	West
     };
   }
 
+  function rowDisplaysProductsIndustry(row) {
+    return displayedIndustryFamiliesForRow(row).some(family => normalizeKey(family) === "products");
+  }
+
   function productsScmRelationshipOwnerForRow(row) {
     if (!rowIsProductsScmCandidate(row)) return null;
     if (!productsScmRelationships.length) {
@@ -1927,9 +1931,6 @@ Health & Hospitality	DIRECT	NL	West	West
     );
     if (directorOwner) return directorOwner;
 
-    const territoryOwner = productsScmTerritoryOwnerForRow(row);
-    if (territoryOwner) return territoryOwner;
-
     return {
       scm: "",
       scmKey: "",
@@ -1944,18 +1945,29 @@ Health & Hospitality	DIRECT	NL	West	West
     const explicitOwner = productsScmExplicitOwner(row);
     if (explicitOwner) return explicitOwner;
 
-    const relationshipOwner = productsScmRelationshipOwnerForRow(row);
+    const isProductsRow = rowDisplaysProductsIndustry(row);
+    const requestTypeKey = normalizeKey(normalizeAmoDirect(row && row.amoDirect));
     const territoryOwner = productsScmTerritoryOwnerForRow(row);
-    if (territoryOwner) {
-      const relationshipDiffers = relationshipOwner && relationshipOwner.scm
-        && normalizeKey(relationshipOwner.scm) !== normalizeKey(territoryOwner.scm);
-      return relationshipDiffers
-        ? {
-          ...territoryOwner,
-          relationshipOwner: relationshipOwner.scm,
-          relationshipSourceLabel: relationshipOwner.sourceLabel || "Relationship owner"
-        }
-        : territoryOwner;
+
+    if (isProductsRow && requestTypeKey === "amo") {
+      return territoryOwner || {
+        scm: "",
+        scmKey: "",
+        source: "unmapped",
+        sourceLabel: "No Products territory mapping"
+      };
+    }
+
+    const relationshipOwner = productsScmRelationshipOwnerForRow(row);
+
+    if (isProductsRow && requestTypeKey === "direct") {
+      return relationshipOwner && relationshipOwner.scm
+        ? relationshipOwner
+        : territoryOwner || relationshipOwner;
+    }
+
+    if (isProductsRow && territoryOwner && !(relationshipOwner && relationshipOwner.scm)) {
+      return territoryOwner;
     }
 
     return relationshipOwner;
