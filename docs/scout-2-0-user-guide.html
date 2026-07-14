@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SCOUT 2.0 User Guide</title>
+  <meta name="description" content="Install, setup, calendar integration, and staffing workflow guide for SCOUT 2.0.">
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --surface: #ffffff;
+      --ink: #18202b;
+      --muted: #647181;
+      --line: #dce3ea;
+      --line-strong: #c7d1dc;
+      --navy: #1f3447;
+      --navy-2: #2c4155;
+      --teal: #137c75;
+      --blue: #2c62a3;
+      --shadow: 0 16px 40px rgba(24, 32, 43, 0.10);
+      --radius: 8px;
+      --content-width: 1180px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.52;
+    }
+
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    button { font: inherit; }
+
+    .skip-link {
+      position: absolute;
+      top: -48px;
+      left: 16px;
+      z-index: 20;
+      padding: 8px 12px;
+      border-radius: 6px;
+      background: #fff;
+      color: var(--ink);
+    }
+
+    .skip-link:focus { top: 12px; }
+
+    .hero {
+      background: var(--navy);
+      color: #fff;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+    }
+
+    .hero-inner {
+      max-width: var(--content-width);
+      margin: 0 auto;
+      padding: 28px 24px 26px;
+    }
+
+    .brand-strip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 26px;
+    }
+
+    .logo-card {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 48px;
+      padding: 8px 12px;
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+    }
+
+    .logo-card img {
+      display: block;
+      max-height: 32px;
+      max-width: 172px;
+      object-fit: contain;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: #b8c7d5;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .hero h1 {
+      margin: 0;
+      max-width: 760px;
+      font-size: clamp(34px, 5vw, 60px);
+      line-height: 1.02;
+      letter-spacing: 0;
+    }
+
+    .hero-copy {
+      margin: 16px 0 0;
+      max-width: 760px;
+      color: #dbe6ef;
+      font-size: 18px;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 22px;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      padding: 9px 13px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 7px;
+      background: #fff;
+      color: var(--navy);
+      font-weight: 800;
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    .button.secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+    }
+
+    .button:hover { text-decoration: none; filter: brightness(0.98); }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 26px;
+    }
+
+    .meta-card {
+      padding: 14px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .meta-card strong {
+      display: block;
+      color: #fff;
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+
+    .meta-card span {
+      color: #cbd8e3;
+      font-size: 13px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      gap: 24px;
+      max-width: var(--content-width);
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .toc {
+      position: sticky;
+      top: 18px;
+      align-self: start;
+      max-height: calc(100vh - 36px);
+      overflow: auto;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: 0 8px 24px rgba(24, 32, 43, 0.06);
+    }
+
+    .toc-title {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .toc-link {
+      display: block;
+      padding: 7px 8px;
+      border-radius: 6px;
+      color: var(--ink);
+      font-size: 13px;
+      line-height: 1.25;
+      text-decoration: none;
+    }
+
+    .toc-link:hover,
+    .toc-link.is-active {
+      background: #e7f2f1;
+      color: #0f615c;
+      text-decoration: none;
+    }
+
+    .toc-level-1 { font-weight: 800; }
+    .toc-level-3 { padding-left: 22px; color: var(--muted); }
+
+    .doc {
+      min-width: 0;
+      padding: 28px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .loading {
+      padding: 28px;
+      border: 1px dashed var(--line-strong);
+      border-radius: var(--radius);
+      background: #fbfcfd;
+      color: var(--muted);
+    }
+
+    .doc h1,
+    .doc h2,
+    .doc h3,
+    .doc h4 {
+      position: relative;
+      margin: 30px 0 12px;
+      color: var(--ink);
+      letter-spacing: 0;
+      scroll-margin-top: 18px;
+    }
+
+    .doc h1,
+    .doc h2 {
+      padding-top: 20px;
+      border-top: 1px solid var(--line);
+      line-height: 1.16;
+    }
+
+    .doc h1 { font-size: 32px; }
+    .doc h2 { font-size: 27px; }
+    .doc h1:first-child,
+    .doc h2:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+    .doc h3 { color: var(--navy-2); font-size: 20px; }
+    .doc h4 { font-size: 17px; }
+
+    .heading-anchor {
+      opacity: 0;
+      margin-left: 8px;
+      color: var(--muted);
+      font-size: 0.78em;
+      text-decoration: none;
+    }
+
+    h1:hover .heading-anchor,
+    h2:hover .heading-anchor,
+    h3:hover .heading-anchor,
+    h4:hover .heading-anchor { opacity: 1; }
+
+    .doc p { margin: 0 0 14px; }
+
+    .doc ul,
+    .doc ol {
+      margin: 0 0 16px 22px;
+      padding: 0;
+    }
+
+    .doc li { margin: 5px 0; }
+
+    .table-scroller {
+      margin: 14px 0 22px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+    }
+
+    table {
+      width: 100%;
+      min-width: 720px;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th,
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      background: #eef3f7;
+      color: var(--navy);
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+    tr:nth-child(even) td { background: #fbfcfd; }
+
+    code {
+      padding: 2px 5px;
+      border-radius: 5px;
+      background: #eef2f5;
+      color: #233446;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 0.88em;
+      word-break: break-word;
+    }
+
+    .code-link code { color: var(--blue); }
+
+    .copy-link {
+      display: inline-flex;
+      align-items: center;
+      margin-left: 6px;
+      padding: 3px 7px;
+      border: 1px solid var(--line-strong);
+      border-radius: 5px;
+      background: #fff;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+      vertical-align: middle;
+    }
+
+    .copy-link:hover { border-color: var(--teal); color: var(--teal); }
+
+    .footer {
+      max-width: var(--content-width);
+      margin: 0 auto;
+      padding: 0 24px 32px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .footer-inner {
+      padding: 18px 0 0;
+      border-top: 1px solid var(--line);
+    }
+
+    @media (max-width: 980px) {
+      .layout { grid-template-columns: 1fr; }
+      .toc { position: static; max-height: none; }
+      .meta-grid { grid-template-columns: 1fr; }
+      .doc { padding: 20px; }
+    }
+
+    @media (max-width: 640px) {
+      .hero-inner,
+      .layout,
+      .footer { padding-left: 16px; padding-right: 16px; }
+      .brand-strip { align-items: flex-start; flex-direction: column; }
+      .hero h1 { font-size: 34px; }
+      .hero-copy { font-size: 16px; }
+      table { min-width: 640px; }
+    }
+
+    @media print {
+      body { background: #fff; }
+      .hero { color: #000; background: #fff; border-bottom: 1px solid #ccc; }
+      .hero-actions,
+      .toc,
+      .heading-anchor,
+      .copy-link { display: none !important; }
+      .layout { display: block; max-width: none; padding: 0; }
+      .doc { border: 0; box-shadow: none; padding: 0; }
+      .table-scroller { overflow: visible; }
+      a { color: #000; text-decoration: underline; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#guide-content">Skip to guide content</a>
+
+  <header class="hero">
+    <div class="hero-inner">
+      <div class="brand-strip">
+        <span class="logo-card"><img src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo"></span>
+        <a class="button secondary" href="./SCOUT_2_0_User_Guide.md">View Markdown</a>
+      </div>
+      <p class="eyebrow">NetSuite SCM Tools</p>
+      <h1>SCOUT 2.0 User Guide</h1>
+      <p class="hero-copy">Install, setup, calendar integration, dashboard, inline drawer, and staffing workflow guide for SCOUT 2.0.</p>
+      <div class="hero-actions">
+        <a class="button" href="#install-scout-2-0">Start With Install</a>
+        <a class="button secondary" href="#calendar-setup">Calendar Setup</a>
+        <a class="button secondary" href="#basic-staffing-workflow">Staffing Workflow</a>
+        <button class="button secondary" type="button" onclick="window.print()">Print Guide</button>
+      </div>
+      <div class="meta-grid" aria-label="Guide summary">
+        <div class="meta-card"><strong>SCOUT Panel</strong><span>SCR context, Direct/AMO/Combined search, and NetSuite writeback.</span></div>
+        <div class="meta-card"><strong>Dashboard</strong><span>Calendar, workload, availability, and recommendation views.</span></div>
+        <div class="meta-card"><strong>Drawer</strong><span>Inline calendar and workload review from SCOUT candidate cards.</span></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="toc" aria-label="Table of contents">
+      <p class="toc-title">Contents</p>
+      <nav id="toc-links"></nav>
+    </aside>
+    <main id="guide-content" class="doc">
+      <div class="loading">Loading guide content from <code>SCOUT_2_0_User_Guide.md</code>...</div>
+    </main>
+  </div>
+
+  <footer class="footer">
+    <div class="footer-inner">Upload this file and <code>SCOUT_2_0_User_Guide.md</code> together at the repo root to publish the guide as <code>/scout-2-0-user-guide.html</code>.</div>
+  </footer>
+
+  <script>
+    (function () {
+      var markdownPath = './SCOUT_2_0_User_Guide.md';
+      var content = document.getElementById('guide-content');
+      var tocLinks = document.getElementById('toc-links');
+
+      function escapeHtml(value) {
+        return String(value == null ? '' : value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      function escapeAttr(value) {
+        return escapeHtml(value).replace(/'/g, '&#39;');
+      }
+
+      function stripMarkdown(text) {
+        return String(text || '')
+          .replace(/`([^`]+)`/g, '$1')
+          .replace(/\*\*([^*]+)\*\*/g, '$1')
+          .trim();
+      }
+
+      function slugify(value, counts) {
+        var base = String(value || '')
+          .toLowerCase()
+          .replace(/`([^`]+)`/g, '$1')
+          .replace(/&amp;/g, 'and')
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '') || 'section';
+        counts[base] = (counts[base] || 0) + 1;
+        return counts[base] === 1 ? base : base + '-' + counts[base];
+      }
+
+      function splitTableRow(line) {
+        var text = line.trim();
+        if (text.charAt(0) === '|') text = text.slice(1);
+        if (text.charAt(text.length - 1) === '|') text = text.slice(0, -1);
+        return text.split('|').map(function (cell) { return cell.trim(); });
+      }
+
+      function isTableDivider(line) {
+        return /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line || '');
+      }
+
+      function inlineMarkdown(text) {
+        return String(text || '').split(/(`[^`]*`)/g).map(function (part) {
+          if (part.indexOf('`') === 0 && part.lastIndexOf('`') === part.length - 1) {
+            var raw = part.slice(1, -1);
+            var escaped = escapeHtml(raw);
+            if (/^https?:\/\//i.test(raw)) {
+              return '<a class="code-link" href="' + escapeAttr(raw) + '" target="_blank" rel="noopener"><code>' + escaped + '</code></a>';
+            }
+            return '<code>' + escaped + '</code>';
+          }
+          return escapeHtml(part)
+            .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+            .replace(/\b(https?:\/\/[^\s<]+[^\s<.,)])\b/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+        }).join('');
+      }
+
+      function renderMarkdown(markdown) {
+        var lines = String(markdown || '').replace(/\r\n?/g, '\n').split('\n');
+        var slugCounts = Object.create(null);
+        var toc = [];
+        var html = [];
+        var i = 0;
+        var skippedTitle = false;
+
+        function nextSpecial(index) {
+          var line = lines[index] || '';
+          var trimmed = line.trim();
+          return !trimmed
+            || /^#{1,6}\s+/.test(trimmed)
+            || /^[-*]\s+/.test(trimmed)
+            || /^\d+\.\s+/.test(trimmed)
+            || (trimmed.indexOf('|') === 0 && isTableDivider(lines[index + 1] || ''));
+        }
+
+        while (i < lines.length) {
+          var line = lines[i];
+          var trimmed = line.trim();
+          if (!trimmed) {
+            i += 1;
+            continue;
+          }
+
+          var heading = trimmed.match(/^(#{1,6})\s+(.+)$/);
+          if (heading) {
+            var level = heading[1].length;
+            var headingText = stripMarkdown(heading[2]);
+            if (level === 1 && !skippedTitle) {
+              skippedTitle = true;
+              i += 1;
+              continue;
+            }
+            var id = slugify(headingText, slugCounts);
+            if (level <= 3) toc.push({ level: level, text: headingText, id: id });
+            html.push('<h' + level + ' id="' + id + '">' + inlineMarkdown(heading[2]) + '<a class="heading-anchor" href="#' + id + '" aria-label="Link to ' + escapeAttr(headingText) + '">#</a></h' + level + '>');
+            i += 1;
+            continue;
+          }
+
+          if (trimmed.indexOf('|') === 0 && isTableDivider(lines[i + 1] || '')) {
+            var headers = splitTableRow(lines[i]);
+            var rows = [];
+            i += 2;
+            while (i < lines.length && lines[i].trim().indexOf('|') === 0) {
+              rows.push(splitTableRow(lines[i]));
+              i += 1;
+            }
+            html.push('<div class="table-scroller"><table>');
+            html.push('<thead><tr>' + headers.map(function (cell) { return '<th>' + inlineMarkdown(cell) + '</th>'; }).join('') + '</tr></thead>');
+            html.push('<tbody>');
+            rows.forEach(function (row) {
+              html.push('<tr>' + row.map(function (cell) { return '<td>' + inlineMarkdown(cell) + '</td>'; }).join('') + '</tr>');
+            });
+            html.push('</tbody></table></div>');
+            continue;
+          }
+
+          if (/^[-*]\s+/.test(trimmed)) {
+            var bulletItems = [];
+            while (i < lines.length && /^[-*]\s+/.test(lines[i].trim())) {
+              bulletItems.push(lines[i].trim().replace(/^[-*]\s+/, ''));
+              i += 1;
+            }
+            html.push('<ul>' + bulletItems.map(function (item) { return '<li>' + inlineMarkdown(item) + '</li>'; }).join('') + '</ul>');
+            continue;
+          }
+
+          if (/^\d+\.\s+/.test(trimmed)) {
+            var orderedItems = [];
+            while (i < lines.length && /^\d+\.\s+/.test(lines[i].trim())) {
+              orderedItems.push(lines[i].trim().replace(/^\d+\.\s+/, ''));
+              i += 1;
+            }
+            html.push('<ol>' + orderedItems.map(function (item) { return '<li>' + inlineMarkdown(item) + '</li>'; }).join('') + '</ol>');
+            continue;
+          }
+
+          var paragraph = [];
+          while (i < lines.length && !nextSpecial(i)) {
+            paragraph.push(lines[i].trim());
+            i += 1;
+          }
+          html.push('<p>' + inlineMarkdown(paragraph.join(' ')) + '</p>');
+        }
+
+        content.innerHTML = html.join('\n');
+        tocLinks.innerHTML = toc.map(function (item) {
+          return '<a class="toc-link toc-level-' + item.level + '" href="#' + item.id + '">' + escapeHtml(item.text) + '</a>';
+        }).join('\n');
+        enhancePage();
+      }
+
+      function enhancePage() {
+        var links = Array.prototype.slice.call(document.querySelectorAll('.toc-link'));
+        var byId = {};
+        links.forEach(function (link) {
+          byId[link.getAttribute('href').slice(1)] = link;
+        });
+
+        function setActive(id) {
+          links.forEach(function (link) {
+            link.classList.toggle('is-active', link === byId[id]);
+          });
+        }
+
+        if ('IntersectionObserver' in window) {
+          var headings = Array.prototype.slice.call(document.querySelectorAll('.doc h1[id], .doc h2[id], .doc h3[id]'));
+          var observer = new IntersectionObserver(function (entries) {
+            var visible = entries.filter(function (entry) { return entry.isIntersecting; })
+              .sort(function (a, b) { return a.boundingClientRect.top - b.boundingClientRect.top; })[0];
+            if (visible) setActive(visible.target.id);
+          }, { rootMargin: '-10% 0px -75% 0px', threshold: [0, 1] });
+          headings.forEach(function (heading) { observer.observe(heading); });
+        }
+
+        document.querySelectorAll('a.code-link code').forEach(function (code) {
+          var url = code.textContent.trim();
+          if (!/^https?:\/\//i.test(url)) return;
+          var button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'copy-link';
+          button.textContent = 'Copy';
+          button.setAttribute('aria-label', 'Copy link');
+          button.addEventListener('click', function () {
+            if (!navigator.clipboard) return;
+            navigator.clipboard.writeText(url).then(function () {
+              button.textContent = 'Copied';
+              window.setTimeout(function () { button.textContent = 'Copy'; }, 1200);
+            });
+          });
+          code.parentElement.insertAdjacentElement('afterend', button);
+        });
+      }
+
+      fetch(markdownPath, { cache: 'no-cache' })
+        .then(function (response) {
+          if (!response.ok) throw new Error('HTTP ' + response.status);
+          return response.text();
+        })
+        .then(renderMarkdown)
+        .catch(function () {
+          renderMarkdown('# Guide Content Not Loaded\n\nThis page expects `SCOUT_2_0_User_Guide.md` to be uploaded in the same folder as `scout-2-0-user-guide.html`.\n\nUpload both files to the repo root, then open the HTML page from GitHub Pages.');
+        });
+    }());
+  </script>
+</body>
+</html>
