@@ -4,9 +4,9 @@ This guide covers SCOUT 2.0 setup and day-to-day use for NetSuite SC Request sta
 
 SCOUT 2.0 includes:
 
-| Component | Local version referenced | What it does |
+| Component | Version referenced | What it does |
 | --- | --- | --- |
-| SCOUT main userscript | 27.0.26 | Adds the SCOUT side panel to NetSuite SCR record pages. |
+| SCOUT 2.0 main userscript | 27.2.0+ | Adds the SCOUT side panel to NetSuite SCR record pages. |
 | SCOUT 2.0 staffing dashboard | 27.0.50 | Shows consultant calendar, workload, availability, and recommendation context. |
 | SCOUT Inline Calendar Drawer | 27.0.1 | Adds inline calendar/workload cards to SCOUT result cards. |
 | SCOUT Staffing Load Cache Bridge | 27.0.8 | Refreshes dashboard workload data from NetSuite saved search `1324335`. |
@@ -384,4 +384,3 @@ These panels are optional and lazy loaded.
 | Put request on hold | Request Context -> On Hold. |
 | Cancel request | Request Context -> Cancel. |
 | Build GPT prompt | Enable GPT Assist -> Ask AI Agent. |
-

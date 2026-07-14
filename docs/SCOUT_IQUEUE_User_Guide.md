@@ -2,12 +2,17 @@
 
 This guide covers the day-to-day use of SCOUT and IQUEUE for managing SC Requests in NetSuite.
 
-It is based on the local tool versions in this workspace:
+It references these tool versions:
 
-| Tool | Local version referenced | Primary use |
+| Tool | Version referenced | Primary use |
 | --- | --- | --- |
-| SCOUT | 27.0.26 | Work an individual SC Request record, find qualified SCs, check calendars, and staff the request. |
+| SCOUT 2.0 userscript | 27.2.0+ | Work an individual SC Request record, find qualified SCs, check calendars, and staff the request. |
 | IQUEUE | 27.0.51 | Triage SCR queue search results, filter routed work, take ownership, redirect/cross-staff, and open SCRs for staffing. |
+
+Dedicated SCOUT 2.0 guide:
+
+- Published HTML page: `scout-2-0-user-guide.html`
+- Markdown source: `SCOUT_2_0_User_Guide.md`
 
 ## Which Tool Should I Use?
 
