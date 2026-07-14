@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SCOUT 2.0 User Guide</title>
-  <meta name="description" content="Install, setup, calendar integration, and staffing workflow guide for SCOUT 2.0.">
+  <title>IQUEUE Quick Start</title>
+  <meta name="description" content="One-page daily workflow quick start for SCR queue triage and routing in IQUEUE.">
   <style>
     :root {
       --bg: #f4f6f8;
@@ -376,14 +376,29 @@
     }
 
     @media print {
+      @page { size: letter; margin: 0.4in; }
       body { background: #fff; }
       .hero { color: #000; background: #fff; border-bottom: 1px solid #ccc; }
+      .hero-inner { padding: 0 0 10px; }
+      .hero h1 { font-size: 24px; }
+      .hero-copy,
+      .meta-grid { display: none !important; }
       .hero-actions,
       .toc,
       .heading-anchor,
       .copy-link { display: none !important; }
       .layout { display: block; max-width: none; padding: 0; }
-      .doc { border: 0; box-shadow: none; padding: 0; }
+      .doc { border: 0; box-shadow: none; padding: 0; font-size: 10px; line-height: 1.25; }
+      .doc h1 { font-size: 18px; }
+      .doc h2 { margin: 10px 0 5px; padding-top: 8px; font-size: 14px; }
+      .doc h3 { margin: 8px 0 4px; font-size: 12px; }
+      .doc p,
+      .doc ul,
+      .doc ol,
+      .table-scroller { margin-bottom: 7px; }
+      th,
+      td { padding: 4px 5px; }
+      table { min-width: 0; font-size: 9px; }
       .table-scroller { overflow: visible; }
       a { color: #000; text-decoration: underline; }
     }
@@ -395,22 +410,22 @@
   <header class="hero">
     <div class="hero-inner">
       <div class="brand-strip">
-        <span class="logo-card"><img src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png" alt="SCOUT logo"></span>
-        <a class="button secondary" href="./SCOUT_2_0_User_Guide.md">View Markdown</a>
+        <span class="logo-card"><img src="https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/IQ_large_logo.png" alt="IQUEUE logo"></span>
+        <a class="button secondary" href="./IQUEUE_Quick_Start.md">View Markdown</a>
       </div>
       <p class="eyebrow">NetSuite SCM Tools</p>
-      <h1>SCOUT 2.0 User Guide</h1>
-      <p class="hero-copy">Install, setup, calendar integration, dashboard, inline drawer, and staffing workflow guide for SCOUT 2.0.</p>
+      <h1>IQUEUE Quick Start</h1>
+      <p class="hero-copy">One-page daily workflow for SCR queue triage, filters, ownership, routing, and handoff to SCOUT.</p>
       <div class="hero-actions">
-        <a class="button" href="#install-scout-2-0">Start With Install</a>
-        <a class="button secondary" href="#calendar-setup">Calendar Setup</a>
-        <a class="button secondary" href="#basic-staffing-workflow">Staffing Workflow</a>
+        <a class="button" href="#daily-workflow">Daily Workflow</a>
+        <a class="button secondary" href="./scout-iqueue-user-guide.html">Full SCOUT/IQUEUE Guide</a>
+        <a class="button secondary" href="./index.html">Docs Home</a>
         <button class="button secondary" type="button" onclick="window.print()">Print Guide</button>
       </div>
       <div class="meta-grid" aria-label="Guide summary">
-        <div class="meta-card"><strong>SCOUT Panel</strong><span>SCR context, Direct/AMO/Combined search, and NetSuite writeback.</span></div>
-        <div class="meta-card"><strong>Dashboard</strong><span>Calendar, workload, availability, and recommendation views.</span></div>
-        <div class="meta-card"><strong>Drawer</strong><span>Inline calendar and workload review from SCOUT candidate cards.</span></div>
+        <div class="meta-card"><strong>Preflight</strong><span>Tampermonkey, IQUEUE script, Requested/On Hold saved-search access.</span></div>
+        <div class="meta-card"><strong>Workflow</strong><span>Filter, review oldest/SLA, take ownership, staff, route, or follow up.</span></div>
+        <div class="meta-card"><strong>Fix Fast</strong><span>Too many cards, missing owned work, stale mappings, blocked email drafts.</span></div>
       </div>
     </div>
   </header>
@@ -421,17 +436,17 @@
       <nav id="toc-links"></nav>
     </aside>
     <main id="guide-content" class="doc">
-      <div class="loading">Loading guide content from <code>SCOUT_2_0_User_Guide.md</code>...</div>
+      <div class="loading">Loading guide content from <code>IQUEUE_Quick_Start.md</code>...</div>
     </main>
   </div>
 
   <footer class="footer">
-    <div class="footer-inner">Keep this file and <code>SCOUT_2_0_User_Guide.md</code> together in the <code>/docs/</code> folder to publish the guide as <code>/docs/scout-2-0-user-guide.html</code>.</div>
+    <div class="footer-inner">Keep this file and <code>IQUEUE_Quick_Start.md</code> together in the <code>/docs/</code> folder to publish the quick start as <code>/docs/iqueue-quick-start.html</code>.</div>
   </footer>
 
   <script>
     (function () {
-      var markdownPath = './SCOUT_2_0_User_Guide.md';
+      var markdownPath = './IQUEUE_Quick_Start.md';
       var content = document.getElementById('guide-content');
       var tocLinks = document.getElementById('toc-links');
 
@@ -636,7 +651,7 @@
         })
         .then(renderMarkdown)
         .catch(function () {
-          renderMarkdown('# Guide Content Not Loaded\n\nThis page expects `SCOUT_2_0_User_Guide.md` to be uploaded in the same `/docs/` folder as `scout-2-0-user-guide.html`.\n\nUpload both files to `/docs/`, then open the HTML page from GitHub Pages.');
+          renderMarkdown('# Guide Content Not Loaded\n\nThis page expects `IQUEUE_Quick_Start.md` to be uploaded in the same `/docs/` folder as `iqueue-quick-start.html`.\n\nUpload both files to `/docs/`, then open the HTML page from GitHub Pages.');
         });
     }());
   </script>

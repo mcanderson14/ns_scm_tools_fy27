@@ -177,6 +177,77 @@
       font-size: 13px;
     }
 
+    .guide-callout {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-top: 18px;
+      padding: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.10);
+    }
+
+    .guide-callout strong {
+      display: block;
+      margin-bottom: 3px;
+      color: #fff;
+      font-size: 16px;
+    }
+
+    .guide-callout span {
+      color: #dbe6ef;
+      font-size: 14px;
+    }
+
+    .quick-start-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .quick-start-card {
+      display: flex;
+      min-height: 126px;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.10);
+      color: #fff;
+      text-decoration: none;
+    }
+
+    .quick-start-card:hover {
+      background: rgba(255, 255, 255, 0.15);
+      text-decoration: none;
+    }
+
+    .quick-start-card strong {
+      display: block;
+      margin-bottom: 4px;
+      color: #fff;
+      font-size: 17px;
+    }
+
+    .quick-start-card span {
+      color: #dbe6ef;
+      font-size: 13px;
+    }
+
+    .quick-start-card em {
+      color: #fff;
+      font-style: normal;
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
     .layout {
       display: grid;
       grid-template-columns: 280px minmax(0, 1fr);
@@ -380,6 +451,8 @@
       .layout,
       .footer { padding-left: 16px; padding-right: 16px; }
       .brand-strip { align-items: flex-start; flex-direction: column; }
+      .guide-callout { align-items: flex-start; flex-direction: column; }
+      .quick-start-grid { grid-template-columns: 1fr; }
       .hero h1 { font-size: 34px; }
       .hero-copy { font-size: 16px; }
       table { min-width: 640px; }
@@ -420,6 +493,27 @@
         <a class="button secondary" href="#scout-calendar-integration-setup">Calendar Setup</a>
         <button class="button secondary" type="button" onclick="window.print()">Print Guide</button>
       </div>
+      <div class="guide-callout">
+        <div>
+          <strong>Looking specifically for SCOUT 2.0?</strong>
+          <span>Open the dedicated SCOUT 2.0 install, dashboard, calendar, drawer, and staffing guide.</span>
+        </div>
+        <a class="button" href="./scout-2-0-user-guide.html">Open SCOUT 2.0 Guide</a>
+      </div>
+      <div class="quick-start-grid" aria-label="Quick start guides">
+        <a class="quick-start-card" href="./iqueue-quick-start.html">
+          <span><strong>IQUEUE Quick Start</strong>One-page queue triage workflow for filters, ownership, routing, and handoff to SCOUT.</span>
+          <em>Open quick start</em>
+        </a>
+        <a class="quick-start-card" href="./scout-quick-start.html">
+          <span><strong>SCOUT Quick Start</strong>One-page staffing workflow for one SCR, calendar checks, workload, and save confirmation.</span>
+          <em>Open quick start</em>
+        </a>
+        <a class="quick-start-card" href="./scout-2-0-user-guide.html">
+          <span><strong>SCOUT 2.0 Full Guide</strong>Detailed install, settings, dashboard, drawer, calendar, and troubleshooting guide.</span>
+          <em>Open full guide</em>
+        </a>
+      </div>
       <div class="meta-grid" aria-label="Guide summary">
         <div class="meta-card"><strong>SCOUT</strong><span>Staff one SCR at a time with skills, calendar, and NetSuite writeback support.</span></div>
         <div class="meta-card"><strong>IQUEUE</strong><span>Triage Requested and On Hold queues, ownership, routing, and cross-staffing.</span></div>
@@ -439,7 +533,7 @@
   </div>
 
   <footer class="footer">
-    <div class="footer-inner">Upload this file and <code>SCOUT_IQUEUE_User_Guide.md</code> together at the repo root to publish the guide as <code>/scout-iqueue-user-guide.html</code>.</div>
+    <div class="footer-inner">Compatibility page for the combined guide. Keep this file and <code>SCOUT_IQUEUE_User_Guide.md</code> together in the <code>/docs/</code> folder to publish it at <code>/docs/scout-iqueue-user-guide.html</code>.</div>
   </footer>
 
   <script>
@@ -649,7 +743,7 @@
         })
         .then(renderMarkdown)
         .catch(function () {
-          renderMarkdown('# Guide Content Not Loaded\n\nThis page expects `SCOUT_IQUEUE_User_Guide.md` to be uploaded in the same folder as `scout-iqueue-user-guide.html`.\n\nUpload both files to the repo root, then open the HTML page from GitHub Pages.');
+          renderMarkdown('# Guide Content Not Loaded\n\nThis page expects `SCOUT_IQUEUE_User_Guide.md` to be uploaded in the same `/docs/` folder as `scout-iqueue-user-guide.html`.\n\nUpload both files to `/docs/`, then open the HTML page from GitHub Pages.');
         });
     }());
   </script>
