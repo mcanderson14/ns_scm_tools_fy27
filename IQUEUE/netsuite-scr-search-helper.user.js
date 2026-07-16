@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.53
+// @version      27.0.54
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -42,7 +42,8 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.53";
+  const HELPER_VERSION = "27.0.54";
+  const HELPER_RESTORE_OVERLAY_ID = "scr-helper-restore-overlay";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -9418,6 +9419,7 @@ Health & Hospitality	DIRECT	NL	West	West
       button.textContent = "Staff SCR";
     });
     applyRequestPresentation(visibleRows);
+    hideRestoreOverlay();
   }
 
   function updateAssignedToMeControl() {
@@ -11141,6 +11143,33 @@ Health & Hospitality	DIRECT	NL	West	West
         </div>
       </div>
     `;
+  }
+
+  function showRestoreOverlay(message = `Restoring ${CURRENT_QUEUE.loadingLabel}...`) {
+    if (!document.body) return;
+    let overlay = document.getElementById(HELPER_RESTORE_OVERLAY_ID);
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.id = HELPER_RESTORE_OVERLAY_ID;
+      overlay.setAttribute("role", "status");
+      overlay.setAttribute("aria-live", "polite");
+      document.body.appendChild(overlay);
+    }
+    overlay.innerHTML = `
+      <div class="scr-helper-restore-card">
+        <div class="scr-helper-loading-mark">⏳</div>
+        <div>
+          <div class="scr-helper-loading-title">Restoring IQUEUE</div>
+          <div class="scr-helper-loading-text">${escapeHtml(message)}</div>
+        </div>
+      </div>
+    `;
+    overlay.hidden = false;
+  }
+
+  function hideRestoreOverlay() {
+    const overlay = document.getElementById(HELPER_RESTORE_OVERLAY_ID);
+    if (overlay) overlay.hidden = true;
   }
 
   function setupPortletResize(portlet) {
@@ -12872,6 +12901,32 @@ Health & Hospitality	DIRECT	NL	West	West
         font-weight: 600;
       }
 
+      #${HELPER_RESTORE_OVERLAY_ID} {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483647;
+        display: grid;
+        place-items: center;
+        background: #f7fbfc;
+        color: var(--rw-slate-150);
+      }
+
+      #${HELPER_RESTORE_OVERLAY_ID}[hidden] {
+        display: none;
+      }
+
+      #${HELPER_RESTORE_OVERLAY_ID} .scr-helper-restore-card {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: min(460px, calc(100vw - 32px));
+        border: 1px solid var(--rw-slate-50);
+        border-radius: 8px;
+        padding: 18px;
+        background: linear-gradient(90deg, var(--rw-ocean-30), #ffffff 72%);
+        box-shadow: 0 10px 28px rgba(31, 49, 48, 0.14), inset 4px 0 0 var(--ns-ui-primary);
+      }
+
       #${HELPER_ID}.scr-helper-fullscreen .scr-helper-summary-grid {
         grid-template-columns: repeat(5, minmax(0, 1fr));
       }
@@ -13793,6 +13848,7 @@ Health & Hospitality	DIRECT	NL	West	West
   }
 
   function resumeHelperWork(message = `Resuming ${CURRENT_QUEUE.loadingLabel}.`) {
+    showRestoreOverlay(message);
     pageIsSuspended = false;
     pageWasSuspended = false;
     startupDeferredForVisibility = false;
@@ -13818,6 +13874,7 @@ Health & Hospitality	DIRECT	NL	West	West
 
   function handlePageShow(event) {
     if (!pageWasSuspended && !(event && event.persisted)) return;
+    showRestoreOverlay(`Restoring ${CURRENT_QUEUE.loadingLabel}.`);
     if (pageShouldPauseWork()) {
       suspendHelperForVisibility();
       return;
@@ -13832,6 +13889,7 @@ Health & Hospitality	DIRECT	NL	West	West
       return;
     }
     if (startupDeferredForVisibility || pageWasSuspended || pageIsSuspended) {
+      showRestoreOverlay(`Restoring ${CURRENT_QUEUE.loadingLabel}.`);
       resumeHelperWork(`Resuming ${CURRENT_QUEUE.loadingLabel}.`);
     }
   }
