@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.54
+// @version      27.0.55
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -19,7 +19,7 @@
 // @connect      github.com
 // @connect      raw.githubusercontent.com
 // @connect      graph.microsoft.com
-// @run-at       document-end
+// @run-at       document-start
 // @downloadURL  https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js
 // @updateURL    https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js
 // ==/UserScript==
@@ -42,8 +42,9 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.54";
+  const HELPER_VERSION = "27.0.55";
   const HELPER_RESTORE_OVERLAY_ID = "scr-helper-restore-overlay";
+  const HELPER_RESTORE_STYLE_ID = "scr-helper-restore-overlay-styles";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -11146,14 +11147,14 @@ Health & Hospitality	DIRECT	NL	West	West
   }
 
   function showRestoreOverlay(message = `Restoring ${CURRENT_QUEUE.loadingLabel}...`) {
-    if (!document.body) return;
+    installRestoreOverlayStyles();
     let overlay = document.getElementById(HELPER_RESTORE_OVERLAY_ID);
     if (!overlay) {
       overlay = document.createElement("div");
       overlay.id = HELPER_RESTORE_OVERLAY_ID;
       overlay.setAttribute("role", "status");
       overlay.setAttribute("aria-live", "polite");
-      document.body.appendChild(overlay);
+      (document.body || document.documentElement).appendChild(overlay);
     }
     overlay.innerHTML = `
       <div class="scr-helper-restore-card">
@@ -11170,6 +11171,70 @@ Health & Hospitality	DIRECT	NL	West	West
   function hideRestoreOverlay() {
     const overlay = document.getElementById(HELPER_RESTORE_OVERLAY_ID);
     if (overlay) overlay.hidden = true;
+  }
+
+  function installRestoreOverlayStyles() {
+    if (document.getElementById(HELPER_RESTORE_STYLE_ID)) return;
+    const style = document.createElement("style");
+    style.id = HELPER_RESTORE_STYLE_ID;
+    style.textContent = `
+      html {
+        background: #f7fbfc;
+      }
+
+      #${HELPER_RESTORE_OVERLAY_ID} {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483647;
+        display: grid;
+        place-items: center;
+        background: #f7fbfc;
+        color: #3c4545;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      #${HELPER_RESTORE_OVERLAY_ID}[hidden] {
+        display: none;
+      }
+
+      #${HELPER_RESTORE_OVERLAY_ID} .scr-helper-restore-card {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: min(460px, calc(100vw - 32px));
+        border: 1px solid #c4d4d7;
+        border-radius: 8px;
+        padding: 18px;
+        background: linear-gradient(90deg, #e7f2f5, #ffffff 72%);
+        box-shadow: 0 10px 28px rgba(31, 49, 48, 0.14), inset 4px 0 0 #36677d;
+      }
+
+      #${HELPER_RESTORE_OVERLAY_ID} .scr-helper-loading-mark {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 38px;
+        height: 38px;
+        border-radius: 999px;
+        background: #fff4d8;
+        color: #7a4a00;
+        font-size: 18px;
+      }
+
+      #${HELPER_RESTORE_OVERLAY_ID} .scr-helper-loading-title {
+        color: #36677d;
+        font-size: 15px;
+        font-weight: 800;
+      }
+
+      #${HELPER_RESTORE_OVERLAY_ID} .scr-helper-loading-text {
+        margin-top: 3px;
+        color: #697778;
+        font-size: 12px;
+        font-weight: 600;
+      }
+    `;
+    (document.head || document.documentElement).appendChild(style);
   }
 
   function setupPortletResize(portlet) {
@@ -13853,12 +13918,18 @@ Health & Hospitality	DIRECT	NL	West	West
     pageWasSuspended = false;
     startupDeferredForVisibility = false;
 
-    if (!document.body || !document.body.children.length || !helperShellIsPresent()) {
-      window.setTimeout(() => window.location.reload(), 0);
+    if (!document.body) {
+      runWhenBodyReady(() => resumeHelperWork(message));
       return;
     }
 
-    if (!document.getElementById(HELPER_STYLE_ID)) addStyles();
+    if (!helperShellIsPresent()) {
+      removeExistingHelperArtifacts();
+      addStyles();
+      insertPortlet();
+    } else if (!document.getElementById(HELPER_STYLE_ID)) {
+      addStyles();
+    }
     renderStartupSplash(message);
     applyStartupCachedData();
     refreshRows();
@@ -13921,9 +13992,30 @@ Health & Hospitality	DIRECT	NL	West	West
     });
   }
 
+  function runWhenBodyReady(callback) {
+    if (document.body) {
+      callback();
+      return;
+    }
+    const run = () => {
+      if (!document.body) {
+        window.setTimeout(run, 25);
+        return;
+      }
+      callback();
+    };
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", run, { once: true });
+    } else {
+      run();
+    }
+  }
+
   window.addEventListener("pagehide", handlePageHide);
   window.addEventListener("pageshow", handlePageShow);
   document.addEventListener("visibilitychange", handleVisibilityChange);
 
-  startHelper();
+  installRestoreOverlayStyles();
+  showRestoreOverlay(`Preparing ${CURRENT_QUEUE.loadingLabel}.`);
+  runWhenBodyReady(startHelper);
 })();
