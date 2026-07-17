@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.65
+// @version      27.0.66
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -43,7 +43,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.65";
+  const HELPER_VERSION = "27.0.66";
   const HELPER_RESTORE_OVERLAY_ID = "scr-helper-restore-overlay";
   const HELPER_RESTORE_STYLE_ID = "scr-helper-restore-overlay-styles";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
@@ -10337,6 +10337,34 @@ Health & Hospitality	DIRECT	NL	West	West
     return normalizeSpaces(value);
   }
 
+  function fieldInternalIdFromRow(row, fieldId) {
+    const cleanFieldId = normalizeSpaces(fieldId);
+    if (!row || !cleanFieldId) return "";
+    const escapedFieldId = cleanFieldId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const patterns = [
+      new RegExp(`${escapedFieldId}\\s*[:=]\\s*["']?(\\d+)["']?`, "i"),
+      new RegExp(`${escapedFieldId}[^\\d]{0,80}(\\d{3,})`, "i")
+    ];
+    const fields = row.allFields || row.fields || [];
+    const candidates = fields.flatMap(field => [
+      field && field.label,
+      field && field.value,
+      field && field.rawValue,
+      field && field.rawHtml
+    ]).concat([
+      row.rawHtml,
+      row.rawValue
+    ]).filter(Boolean);
+    for (const candidate of candidates) {
+      const text = String(candidate || "");
+      for (const pattern of patterns) {
+        const match = text.match(pattern);
+        if (match && match[1]) return match[1];
+      }
+    }
+    return "";
+  }
+
   function lookupSingleFieldWithRequire(pageWindow, internalId, fieldId) {
     return new Promise((resolve, reject) => {
       let settled = false;
@@ -11460,9 +11488,11 @@ Health & Hospitality	DIRECT	NL	West	West
       }
 
       const salesRepName = cleanPersonName(recipient.name || buildRowSummary(row).salesRep);
-      const requestorId = normalizeInternalIdValue(await lookupSingleFieldInternal(row, REQUESTOR_FIELD_ID));
+      const rawRequestorId = normalizeInternalIdValue(fieldInternalIdFromRow(row, REQUESTOR_FIELD_ID));
+      const lookupRequestorId = rawRequestorId ? "" : normalizeInternalIdValue(await lookupSingleFieldInternal(row, REQUESTOR_FIELD_ID));
+      const requestorId = rawRequestorId || lookupRequestorId;
       let employeeId = requestorId || recipient.id || salesRepEmployeeIdForRow(row);
-      let assigneeSource = requestorId ? `${REQUESTOR_FIELD_ID}:${requestorId}` : "";
+      let assigneeSource = requestorId ? `${REQUESTOR_FIELD_ID}:${requestorId}${rawRequestorId ? " raw" : ""}` : "";
       if (!employeeId && salesRepName) {
         const employeeRecord = await resolveEmployeeRecordByName(salesRepName, {
           label: "Sales Rep",
