@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.64
+// @version      27.0.65
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -37,12 +37,13 @@
   const HASHTAGS_FIELD_ID = "custrecord_screq_hashtags";
   const CROSS_VERTICAL_FIELD_ID = "custrecord_screq_cross_vertical";
   const ASSIGNEE_FIELD_ID = "custrecord_screq_assignee";
+  const REQUESTOR_FIELD_ID = "custrecord_screq_requestor";
   const ROSTER_RECORD_TYPE = "customrecord_emproster";
   const ROSTER_COST_CENTER_ID = "M5M1";
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.64";
+  const HELPER_VERSION = "27.0.65";
   const HELPER_RESTORE_OVERLAY_ID = "scr-helper-restore-overlay";
   const HELPER_RESTORE_STYLE_ID = "scr-helper-restore-overlay-styles";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
@@ -10324,6 +10325,18 @@ Health & Hospitality	DIRECT	NL	West	West
     return normalizeSpaces(value);
   }
 
+  function normalizeLookupFieldInternalValue(value) {
+    if (Array.isArray(value)) {
+      return value.map(item => (
+        normalizeSpaces(item && (item.value || item.id || item.text) || item)
+      )).filter(Boolean).join("\n");
+    }
+    if (value && typeof value === "object") {
+      return normalizeSpaces(value.value || value.id || value.text || "");
+    }
+    return normalizeSpaces(value);
+  }
+
   function lookupSingleFieldWithRequire(pageWindow, internalId, fieldId) {
     return new Promise((resolve, reject) => {
       let settled = false;
@@ -10355,6 +10368,37 @@ Health & Hospitality	DIRECT	NL	West	West
     });
   }
 
+  function lookupSingleFieldInternalWithRequire(pageWindow, internalId, fieldId) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      let timer;
+      const finish = callback => result => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        callback(result);
+      };
+      timer = setTimeout(finish(reject), 8000, new Error("Timed out waiting for NetSuite search module."));
+
+      try {
+        pageWindow.require(["N/search"], search => {
+          try {
+            const result = search.lookupFields({
+              type: SCR_RECORD_SCRIPT_ID,
+              id: internalId,
+              columns: [fieldId]
+            });
+            finish(resolve)(normalizeLookupFieldInternalValue(result && result[fieldId]));
+          } catch (error) {
+            finish(reject)(error);
+          }
+        }, finish(reject));
+      } catch (error) {
+        finish(reject)(error);
+      }
+    });
+  }
+
   async function lookupSingleField(row, fieldId) {
     const internalId = row.internalId || recordIdFromUrl(row.editUrl);
     if (!internalId) return "";
@@ -10373,6 +10417,30 @@ Health & Hospitality	DIRECT	NL	West	West
         return await lookupSingleFieldWithRequire(pageWindow, internalId, fieldId);
       } catch (error) {
         console.warn("SCR helper N/search lookup failed", error);
+      }
+    }
+
+    return "";
+  }
+
+  async function lookupSingleFieldInternal(row, fieldId) {
+    const internalId = row.internalId || recordIdFromUrl(row.editUrl);
+    if (!internalId) return "";
+
+    const pageWindow = getPageWindow();
+    if (typeof pageWindow.nlapiLookupField === "function") {
+      try {
+        return normalizeLookupFieldInternalValue(pageWindow.nlapiLookupField(SCR_RECORD_SCRIPT_ID, internalId, fieldId));
+      } catch (error) {
+        console.warn("SCR helper page nlapiLookupField internal value failed", error);
+      }
+    }
+
+    if (typeof pageWindow.require === "function") {
+      try {
+        return await lookupSingleFieldInternalWithRequire(pageWindow, internalId, fieldId);
+      } catch (error) {
+        console.warn("SCR helper N/search internal lookup failed", error);
       }
     }
 
@@ -11392,18 +11460,22 @@ Health & Hospitality	DIRECT	NL	West	West
       }
 
       const salesRepName = cleanPersonName(recipient.name || buildRowSummary(row).salesRep);
-      let employeeId = recipient.id || salesRepEmployeeIdForRow(row);
+      const requestorId = normalizeInternalIdValue(await lookupSingleFieldInternal(row, REQUESTOR_FIELD_ID));
+      let employeeId = requestorId || recipient.id || salesRepEmployeeIdForRow(row);
+      let assigneeSource = requestorId ? `${REQUESTOR_FIELD_ID}:${requestorId}` : "";
       if (!employeeId && salesRepName) {
         const employeeRecord = await resolveEmployeeRecordByName(salesRepName, {
           label: "Sales Rep",
           optional: true
         });
         employeeId = employeeRecord && employeeRecord.id || "";
+        assigneeSource = employeeId ? `employee search:${employeeId}` : "";
       }
       if (employeeId) {
         await submitAssignee(row, employeeId);
       } else if (salesRepName) {
         await submitAssigneeByName(row, salesRepName, { noEditFormFallback: true });
+        assigneeSource = `setText:${salesRepName}`;
       } else {
         throw new Error(`Sales Rep employee id was not available for ${salesRepName || recipient.email}.`);
       }
@@ -11416,21 +11488,17 @@ Health & Hospitality	DIRECT	NL	West	West
         ? "email compose opened using the Firefox fallback"
         : "Outlook compose opened";
       row.routingNotice = {
-        message: `SCR assigned back to ${recipient.name || recipient.email}; #gravity saved. Redirect-to-sales ${openedText} for ${draft.email}${draft.cc && draft.cc.length ? `, cc ${draft.cc.join(", ")}` : ""}. Review and send it. If it did not appear, use the links below.`,
+        message: `SCR assigned back to ${recipient.name || recipient.email}${assigneeSource ? ` (${assigneeSource})` : ""}; #gravity saved. Redirect-to-sales ${openedText} for ${draft.email}${draft.cc && draft.cc.length ? `, cc ${draft.cc.join(", ")}` : ""}. Review and send it. If it did not appear, use the links below.`,
         state: "success",
         links: draft.links || []
       };
       renderResults();
     } catch (error) {
       console.warn("IQUEUE could not redirect SCR to sales", error);
-      const editUrl = editUrlForRow(row);
       const assignmentNeedsEditPage = /without opening the edit page/i.test(error && (error.message || error));
-      if (assignmentNeedsEditPage && editUrl) {
-        openEditUrlWithGm(editUrl);
-      }
       row.routingNotice = {
-        message: assignmentNeedsEditPage && editUrl
-          ? `Could not auto-assign to Sales Rep, so I opened the SCR in edit mode. ${error.message || error}`
+        message: assignmentNeedsEditPage
+          ? `Could not auto-assign to Sales Rep. ${error.message || error}`
           : `Could not redirect to sales: ${error.message || error}`,
         state: "error"
       };
