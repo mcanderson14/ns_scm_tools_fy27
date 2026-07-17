@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.59
+// @version      27.0.60
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -42,7 +42,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.59";
+  const HELPER_VERSION = "27.0.60";
   const HELPER_RESTORE_OVERLAY_ID = "scr-helper-restore-overlay";
   const HELPER_RESTORE_STYLE_ID = "scr-helper-restore-overlay-styles";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
@@ -8475,6 +8475,22 @@ Health & Hospitality	DIRECT	NL	West	West
     return keyed || (candidates.length === 1 ? candidates[0] : null);
   }
 
+  function pickEmployeeRecordMatch(rows, names) {
+    const candidates = (rows || []).filter(row => row && row.id);
+    if (!candidates.length) return null;
+
+    const variants = [...new Set(names.flatMap(rosterNameVariants))];
+    const targetKeys = names.flatMap(personNameKeys);
+    const exact = candidates.find(row => {
+      const rowName = normalizeRosterName(row.name);
+      return rowName && variants.some(variant => rowName === variant || rowName.includes(variant) || variant.includes(rowName));
+    });
+    if (exact) return exact;
+
+    const keyed = candidates.find(row => personKeyListsOverlap(personNameKeys(row.name), targetKeys));
+    return keyed || (candidates.length === 1 ? candidates[0] : null);
+  }
+
   function employeeLookupRow(id, name, email, source) {
     const cleanEmail = normalizeSpaces(email);
     if (!cleanEmail) return null;
@@ -8482,6 +8498,17 @@ Health & Hospitality	DIRECT	NL	West	West
       id: normalizeSpaces(id),
       name: cleanPersonName(name),
       email: cleanEmail,
+      source: source || "employee"
+    };
+  }
+
+  function employeeRecordLookupRow(id, name, email, source) {
+    const cleanId = normalizeSpaces(id);
+    if (!cleanId) return null;
+    return {
+      id: cleanId,
+      name: cleanPersonName(name),
+      email: normalizeSpaces(email),
       source: source || "employee"
     };
   }
@@ -8538,6 +8565,64 @@ Health & Hospitality	DIRECT	NL	West	West
         "employee search"
       )).filter(Boolean);
       const match = pickEmployeeEmailMatch(rows, names);
+      if (match) return match;
+    }
+
+    return null;
+  }
+
+  function lookupEmployeeRecordWithNlapi(pageWindow, names, employeeId) {
+    if (employeeId && typeof pageWindow.nlapiLookupField === "function") {
+      const email = normalizeLookupFieldValue(pageWindow.nlapiLookupField("employee", employeeId, "email"));
+      const name = normalizeLookupFieldValue(pageWindow.nlapiLookupField("employee", employeeId, "entityid"));
+      const row = employeeRecordLookupRow(employeeId, name || names[0], email, "employee record");
+      if (row) return row;
+    }
+
+    if (typeof pageWindow.nlapiSearchRecord !== "function" || typeof pageWindow.nlobjSearchFilter !== "function") {
+      return null;
+    }
+
+    const inferredEmail = inferOracleEmailFromName(names[0]);
+    if (inferredEmail) {
+      const filters = [
+        new pageWindow.nlobjSearchFilter("email", null, "is", inferredEmail),
+        new pageWindow.nlobjSearchFilter("isinactive", null, "is", "F")
+      ];
+      const columns = [
+        new pageWindow.nlobjSearchColumn("internalid"),
+        new pageWindow.nlobjSearchColumn("entityid"),
+        new pageWindow.nlobjSearchColumn("email")
+      ];
+      const results = pageWindow.nlapiSearchRecord("employee", null, filters, columns) || [];
+      const rows = results.map(result => employeeRecordLookupRow(
+        result.getValue("internalid") || result.getId && result.getId(),
+        result.getValue("entityid") || result.getText("entityid") || names[0],
+        result.getValue("email") || inferredEmail,
+        "employee email search"
+      )).filter(Boolean);
+      const match = pickEmployeeRecordMatch(rows, names);
+      if (match) return match;
+    }
+
+    for (const term of rosterSearchTerms(names)) {
+      const filters = [
+        new pageWindow.nlobjSearchFilter("entityid", null, "contains", term),
+        new pageWindow.nlobjSearchFilter("isinactive", null, "is", "F")
+      ];
+      const columns = [
+        new pageWindow.nlobjSearchColumn("internalid"),
+        new pageWindow.nlobjSearchColumn("entityid"),
+        new pageWindow.nlobjSearchColumn("email")
+      ];
+      const results = pageWindow.nlapiSearchRecord("employee", null, filters, columns) || [];
+      const rows = results.map(result => employeeRecordLookupRow(
+        result.getValue("internalid") || result.getId && result.getId(),
+        result.getValue("entityid") || result.getText("entityid"),
+        result.getValue("email"),
+        "employee search"
+      )).filter(Boolean);
+      const match = pickEmployeeRecordMatch(rows, names);
       if (match) return match;
     }
 
@@ -8624,6 +8709,86 @@ Health & Hospitality	DIRECT	NL	West	West
     });
   }
 
+  function lookupEmployeeRecordWithRequire(pageWindow, names, employeeId, label = "employee") {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      let timer;
+      const finish = callback => result => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        callback(result);
+      };
+      timer = setTimeout(finish(reject), 8000, new Error(`Timed out resolving ${label} employee record.`));
+
+      try {
+        pageWindow.require(["N/search"], search => {
+          try {
+            const employeeType = search.Type && search.Type.EMPLOYEE || "employee";
+            if (employeeId) {
+              const result = search.lookupFields({
+                type: employeeType,
+                id: employeeId,
+                columns: ["entityid", "email"]
+              });
+              finish(resolve)(employeeRecordLookupRow(
+                employeeId,
+                normalizeLookupFieldValue(result && result.entityid) || names[0],
+                normalizeLookupFieldValue(result && result.email),
+                "employee record"
+              ));
+              return;
+            }
+
+            const inferredEmail = inferOracleEmailFromName(names[0]);
+            if (inferredEmail) {
+              const results = search.create({
+                type: employeeType,
+                filters: [["email", "is", inferredEmail], "AND", ["isinactive", "is", "F"]],
+                columns: ["internalid", "entityid", "email"]
+              }).run().getRange({ start: 0, end: 5 }) || [];
+              const rows = results.map(result => employeeRecordLookupRow(
+                result.getValue({ name: "internalid" }),
+                result.getValue({ name: "entityid" }) || names[0],
+                result.getValue({ name: "email" }) || inferredEmail,
+                "employee email search"
+              )).filter(Boolean);
+              const match = pickEmployeeRecordMatch(rows, names);
+              if (match) {
+                finish(resolve)(match);
+                return;
+              }
+            }
+
+            for (const term of rosterSearchTerms(names)) {
+              const results = search.create({
+                type: employeeType,
+                filters: [["entityid", "contains", term], "AND", ["isinactive", "is", "F"]],
+                columns: ["internalid", "entityid", "email"]
+              }).run().getRange({ start: 0, end: 25 }) || [];
+              const rows = results.map(result => employeeRecordLookupRow(
+                result.getValue({ name: "internalid" }),
+                result.getValue({ name: "entityid" }),
+                result.getValue({ name: "email" }),
+                "employee search"
+              )).filter(Boolean);
+              const match = pickEmployeeRecordMatch(rows, names);
+              if (match) {
+                finish(resolve)(match);
+                return;
+              }
+            }
+            finish(resolve)(null);
+          } catch (error) {
+            finish(reject)(error);
+          }
+        }, finish(reject));
+      } catch (error) {
+        finish(reject)(error);
+      }
+    });
+  }
+
   async function resolveEmployeeEmailByName(name, options = {}) {
     const label = options.label || "employee";
     const employeeName = cleanPersonName(name);
@@ -8680,6 +8845,39 @@ Health & Hospitality	DIRECT	NL	West	West
     };
     employeeEmailLookupCache.set(roleCacheKey, resolved);
     return resolved;
+  }
+
+  async function resolveEmployeeRecordByName(name, options = {}) {
+    const label = options.label || "employee";
+    const employeeName = cleanPersonName(name);
+    if (!employeeName) {
+      if (options.optional) return null;
+      throw new Error(`No ${label} was returned on this SCR row.`);
+    }
+
+    const employeeId = options.employeeId || "";
+    const names = [employeeName];
+    const pageWindow = getPageWindow();
+    let match = null;
+    if (pageWindow && (typeof pageWindow.nlapiLookupField === "function" || typeof pageWindow.nlapiSearchRecord === "function")) {
+      try {
+        match = lookupEmployeeRecordWithNlapi(pageWindow, names, employeeId);
+      } catch (error) {
+        console.warn(`IQUEUE nlapi ${label} employee record lookup failed`, error);
+      }
+    }
+    if (!match && pageWindow && typeof pageWindow.require === "function") {
+      try {
+        match = await lookupEmployeeRecordWithRequire(pageWindow, names, employeeId, label);
+      } catch (error) {
+        console.warn(`IQUEUE N/search ${label} employee record lookup failed`, error);
+      }
+    }
+    if (!match || !match.id) {
+      if (options.optional) return null;
+      throw new Error(`No ${label} employee record was available for ${employeeName}.`);
+    }
+    return match;
   }
 
   async function resolveSalesRepEmail(row) {
@@ -11024,7 +11222,14 @@ Health & Hospitality	DIRECT	NL	West	West
       }
 
       const salesRepName = cleanPersonName(recipient.name || buildRowSummary(row).salesRep);
-      const employeeId = recipient.id || salesRepEmployeeIdForRow(row);
+      let employeeId = recipient.id || salesRepEmployeeIdForRow(row);
+      if (!employeeId && salesRepName) {
+        const employeeRecord = await resolveEmployeeRecordByName(salesRepName, {
+          label: "Sales Rep",
+          optional: true
+        });
+        employeeId = employeeRecord && employeeRecord.id || "";
+      }
       if (employeeId) {
         await submitAssignee(row, employeeId);
       } else if (salesRepName) {
