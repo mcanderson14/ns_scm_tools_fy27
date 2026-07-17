@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.56
+// @version      27.0.57
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -42,7 +42,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.56";
+  const HELPER_VERSION = "27.0.57";
   const HELPER_RESTORE_OVERLAY_ID = "scr-helper-restore-overlay";
   const HELPER_RESTORE_STYLE_ID = "scr-helper-restore-overlay-styles";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
@@ -2288,9 +2288,15 @@ Health & Hospitality	DIRECT	NL	West	West
       const raw = normalizeSpaces(name);
       if (!raw) return;
       const last = raw.includes(",") ? raw.split(",")[0].trim() : raw.split(/\s+/).slice(-1)[0];
+      const first = raw.includes(",")
+        ? normalizeSpaces(raw.split(",").slice(1).join(",")).split(/\s+/)[0]
+        : raw.split(/\s+/)[0];
       if (last) terms.push(last);
+      if (first) terms.push(first);
       const compactLast = last.replace(/[^A-Za-z0-9]/g, "");
       if (compactLast && compactLast !== last) terms.push(compactLast);
+      const compactFirst = String(first || "").replace(/[^A-Za-z0-9]/g, "");
+      if (compactFirst && compactFirst !== first) terms.push(compactFirst);
     });
     return [...new Set(terms.filter(Boolean))];
   }
@@ -8492,6 +8498,28 @@ Health & Hospitality	DIRECT	NL	West	West
       return null;
     }
 
+    const inferredEmail = inferOracleEmailFromName(names[0]);
+    if (inferredEmail) {
+      const filters = [
+        new pageWindow.nlobjSearchFilter("email", null, "is", inferredEmail),
+        new pageWindow.nlobjSearchFilter("isinactive", null, "is", "F")
+      ];
+      const columns = [
+        new pageWindow.nlobjSearchColumn("internalid"),
+        new pageWindow.nlobjSearchColumn("entityid"),
+        new pageWindow.nlobjSearchColumn("email")
+      ];
+      const results = pageWindow.nlapiSearchRecord("employee", null, filters, columns) || [];
+      const rows = results.map(result => employeeLookupRow(
+        result.getValue("internalid") || result.getId && result.getId(),
+        result.getValue("entityid") || result.getText("entityid") || names[0],
+        result.getValue("email") || inferredEmail,
+        "employee email search"
+      )).filter(Boolean);
+      const match = pickEmployeeEmailMatch(rows, names) || (rows.length === 1 ? rows[0] : null);
+      if (match) return match;
+    }
+
     for (const term of rosterSearchTerms(names)) {
       const filters = [
         new pageWindow.nlobjSearchFilter("entityid", null, "contains", term),
@@ -8545,6 +8573,26 @@ Health & Hospitality	DIRECT	NL	West	West
                 "employee record"
               ));
               return;
+            }
+
+            const inferredEmail = inferOracleEmailFromName(names[0]);
+            if (inferredEmail) {
+              const results = search.create({
+                type: employeeType,
+                filters: [["email", "is", inferredEmail], "AND", ["isinactive", "is", "F"]],
+                columns: ["internalid", "entityid", "email"]
+              }).run().getRange({ start: 0, end: 5 }) || [];
+              const rows = results.map(result => employeeLookupRow(
+                result.getValue({ name: "internalid" }),
+                result.getValue({ name: "entityid" }) || names[0],
+                result.getValue({ name: "email" }) || inferredEmail,
+                "employee email search"
+              )).filter(Boolean);
+              const match = pickEmployeeEmailMatch(rows, names) || (rows.length === 1 ? rows[0] : null);
+              if (match) {
+                finish(resolve)(match);
+                return;
+              }
             }
 
             for (const term of rosterSearchTerms(names)) {
