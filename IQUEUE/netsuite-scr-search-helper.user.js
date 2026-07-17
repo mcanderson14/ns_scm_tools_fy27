@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.63
+// @version      27.0.64
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -42,7 +42,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.63";
+  const HELPER_VERSION = "27.0.64";
   const HELPER_RESTORE_OVERLAY_ID = "scr-helper-restore-overlay";
   const HELPER_RESTORE_STYLE_ID = "scr-helper-restore-overlay-styles";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
@@ -10672,10 +10672,12 @@ Health & Hospitality	DIRECT	NL	West	West
     const internalId = row.internalId || recordIdFromUrl(row.editUrl);
     if (!internalId) throw new Error("No SCR internal id was available for this row.");
     const pageWindow = getPageWindow();
+    let lastError = null;
     if (typeof pageWindow.nlapiLoadRecord === "function") {
       try {
         return submitSingleFieldTextWithNlapi(pageWindow, internalId, ASSIGNEE_FIELD_ID, name);
       } catch (error) {
+        lastError = error;
         console.warn("SCR helper page nlapi setFieldText failed", error);
       }
     }
@@ -10683,11 +10685,13 @@ Health & Hospitality	DIRECT	NL	West	West
       try {
         return await submitSingleFieldTextWithRequire(pageWindow, internalId, ASSIGNEE_FIELD_ID, name);
       } catch (error) {
+        lastError = error;
         console.warn("SCR helper page N/record setText failed", error);
       }
     }
     if (options.noEditFormFallback) {
-      throw new Error(`Could not assign SCR to ${name} without opening the edit page.`);
+      const detail = lastError && (lastError.message || String(lastError));
+      throw new Error(`Could not assign SCR to ${name} without opening the edit page${detail ? `: ${detail}` : "."}`);
     }
     return submitSingleFieldTextViaEditForm(row, internalId, ASSIGNEE_FIELD_ID, name, "Assigned To");
   }
@@ -11419,8 +11423,15 @@ Health & Hospitality	DIRECT	NL	West	West
       renderResults();
     } catch (error) {
       console.warn("IQUEUE could not redirect SCR to sales", error);
+      const editUrl = editUrlForRow(row);
+      const assignmentNeedsEditPage = /without opening the edit page/i.test(error && (error.message || error));
+      if (assignmentNeedsEditPage && editUrl) {
+        openEditUrlWithGm(editUrl);
+      }
       row.routingNotice = {
-        message: `Could not redirect to sales: ${error.message || error}`,
+        message: assignmentNeedsEditPage && editUrl
+          ? `Could not auto-assign to Sales Rep, so I opened the SCR in edit mode. ${error.message || error}`
+          : `Could not redirect to sales: ${error.message || error}`,
         state: "error"
       };
       renderResults();
