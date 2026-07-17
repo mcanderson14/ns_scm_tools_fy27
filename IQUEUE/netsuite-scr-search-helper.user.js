@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.61
+// @version      27.0.62
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -42,7 +42,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.61";
+  const HELPER_VERSION = "27.0.62";
   const HELPER_RESTORE_OVERLAY_ID = "scr-helper-restore-overlay";
   const HELPER_RESTORE_STYLE_ID = "scr-helper-restore-overlay-styles";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
@@ -10233,6 +10233,58 @@ Health & Hospitality	DIRECT	NL	West	West
     });
   }
 
+  function submitSingleFieldTextWithNlapi(pageWindow, internalId, fieldId, text) {
+    if (typeof pageWindow.nlapiLoadRecord !== "function" || typeof pageWindow.nlapiSubmitRecord !== "function") {
+      return "";
+    }
+    const record = pageWindow.nlapiLoadRecord(SCR_RECORD_SCRIPT_ID, internalId);
+    if (!record || typeof record.setFieldText !== "function") {
+      throw new Error("NetSuite record text setter is unavailable.");
+    }
+    record.setFieldText(fieldId, text);
+    pageWindow.nlapiSubmitRecord(record, false, true);
+    return "nlapiLoadRecord setFieldText";
+  }
+
+  function submitSingleFieldTextWithRequire(pageWindow, internalId, fieldId, text) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      let timer;
+      const finish = callback => result => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        callback(result);
+      };
+      timer = setTimeout(finish(reject), 15000, new Error("Timed out waiting for NetSuite record module."));
+
+      try {
+        pageWindow.require(["N/record"], record => {
+          try {
+            const loaded = record.load({
+              type: SCR_RECORD_SCRIPT_ID,
+              id: internalId,
+              isDynamic: false
+            });
+            loaded.setText({
+              fieldId,
+              text
+            });
+            loaded.save({
+              enableSourcing: false,
+              ignoreMandatoryFields: true
+            });
+            finish(resolve)("N/record setText");
+          } catch (error) {
+            finish(reject)(error);
+          }
+        }, finish(reject));
+      } catch (error) {
+        finish(reject)(error);
+      }
+    });
+  }
+
   function normalizeLookupFieldValue(value) {
     if (Array.isArray(value)) {
       return value.map(item => (
@@ -10589,9 +10641,27 @@ Health & Hospitality	DIRECT	NL	West	West
     return submitSingleField(row, ASSIGNEE_FIELD_ID, value, "Assigned To");
   }
 
-  function submitAssigneeByName(row, name) {
+  async function submitAssigneeByName(row, name, options = {}) {
     const internalId = row.internalId || recordIdFromUrl(row.editUrl);
     if (!internalId) throw new Error("No SCR internal id was available for this row.");
+    const pageWindow = getPageWindow();
+    if (typeof pageWindow.nlapiLoadRecord === "function") {
+      try {
+        return submitSingleFieldTextWithNlapi(pageWindow, internalId, ASSIGNEE_FIELD_ID, name);
+      } catch (error) {
+        console.warn("SCR helper page nlapi setFieldText failed", error);
+      }
+    }
+    if (typeof pageWindow.require === "function") {
+      try {
+        return await submitSingleFieldTextWithRequire(pageWindow, internalId, ASSIGNEE_FIELD_ID, name);
+      } catch (error) {
+        console.warn("SCR helper page N/record setText failed", error);
+      }
+    }
+    if (options.noEditFormFallback) {
+      throw new Error(`Could not assign SCR to ${name} without opening the edit page.`);
+    }
     return submitSingleFieldTextViaEditForm(row, internalId, ASSIGNEE_FIELD_ID, name, "Assigned To");
   }
 
@@ -11301,6 +11371,8 @@ Health & Hospitality	DIRECT	NL	West	West
       }
       if (employeeId) {
         await submitAssignee(row, employeeId);
+      } else if (salesRepName) {
+        await submitAssigneeByName(row, salesRepName, { noEditFormFallback: true });
       } else {
         throw new Error(`Sales Rep employee id was not available for ${salesRepName || recipient.email}.`);
       }
