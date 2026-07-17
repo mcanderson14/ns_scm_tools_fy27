@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.66
+// @version      27.0.68
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -43,7 +43,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.66";
+  const HELPER_VERSION = "27.0.68";
   const HELPER_RESTORE_OVERLAY_ID = "scr-helper-restore-overlay";
   const HELPER_RESTORE_STYLE_ID = "scr-helper-restore-overlay-styles";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
@@ -2044,6 +2044,28 @@ Health & Hospitality	DIRECT	NL	West	West
       currentProductsScmViewerName()
     ]);
     return uniqueSorted(records.flatMap(authorizedManagerGroupKeysForRecord));
+  }
+
+  function currentAuthorizedManagerIndustryFamilies() {
+    const records = authorizedManagerRecordsForNames([
+      getCurrentUserName(),
+      currentProductsScmUserName(),
+      currentProductsScmDirectorName(),
+      currentProductsScmViewerName()
+    ]);
+    const families = records.flatMap(record => {
+      const groups = Array.isArray(record.groups) ? record.groups : [];
+      if (groups.includes("*") || (record.groupKeys || []).includes("all")) return [];
+      return groups
+        .map(group => findCanonicalIndustry(group) || normalizeSpaces(group))
+        .filter(group => group && industryFilterOptions.includes(group));
+    });
+    return uniqueSorted(families);
+  }
+
+  function currentUserDefaultIndustryFilter() {
+    const families = currentAuthorizedManagerIndustryFamilies();
+    return families.length === 1 ? families[0] : "";
   }
 
   function rowOwnedByCurrentScmUser(row) {
@@ -7079,6 +7101,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const ownerFiltersActive = productsScmUserCanView() && selectedProductsScms.length;
     const ownerLogic = controls.productsScmOwnerLogic && controls.productsScmOwnerLogic.value === "and" ? "and" : "or";
     const ownerFiltersMatch = ownerFiltersActive && rowMatchesProductsScmOwnerFilter(row, selectedProductsScms, false);
+    const ownerIndustryMatches = !industry || rowMatchesIndustryFamily(row, industryKey);
     const peopleFiltersActive = PEOPLE_FILTERS.some(filter => selectedPeopleFilterValues(filter.key).length);
     const hasNonAssignedFilters = Boolean(
       industry
@@ -7118,7 +7141,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const selectedFiltersMatch = matchesSelectedFilters();
     if (currentOwnedOutsideMyScGroups) return false;
     if (ownerFiltersActive && ownerLogic === "and" && !ownerFiltersMatch) return false;
-    if (ownerFiltersActive && ownerLogic === "or" && ownerFiltersMatch) return true;
+    if (ownerFiltersActive && ownerLogic === "or" && ownerFiltersMatch && ownerIndustryMatches) return true;
     if (!assignedToMe) return selectedFiltersMatch;
     return hasNonAssignedFilters ? selectedFiltersMatch || assignedToCurrentUser : assignedToCurrentUser;
   }
@@ -7475,6 +7498,32 @@ Health & Hospitality	DIRECT	NL	West	West
     return Object.prototype.hasOwnProperty.call(filters, "productsScmOwnerMe")
       ? Boolean(filters.productsScmOwnerMe)
       : true;
+  }
+
+  function applyCurrentUserIndustryDefaultFilter() {
+    const filters = helperState.filters || {};
+    if (helperState.currentUserIndustryDefaultedV68) return false;
+    if (filters.industry) {
+      helperState.currentUserIndustryDefaultedV68 = true;
+      writeHelperState({ currentUserIndustryDefaultedV68: true });
+      return false;
+    }
+
+    const defaultIndustry = currentUserDefaultIndustryFilter();
+    if (!defaultIndustry) return false;
+
+    const nextFilters = {
+      ...filters,
+      industry: defaultIndustry
+    };
+    const controls = getControls();
+    if (controls.industry) setSelectValue(controls.industry, defaultIndustry);
+    writeHelperState({
+      currentUserIndustryDefaultedV68: true,
+      filters: nextFilters
+    });
+    updateFilterSummary();
+    return true;
   }
 
   function getPortletMaximized() {
@@ -9725,6 +9774,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const status = document.getElementById("scr-helper-status");
     if (!list || !status) return;
 
+    applyCurrentUserIndustryDefaultFilter();
     updateFilterSummary();
 
     const visibleRows = searchRows
@@ -10531,6 +10581,32 @@ Health & Hospitality	DIRECT	NL	West	West
 
       frame.addEventListener("load", onLoad);
     });
+  }
+
+  async function readSingleFieldViaEditFrame(row, internalId, fieldId, label) {
+    const editUrl = row.editUrl || makeEditUrl("", internalId);
+    if (!editUrl) throw new Error("No SCR edit URL was available for background read.");
+
+    const frame = document.createElement("iframe");
+    frame.className = "scr-helper-save-frame";
+    frame.setAttribute("aria-hidden", "true");
+    frame.tabIndex = -1;
+    document.body.appendChild(frame);
+
+    try {
+      const initialLoad = waitForFrameLoad(frame, 30000, "Timed out loading SCR edit page.");
+      frame.src = editUrl;
+      const frameWindow = await initialLoad;
+      const frameDocument = frameWindow.document;
+      const field = frameDocument.getElementById(fieldId)
+        || frameDocument.getElementById(`hddn_${fieldId}_fs`)
+        || frameDocument.querySelector(`[name="${fieldId}"]`)
+        || frameDocument.querySelector(`[name="${fieldId}_display"]`);
+      if (!field) throw new Error(`Could not find ${label || fieldId} field on the SCR edit page.`);
+      return normalizeSpaces(field.value || field.getAttribute("value") || field.textContent || "");
+    } finally {
+      setTimeout(() => frame.remove(), 1000);
+    }
   }
 
   function setFrameFieldValue(frameWindow, fieldId, value, options = {}) {
@@ -11490,9 +11566,12 @@ Health & Hospitality	DIRECT	NL	West	West
       const salesRepName = cleanPersonName(recipient.name || buildRowSummary(row).salesRep);
       const rawRequestorId = normalizeInternalIdValue(fieldInternalIdFromRow(row, REQUESTOR_FIELD_ID));
       const lookupRequestorId = rawRequestorId ? "" : normalizeInternalIdValue(await lookupSingleFieldInternal(row, REQUESTOR_FIELD_ID));
-      const requestorId = rawRequestorId || lookupRequestorId;
+      const frameRequestorId = rawRequestorId || lookupRequestorId
+        ? ""
+        : normalizeInternalIdValue(await readSingleFieldViaEditFrame(row, row.internalId || recordIdFromUrl(row.editUrl), REQUESTOR_FIELD_ID, "Requester"));
+      const requestorId = rawRequestorId || lookupRequestorId || frameRequestorId;
       let employeeId = requestorId || recipient.id || salesRepEmployeeIdForRow(row);
-      let assigneeSource = requestorId ? `${REQUESTOR_FIELD_ID}:${requestorId}${rawRequestorId ? " raw" : ""}` : "";
+      let assigneeSource = requestorId ? `${REQUESTOR_FIELD_ID}:${requestorId}${rawRequestorId ? " raw" : lookupRequestorId ? " lookup" : " frame"}` : "";
       if (!employeeId && salesRepName) {
         const employeeRecord = await resolveEmployeeRecordByName(salesRepName, {
           label: "Sales Rep",
@@ -11503,9 +11582,6 @@ Health & Hospitality	DIRECT	NL	West	West
       }
       if (employeeId) {
         await submitAssignee(row, employeeId);
-      } else if (salesRepName) {
-        await submitAssigneeByName(row, salesRepName, { noEditFormFallback: true });
-        assigneeSource = `setText:${salesRepName}`;
       } else {
         throw new Error(`Sales Rep employee id was not available for ${salesRepName || recipient.email}.`);
       }
