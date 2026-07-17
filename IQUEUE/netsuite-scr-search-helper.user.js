@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.62
+// @version      27.0.63
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -42,7 +42,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.62";
+  const HELPER_VERSION = "27.0.63";
   const HELPER_RESTORE_OVERLAY_ID = "scr-helper-restore-overlay";
   const HELPER_RESTORE_STYLE_ID = "scr-helper-restore-overlay-styles";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
@@ -8821,6 +8821,33 @@ Health & Hospitality	DIRECT	NL	West	West
                 result.getValue({ name: "entityid" }) || names[0],
                 result.getValue({ name: "email" }) || inferredEmail,
                 "employee email search"
+              )).filter(Boolean);
+              const match = pickEmployeeRecordMatch(rows, names);
+              if (match) {
+                finish(resolve)(match);
+                return;
+              }
+            }
+
+            const recordNameParts = personNameParts(names[0]);
+            if (recordNameParts.first && recordNameParts.last) {
+              const results = search.create({
+                type: employeeType,
+                filters: [
+                  ["firstname", "is", recordNameParts.first],
+                  "AND",
+                  ["lastname", "is", recordNameParts.last],
+                  "AND",
+                  ["isinactive", "is", "F"]
+                ],
+                columns: ["internalid", "entityid", "email", "firstname", "lastname"]
+              }).run().getRange({ start: 0, end: 10 }) || [];
+              const rows = results.map(result => employeeRecordLookupRow(
+                result.getValue({ name: "internalid" }),
+                result.getValue({ name: "entityid" })
+                  || `${result.getValue({ name: "lastname" }) || recordNameParts.last}, ${result.getValue({ name: "firstname" }) || recordNameParts.first}`,
+                result.getValue({ name: "email" }),
+                "employee name record search"
               )).filter(Boolean);
               const match = pickEmployeeRecordMatch(rows, names);
               if (match) {
