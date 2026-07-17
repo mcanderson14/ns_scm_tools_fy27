@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.57
+// @version      27.0.58
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -42,7 +42,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.57";
+  const HELPER_VERSION = "27.0.58";
   const HELPER_RESTORE_OVERLAY_ID = "scr-helper-restore-overlay";
   const HELPER_RESTORE_STYLE_ID = "scr-helper-restore-overlay-styles";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
@@ -10091,23 +10091,39 @@ Health & Hospitality	DIRECT	NL	West	West
     });
   }
 
-  function setFrameFieldValue(frameWindow, fieldId, value) {
+  function setFrameFieldValue(frameWindow, fieldId, value, options = {}) {
     let updated = false;
 
     try {
-      if (typeof frameWindow.nlapiSetFieldValue === "function") {
+      if (options.useText && typeof frameWindow.nlapiSetFieldText === "function") {
+        frameWindow.nlapiSetFieldText(fieldId, value, false, true);
+        updated = true;
+      } else if (typeof frameWindow.nlapiSetFieldValue === "function") {
         frameWindow.nlapiSetFieldValue(fieldId, value, false, true);
         updated = true;
       }
     } catch (error) {
-      console.warn("SCR helper iframe nlapiSetFieldValue failed", error);
+      console.warn("SCR helper iframe nlapi field setter failed", error);
     }
 
     const frameDocument = frameWindow.document;
     const field = frameDocument.getElementById(fieldId)
       || frameDocument.querySelector(`[name="${fieldId}"]`);
     if (field) {
-      field.value = value;
+      if (options.useText && field.tagName && field.tagName.toLowerCase() === "select") {
+        const targetKey = normalizeKey(value);
+        const option = Array.from(field.options || []).find(item => (
+          normalizeKey(item.textContent || item.label || "") === targetKey
+            || normalizeKey(item.text || "") === targetKey
+        ));
+        if (option) {
+          field.value = option.value;
+        } else {
+          field.value = value;
+        }
+      } else {
+        field.value = value;
+      }
       field.dispatchEvent(new frameWindow.Event("input", { bubbles: true }));
       field.dispatchEvent(new frameWindow.Event("change", { bubbles: true }));
       updated = true;
@@ -10208,6 +10224,35 @@ Health & Hospitality	DIRECT	NL	West	West
     }
   }
 
+  async function submitSingleFieldTextViaEditForm(row, internalId, fieldId, text, label) {
+    const editUrl = row.editUrl || makeEditUrl("", internalId);
+    if (!editUrl) throw new Error("No SCR edit URL was available for background save.");
+
+    const frame = document.createElement("iframe");
+    frame.className = "scr-helper-save-frame";
+    frame.setAttribute("aria-hidden", "true");
+    frame.tabIndex = -1;
+    document.body.appendChild(frame);
+
+    try {
+      const initialLoad = waitForFrameLoad(frame, 30000, "Timed out loading SCR edit page.");
+      frame.src = editUrl;
+      const frameWindow = await initialLoad;
+
+      if (!setFrameFieldValue(frameWindow, fieldId, text, { useText: true })) {
+        throw new Error(`Could not find ${label || fieldId} field on the SCR edit page.`);
+      }
+
+      const submitted = submitFrameForm(frameWindow);
+      if (!submitted) throw new Error("Could not find a Save button or form on the SCR edit page.");
+
+      await waitForFrameLoad(frame, 30000, "Timed out waiting for SCR edit page save.");
+      return "editFrame text form";
+    } finally {
+      setTimeout(() => frame.remove(), 1000);
+    }
+  }
+
   async function submitSingleField(row, fieldId, value, label) {
     const internalId = row.internalId || recordIdFromUrl(row.editUrl);
     if (!internalId) throw new Error("No SCR internal id was available for this row.");
@@ -10247,6 +10292,12 @@ Health & Hospitality	DIRECT	NL	West	West
 
   function submitAssignee(row, value) {
     return submitSingleField(row, ASSIGNEE_FIELD_ID, value, "Assigned To");
+  }
+
+  function submitAssigneeByName(row, name) {
+    const internalId = row.internalId || recordIdFromUrl(row.editUrl);
+    if (!internalId) throw new Error("No SCR internal id was available for this row.");
+    return submitSingleFieldTextViaEditForm(row, internalId, ASSIGNEE_FIELD_ID, name, "Assigned To");
   }
 
   function setStaffingNotesStatus(card, message, state = "") {
@@ -10944,10 +10995,16 @@ Health & Hospitality	DIRECT	NL	West	West
         updateRowHashtags(row, nextHashtags);
       }
 
+      const salesRepName = cleanPersonName(recipient.name || buildRowSummary(row).salesRep);
       const employeeId = recipient.id || salesRepEmployeeIdForRow(row);
-      if (!employeeId) throw new Error(`Sales Rep employee id was not available for ${recipient.name || recipient.email}.`);
-      await submitAssignee(row, employeeId);
-      updateRowAssignedTo(row, recipient.name || buildRowSummary(row).salesRep);
+      if (employeeId) {
+        await submitAssignee(row, employeeId);
+      } else if (salesRepName) {
+        await submitAssigneeByName(row, salesRepName);
+      } else {
+        throw new Error(`Sales Rep employee id was not available for ${recipient.email}.`);
+      }
+      updateRowAssignedTo(row, salesRepName || recipient.email);
 
       setStaffingNotesStatus(card, "⏳ Resolving Regional Director email...", "working");
       const ccRecipient = await resolveSalesDirectorEmail(row);
