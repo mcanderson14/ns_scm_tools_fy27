@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.55
+// @version      27.0.56
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -42,7 +42,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.55";
+  const HELPER_VERSION = "27.0.56";
   const HELPER_RESTORE_OVERLAY_ID = "scr-helper-restore-overlay";
   const HELPER_RESTORE_STYLE_ID = "scr-helper-restore-overlay-styles";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
@@ -8625,6 +8625,7 @@ Health & Hospitality	DIRECT	NL	West	West
     }
 
     const resolved = {
+      id: match.id || employeeId || "",
       name: match.name || employeeName,
       email: match.email,
       source: match.source || "employee"
@@ -10197,9 +10198,7 @@ Health & Hospitality	DIRECT	NL	West	West
   }
 
   function submitAssignee(row, value) {
-    const internalId = row.internalId || recordIdFromUrl(row.editUrl);
-    if (!internalId) throw new Error("No SCR internal id was available for this row.");
-    return submitSingleFieldViaEditForm(row, internalId, ASSIGNEE_FIELD_ID, value, "Assigned To");
+    return submitSingleField(row, ASSIGNEE_FIELD_ID, value, "Assigned To");
   }
 
   function setStaffingNotesStatus(card, message, state = "") {
@@ -10883,7 +10882,6 @@ Health & Hospitality	DIRECT	NL	West	West
     const dialog = await showRedirectToSalesDialog(row);
     if (!dialog) return;
 
-    const editUrl = editUrlForRow(row);
     button.disabled = true;
     setStaffingNotesStatus(card, "⏳ Resolving Sales Rep email...", "working");
 
@@ -10898,25 +10896,10 @@ Health & Hospitality	DIRECT	NL	West	West
         updateRowHashtags(row, nextHashtags);
       }
 
-      let assignmentMessage = "";
-      const employeeId = salesRepEmployeeIdForRow(row);
-      if (employeeId) {
-        try {
-          await submitAssignee(row, employeeId);
-          updateRowAssignedTo(row, recipient.name || buildRowSummary(row).salesRep);
-          assignmentMessage = `SCR assigned back to ${recipient.name || recipient.email}.`;
-        } catch (assignmentError) {
-          console.warn("IQUEUE could not assign SCR back to Sales Rep", assignmentError);
-          assignmentMessage = "SCR opened, but automatic reassignment failed. Assign it back to the Sales Rep from the opened SCR.";
-        }
-      } else {
-        assignmentMessage = "SCR opened; Sales Rep employee id was not available for automatic reassignment.";
-      }
-
-      if (editUrl) {
-        setStaffingNotesStatus(card, "⏳ Opening SCR...", "working");
-        openEditUrlWithGm(editUrl);
-      }
+      const employeeId = recipient.id || salesRepEmployeeIdForRow(row);
+      if (!employeeId) throw new Error(`Sales Rep employee id was not available for ${recipient.name || recipient.email}.`);
+      await submitAssignee(row, employeeId);
+      updateRowAssignedTo(row, recipient.name || buildRowSummary(row).salesRep);
 
       setStaffingNotesStatus(card, "⏳ Resolving Regional Director email...", "working");
       const ccRecipient = await resolveSalesDirectorEmail(row);
@@ -10925,8 +10908,8 @@ Health & Hospitality	DIRECT	NL	West	West
         ? "email compose opened using the Firefox fallback"
         : "Outlook compose opened";
       row.routingNotice = {
-        message: `${assignmentMessage} Redirect-to-sales ${openedText} for ${draft.email}${draft.cc && draft.cc.length ? `, cc ${draft.cc.join(", ")}` : ""}. Review and send it. If it did not appear, use the links below.`,
-        state: assignmentMessage.includes("failed") || assignmentMessage.includes("not available") ? "warning" : "success",
+        message: `SCR assigned back to ${recipient.name || recipient.email}; #gravity saved. Redirect-to-sales ${openedText} for ${draft.email}${draft.cc && draft.cc.length ? `, cc ${draft.cc.join(", ")}` : ""}. Review and send it. If it did not appear, use the links below.`,
+        state: "success",
         links: draft.links || []
       };
       renderResults();
