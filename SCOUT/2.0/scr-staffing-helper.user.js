@@ -88,8 +88,9 @@
      SCOUT opens the GitHub Pages staffing dashboard static host directly.
   ──────────────────────────────────────────────────────────────── */
   const DASHBOARD_URL_DEFAULT = 'https://mcanderson14.github.io/ns_scm_tools_fy27/SCOUT/2.0/staffing-dashboard.html';
-  const INLINE_DRAWER_INSTALL_URL = 'https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/2.0/scout-calendar-inline-drawer.user.js';
-  const LOCAL_CONFIG_KEY      = 'sc_staffing_helper_config_v1';
+	  const INLINE_DRAWER_INSTALL_URL = 'https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/2.0/scout-calendar-inline-drawer.user.js';
+	  const LOCAL_CONFIG_KEY      = 'sc_staffing_helper_config_v1';
+	  const SKILLS_SEARCH_ENABLED_KEY = 'sc_skills_search_enabled';
 
   function getLocalConfig() {
     const defaults = {
@@ -117,14 +118,18 @@
       cfg = {};
     }
 
-    const legacyCalendar = localStorage.getItem('sc_cal_integration_enabled');
-    const merged = {
-      ...defaults,
-      ...cfg,
-    };
-    if (typeof cfg.calendarIntegrationEnabled !== 'boolean' && legacyCalendar !== null) {
-      merged.calendarIntegrationEnabled = legacyCalendar === 'true';
-    }
+	    const legacyCalendar = localStorage.getItem('sc_cal_integration_enabled');
+	    const legacySkillsSearch = localStorage.getItem(SKILLS_SEARCH_ENABLED_KEY);
+	    const merged = {
+	      ...defaults,
+	      ...cfg,
+	    };
+	    if (typeof cfg.calendarIntegrationEnabled !== 'boolean' && legacyCalendar !== null) {
+	      merged.calendarIntegrationEnabled = legacyCalendar === 'true';
+	    }
+	    if (typeof cfg.skillsSearchEnabled !== 'boolean' && legacySkillsSearch !== null) {
+	      merged.skillsSearchEnabled = legacySkillsSearch === 'true';
+	    }
     merged.inlineCalendarDrawerEnabled = Boolean(merged.inlineCalendarDrawerEnabled);
     merged.gptAssistEnabled = Boolean(merged.gptAssistEnabled);
     merged.debugModeEnabled = Boolean(merged.debugModeEnabled);
@@ -161,10 +166,11 @@
 	    cfg.skillsSearchEnabled = typeof cfg.skillsSearchEnabled === 'boolean' ? cfg.skillsSearchEnabled : true;
 	    cfg.testingUpdateUrl = String(cfg.testingUpdateUrl || '').trim();
     cfg.commentInitials = normalizeCommentInitials(cfg.commentInitials);
-    localStorage.setItem(LOCAL_CONFIG_KEY, JSON.stringify(cfg));
-    localStorage.setItem('sc_cal_integration_enabled', cfg.calendarIntegrationEnabled ? 'true' : 'false');
-    return cfg;
-  }
+	    localStorage.setItem(LOCAL_CONFIG_KEY, JSON.stringify(cfg));
+	    localStorage.setItem('sc_cal_integration_enabled', cfg.calendarIntegrationEnabled ? 'true' : 'false');
+	    localStorage.setItem(SKILLS_SEARCH_ENABLED_KEY, cfg.skillsSearchEnabled ? 'true' : 'false');
+	    return cfg;
+	  }
 
   function getDashboardUrl() {
     return DASHBOARD_URL_DEFAULT;
@@ -13489,6 +13495,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 	    const skillsSearchToggle = document.getElementById('sc-skills-search-toggle');
 	    if (skillsSearchToggle) {
 	      skillsSearchToggle.addEventListener('change', function () {
+	        try { localStorage.setItem(SKILLS_SEARCH_ENABLED_KEY, this.checked ? 'true' : 'false'); } catch (e) { /* ignore */ }
 	        saveLocalConfig({ skillsSearchEnabled: this.checked });
 	        applySkillsSearchUI();
 	        if (this.checked) {
