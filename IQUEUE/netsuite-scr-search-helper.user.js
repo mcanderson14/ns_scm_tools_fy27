@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.69
+// @version      27.0.71
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -43,7 +43,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.69";
+  const HELPER_VERSION = "27.0.71";
   const HELPER_RESTORE_OVERLAY_ID = "scr-helper-restore-overlay";
   const HELPER_RESTORE_STYLE_ID = "scr-helper-restore-overlay-styles";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
@@ -102,7 +102,7 @@
   const TECH_COE_REQUEST_TYPE = "Technology COE";
   const TECH_COE_REQUESTED_TAG = "#tcoe-requested-sc";
   const SCAI_INDUSTRY_GROUP = "SCAI";
-  const AI_INNOVATION_REQUEST_TYPE = "AI Innovation";
+  const SCAI_SUPPORT_REQUEST_TYPE = "SCAI Support";
   const SCAI_REQUEST_TYPE = "SCAI";
   const SCAI_XVR_TAG = "#xvr-scai";
   const SCAI_EMOJI = "AI";
@@ -162,7 +162,7 @@
     "Tech COE": { emoji: "☁️", color: REDWOOD_COLORS.sky120, soft: REDWOOD_COLORS.sky30 },
     "Technology COE": { emoji: "☁️", color: REDWOOD_COLORS.sky120, soft: REDWOOD_COLORS.sky30 },
     "TCOE": { emoji: "☁️", color: REDWOOD_COLORS.sky120, soft: REDWOOD_COLORS.sky30 },
-    "AI Innovation": { emoji: SCAI_EMOJI, color: REDWOOD_COLORS.tigerPurple, soft: REDWOOD_COLORS.tigerPurpleSoft },
+    "SCAI Support": { emoji: SCAI_EMOJI, color: REDWOOD_COLORS.tigerPurple, soft: REDWOOD_COLORS.tigerPurpleSoft },
     "SCAI": { emoji: SCAI_EMOJI, color: REDWOOD_COLORS.tigerPurple, soft: REDWOOD_COLORS.tigerPurpleSoft },
     "Life Science": { emoji: "🧬", color: REDWOOD_COLORS.pine90, soft: REDWOOD_COLORS.neutral30 },
     "Life Sciences": { emoji: "🧬", color: REDWOOD_COLORS.pine90, soft: REDWOOD_COLORS.neutral30 },
@@ -1421,7 +1421,7 @@ Health & Hospitality	DIRECT	NL	West	West
     industryOptions = uniqueSorted(mappingRows.map(row => row.industryFamily).concat(ADDITIONAL_INDUSTRY_GROUPS));
     industryFilterOptions = uniqueSorted(industryOptions.concat([UNMAPPED_FILTER_LABEL]));
     amoDirectOptions = uniqueSorted(mappingRows.map(row => row.amoDirect).concat([NSPB_REQUEST_TYPE, TECH_COE_REQUEST_TYPE]));
-    amoDirectOptions = uniqueSorted(amoDirectOptions.concat([AI_INNOVATION_REQUEST_TYPE, SCAI_REQUEST_TYPE]));
+    amoDirectOptions = uniqueSorted(amoDirectOptions.concat([SCAI_SUPPORT_REQUEST_TYPE, SCAI_REQUEST_TYPE]));
     salesRegionOptions = uniqueSorted(mappingRows.map(row => row.salesRegion));
     staffingRegionOptions = uniqueSorted(
       mappingRows
@@ -1479,7 +1479,8 @@ Health & Hospitality	DIRECT	NL	West	West
 
   function normalizeAmoDirect(value) {
     const text = normalizeSpaces(value);
-    if (/\bai\s*innovation\b/i.test(text)) return AI_INNOVATION_REQUEST_TYPE;
+    if (/\bscai\s*support\b|\bsc\s*ai\s*support\b/i.test(text)) return SCAI_SUPPORT_REQUEST_TYPE;
+    if (/\bai\s*innovation\b/i.test(text)) return SCAI_SUPPORT_REQUEST_TYPE;
     if (/\bsc\s*ai\b|\bscai\b/i.test(text)) return SCAI_REQUEST_TYPE;
     if (/\btechnology\s*coe\b|\btech\s*coe\b|\btcoe\b/i.test(text)) return TECH_COE_REQUEST_TYPE;
     if (/\bnspb\b|\bnet\s*suite\s*planning\s*(?:and|&)?\s*budgeting\b/i.test(text)) return NSPB_REQUEST_TYPE;
@@ -1494,7 +1495,7 @@ Health & Hospitality	DIRECT	NL	West	West
       || normalized === "Direct"
       || normalized === NSPB_REQUEST_TYPE
       || normalized === TECH_COE_REQUEST_TYPE
-      || normalized === AI_INNOVATION_REQUEST_TYPE
+      || normalized === SCAI_SUPPORT_REQUEST_TYPE
       || normalized === SCAI_REQUEST_TYPE;
   }
 
@@ -1520,7 +1521,7 @@ Health & Hospitality	DIRECT	NL	West	West
       || key === "checked"
       || key === "1"
       || key === "x"
-      || /check|tick|selected|nspb|technologycoe|techcoe|tcoe|aiinnovation|scai/i.test(key);
+      || /check|tick|selected|nspb|technologycoe|techcoe|tcoe|aiinnovation|scaisupport|scai/i.test(key);
   }
 
   function fieldHasAffirmativeRequestTypeValue(field) {
@@ -1660,7 +1661,7 @@ Health & Hospitality	DIRECT	NL	West	West
 
   function rowRequestTypeIsScai(row) {
     const key = normalizeKey(normalizeAmoDirect(row && row.amoDirect));
-    return key === normalizeKey(AI_INNOVATION_REQUEST_TYPE)
+    return key === normalizeKey(SCAI_SUPPORT_REQUEST_TYPE)
       || key === normalizeKey(SCAI_REQUEST_TYPE);
   }
 
@@ -5544,6 +5545,10 @@ Health & Hospitality	DIRECT	NL	West	West
       return NSPB_REQUEST_TYPE;
     }
 
+    if (/\bscai\s*support\b|\bsc\s*ai\s*support\b|\bai\s*innovation\b/i.test(text)) {
+      return SCAI_SUPPORT_REQUEST_TYPE;
+    }
+
     if (/\bsolution\s+consultant\s*-\s*amo\b/i.test(text)
       || /\btype\s*:\s*solution\s+consultant\s*-\s*amo\b/i.test(text)
       || /\bamo\s+sc\s+request\b/i.test(text)) {
@@ -5656,6 +5661,9 @@ Health & Hospitality	DIRECT	NL	West	West
       const projectedAcv = getByIndex(paddedCells, indexes, "projectedAcv") || getConciseFieldValue(fields, [
         /acv.*commit/, /projected.*acv/, /\bacv\b/
       ], [], labeledValuePatterns.projectedAcv);
+      const salesRepYearsLive = getConciseFieldValue(fields, [
+        /sales.*rep.*yrs.*live/, /sales.*rep.*years.*live/, /rep.*yrs.*live/, /rep.*years.*live/
+      ], [], labeledValuePatterns.salesRepYearsLive);
       const billingZip = billingZipFromText(getConciseFieldValue(fields, [
         /billing.*(?:zip|postal)/, /bill.*(?:zip|postal)/, /zip\s*code/, /\bzip\b/, /postal/
       ], [], labeledValuePatterns.billingZip));
@@ -5688,6 +5696,7 @@ Health & Hospitality	DIRECT	NL	West	West
           crossVertical,
           scrAge,
           projectedAcv,
+          salesRepYearsLive,
           submittedDate,
           salesVertical,
           amoDirect,
@@ -5724,6 +5733,7 @@ Health & Hospitality	DIRECT	NL	West	West
         crossVertical,
         scrAge,
         projectedAcv,
+        salesRepYearsLive,
         billingZip,
         submittedDate,
         salesVertical,
@@ -6576,6 +6586,24 @@ Health & Hospitality	DIRECT	NL	West	West
     `;
   }
 
+  function formatSalesRepTenure(value) {
+    const text = normalizeSpaces(value);
+    if (!text) return "";
+    const numeric = text.match(/-?\d+(?:\.\d+)?/);
+    if (!numeric) return text;
+    const years = Number(numeric[0]);
+    if (!Number.isFinite(years)) return text;
+    const rounded = Math.round(years * 10) / 10;
+    return `${rounded.toFixed(1)} year${rounded === 1 ? "" : "s"}`;
+  }
+
+  function salesRepWithTenureLabel(name, yearsLive) {
+    const repName = normalizeSpaces(name);
+    const tenure = formatSalesRepTenure(yearsLive);
+    if (!repName) return "";
+    return tenure ? `${repName} [Tenure: ${tenure}]` : repName;
+  }
+
   function renderSummaryColumn(title, items, modifier = "") {
     const visibleItems = items.filter(Boolean);
     return `
@@ -6592,7 +6620,7 @@ Health & Hospitality	DIRECT	NL	West	West
     if (normalized === "Direct") return "Solution Consultant - Direct";
     if (normalized === NSPB_REQUEST_TYPE) return NSPB_REQUEST_TYPE;
     if (normalized === TECH_COE_REQUEST_TYPE) return TECH_COE_REQUEST_TYPE;
-    if (normalized === AI_INNOVATION_REQUEST_TYPE) return AI_INNOVATION_REQUEST_TYPE;
+    if (normalized === SCAI_SUPPORT_REQUEST_TYPE) return SCAI_SUPPORT_REQUEST_TYPE;
     if (normalized === SCAI_REQUEST_TYPE) return SCAI_REQUEST_TYPE;
     return "";
   }
@@ -6603,7 +6631,7 @@ Health & Hospitality	DIRECT	NL	West	West
     if (normalized === "Direct") return "direct";
     if (normalized === NSPB_REQUEST_TYPE) return "nspb";
     if (normalized === TECH_COE_REQUEST_TYPE) return "techcoe";
-    if (normalized === AI_INNOVATION_REQUEST_TYPE || normalized === SCAI_REQUEST_TYPE) return "scai";
+    if (normalized === SCAI_SUPPORT_REQUEST_TYPE || normalized === SCAI_REQUEST_TYPE) return "scai";
     return "";
   }
 
@@ -6928,6 +6956,9 @@ Health & Hospitality	DIRECT	NL	West	West
     const salesRep = getConciseFieldValue(fields, [
       /sales\s*rep$/, /salesrep$/, /opp.*sales.*rep/, /sales.*representative/
     ], [/manager/, /yrs.*live/], labeledValuePatterns.salesRep);
+    const salesRepYearsLive = row.salesRepYearsLive || getConciseFieldValue(fields, [
+      /sales.*rep.*yrs.*live/, /sales.*rep.*years.*live/, /rep.*yrs.*live/, /rep.*years.*live/
+    ], [], labeledValuePatterns.salesRepYearsLive);
     const salesDirector = row.salesDirector || getConciseFieldValue(fields, [
       /regional.*director/, /regionaldirector/, /regional.*dir\b/, /regionaldir\b/, /sales.*director/, /salesdirector/, /sales.*dir\b/, /salesdir\b/, /sales.*rep.*manager/, /salesrepmanager/, /sales.*manager/
     ], [], labeledValuePatterns.salesDirector);
@@ -6998,6 +7029,8 @@ Health & Hospitality	DIRECT	NL	West	West
       projectArr,
       projectedAcv,
       salesRep,
+      salesRepYearsLive,
+      salesRepWithTenure: salesRepWithTenureLabel(salesRep, salesRepYearsLive),
       salesDirector,
       regionalVp,
       industryLeader,
@@ -7225,7 +7258,7 @@ Health & Hospitality	DIRECT	NL	West	West
         renderSummaryItem("Expected Close Date", summary.expectedCloseDate),
         renderSummaryItem("Projected ARR", summary.projectArr),
         renderSummaryItem("Projected ACV", summary.projectedAcv),
-        renderSummaryItem("Sales Rep", summary.salesRep),
+        renderSummaryItem("Sales Rep", summary.salesRepWithTenure || summary.salesRep),
         renderSummaryItem("Regional Director", summary.salesDirector),
         renderSummaryItem("Regional VP", summary.regionalVp),
         renderSummaryItem("Industry Leader/AVP", summary.industryLeader),
@@ -11664,11 +11697,11 @@ Health & Hospitality	DIRECT	NL	West	West
     if (isScaiTarget(target) && !rowRequestTypeIsScai(row)) {
       const actualType = requestTypeLabel(row.amoDirect) || normalizeSpaces(row.amoDirect) || "Not found";
       row.routingNotice = {
-        message: `SCAI route not saved. Request Type must be ${AI_INNOVATION_REQUEST_TYPE}; current Request Type is ${actualType}. Open Staff SCR and update the request type first.`,
+        message: `SCAI route not saved. Request Type must be ${SCAI_SUPPORT_REQUEST_TYPE}; current Request Type is ${actualType}. Open Staff SCR and update the request type first.`,
         state: "error",
         links: editUrlForRow(row) ? [{ label: "Staff SCR", href: editUrlForRow(row) }] : []
       };
-      setStaffingNotesStatus(card, `Request Type must be ${AI_INNOVATION_REQUEST_TYPE} before SCAI routing.`, "error");
+      setStaffingNotesStatus(card, `Request Type must be ${SCAI_SUPPORT_REQUEST_TYPE} before SCAI routing.`, "error");
       renderResults();
       return;
     }
