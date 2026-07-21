@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.0.22
+// @version      27.2.1
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -17,12 +17,12 @@
 // @connect      nlcorp-sb2.app.netsuite.com
 // @grant        unsafeWindow
 // @run-at       document-idle
-// @downloadURL  https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/scr-staffing-helper.user.js
-// @updateURL    https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/scr-staffing-helper.user.js
+// @downloadURL  https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/2.0/scr-staffing-helper.user.js
+// @updateURL    https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/2.0/scr-staffing-helper.user.js
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.0.22
+   SCOUT — SC Operations Utility Tool  27.2.1
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,13 +32,13 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.0.22';
+  const SCRIPT_VERSION = '27.2.1';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
   const SCOUT_GPT_URL = 'https://chatgpt.com/';
-  const SCOUT_INSTALL_URL = 'https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/scr-staffing-helper.user.js';
-  const SCOUT_UPDATE_CHECK_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_tools_fy27/main/SCOUT/scr-staffing-helper.user.js';
+  const SCOUT_INSTALL_URL = 'https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/2.0/scr-staffing-helper.user.js';
+  const SCOUT_UPDATE_CHECK_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_tools_fy27/main/SCOUT/2.0/scr-staffing-helper.user.js';
   const SCOUT_TESTING_INSTALL_URL = 'https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/testing/scr-staffing-helper.user.js';
   const SCOUT_TESTING_UPDATE_CHECK_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_tools_fy27/main/SCOUT/testing/scr-staffing-helper.user.js';
   const SCOUT_UPDATE_CACHE_KEY = 'scout_update_check_cache_v2';
@@ -87,17 +87,20 @@
      SHARED DASHBOARD URL
      SCOUT opens the GitHub Pages staffing dashboard static host directly.
   ──────────────────────────────────────────────────────────────── */
-  const DASHBOARD_URL_DEFAULT = 'https://mcanderson14.github.io/ns_scm_tools_fy27/staffing-dashboard.html';
+  const DASHBOARD_URL_DEFAULT = 'https://mcanderson14.github.io/ns_scm_tools_fy27/SCOUT/2.0/staffing-dashboard.html';
+  const INLINE_DRAWER_INSTALL_URL = 'https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/2.0/scout-calendar-inline-drawer.user.js';
   const LOCAL_CONFIG_KEY      = 'sc_staffing_helper_config_v1';
 
   function getLocalConfig() {
     const defaults = {
       calendarIntegrationEnabled: false,
+      inlineCalendarDrawerEnabled: false,
       gptAssistEnabled: false,
       debugModeEnabled: false,
       previousScHistoryEnabled: false,
       customerLicenseEnabled: false,
       earlyAdopterUpdatesEnabled: false,
+      combineStaffingTabsEnabled: false,
       testingUpdateUrl: '',
       commentInitials: '',
       extraTeamMembers: '',
@@ -120,11 +123,13 @@
     if (typeof cfg.calendarIntegrationEnabled !== 'boolean' && legacyCalendar !== null) {
       merged.calendarIntegrationEnabled = legacyCalendar === 'true';
     }
+    merged.inlineCalendarDrawerEnabled = Boolean(merged.inlineCalendarDrawerEnabled);
     merged.gptAssistEnabled = Boolean(merged.gptAssistEnabled);
     merged.debugModeEnabled = Boolean(merged.debugModeEnabled);
     merged.previousScHistoryEnabled = Boolean(merged.previousScHistoryEnabled);
     merged.customerLicenseEnabled = Boolean(merged.customerLicenseEnabled);
     merged.earlyAdopterUpdatesEnabled = Boolean(merged.earlyAdopterUpdatesEnabled);
+    merged.combineStaffingTabsEnabled = Boolean(merged.combineStaffingTabsEnabled);
     merged.testingUpdateUrl = String(merged.testingUpdateUrl || '').trim();
     merged.commentInitials = normalizeCommentInitials(merged.commentInitials);
     merged.extraTeamMembers = String(merged.extraTeamMembers || '');
@@ -141,11 +146,13 @@
     cfg.extraAmoDeliverables = String(cfg.extraAmoDeliverables || '');
     cfg.feedbackWebhookUrl = String(cfg.feedbackWebhookUrl || '').trim();
     cfg.calendarIntegrationEnabled = Boolean(cfg.calendarIntegrationEnabled);
+    cfg.inlineCalendarDrawerEnabled = Boolean(cfg.inlineCalendarDrawerEnabled);
     cfg.gptAssistEnabled = Boolean(cfg.gptAssistEnabled);
     cfg.debugModeEnabled = Boolean(cfg.debugModeEnabled);
     cfg.previousScHistoryEnabled = Boolean(cfg.previousScHistoryEnabled);
     cfg.customerLicenseEnabled = Boolean(cfg.customerLicenseEnabled);
     cfg.earlyAdopterUpdatesEnabled = Boolean(cfg.earlyAdopterUpdatesEnabled);
+    cfg.combineStaffingTabsEnabled = Boolean(cfg.combineStaffingTabsEnabled);
     cfg.testingUpdateUrl = String(cfg.testingUpdateUrl || '').trim();
     cfg.commentInitials = normalizeCommentInitials(cfg.commentInitials);
     localStorage.setItem(LOCAL_CONFIG_KEY, JSON.stringify(cfg));
@@ -199,6 +206,9 @@
   function getGptAssistEnabled() {
     return Boolean(getLocalConfig().gptAssistEnabled);
   }
+  function getInlineCalendarDrawerEnabled() {
+    return Boolean(getLocalConfig().inlineCalendarDrawerEnabled);
+  }
   function getDebugModeEnabled() {
     return Boolean(getLocalConfig().debugModeEnabled);
   }
@@ -210,6 +220,9 @@
   }
   function getEarlyAdopterUpdatesEnabled() {
     return Boolean(getLocalConfig().earlyAdopterUpdatesEnabled);
+  }
+  function getCombineStaffingTabsEnabled() {
+    return Boolean(getLocalConfig().combineStaffingTabsEnabled);
   }
   function getTestingUpdateUrl() {
     return getLocalConfig().testingUpdateUrl || SCOUT_TESTING_UPDATE_CHECK_URL;
@@ -395,10 +408,9 @@ Good luck with ${sc}!
   const SEARCH_PAGE_SIZE = 10;
   const STAFFING_PENDING_KEY = 'sc_staffing_helper_pending_action_v1';
   const PENDING_STAFFING_SAVE_DELAY_MS = 1800;
+  const NETSUITE_FORM_INIT_TIMEOUT_MS = 20000;
+  const NETSUITE_FORM_INIT_POLL_MS = 250;
   const SEARCH_RESULT_CACHE = {};
-  const RECENT_LOAD_CACHE = new Map();
-  const RECENT_LOAD_CACHE_TTL_MS = 2 * 60 * 1000;
-  const RECENT_LOAD_SEARCH_ID = '1316256';
   const PREVIOUS_SC_HISTORY_SEARCH_ID = '1316506';
   const CUSTOMER_LICENSE_SEARCH_ID = '1316575';
   const ASSIGNEE_EMPLOYEE_CACHE = {};
@@ -1335,15 +1347,6 @@ html.sc-resizing #sc-skills-toggle { transition: none !important; }
   gap: 3px;
   margin-top: 4px;
 }
-.sc-load-badge {
-  font-size: 10px;
-  background: #fff4d8;
-  color: #7a5600;
-  border: 1px solid #e6c773;
-  border-radius: 3px;
-  padding: 1px 5px;
-  white-space: nowrap;
-}
 .sc-card-right {
   display: flex;
   flex-direction: column;
@@ -1351,29 +1354,6 @@ html.sc-resizing #sc-skills-toggle { transition: none !important; }
   gap: 4px;
   flex-shrink: 0;
 }
-.sc-avail-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 99px;
-  white-space: nowrap;
-}
-.sc-avail-pill.green   { background: #e6f4ec; color: var(--sc-green-dark); }
-.sc-avail-pill.yellow  { background: #fdf3e3; color: #8a6020; }
-.sc-avail-pill.red     { background: #fdecea; color: var(--sc-red-dark); }
-.sc-avail-pill.unknown { background: #f0f0f0; color: var(--sc-text-muted); }
-.sc-avail-dot {
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.sc-avail-dot.green   { background: var(--sc-green); }
-.sc-avail-dot.yellow  { background: var(--sc-yellow); }
-.sc-avail-dot.red     { background: var(--sc-red); }
-.sc-avail-dot.unknown { background: #bbb; }
 
 /* ── Card action buttons row ─────────────────────────────────────── */
 .sc-card-btn-row {
@@ -1386,16 +1366,6 @@ html.sc-resizing #sc-skills-toggle { transition: none !important; }
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-.sc-card-avail-notes {
-  font-size: 11px;
-  color: var(--sc-text);
-  line-height: 1.45;
-}
-.sc-card-avail-res {
-  font-size: 10px;
-  color: var(--sc-red);
-  margin-top: 2px;
 }
 .sc-card-skills {
   display: flex;
@@ -2436,6 +2406,11 @@ html.sc-resizing #sc-skills-toggle { transition: none !important; }
   color: var(--sc-red-dark);
   border-bottom-color: var(--sc-red);
 }
+.sc-tab-btn.active[data-tab="combined"] {
+  color: #13212C;
+  border-bottom-color: var(--sc-yellow);
+}
+.sc-tab-btn.sc-tab-hidden { display: none; }
 .sc-tab-pane { display: none; }
 .sc-tab-pane.active { display: block; }
 
@@ -2532,6 +2507,19 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 #sc-amo-results-area .sc-results-count    { color: var(--sc-red-dark); font-weight: 700; }
 #sc-amo-results-area .sc-viewall-cal-btn  { background: var(--sc-red-dark); }
 #sc-amo-results-area .sc-card-name        { color: var(--sc-red-dark); }
+.sc-result-card.sc-result-card-amo .sc-card-name { color: var(--sc-red-dark); }
+.sc-result-card.sc-result-card-amo .sc-rank-bar-fill { background: var(--sc-red); }
+.sc-result-card.sc-result-card-amo .sc-rank-pct { color: var(--sc-red-dark); }
+.sc-result-card.sc-result-card-amo .sc-skill-tag { background: #fff2ef; color: var(--sc-red-dark); border-color: #f2c2b8; }
+.sc-result-card.sc-result-card-amo .sc-card-select-label input[type="checkbox"] { accent-color: var(--sc-red); }
+#sc-combined-search-btn {
+  background: linear-gradient(90deg, var(--sc-blue) 0%, var(--sc-blue) 49%, var(--sc-red) 51%, var(--sc-red) 100%);
+}
+.sc-combined-helper-note {
+  font-size: 11px;
+  color: var(--sc-text-muted);
+  margin: -4px 0 10px;
+}
 
 /* ── AMO Staff Button (red instead of green) ─────────────────────── */
 .sc-amo-staff-btn {
@@ -4000,7 +3988,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       .filter(o => o.value && o.text)
       .sort((a, b) => a.text.localeCompare(b.text));
     if (!opts.length) return;
-    ['sc-products', 'sc-amo-products'].forEach(selectId => {
+    ['sc-products', 'sc-amo-products', 'sc-combined-products'].forEach(selectId => {
       const target = document.getElementById(selectId);
       if (!target || target.dataset.scrOptionsLoaded === 'true') return;
       target.innerHTML = opts.map(o => `<option value="${escAttr(o.value)}" data-scr-value="${escAttr(o.value)}">${escHtml(o.text)}</option>`).join('');
@@ -4040,7 +4028,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
   function applyProductSkillOptions(options) {
     const markup = buildProductSkillOptionMarkup(options);
-    ['sc-product-skills', 'sc-amo-product-skills'].forEach(selectId => {
+    ['sc-product-skills', 'sc-amo-product-skills', 'sc-combined-product-skills'].forEach(selectId => {
       const target = document.getElementById(selectId);
       if (!target) return;
       const selected = new Set(Array.from(target.selectedOptions || []).map(o => String(o.value)));
@@ -4051,6 +4039,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     });
     syncProductsToMappedProductSkills('sc-products', 'sc-product-skills');
     syncProductsToMappedProductSkills('sc-amo-products', 'sc-amo-product-skills');
+    syncProductsToMappedProductSkills('sc-combined-products', 'sc-combined-product-skills');
   }
 
   function optionMatchesLooseQuery(option, query) {
@@ -4290,11 +4279,33 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           </div>
           <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#222">
+              <input type="checkbox" id="sc-inline-drawer-toggle" style="width:14px;height:14px">
+              <span>Enable Inline Calendar Drawer</span>
+            </label>
+            <div style="font-size:10px;color:var(--sc-text-muted);margin-top:4px;margin-left:22px">
+              Safer rollout mode. Uses the separate SCOUT 2.0 drawer helper for inline workload and calendar cards.
+            </div>
+            <div id="sc-inline-drawer-warning" style="display:none;margin-top:8px;margin-left:22px;padding:8px;border:1px solid #E2C06B;background:#fff8e1;border-radius:6px;font-size:10px;color:#13212C">
+              Inline drawer is enabled, but the drawer helper is not active on this page. Install or enable the SCOUT 2.0 drawer helper in Tampermonkey.
+              <button type="button" id="sc-inline-drawer-install-btn" style="margin-top:6px;padding:5px 8px;border:0;border-radius:5px;background:#E2C06B;color:#13212C;font-weight:700;cursor:pointer">Install drawer helper</button>
+            </div>
+          </div>
+          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#222">
               <input type="checkbox" id="sc-gpt-assist-toggle" style="width:14px;height:14px">
               <span>Enable GPT Assist</span>
             </label>
             <div style="font-size:10px;color:var(--sc-text-muted);margin-top:4px;margin-left:22px">
               Shows an <strong>Ask AI Agent</strong> prompt builder that opens ChatGPT with the staffing prompt.
+            </div>
+          </div>
+          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#222">
+              <input type="checkbox" id="sc-combine-tabs-toggle" style="width:14px;height:14px">
+              <span>Combine Direct and AMO staffing search</span>
+            </label>
+            <div style="font-size:10px;color:var(--sc-text-muted);margin-top:4px;margin-left:22px">
+              Adds a Combined Staffing tab that searches both groups together while preserving AMO deliverables and Direct/AMO card colors.
             </div>
           </div>
           <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
@@ -4461,6 +4472,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         <div class="sc-tab-bar">
           <button class="sc-tab-btn active" id="sc-tab-direct" data-tab="direct">Direct Staffing</button>
           <button class="sc-tab-btn"        id="sc-tab-amo"    data-tab="amo">AMO Staffing</button>
+          <button class="sc-tab-btn"        id="sc-tab-combined" data-tab="combined">Combined Staffing</button>
         </div>
 
         <!-- ═══════════════════════════════════════════════════════
@@ -4827,6 +4839,181 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
         </div><!-- end sc-amo-pane -->
 
+
+        <!-- ═══════════════════════════════════════════════════════
+             COMBINED STAFFING PANE
+        ═══════════════════════════════════════════════════════ -->
+        <div id="sc-combined-pane" class="sc-tab-pane">
+          <div class="sc-combined-helper-note">
+            Combined search uses one set of filters across Direct and AMO SCs. AMO cards still require the AMO deliverable selector when staffed.
+          </div>
+
+          <div class="sc-card sc-card-amo">
+            <div class="sc-card-title">AMO Deliverable</div>
+            <div class="sc-field">
+              <label class="sc-label">Deliverable Type</label>
+              <select id="sc-combined-amo-deliverable">
+                <option value="">— Select deliverable (optional) —</option>
+                ${buildAmoDeliverableOptionMarkup()}
+              </select>
+              <div class="sc-field-hint">Used only when staffing an AMO SC from the Combined tab.</div>
+            </div>
+          </div>
+
+          <div class="sc-card sc-insights-card" id="sc-combined-insights-card" style="display:none">
+            <div class="sc-card-title">📦 Module Detection</div>
+            <div class="sc-insights-hint">Modules found in Request Details — click to select product:</div>
+            <div id="sc-combined-insights-chips" class="sc-insights-chips"></div>
+          </div>
+
+          <div class="sc-card sc-collapsible-card collapsed" id="sc-combined-products-card">
+            <div class="sc-card-title" id="sc-combined-products-toggle" role="button" tabindex="0" aria-expanded="false">
+              <span>Products Demonstrated</span>
+              <span class="sc-collapsible-chevron">▼</span>
+            </div>
+            <div class="sc-collapsible-body">
+              <div class="sc-field">
+                <label class="sc-label">Filter products</label>
+                <input type="text" id="sc-combined-product-filter" placeholder="Type to filter list…">
+              </div>
+              <div class="sc-field">
+                <label class="sc-label">Products <span style="font-weight:400">(select up to 4)</span></label>
+                <select id="sc-combined-products" multiple size="7">
+                  ${buildProductOptions()}
+                </select>
+                <div class="sc-field-hint">These write to the SCR Product(s) field when staffing.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sc-card sc-collapsible-card collapsed" id="sc-combined-product-skills-card">
+            <div class="sc-card-title" id="sc-combined-product-skills-toggle" role="button" tabindex="0" aria-expanded="false">
+              <span>Product Skills Search</span>
+              <span class="sc-collapsible-chevron">▼</span>
+            </div>
+            <div class="sc-collapsible-body">
+              <div class="sc-field">
+                <label class="sc-label">Filter product skills</label>
+                <input type="text" id="sc-combined-product-skill-filter" placeholder="Type and press Enter to add…">
+              </div>
+              <div class="sc-field">
+                <label class="sc-label">Product Skills <span style="font-weight:400">(select up to 4)</span></label>
+                <select id="sc-combined-product-skills" multiple size="7">
+                  ${buildProductSkillOptions()}
+                </select>
+                <div class="sc-field-hint">Pulled from the employee product skills matrix. Press Enter in the filter to add the best match.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sc-card sc-collapsible-card collapsed" id="sc-combined-industry-card">
+            <div class="sc-card-title" id="sc-combined-industry-toggle" role="button" tabindex="0" aria-expanded="false">
+              <span>Industry (Optional)</span>
+              <span class="sc-collapsible-chevron">▼</span>
+            </div>
+            <div class="sc-collapsible-body">
+              <div class="sc-field">
+                <label class="sc-label">SC Industry</label>
+                <select id="sc-combined-industry">
+                  <option value="">— Any industry —</option>
+                  ${buildIndustryOptions()}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="sc-card sc-collapsible-card collapsed sc-additional-skills-card" id="sc-combined-additional-skills-card">
+            <div class="sc-card-title" id="sc-combined-additional-skills-toggle" role="button" tabindex="0" aria-expanded="false">
+              <span>Additional SC Skills</span>
+              <span class="sc-collapsible-chevron">▼</span>
+            </div>
+            <div class="sc-collapsible-body">
+              <div class="sc-filters-grid">
+                <div class="sc-field">
+                  <label class="sc-toggle-label">
+                    <input type="checkbox" id="sc-combined-cert-cpa">
+                    CPA
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sc-card sc-collapsible-card collapsed sc-filter-card" id="sc-combined-filters-card">
+            <div class="sc-card-title" id="sc-combined-filters-toggle" role="button" tabindex="0" aria-expanded="false">
+              <span>Filters</span>
+              <span class="sc-collapsible-chevron">▼</span>
+            </div>
+            <div class="sc-collapsible-body">
+              <div class="sc-filters-grid">
+                <div class="sc-field">
+                  <label class="sc-label">SC Industry</label>
+                  <select id="sc-combined-filter-vertical" multiple size="6">
+                    <option value="73">Health &amp; Hospitality</option>
+                    <option value="58">Products</option>
+                    <option value="72">Construction &amp; Energy</option>
+                    <option value="71">Consumer Service</option>
+                    <option value="70">Business Services</option>
+                    <option value="14">Software</option>
+                  </select>
+                  <div class="sc-field-hint">Ctrl+click for multiple.</div>
+                </div>
+                <div class="sc-field">
+                  <label class="sc-label">SC Region</label>
+                  <select id="sc-combined-filter-region" multiple size="4">
+                    <option value="48">East</option>
+                    <option value="49">Central</option>
+                    <option value="50">West</option>
+                    <option value="South">South</option>
+                  </select>
+                  <div class="sc-field-hint">Ctrl+click for multiple.</div>
+                </div>
+                <div class="sc-field">
+                  <label class="sc-label">Sort Priority</label>
+                  <select id="sc-combined-filter-sort">
+                    <option value="isa" selected>Industry → Skills → Availability</option>
+                    <option value="ias">Industry → Availability → Skills</option>
+                    <option value="ais">Avail → Industry → Skills</option>
+                    <option value="sia">Skills → Industry → Avail</option>
+                  </select>
+                </div>
+                <div class="sc-field">
+                  <label class="sc-label">Skills Match</label>
+                  <select id="sc-combined-filter-operator">
+                    <option value="any">Has ANY skills</option>
+                    <option value="all">Has ALL skills</option>
+                  </select>
+                </div>
+                <div class="sc-field">
+                  <label class="sc-toggle-label">
+                    <input type="checkbox" id="sc-combined-filter-myteam">
+                    Limit search to My Team
+                  </label>
+                  <div class="sc-field-hint">Uses the My Team list above, including locally configured additions.</div>
+                </div>
+                <div class="sc-field">
+                  <label class="sc-toggle-label">
+                    <input type="checkbox" id="sc-combined-filter-same-state">
+                    Limit to same state/province as customer
+                  </label>
+                  <div class="sc-field-hint">Uses the Request Context default billing location.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button id="sc-combined-search-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            Search Combined SCs
+          </button>
+
+          <div id="sc-combined-results-area">
+            <div class="sc-status">Turn on Combined Staffing in settings, then select product skills, industry, or additional SC skills and click Search Combined SCs.</div>
+          </div>
+        </div><!-- end sc-combined-pane -->
+
       </div><!-- end sc-panel-body -->
 
       <!-- Selection bar — slides in when consultants are checked -->
@@ -5140,6 +5327,55 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const params = new URLSearchParams(window.location.search);
     if (/^t$/i.test(params.get('e') || '')) return true;
     return Boolean(document.getElementById('submitter') || document.querySelector('input[type="submit"][value="Save"], button[name="submitter"]'));
+  }
+
+  function isNetSuiteFormInitialized() {
+    try {
+      const ns = unsafeWindow.NS || window.NS;
+      const form = ns && ns.form;
+      if (!form || typeof form.isInited !== 'function') return true;
+      return form.isInited() === true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function waitForNetSuiteFormInitialized(actionLabel) {
+    const label = actionLabel || 'SCOUT action';
+    if (isNetSuiteFormInitialized()) return Promise.resolve(true);
+    showToast(`Waiting on NetSuite form to initialize before ${label}...`, 'info', 7000);
+    const startedAt = Date.now();
+    return new Promise(resolve => {
+      const poll = function () {
+        if (isNetSuiteFormInitialized()) {
+          resolve(true);
+          return;
+        }
+        if (Date.now() - startedAt >= NETSUITE_FORM_INIT_TIMEOUT_MS) {
+          console.warn('[SCOUT] NetSuite form did not initialize before SCOUT action:', label, {
+            url: window.location.href,
+            elapsedMs: Date.now() - startedAt,
+          });
+          showToast(`SCOUT stopped: NetSuite form is still initializing. Refresh the SCR and try ${label} again.`, 'error', 12000);
+          resolve(false);
+          return;
+        }
+        setTimeout(poll, NETSUITE_FORM_INIT_POLL_MS);
+      };
+      setTimeout(poll, NETSUITE_FORM_INIT_POLL_MS);
+    });
+  }
+
+  function runWhenNetSuiteFormInitialized(actionLabel, callback) {
+    waitForNetSuiteFormInitialized(actionLabel).then(ok => {
+      if (!ok) return;
+      try {
+        callback();
+      } catch (e) {
+        console.error('[SCOUT] Action failed after NetSuite form initialized:', actionLabel, e);
+        showToast(`Could not complete ${actionLabel}. Check console for details.`, 'error', 8000);
+      }
+    });
   }
 
   function goToEditMode() {
@@ -5751,7 +5987,12 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     }
     if (!isScrEditMode()) return;
 
-    try {
+    const actionLabel = pending.type === 'onhold'
+      ? 'on hold changes'
+      : pending.type === 'cancel'
+        ? 'cancellation changes'
+        : `staffing changes for ${pending.scName}`;
+    runWhenNetSuiteFormInitialized(actionLabel, function () {
       if (pending.type === 'amo') {
         applyAmoStaffing(pending.scId, pending.scName, pending.empName, pending.hasLeadOnOpp, pending.notes, pending.deliverable, pending.productIds, pending.assignAsLead !== false, pending.requestDetailsNote);
       } else if (pending.type === 'onhold') {
@@ -5762,44 +6003,39 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         applyDirectStaffing(pending.scId, pending.scName, pending.empName, pending.hasLeadOnOpp, pending.notes, pending.productIds, pending.assignAsLead !== false, pending.requestDetailsNote);
       }
       sessionStorage.removeItem(STAFFING_PENDING_KEY);
-      const actionLabel = pending.type === 'onhold'
-        ? 'on hold changes'
-        : pending.type === 'cancel'
-          ? 'cancellation changes'
-          : `staffing changes for ${pending.scName}`;
       showToast(`✔ Applied ${actionLabel}; saving record…`, 'success', 5000);
       setTimeout(function () {
         triggerNetSuiteFieldEvents(SCR_FIELD_ASSIGNEE);
         releaseActiveNetSuiteFieldFocus();
         setTimeout(saveNetSuiteForm, 250);
       }, PENDING_STAFFING_SAVE_DELAY_MS);
-    } catch (e) {
-      console.error('[Staffing Helper] Pending staffing action failed:', e);
-      showToast('Could not apply pending SCOUT action. Check console for details.', 'error', 8000);
-    }
+    });
   }
 
   /**
    * Direct staffing — items 1 (lead conditional), 3 (markers), 4 (new message),
    * 7 (no confirm), 8 (notes popup).
    */
-  function staffSC(scId, scName, empName, hasLeadOnOpp) {
+  function staffSC(scId, scName, empName, hasLeadOnOpp, sourceOptions) {
+    const sourceIds = sourceOptions || {};
     showNotesDialog('Staff ' + scName, function (dialog) {
       const notes = dialog.staffingNotes;
       const assignAsLead = dialog.assignAsLead;
       const requestDetailsNote = dialog.requestDetailsNote;
       const assignmentLabel = assignAsLead ? 'Lead SC' : 'Secondary SC';
       if (!isScrEditMode()) {
-        storePendingStaffAction({ type: 'direct', scId, scName, empName, hasLeadOnOpp, notes, requestDetailsNote, assignAsLead, productIds: getProductsForStaffing('sc-products', 'sc-product-skills') });
+        storePendingStaffAction({ type: 'direct', scId, scName, empName, hasLeadOnOpp, notes, requestDetailsNote, assignAsLead, productIds: getProductsForStaffing(sourceIds.productSelectId || 'sc-products', sourceIds.productSkillSelectId || 'sc-product-skills') });
         return;
       }
-      applyDirectStaffing(scId, scName, empName, hasLeadOnOpp, notes, getProductsForStaffing('sc-products', 'sc-product-skills'), assignAsLead, requestDetailsNote);
-      showToast(`✔ Staffed: ${scName} as ${assignmentLabel} — save the record to confirm.`, 'success', 6000);
+      runWhenNetSuiteFormInitialized(`staffing ${scName}`, function () {
+        applyDirectStaffing(scId, scName, empName, hasLeadOnOpp, notes, getProductsForStaffing(sourceIds.productSelectId || 'sc-products', sourceIds.productSkillSelectId || 'sc-product-skills'), assignAsLead, requestDetailsNote);
+        showToast(`✔ Staffed: ${scName} as ${assignmentLabel} — save the record to confirm.`, 'success', 6000);
+      });
     }, { showLeadToggle: true, showRequestDetailsBox: true });
   }
 
-  function getSelectedAmoDeliverableFromPicker() {
-    const picker = document.getElementById('sc-amo-deliverable');
+  function getSelectedAmoDeliverableFromPicker(pickerId) {
+    const picker = document.getElementById(pickerId || 'sc-amo-deliverable');
     const selected = normalizeAmoDeliverableName(picker && picker.value);
     return isValidAmoDeliverableName(selected) ? selected : '';
   }
@@ -5818,7 +6054,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
   function getSelectedAmoDeliverable(options) {
     const opts = options || {};
-    const pickerValue = getSelectedAmoDeliverableFromPicker();
+    const pickerValue = getSelectedAmoDeliverableFromPicker(opts.pickerId || opts.deliverablePickerId);
     if (pickerValue) return pickerValue;
     if (opts.requirePickerSelection) return '';
     return getCurrentAmoDeliverableFromForm();
@@ -5833,21 +6069,24 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
    * AMO variant — items 1 (lead conditional), 3 (markers), 4 (remove strategy-call line),
    * 5 (deliverable field sync), 7 (no confirm), 8 (notes popup).
    */
-  function staffSCWithDeliverable(scId, scName, empName, hasLeadOnOpp) {
+  function staffSCWithDeliverable(scId, scName, empName, hasLeadOnOpp, sourceOptions) {
+    const sourceIds = sourceOptions || {};
     showNotesDialog('Staff ' + scName + ' (AMO)', function (dialog) {
       const notes = dialog.staffingNotes;
       const assignAsLead = dialog.assignAsLead;
       const requestDetailsNote = dialog.requestDetailsNote;
-      const deliverable = getSelectedAmoDeliverable({ requirePickerSelection: true });
+      const deliverable = getSelectedAmoDeliverable({ requirePickerSelection: true, deliverablePickerId: sourceIds.deliverablePickerId || 'sc-amo-deliverable' });
       const assignmentLabel = assignAsLead ? 'Lead SC' : 'Secondary SC';
       const continueStaffing = function () {
         if (!isScrEditMode()) {
-          storePendingStaffAction({ type: 'amo', scId, scName, empName, hasLeadOnOpp, notes, requestDetailsNote, deliverable, assignAsLead, productIds: getProductsForStaffing('sc-amo-products', 'sc-amo-product-skills') });
+          storePendingStaffAction({ type: 'amo', scId, scName, empName, hasLeadOnOpp, notes, requestDetailsNote, deliverable, assignAsLead, productIds: getProductsForStaffing(sourceIds.productSelectId || 'sc-amo-products', sourceIds.productSkillSelectId || 'sc-amo-product-skills') });
           return;
         }
-        applyAmoStaffing(scId, scName, empName, hasLeadOnOpp, notes, deliverable, getProductsForStaffing('sc-amo-products', 'sc-amo-product-skills'), assignAsLead, requestDetailsNote);
-        const label = deliverable ? ` (${deliverable})` : '';
-        showToast(`✔ Staffed: ${scName}${label} as ${assignmentLabel} — save the record to confirm.`, 'success', 6000);
+        runWhenNetSuiteFormInitialized(`staffing ${scName}`, function () {
+          applyAmoStaffing(scId, scName, empName, hasLeadOnOpp, notes, deliverable, getProductsForStaffing(sourceIds.productSelectId || 'sc-amo-products', sourceIds.productSkillSelectId || 'sc-amo-product-skills'), assignAsLead, requestDetailsNote);
+          const label = deliverable ? ` (${deliverable})` : '';
+          showToast(`✔ Staffed: ${scName}${label} as ${assignmentLabel} — save the record to confirm.`, 'success', 6000);
+        });
       };
       if (!deliverable) {
         showAmoBlankDeliverableWarning(continueStaffing);
@@ -5899,8 +6138,10 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         storePendingStaffAction({ type: 'onhold', meId, notes });
         return;
       }
-      applyOnHold(meId, notes);
-      showToast('✔ Status set to On Hold — save the record to confirm.', 'info');
+      runWhenNetSuiteFormInitialized('placing the request on hold', function () {
+        applyOnHold(meId, notes);
+        showToast('✔ Status set to On Hold — save the record to confirm.', 'info');
+      });
     });
   }
 
@@ -5912,8 +6153,10 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         storePendingStaffAction({ type: 'cancel', empName, notes });
         return;
       }
-      applyCancelRequest(empName, notes);
-      showToast('✔ Request cancelled — save the record to confirm.', 'error', 6000);
+      runWhenNetSuiteFormInitialized('cancelling the request', function () {
+        applyCancelRequest(empName, notes);
+        showToast('✔ Request cancelled — save the record to confirm.', 'error', 6000);
+      });
     });
   }
 
@@ -7035,243 +7278,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     return d;
   }
 
-  function getRecentScrLoad(members) {
-    members = members || [];
-    const ids = [...new Set(members.map(m => m.employeeId).filter(Boolean))];
-    const rosterByEmployee = {};
-    const rosterByName = {};
-
-    function addRosterNameVariant(name, rosterId) {
-      const key = normalizeLoose(name);
-      if (key && rosterId) rosterByName[key] = rosterId;
-    }
-
-    members.forEach(m => {
-      if (m.employeeRecId && m.employeeId) rosterByEmployee[m.employeeRecId] = m.employeeId;
-      const rawName = m.employee || m.name || '';
-      addRosterNameVariant(rawName, m.employeeId);
-      if (rawName.includes(',')) {
-        const parts = rawName.split(',').map(s => s.trim()).filter(Boolean);
-        if (parts.length >= 2) addRosterNameVariant(`${parts[1]} ${parts[0]}`, m.employeeId);
-      } else {
-        const parts = rawName.trim().split(/\s+/).filter(Boolean);
-        if (parts.length >= 2) addRosterNameVariant(`${parts.slice(-1)[0]}, ${parts.slice(0, -1).join(' ')}`, m.employeeId);
-      }
-    });
-    const counts = {};
-    const now = Date.now();
-    ids.forEach(id => {
-      const cached = RECENT_LOAD_CACHE.get(id);
-      counts[id] = cached && (now - cached.ts < RECENT_LOAD_CACHE_TTL_MS) ? cached.count : 0;
-    });
-    const missing = ids.filter(id => {
-      const cached = RECENT_LOAD_CACHE.get(id);
-      return !cached || (now - cached.ts >= RECENT_LOAD_CACHE_TTL_MS);
-    });
-    if (!missing.length) return counts;
-
-    const missingSet = new Set(missing);
-    const employeeIds = Object.keys(rosterByEmployee).filter(empId => missingSet.has(rosterByEmployee[empId]));
-    const seenScrs = new Set();
-    const loadDebugSamples = [];
-    missing.forEach(id => { counts[id] = 0; });
-
-    function readSearchValue(r, fieldId, joinId) {
-      try { return joinId ? r.getValue(fieldId, joinId) : r.getValue(fieldId); }
-      catch (e) { return ''; }
-    }
-
-    function readSearchText(r, fieldId, joinId) {
-      try { return joinId ? r.getText(fieldId, joinId) : r.getText(fieldId); }
-      catch (e) { return ''; }
-    }
-
-    function columnDescriptor(col) {
-      const parts = [];
-      ['getName', 'getLabel', 'getJoin', 'getSummary'].forEach(fn => {
-        try {
-          if (col && typeof col[fn] === 'function') parts.push(col[fn]() || '');
-        } catch (e) { /* ignore */ }
-      });
-      return parts.join(' ').toLowerCase();
-    }
-
-    function parseLoadCountValue(value) {
-      const normalized = String(value == null ? '' : value).replace(/,/g, '').trim();
-      if (!/^\d+(?:\.\d+)?$/.test(normalized)) return null;
-      return Math.max(0, Math.round(Number(normalized)));
-    }
-
-    function loadCountFromSavedSearchColumns(r) {
-      let cols = [];
-      try { cols = typeof r.getAllColumns === 'function' ? (r.getAllColumns() || []) : []; }
-      catch (e) { cols = []; }
-      const candidates = [];
-      cols.forEach(col => {
-        const hint = columnDescriptor(col);
-        const rawValue = readColumnValue(r, col, false);
-        const rawText = readColumnValue(r, col, true);
-        const value = parseLoadCountValue(rawValue);
-        const textValue = parseLoadCountValue(rawText);
-        const count = value != null ? value : textValue;
-        if (count == null) return;
-        if (/assignee|consultant|employee|manager|email|name|region|vertical|team/i.test(hint)) return;
-
-        let score = 0;
-        if (/\b(scr|request|load)\b/i.test(hint)) score += 25;
-        if (/(last|lst)\s*7|7\s*(?:days|dys)|assigned.*7/i.test(hint)) score += 80;
-        if (/count|sum|formula|numeric/i.test(hint)) score += 30;
-        if (/\bcount\b|\bsum\b/i.test(hint)) score += 20;
-        if (score > 0) candidates.push({ score, count, hint });
-      });
-      if (!candidates.length) return null;
-      candidates.sort((a, b) => b.score - a.score);
-      return candidates[0].count;
-    }
-
-    function rosterIdFromNameText(text) {
-      const nameKey = normalizeLoose(text);
-      if (!nameKey) return '';
-      if (rosterByName[nameKey]) return rosterByName[nameKey];
-      const matchedKey = Object.keys(rosterByName).find(key =>
-        key && (nameKey === key || nameKey.includes(key) || key.includes(nameKey)));
-      return matchedKey ? rosterByName[matchedKey] : '';
-    }
-
-    function readColumnValue(r, col, asText) {
-      try {
-        return asText ? r.getText(col) : r.getValue(col);
-      } catch (e) { /* fall through */ }
-      try {
-        const name = col && typeof col.getName === 'function' ? col.getName() : '';
-        const join = col && typeof col.getJoin === 'function' ? col.getJoin() : null;
-        const summary = col && typeof col.getSummary === 'function' ? col.getSummary() : null;
-        return asText ? r.getText(name, join, summary) : r.getValue(name, join, summary);
-      } catch (e) { return ''; }
-    }
-
-    function rosterIdFromSavedSearchColumns(r) {
-      let cols = [];
-      try { cols = typeof r.getAllColumns === 'function' ? (r.getAllColumns() || []) : []; }
-      catch (e) { cols = []; }
-      for (const col of cols) {
-        const hint = columnDescriptor(col);
-        const value = String(readColumnValue(r, col, false) || '').trim();
-        const text = String(readColumnValue(r, col, true) || '').trim();
-        const byName = rosterIdFromNameText(text) || rosterIdFromNameText(value);
-        if (byName) return byName;
-        if (/assignee|employee|consultant|staff/i.test(hint)) {
-          if (value && missingSet.has(value)) return value;
-          if (value && rosterByEmployee[value]) return rosterByEmployee[value];
-        }
-      }
-      return '';
-    }
-
-    function sampleLoadRow(r, rowCount, searchId, recordType) {
-      if (loadDebugSamples.length >= 4) return;
-      let cols = [];
-      try { cols = typeof r.getAllColumns === 'function' ? (r.getAllColumns() || []) : []; }
-      catch (e) { cols = []; }
-      loadDebugSamples.push({
-        searchId,
-        recordType,
-        rowCount,
-        columns: cols.slice(0, 12).map(col => ({
-          hint: columnDescriptor(col),
-          value: readColumnValue(r, col, false),
-          text: readColumnValue(r, col, true),
-        })),
-      });
-    }
-
-    function rosterIdFromLoadRow(r) {
-      const directRosterId = readSearchValue(r, SCR_FIELD_ASSIGNEE);
-      if (directRosterId && missingSet.has(directRosterId)) return directRosterId;
-
-      const employeeId = readSearchValue(r, SCR_FIELD_ASSIGNEE_EMPLOYEE) ||
-        readSearchValue(r, 'custrecord_emproster_emp', SCR_FIELD_ASSIGNEE);
-      if (employeeId && rosterByEmployee[employeeId]) return rosterByEmployee[employeeId];
-
-      const assigneeName = normalizeLoose(readSearchText(r, SCR_FIELD_ASSIGNEE) ||
-        readSearchText(r, SCR_FIELD_ASSIGNEE_EMPLOYEE));
-      const byName = rosterIdFromNameText(assigneeName);
-      if (byName) return byName;
-
-      return rosterIdFromSavedSearchColumns(r);
-    }
-
-    function addRows(rows, opts) {
-      const options = opts || {};
-      let matched = 0;
-      (rows || []).forEach(r => {
-        const assignee = rosterIdFromLoadRow(r);
-        if (!assignee || !missingSet.has(assignee)) return;
-        const savedSearchMetric = options.useSavedSearchMetric ? loadCountFromSavedSearchColumns(r) : null;
-        if (savedSearchMetric != null) {
-          counts[assignee] = Math.max(Number(counts[assignee] || 0), savedSearchMetric);
-          matched += 1;
-          return;
-        }
-        const scrId = r.getValue('internalid') || `${assignee}:${counts[assignee]}`;
-        const seenKey = `${assignee}:${scrId}`;
-        if (seenScrs.has(seenKey)) return;
-        seenScrs.add(seenKey);
-        counts[assignee] = (counts[assignee] || 0) + 1;
-        matched += 1;
-      });
-      return matched;
-    }
-
-    function runLoadSearch(searchId, filters, cols, opts) {
-      const searchTypes = searchId ? [SCR_RECORD_TYPE, null] : [SCR_RECORD_TYPE];
-      for (const recordType of searchTypes) {
-        try {
-          const rows = nlapiSearchRecord(recordType, searchId || null, filters, cols) || [];
-          if (searchId && recordType && rows.length === 0) continue;
-          if (searchId && rows.length) sampleLoadRow(rows[0], rows.length, searchId, recordType);
-          const matched = addRows(rows, opts);
-          return { ok: true, rows: rows.length, matched };
-        } catch (e) {
-          console.warn('[Staffing Helper] Recent SCR load lookup failed:', {
-            searchId,
-            recordType,
-            message: e.message || e,
-          });
-        }
-      }
-      return { ok: false, rows: 0, matched: 0 };
-    }
-
-    function hasAnyLoadCount() {
-      return missing.some(id => Number(counts[id] || 0) > 0);
-    }
-
-    const savedSearchResult = runLoadSearch(RECENT_LOAD_SEARCH_ID, null, null, { useSavedSearchMetric: true });
-    if (!savedSearchResult.ok) {
-      console.warn('[Staffing Helper] Recent SCR load saved search was unavailable. Counts defaulted to zero.', {
-        searchId: RECENT_LOAD_SEARCH_ID,
-      });
-    }
-    if (!hasAnyLoadCount() && loadDebugSamples.length) {
-      console.warn('[Staffing Helper] SCR load search returned rows but none matched the visible roster cards.', {
-        searchId: RECENT_LOAD_SEARCH_ID,
-        visibleRosterIds: missing,
-        visibleEmployeeIds: employeeIds,
-        visibleNameKeys: Object.keys(rosterByName).slice(0, 20),
-        samples: loadDebugSamples,
-      });
-    }
-    missing.forEach(id => RECENT_LOAD_CACHE.set(id, { count: counts[id] || 0, ts: Date.now() }));
-    return counts;
-  }
-
-  function enrichRecentScrLoad(members) {
-    if (!members || !members.length) return;
-    const loadMap = getRecentScrLoad(members);
-    members.forEach(m => { m.recentLoad = loadMap[m.employeeId] || 0; });
-  }
-
   /**
    * Enrich member objects (from getRequestedSCRoster / loadQuickAssignCard) with
    * availability and email fetched directly from customrecord_emproster.
@@ -7686,6 +7692,23 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     if (cb) cb.checked = getCalIntegrationEnabled();
   }
 
+  function isInlineCalendarDrawerInstalled() {
+    const win = (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : window;
+    return Boolean(
+      win.__SCOUT_INLINE_CALENDAR_DRAWER ||
+      win.__SCOUT_INLINE_CALENDAR_DRAWER_TEST ||
+      win.__SCOUT_INLINE_DRAWER_VERSION__
+    );
+  }
+
+  function applyInlineCalendarDrawerUI() {
+    const enabled = getInlineCalendarDrawerEnabled();
+    const cb = document.getElementById('sc-inline-drawer-toggle');
+    const warning = document.getElementById('sc-inline-drawer-warning');
+    if (cb) cb.checked = enabled;
+    if (warning) warning.style.display = enabled && !isInlineCalendarDrawerInstalled() ? 'block' : 'none';
+  }
+
   function applyGptAssistUI() {
     const panel = document.getElementById('sc-skills-panel');
     if (!panel) return;
@@ -7698,9 +7721,25 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     if (cb) cb.checked = getGptAssistEnabled();
   }
 
+  function applyCombinedStaffingTabsUI() {
+    const enabled = getCombineStaffingTabsEnabled();
+    const tab = document.getElementById('sc-tab-combined');
+    const pane = document.getElementById('sc-combined-pane');
+    const cb = document.getElementById('sc-combine-tabs-toggle');
+    if (cb) cb.checked = enabled;
+    if (tab) tab.classList.toggle('sc-tab-hidden', !enabled);
+    if (!enabled && tab && tab.classList.contains('active')) {
+      const directTab = document.getElementById('sc-tab-direct');
+      if (directTab) directTab.click();
+    }
+    if (pane && !enabled) pane.classList.remove('active');
+  }
+
   function populateSettingsForm() {
     const calToggle = document.getElementById('sc-cal-integration-toggle');
+    const inlineDrawerToggle = document.getElementById('sc-inline-drawer-toggle');
     const gptToggle = document.getElementById('sc-gpt-assist-toggle');
+    const combineTabsToggle = document.getElementById('sc-combine-tabs-toggle');
     const debugToggle = document.getElementById('sc-debug-mode-toggle');
     const previousHistoryToggle = document.getElementById('sc-prev-history-setting-toggle');
     const customerLicenseToggle = document.getElementById('sc-customer-license-setting-toggle');
@@ -7712,7 +7751,10 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const extraAmoDeliverables = document.getElementById('sc-extra-amo-deliverables-input');
     const feedbackWebhook = document.getElementById('sc-feedback-webhook-input');
     if (calToggle) calToggle.checked = getCalIntegrationEnabled();
+    if (inlineDrawerToggle) inlineDrawerToggle.checked = getInlineCalendarDrawerEnabled();
     if (gptToggle) gptToggle.checked = getGptAssistEnabled();
+    applyInlineCalendarDrawerUI();
+    if (combineTabsToggle) combineTabsToggle.checked = getCombineStaffingTabsEnabled();
     if (debugToggle) debugToggle.checked = getDebugModeEnabled();
     if (previousHistoryToggle) previousHistoryToggle.checked = getPreviousScHistoryEnabled();
     if (customerLicenseToggle) customerLicenseToggle.checked = getCustomerLicenseEnabled();
@@ -7727,7 +7769,9 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
   function saveSettingsFromForm() {
     const calToggle = document.getElementById('sc-cal-integration-toggle');
+    const inlineDrawerToggle = document.getElementById('sc-inline-drawer-toggle');
     const gptToggle = document.getElementById('sc-gpt-assist-toggle');
+    const combineTabsToggle = document.getElementById('sc-combine-tabs-toggle');
     const debugToggle = document.getElementById('sc-debug-mode-toggle');
     const previousHistoryToggle = document.getElementById('sc-prev-history-setting-toggle');
     const customerLicenseToggle = document.getElementById('sc-customer-license-setting-toggle');
@@ -7740,7 +7784,9 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const feedbackWebhook = document.getElementById('sc-feedback-webhook-input');
     saveLocalConfig({
       calendarIntegrationEnabled: calToggle ? calToggle.checked : getCalIntegrationEnabled(),
+      inlineCalendarDrawerEnabled: inlineDrawerToggle ? inlineDrawerToggle.checked : getInlineCalendarDrawerEnabled(),
       gptAssistEnabled: gptToggle ? gptToggle.checked : getGptAssistEnabled(),
+      combineStaffingTabsEnabled: combineTabsToggle ? combineTabsToggle.checked : getCombineStaffingTabsEnabled(),
       debugModeEnabled: debugToggle ? debugToggle.checked : getDebugModeEnabled(),
       previousScHistoryEnabled: previousHistoryToggle ? previousHistoryToggle.checked : getPreviousScHistoryEnabled(),
       customerLicenseEnabled: customerLicenseToggle ? customerLicenseToggle.checked : getCustomerLicenseEnabled(),
@@ -7753,7 +7799,9 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       feedbackWebhookUrl: feedbackWebhook ? feedbackWebhook.value.trim() : getFeedbackWebhookUrl(),
     });
     applyCalIntegrationUI();
+    applyInlineCalendarDrawerUI();
     applyGptAssistUI();
+    applyCombinedStaffingTabsUI();
     refreshAmoDeliverableOptions();
     try { localStorage.removeItem(SCOUT_UPDATE_CACHE_KEY); } catch (e) { /* ignore */ }
     checkScoutUpdate(true);
@@ -8562,31 +8610,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     return m ? m[0] : text;
   }
 
-  function updateRecentLoadBadges(containerId, employees) {
-    const area = document.getElementById(containerId);
-    if (!area) return;
-    const byId = {};
-    (employees || []).forEach(e => { if (e && e.employeeId) byId[String(e.employeeId)] = e; });
-    area.querySelectorAll('.sc-load-badge[data-load-empid]').forEach(badge => {
-      const member = byId[String(badge.dataset.loadEmpid || '')];
-      if (!member || member.recentLoad == null) return;
-      badge.textContent = `SCR Lst 7 dys ${Number(member.recentLoad || 0)}`;
-    });
-  }
-
-  function scheduleRecentLoadRefresh(employees, containerId) {
-    const pending = (employees || []).filter(e => e && e.employeeId && e.recentLoad == null);
-    if (!pending.length) return;
-    setTimeout(() => {
-      try {
-        enrichRecentScrLoad(pending);
-        updateRecentLoadBadges(containerId, pending);
-      } catch (e) {
-        console.warn('[Staffing Helper] Deferred SCR load lookup failed:', e.message || e);
-      }
-    }, 250);
-  }
-
   function updateResultEmailControls(containerId, employees) {
     const area = document.getElementById(containerId);
     if (!area) return;
@@ -8621,6 +8644,46 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
      RENDER RESULTS
   ──────────────────────────────────────────────────────────────── */
 
+  function getStaffingSourceIds(containerId, cardMode) {
+    if (containerId === 'sc-combined-results-area') {
+      return {
+        productSelectId: 'sc-combined-products',
+        productSkillSelectId: 'sc-combined-product-skills',
+        deliverablePickerId: 'sc-combined-amo-deliverable',
+      };
+    }
+    if (cardMode === 'amo') {
+      return {
+        productSelectId: 'sc-amo-products',
+        productSkillSelectId: 'sc-amo-product-skills',
+        deliverablePickerId: 'sc-amo-deliverable',
+      };
+    }
+    return { productSelectId: 'sc-products', productSkillSelectId: 'sc-product-skills' };
+  }
+
+  function tagStaffingMode(members, mode) {
+    return (members || []).map(member => ({ ...member, _scoutStaffingMode: mode }));
+  }
+
+  function mergeCombinedResults(directRows, amoRows, sortKey) {
+    const byId = new Map();
+    [...tagStaffingMode(directRows, 'direct'), ...tagStaffingMode(amoRows, 'amo')].forEach(member => {
+      const key = String(member.employeeId || member.employee || '');
+      if (!key) return;
+      const existing = byId.get(key);
+      if (!existing || Number(member.stackRank || 0) > Number(existing.stackRank || 0)) byId.set(key, member);
+    });
+    const rows = Array.from(byId.values());
+    return rows.sort((a, b) => {
+      const rankDiff = Number(b.stackRank || 0) - Number(a.stackRank || 0);
+      if (rankDiff) return rankDiff;
+      const modeDiff = String(a._scoutStaffingMode || '').localeCompare(String(b._scoutStaffingMode || ''));
+      if (modeDiff) return modeDiff;
+      return String(a.employee || '').localeCompare(String(b.employee || ''));
+    });
+  }
+
   function renderResults(employees, hasIndustry, empName, containerId, mode, page) {
     containerId = containerId || 'sc-results-area';
     mode        = mode        || 'direct';
@@ -8632,7 +8695,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     }
 
     SEARCH_RESULT_CACHE[containerId] = { employees, hasIndustry, empName, mode };
-    const industrySelect = document.getElementById(mode === 'amo' ? 'sc-amo-industry' : 'sc-industry');
+    const industrySelect = document.getElementById(mode === 'combined' ? 'sc-combined-industry' : (mode === 'amo' ? 'sc-amo-industry' : 'sc-industry'));
     const selectedIndustryLabel = industrySelect && industrySelect.selectedOptions && industrySelect.selectedOptions[0]
       ? industrySelect.selectedOptions[0].text
       : 'Industry';
@@ -8645,6 +8708,8 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const pageEmployees = employees.slice(startIndex, startIndex + SEARCH_PAGE_SIZE);
 
     const cards = pageEmployees.map(e => {
+      const cardMode = mode === 'combined' ? (e._scoutStaffingMode || (isAmoSalesTeam(e.salesteam) ? 'amo' : 'direct')) : mode;
+      const cardModeClass = cardMode === 'amo' ? 'sc-result-card-amo' : 'sc-result-card-direct';
       const empId       = escAttr(e.employeeId);
       const empHrefId   = encodeURIComponent(String(e.employeeId || ''));
       const employee    = escHtml(e.employee);
@@ -8658,13 +8723,10 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       const region      = escHtml(e.region);
       const location    = escHtml(e.location);
       const locationAtr = escAttr(e.location);
-      const avail       = availabilityClass(e.availability);
-      const availLabel  = availabilityLabel(e.availability);
       const nameTone    = scNameToneClass(e);
       const stackRank   = Math.max(0, Math.min(100, Number(e.stackRank) || 0));
       const indRating   = Math.max(0, Math.min(4, Number(e.industryRating) || 0));
       const indLabel    = ratingLabel(indRating);
-      const recentLoad  = e.recentLoad == null ? '...' : Number(e.recentLoad || 0);
       const skillParts  = Object.entries(e.skills || {})
         .map(([s, r]) => {
           const skill = String(s || '');
@@ -8682,7 +8744,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         : `Open calendar dashboard for ${e.employee}`;
 
       return `
-        <div class="sc-result-card">
+        <div class="sc-result-card ${cardModeClass}" data-staffing-mode="${escAttr(cardMode)}">
           <div class="sc-card-head">
             <label class="sc-card-select-label" title="Select for multi-calendar view">
               <input type="checkbox" class="sc-consultant-checkbox"
@@ -8704,13 +8766,9 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                 ${e.tier     ? `<span class="sc-attr-badge">${tier}</span>`     : ''}
                 ${e.region   ? `<span class="sc-attr-badge">${region}</span>`   : ''}
                 ${e.location ? `<span class="sc-attr-badge">${location}</span>` : ''}
-                <span class="sc-load-badge" data-load-empid="${empId}">SCR Lst 7 dys ${recentLoad}</span>
               </div>
             </div>
             <div class="sc-card-right">
-              <span class="sc-avail-pill ${avail}" title="${avail}">
-                <span class="sc-avail-dot ${avail}"></span>${availLabel}
-              </span>
               <div class="sc-card-btn-row">
                 <button class="sc-viewcal-btn"
                   data-empid="${empId}"
@@ -8720,7 +8778,8 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                   data-vertical="${verticalAtr}"
                   data-location="${locationAtr}"
                   title="${escAttr(calTitle)}">📅 View Cal</button>
-                <button class="${mode === 'amo' ? 'sc-amo-staff-btn' : 'sc-staff-btn'}"
+                <button class="${cardMode === 'amo' ? 'sc-amo-staff-btn' : 'sc-staff-btn'}"
+                  data-staffmode="${escAttr(cardMode)}"
                   data-empid="${empId}"
                   data-empname="${employeeAtr}"
                   title="Staff ${employeeAtr}">✔ Staff</button>
@@ -8728,7 +8787,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
             </div>
           </div>
           <div class="sc-card-body">
-            ${e.availNotes ? `<div class="sc-card-avail-notes">${escHtml(e.availNotes)}${e.availRes ? `<div class="sc-card-avail-res">${escHtml(e.availRes)}</div>` : ''}</div>` : ''}
             ${skillTags    ? `<div class="sc-card-skills">${skillTags}</div>` : ''}
             <div class="sc-card-footer">
               <div class="sc-rank-inline">
@@ -8774,7 +8832,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     if (prevBtn) prevBtn.addEventListener('click', () => renderResults(employees, hasIndustry, empName, containerId, mode, page - 1));
     if (nextBtn) nextBtn.addEventListener('click', () => renderResults(employees, hasIndustry, empName, containerId, mode, page + 1));
     scheduleResultEmailRefresh(employees, containerId);
-    scheduleRecentLoadRefresh(pageEmployees, containerId);
 
     // Wire per-card View Cal buttons (single consultant)
     area.querySelectorAll('.sc-viewcal-btn').forEach(btn => {
@@ -8789,18 +8846,18 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       });
     });
 
-    // Wire Staff buttons (direct uses sc-staff-btn, amo uses sc-amo-staff-btn)
-    const staffSelector = mode === 'amo' ? '.sc-amo-staff-btn' : '.sc-staff-btn';
-    area.querySelectorAll(staffSelector).forEach(btn => {
+    // Wire Staff buttons. Combined cards carry their own Direct/AMO mode.
+    area.querySelectorAll('.sc-staff-btn, .sc-amo-staff-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const scId   = btn.dataset.empid;
         const scName = btn.dataset.empname;
-        if (mode === 'amo') {
-          syncProductsToForm('sc-amo-products');
-          staffSCWithDeliverable(scId, scName, empName, _hasLeadOnOpp);
+        const cardMode = btn.dataset.staffmode || mode;
+        const sourceIds = getStaffingSourceIds(containerId, cardMode);
+        syncProductsToForm(sourceIds.productSelectId);
+        if (cardMode === 'amo') {
+          staffSCWithDeliverable(scId, scName, empName, _hasLeadOnOpp, sourceIds);
         } else {
-          syncProductsToForm('sc-products');
-          staffSC(scId, scName, empName, _hasLeadOnOpp);
+          staffSC(scId, scName, empName, _hasLeadOnOpp, sourceIds);
         }
       });
     });
@@ -8815,14 +8872,13 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       area.innerHTML = '<div class="sc-status">No team members found.</div>';
       return;
     }
-    if (team.some(e => e.recentLoad == null)) enrichRecentScrLoad(team);
-
     const cards = team.map(e => {
       const empId       = escAttr(e.employeeId);
       const empHrefId   = encodeURIComponent(String(e.employeeId || ''));
       const employee    = escHtml(e.employee);
       const employeeAtr = escAttr(e.employee);
       const email       = escAttr(e.email);
+      const manager     = escHtml(e.manager);
       const managerAtr  = escAttr(e.manager);
       const vertical    = escHtml(e.vertical);
       const verticalAtr = escAttr(e.vertical);
@@ -8834,8 +8890,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       const nameTone    = scNameToneClass(e);
       const cardTone    = isAmoMember ? ' sc-team-card-amo' : '';
       const staffBtnClass = isAmoMember ? 'sc-amo-staff-btn' : 'sc-staff-btn';
-      const avail       = availabilityClass(e.availability);
-      const availLabel  = availabilityLabel(e.availability);
       return `
         <div class="sc-result-card${cardTone}">
           <div class="sc-card-head">
@@ -8853,18 +8907,15 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                  href="/app/common/custom/custrecordentry.nl?rectype=1572&id=${empHrefId}"
                  target="_blank"
                  title="${employeeAtr}">${employee}</a>
+              ${e.manager ? `<div class="sc-card-mgr">${manager}</div>` : ''}
               <div class="sc-card-badges">
                 ${e.vertical ? `<span class="sc-attr-badge">${vertical}</span>` : ''}
                 ${e.tier     ? `<span class="sc-attr-badge">${tier}</span>`     : ''}
                 ${e.region   ? `<span class="sc-attr-badge">${region}</span>`   : ''}
                 ${e.location ? `<span class="sc-attr-badge">${location}</span>` : ''}
-                <span class="sc-load-badge">SCR Lst 7 dys ${Number(e.recentLoad || 0)}</span>
               </div>
             </div>
             <div class="sc-card-right">
-              <span class="sc-avail-pill ${avail}">
-                <span class="sc-avail-dot ${avail}"></span>${availLabel}
-              </span>
               <div class="sc-card-btn-row">
                 <button class="sc-viewcal-btn"
                   data-email="${email}"
@@ -8880,11 +8931,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               </div>
             </div>
           </div>
-          ${e.availNotes ? `
-          <div class="sc-card-body">
-            <div class="sc-card-avail-notes">${escHtml(e.availNotes)}${e.availRes
-              ? `<div class="sc-card-avail-res">${escHtml(e.availRes)}</div>` : ''}</div>
-          </div>` : ''}
         </div>`;
     }).join('');
 
@@ -9317,6 +9363,94 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     }, 60);
   }
 
+  function runCombinedSearch(empRec, empIds, empName) {
+    const btn  = document.getElementById('sc-combined-search-btn');
+    const area = document.getElementById('sc-combined-results-area');
+
+    const selectedProducts = Array.from(document.getElementById('sc-combined-product-skills').selectedOptions)
+      .map(o => parseInt(o.value, 10)).slice(0, 4);
+    const industryId = document.getElementById('sc-combined-industry').value || null;
+    const additionalSkillOpts = getAdditionalSkillOptions('sc-combined');
+    if (selectedProducts.length === 0 && !industryId && !hasAdditionalSkillFilters(additionalSkillOpts)) {
+      area.innerHTML = '<div class="sc-error">Select at least one product skill, industry, or additional SC skill before searching.</div>';
+      return;
+    }
+
+    const skillIds = getSelectedProductSkillIds('sc-combined-product-skills');
+    if (selectedProducts.length > 0 && skillIds.length === 0) {
+      area.innerHTML = '<div class="sc-error">Selected product skill(s) have no skill matrix entries.</div>';
+      return;
+    }
+
+    const filterOpts = {
+      myTeam: false,
+      limitToMyTeam: getCheckboxValue('sc-combined-filter-myteam'),
+      vertical: getMultiSelectValues('sc-combined-filter-vertical'),
+      verticalText: getMultiSelectTexts('sc-combined-filter-vertical'),
+      tier: [],
+      region: getMultiSelectValues('sc-combined-filter-region'),
+      regionText: getMultiSelectTexts('sc-combined-filter-region'),
+      limitToCustomerState: getCheckboxValue('sc-combined-filter-same-state'),
+      customerStateTarget: getCustomerStateProvinceTarget(),
+    };
+    if (!assertCustomerStateFilterReady(filterOpts, area)) return;
+    const sortKey = document.getElementById('sc-combined-filter-sort').value || 'isa';
+    const matchOperator = document.getElementById('sc-combined-filter-operator').value || 'any';
+
+    btn.disabled = true;
+    area.innerHTML = '<div class="sc-status loading">Searching Direct and AMO SCs — this may take a few seconds…</div>';
+
+    setTimeout(async () => {
+      try {
+        await yieldToBrowser();
+        const allSkillRows = skillIds.length ? getSkillData(skillIds, empRec, empIds, filterOpts) : [];
+        await yieldToBrowser();
+        const allIndustryRows = industryId ? getIndustryData(industryId, empRec, empIds, filterOpts) : [];
+        await yieldToBrowser();
+
+        let directRows = consolidateData(
+          filterByStaffingMode(allSkillRows, 'direct').filter(r => !isExcludedVertical(r.vertical)),
+          filterByStaffingMode(allIndustryRows, 'direct').filter(r => !isExcludedVertical(r.vertical)),
+          sortKey,
+          skillIds.length,
+          matchOperator
+        );
+        let amoRows = consolidateData(
+          filterByStaffingMode(allSkillRows, 'amo').filter(r => !isExcludedVertical(r.vertical)),
+          filterByStaffingMode(allIndustryRows, 'amo').filter(r => !isExcludedVertical(r.vertical)),
+          sortKey,
+          skillIds.length,
+          matchOperator
+        );
+
+        if (!directRows.length && hasAdditionalSkillFilters(additionalSkillOpts) && !skillIds.length && !industryId) {
+          directRows = getRosterCandidates(empRec, empIds, filterOpts, 'direct');
+        }
+        if (!amoRows.length && hasAdditionalSkillFilters(additionalSkillOpts) && !skillIds.length && !industryId) {
+          amoRows = getRosterCandidates(empRec, empIds, filterOpts, 'amo');
+        }
+
+        await yieldToBrowser();
+        directRows = applyAdditionalSkillFilters(filterByStaffingMode(directRows, 'direct'), additionalSkillOpts)
+          .filter(e => !isExcludedVertical(e.vertical));
+        amoRows = applyAdditionalSkillFilters(filterByStaffingMode(amoRows, 'amo'), additionalSkillOpts)
+          .filter(e => !isExcludedVertical(e.vertical));
+        let combined = mergeCombinedResults(directRows, amoRows, sortKey);
+        combined = applySalesVerticalFilter(combined, filterOpts);
+        combined = applyRegionFilter(combined, filterOpts);
+        combined = applyCustomerStateFilter(combined, filterOpts);
+        combined = applyMyTeamLimit(combined, filterOpts, empIds);
+
+        renderResults(combined, Boolean(industryId && allIndustryRows.length), empName, 'sc-combined-results-area', 'combined');
+      } catch (err) {
+        console.error('[Staffing Helper] Combined Search error:', err);
+        area.innerHTML = `<div class="sc-error">Search error: ${escHtml(err.message || err)}</div>`;
+      } finally {
+        btn.disabled = false;
+      }
+    }, 60);
+  }
+
   /* ────────────────────────────────────────────────────────────────
      MODULE DETECTION
      Scans Request Details text against known module keywords and
@@ -9473,10 +9607,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   function updateRequestInsights(tabId) {
     try {
       const isAmo      = tabId === 'amo';
-      const cardId     = isAmo ? 'sc-amo-insights-card' : 'sc-insights-card';
-      const chipsId    = isAmo ? 'sc-amo-insights-chips' : 'sc-insights-chips';
-      const selectId   = isAmo ? 'sc-amo-products'       : 'sc-products';
-      const skillSelectId = isAmo ? 'sc-amo-product-skills' : 'sc-product-skills';
+      const isCombined = tabId === 'combined';
+      const cardId     = isCombined ? 'sc-combined-insights-card' : (isAmo ? 'sc-amo-insights-card' : 'sc-insights-card');
+      const chipsId    = isCombined ? 'sc-combined-insights-chips' : (isAmo ? 'sc-amo-insights-chips' : 'sc-insights-chips');
+      const selectId   = isCombined ? 'sc-combined-products' : (isAmo ? 'sc-amo-products' : 'sc-products');
+      const skillSelectId = isCombined ? 'sc-combined-product-skills' : (isAmo ? 'sc-amo-product-skills' : 'sc-product-skills');
 
       const card  = document.getElementById(cardId);
       const chips = document.getElementById(chipsId);
@@ -9566,16 +9701,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
   function escAttr(str) {
     return escHtml(str).replace(/'/g, '&#39;');
-  }
-
-  function availabilityClass(raw) {
-    const v = String(raw || '').trim().toLowerCase();
-    return /^(green|yellow|red)$/.test(v) ? v : 'unknown';
-  }
-
-  function availabilityLabel(raw) {
-    const v = availabilityClass(raw);
-    return v.charAt(0).toUpperCase() + v.slice(1);
   }
 
   /**
@@ -9958,7 +10083,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       }
 
       if (!result.enriched) enrichMembersWithRosterData(members);
-      enrichRecentScrLoad(members);
       label.textContent = members[0].employee || requestedSCName;
       wrapper.style.display = 'block';
 
@@ -9969,6 +10093,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         const employee    = escHtml(e.employee);
         const employeeAtr = escAttr(e.employee);
         const email       = escAttr(e.email);
+        const manager     = escHtml(e.manager);
         const managerAtr  = escAttr(e.manager);
         const vertical    = escHtml(e.vertical);
         const verticalAtr = escAttr(e.vertical);
@@ -9977,8 +10102,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         const location    = escHtml(e.location);
         const locationAtr = escAttr(e.location);
         const nameTone    = scNameToneClass(e);
-        const avail       = availabilityClass(e.availability);
-        const availLabel  = availabilityLabel(e.availability);
         return `
           <div class="sc-result-card">
             <div class="sc-card-head">
@@ -9996,18 +10119,15 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                    href="/app/common/custom/custrecordentry.nl?rectype=1572&id=${empHrefId}"
                    target="_blank"
                    title="${employeeAtr}">${employee}</a>
+                ${e.manager ? `<div class="sc-card-mgr">${manager}</div>` : ''}
                 <div class="sc-card-badges">
                   ${e.vertical ? `<span class="sc-attr-badge">${vertical}</span>` : ''}
                   ${e.tier     ? `<span class="sc-attr-badge">${tier}</span>`     : ''}
                   ${e.region   ? `<span class="sc-attr-badge">${region}</span>`   : ''}
                   ${e.location ? `<span class="sc-attr-badge">${location}</span>` : ''}
-                  <span class="sc-load-badge">SCR Lst 7 dys ${Number(e.recentLoad || 0)}</span>
                 </div>
               </div>
               <div class="sc-card-right">
-                <span class="sc-avail-pill ${avail}">
-                  <span class="sc-avail-dot ${avail}"></span>${availLabel}
-                </span>
                 <div class="sc-card-btn-row">
                   <button class="sc-viewcal-btn"
                     data-email="${email}"
@@ -10023,11 +10143,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                 </div>
               </div>
             </div>
-            ${e.availNotes ? `
-            <div class="sc-card-body">
-              <div class="sc-card-avail-notes">${escHtml(e.availNotes)}${e.availRes
-                ? `<div class="sc-card-avail-res">${escHtml(e.availRes)}</div>` : ''}</div>
-            </div>` : ''}
           </div>`;
       }).join('');
 
@@ -10095,7 +10210,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         }
 
         if (!result.enriched) enrichMembersWithRosterData(members);
-        enrichRecentScrLoad(members);
 
         const displayMembers = members.slice(0, QUICK_ASSIGN_RESULT_LIMIT);
         const cards = displayMembers.map(function (e) {
@@ -10104,6 +10218,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           const employee    = escHtml(e.employee);
           const employeeAtr = escAttr(e.employee);
           const email       = escAttr(e.email);
+          const manager     = escHtml(e.manager);
           const managerAtr  = escAttr(e.manager);
           const vertical    = escHtml(e.vertical);
           const verticalAtr = escAttr(e.vertical);
@@ -10112,8 +10227,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           const location    = escHtml(e.location);
           const locationAtr = escAttr(e.location);
           const nameTone    = scNameToneClass(e);
-          const avail       = availabilityClass(e.availability);
-          const availLabel  = availabilityLabel(e.availability);
           return `
             <div class="sc-result-card">
               <div class="sc-card-head">
@@ -10131,18 +10244,15 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                      href="/app/common/custom/custrecordentry.nl?rectype=1572&id=${empHrefId}"
                      target="_blank"
                      title="${employeeAtr}">${employee}</a>
+                  ${e.manager ? `<div class="sc-card-mgr">${manager}</div>` : ''}
                   <div class="sc-card-badges">
                     ${e.vertical ? `<span class="sc-attr-badge">${vertical}</span>` : ''}
                     ${e.tier     ? `<span class="sc-attr-badge">${tier}</span>`     : ''}
                     ${e.region   ? `<span class="sc-attr-badge">${region}</span>`   : ''}
                     ${e.location ? `<span class="sc-attr-badge">${location}</span>` : ''}
-                    <span class="sc-load-badge">SCR Lst 7 dys ${Number(e.recentLoad || 0)}</span>
                   </div>
                 </div>
                 <div class="sc-card-right">
-                  <span class="sc-avail-pill ${avail}">
-                    <span class="sc-avail-dot ${avail}"></span>${availLabel}
-                  </span>
                   <div class="sc-card-btn-row">
                     <button class="sc-viewcal-btn"
                       data-email="${email}"
@@ -10158,11 +10268,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                   </div>
                 </div>
               </div>
-              ${e.availNotes ? `
-              <div class="sc-card-body">
-                <div class="sc-card-avail-notes">${escHtml(e.availNotes)}${e.availRes
-                  ? `<div class="sc-card-avail-res">${escHtml(e.availRes)}</div>` : ''}</div>
-              </div>` : ''}
             </div>`;
         }).join('');
 
@@ -13065,6 +13170,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
     // Calendar integration toggle
     applyCalIntegrationUI();
+    applyInlineCalendarDrawerUI();
     applyGptAssistUI();
     const calToggle = document.getElementById('sc-cal-integration-toggle');
     if (calToggle) {
@@ -13073,11 +13179,34 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         applyCalIntegrationUI();
       });
     }
+    const inlineDrawerToggle = document.getElementById('sc-inline-drawer-toggle');
+    if (inlineDrawerToggle) {
+      inlineDrawerToggle.addEventListener('change', function () {
+        saveLocalConfig({ inlineCalendarDrawerEnabled: this.checked });
+        applyInlineCalendarDrawerUI();
+        if (this.checked && !isInlineCalendarDrawerInstalled()) {
+          showToast('Inline drawer helper is not active. Install or enable the SCOUT 2.0 drawer helper.', 'info', 9000);
+        }
+      });
+    }
+    const inlineDrawerInstallBtn = document.getElementById('sc-inline-drawer-install-btn');
+    if (inlineDrawerInstallBtn) {
+      inlineDrawerInstallBtn.addEventListener('click', function () {
+        gmOpenUrl(INLINE_DRAWER_INSTALL_URL);
+      });
+    }
     const gptToggle = document.getElementById('sc-gpt-assist-toggle');
     if (gptToggle) {
       gptToggle.addEventListener('change', function () {
         saveLocalConfig({ gptAssistEnabled: this.checked });
         applyGptAssistUI();
+      });
+    }
+    const combineTabsToggle = document.getElementById('sc-combine-tabs-toggle');
+    if (combineTabsToggle) {
+      combineTabsToggle.addEventListener('change', function () {
+        saveLocalConfig({ combineStaffingTabsEnabled: this.checked });
+        applyCombinedStaffingTabsUI();
       });
     }
     const debugToggle = document.getElementById('sc-debug-mode-toggle');
@@ -13172,6 +13301,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     wireCollapsibleCard('sc-amo-product-skills-card', 'sc-amo-product-skills-toggle');
     wireCollapsibleCard('sc-amo-industry-card', 'sc-amo-industry-toggle');
     wireCollapsibleCard('sc-amo-filters-card', 'sc-amo-filters-toggle');
+    wireCollapsibleCard('sc-combined-additional-skills-card', 'sc-combined-additional-skills-toggle');
+    wireCollapsibleCard('sc-combined-products-card', 'sc-combined-products-toggle');
+    wireCollapsibleCard('sc-combined-product-skills-card', 'sc-combined-product-skills-toggle');
+    wireCollapsibleCard('sc-combined-industry-card', 'sc-combined-industry-toggle');
+    wireCollapsibleCard('sc-combined-filters-card', 'sc-combined-filters-toggle');
 
     // Quick SC Lookup
     (function () {
@@ -13252,11 +13386,12 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         tabBtn.classList.add('active');
         document.getElementById('sc-direct-pane').classList.toggle('active', target === 'direct');
         document.getElementById('sc-amo-pane').classList.toggle('active', target === 'amo');
-        if (target === 'amo') {
+        document.getElementById('sc-combined-pane').classList.toggle('active', target === 'combined');
+        if (target === 'amo' || target === 'combined') {
           refreshAmoDeliverableOptions();
           refreshAmoDeliverableOptionsAsync();
           applyAmoDeliverableSuggestionFromRequest();
-          updateRequestInsights('amo');
+          updateRequestInsights(target);
         }
       });
     });
@@ -13290,6 +13425,38 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       syncProductsToForm('sc-amo-products');
       runAmoSearch(empRec, empIds, empName);
     });
+
+    const combinedDeliverable = document.getElementById('sc-combined-amo-deliverable');
+    if (combinedDeliverable) {
+      combinedDeliverable.addEventListener('change', function () {
+        if (this.value) syncDeliverableToForm(this.value);
+      });
+    }
+    document.getElementById('sc-combined-product-filter').addEventListener('input', function () {
+      filterSelectOptionsByQuery('sc-combined-products', this.value);
+    });
+    document.getElementById('sc-combined-product-skill-filter').addEventListener('input', function () {
+      filterSelectOptionsByQuery('sc-combined-product-skills', this.value);
+    });
+    document.getElementById('sc-combined-product-skill-filter').addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Enter') return;
+      ev.preventDefault();
+      addProductSkillFromFilter('sc-combined-product-skill-filter', 'sc-combined-product-skills', 'sc-combined-products');
+    });
+    document.getElementById('sc-combined-products').addEventListener('change', function () {
+      enforceSelectLimit(this, 4);
+      syncProductsToMappedProductSkills('sc-combined-products', 'sc-combined-product-skills');
+    });
+    document.getElementById('sc-combined-product-skills').addEventListener('change', function () {
+      enforceSelectLimit(this, 4);
+      syncMappedProductSkillsToProducts('sc-combined-products', 'sc-combined-product-skills');
+    });
+    document.getElementById('sc-combined-search-btn').addEventListener('click', () => {
+      syncProductsToForm('sc-combined-products');
+      runCombinedSearch(empRec, empIds, empName);
+    });
+
+    applyCombinedStaffingTabsUI();
 
     if (getPanelOpenState()) {
       setTimeout(openScoutPanel, 350);
