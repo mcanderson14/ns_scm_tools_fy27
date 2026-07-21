@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.2.4
+// @version      27.2.5
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.2.4
+   SCOUT — SC Operations Utility Tool  27.2.5
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.2.4';
+  const SCRIPT_VERSION = '27.2.5';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -127,7 +127,7 @@
 	    if (typeof cfg.calendarIntegrationEnabled !== 'boolean' && legacyCalendar !== null) {
 	      merged.calendarIntegrationEnabled = legacyCalendar === 'true';
 	    }
-	    if (typeof cfg.skillsSearchEnabled !== 'boolean' && legacySkillsSearch !== null) {
+	    if (legacySkillsSearch !== null) {
 	      merged.skillsSearchEnabled = legacySkillsSearch === 'true';
 	    }
     merged.inlineCalendarDrawerEnabled = Boolean(merged.inlineCalendarDrawerEnabled);
@@ -13499,7 +13499,9 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 	        saveLocalConfig({ skillsSearchEnabled: this.checked });
 	        applySkillsSearchUI();
 	        if (this.checked) {
-	          showToast('SC Skills Search will fully reload on the next SCOUT page load.', 'info', 7000);
+	          showToast('SC Skills Search is enabled. Product, industry, and skills lists will load on the next NetSuite page refresh.', 'info', 7000);
+	        } else {
+	          showToast('SCOUT Zero is enabled. Product, industry, and skills search will stay off after reload.', 'info', 7000);
 	        }
 	      });
 	    }
