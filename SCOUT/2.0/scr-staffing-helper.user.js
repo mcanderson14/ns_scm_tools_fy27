@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.2.5
+// @version      27.2.6
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.2.5
+   SCOUT — SC Operations Utility Tool  27.2.6
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.2.5';
+  const SCRIPT_VERSION = '27.2.6';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -7922,10 +7922,18 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 	  }
 
 	  function applySkillsSearchUI() {
+	    const enabled = getSkillsSearchEnabled();
+	    document.documentElement.classList.toggle('sc-skills-search-off', !enabled);
+	    if (document.body) document.body.classList.toggle('sc-skills-search-off', !enabled);
 	    const panel = document.getElementById('sc-skills-panel');
-	    if (panel) panel.classList.toggle('sc-skills-search-off', !getSkillsSearchEnabled());
+	    if (panel) {
+	      panel.classList.toggle('sc-skills-search-off', !enabled);
+	      panel.dataset.skillsSearchEnabled = enabled ? 'T' : 'F';
+	    }
+	    document.querySelectorAll('.sc-skill-search-only').forEach(function (el) { el.hidden = !enabled; });
+	    document.querySelectorAll('.sc-zero-only').forEach(function (el) { el.hidden = enabled; });
 	    const cb = document.getElementById('sc-skills-search-toggle');
-	    if (cb) cb.checked = getSkillsSearchEnabled();
+	    if (cb) cb.checked = enabled;
 	  }
 
 		  function populateSettingsForm() {
@@ -13286,6 +13294,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
     const panel = document.createElement('div');
     panel.id = 'sc-skills-panel';
+    const skillsSearchEnabled = getSkillsSearchEnabled();
+    panel.classList.toggle('sc-skills-search-off', !skillsSearchEnabled);
+    panel.dataset.skillsSearchEnabled = skillsSearchEnabled ? 'T' : 'F';
+    document.documentElement.classList.toggle('sc-skills-search-off', !skillsSearchEnabled);
+    if (document.body) document.body.classList.toggle('sc-skills-search-off', !skillsSearchEnabled);
     panel.innerHTML = buildPanelHTML();
     document.body.appendChild(panel);
     wireScoutUpdateBanner();
