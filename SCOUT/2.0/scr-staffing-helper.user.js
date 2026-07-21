@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.2.2
+// @version      27.2.3
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.2.2
+   SCOUT — SC Operations Utility Tool  27.2.3
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.2.2';
+  const SCRIPT_VERSION = '27.2.3';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -104,10 +104,11 @@
       testingUpdateUrl: '',
       commentInitials: '',
       extraTeamMembers: '',
-      extraTeamManagers: '',
-      extraAmoDeliverables: '',
-      feedbackWebhookUrl: '',
-    };
+	      extraTeamManagers: '',
+	      extraAmoDeliverables: '',
+	      feedbackWebhookUrl: '',
+	      requestDetailTemplateOverrides: {},
+	    };
     let cfg = {};
     try {
       cfg = JSON.parse(localStorage.getItem(LOCAL_CONFIG_KEY) || '{}') || {};
@@ -133,19 +134,21 @@
     merged.testingUpdateUrl = String(merged.testingUpdateUrl || '').trim();
     merged.commentInitials = normalizeCommentInitials(merged.commentInitials);
     merged.extraTeamMembers = String(merged.extraTeamMembers || '');
-    merged.extraTeamManagers = String(merged.extraTeamManagers || '');
-    merged.extraAmoDeliverables = String(merged.extraAmoDeliverables || '');
-    merged.feedbackWebhookUrl = String(merged.feedbackWebhookUrl || '').trim();
-    return merged;
-  }
+	    merged.extraTeamManagers = String(merged.extraTeamManagers || '');
+	    merged.extraAmoDeliverables = String(merged.extraAmoDeliverables || '');
+	    merged.feedbackWebhookUrl = String(merged.feedbackWebhookUrl || '').trim();
+	    merged.requestDetailTemplateOverrides = sanitizeRequestDetailTemplateOverrides(merged.requestDetailTemplateOverrides);
+	    return merged;
+	  }
 
   function saveLocalConfig(patch) {
     const cfg = { ...getLocalConfig(), ...(patch || {}) };
     cfg.extraTeamMembers = String(cfg.extraTeamMembers || '');
     cfg.extraTeamManagers = String(cfg.extraTeamManagers || '');
-    cfg.extraAmoDeliverables = String(cfg.extraAmoDeliverables || '');
-    cfg.feedbackWebhookUrl = String(cfg.feedbackWebhookUrl || '').trim();
-    cfg.calendarIntegrationEnabled = Boolean(cfg.calendarIntegrationEnabled);
+	    cfg.extraAmoDeliverables = String(cfg.extraAmoDeliverables || '');
+	    cfg.feedbackWebhookUrl = String(cfg.feedbackWebhookUrl || '').trim();
+	    cfg.requestDetailTemplateOverrides = sanitizeRequestDetailTemplateOverrides(cfg.requestDetailTemplateOverrides);
+	    cfg.calendarIntegrationEnabled = Boolean(cfg.calendarIntegrationEnabled);
     cfg.inlineCalendarDrawerEnabled = Boolean(cfg.inlineCalendarDrawerEnabled);
     cfg.gptAssistEnabled = Boolean(cfg.gptAssistEnabled);
     cfg.debugModeEnabled = Boolean(cfg.debugModeEnabled);
@@ -311,9 +314,116 @@ Good luck with ${sc}!
 `,
   };
 
-  const AMO_DELIVERABLE_NO_TEMPLATE_OPTIONS = [
-    'Business Discussion',
-  ];
+	  const AMO_DELIVERABLE_NO_TEMPLATE_OPTIONS = [
+	    'Business Discussion',
+	  ];
+
+	  const REQUEST_DETAIL_TEMPLATE_KEYS = {
+	    directStaffing: 'directStaffing',
+	    amoFallback: 'amoFallback',
+	    cancelRequest: 'cancelRequest',
+	    additionalDetailsLabel: 'additionalDetailsLabel',
+	  };
+
+	  function makeAmoRequestDetailTemplateKey(deliverable) {
+	    return `amo:${normalizeAmoDeliverableName(deliverable)}`;
+	  }
+
+	  function sanitizeRequestDetailTemplateOverrides(value) {
+	    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+	    const clean = {};
+	    Object.keys(value).forEach(key => {
+	      const text = value[key];
+	      if (typeof text === 'string') clean[key] = text;
+	    });
+	    return clean;
+	  }
+
+	  function getRequestDetailTemplateOptions() {
+	    const amoTemplates = Object.keys(AMO_DELIVERABLE_TEMPLATES)
+	      .map(name => ({ key: makeAmoRequestDetailTemplateKey(name), label: `AMO - ${name}` }));
+	    return [
+	      { key: REQUEST_DETAIL_TEMPLATE_KEYS.directStaffing, label: 'Direct Staffing' },
+	      ...amoTemplates,
+	      { key: REQUEST_DETAIL_TEMPLATE_KEYS.amoFallback, label: 'AMO - No Template / Fallback' },
+	      { key: REQUEST_DETAIL_TEMPLATE_KEYS.cancelRequest, label: 'Cancel Request' },
+	      { key: REQUEST_DETAIL_TEMPLATE_KEYS.additionalDetailsLabel, label: 'Additional Request Details Label' },
+	    ];
+	  }
+
+	  function getRequestDetailTemplateLabel(key) {
+	    const option = getRequestDetailTemplateOptions().find(item => item.key === key);
+	    return option ? option.label : key;
+	  }
+
+	  function getDefaultRequestDetailTemplateText(key) {
+	    if (key === REQUEST_DETAIL_TEMPLATE_KEYS.directStaffing || key === REQUEST_DETAIL_TEMPLATE_KEYS.amoFallback) {
+	      return `{scName} has been staffed, please schedule upcoming strategy meeting with the SC.\n`;
+	    }
+	    if (key === REQUEST_DETAIL_TEMPLATE_KEYS.cancelRequest) {
+	      return `SC Request cancelled by SC Manager ({managerName}). \nPlease create a new request if needed.\n---\n\n`;
+	    }
+	    if (key === REQUEST_DETAIL_TEMPLATE_KEYS.additionalDetailsLabel) {
+	      return 'Additional staffing details:';
+	    }
+	    if (String(key || '').startsWith('amo:')) {
+	      const deliverable = normalizeAmoDeliverableName(String(key).slice(4));
+	      const tmplFn = AMO_DELIVERABLE_TEMPLATES[deliverable];
+	      if (tmplFn) return tmplFn('{scName}', '{managerName}');
+	    }
+	    return '';
+	  }
+
+	  function getRequestDetailTemplateOverrides() {
+	    return getLocalConfig().requestDetailTemplateOverrides || {};
+	  }
+
+	  function hasRequestDetailTemplateOverride(key) {
+	    return Object.prototype.hasOwnProperty.call(getRequestDetailTemplateOverrides(), key);
+	  }
+
+	  function getRequestDetailTemplateText(key) {
+	    const overrides = getRequestDetailTemplateOverrides();
+	    return Object.prototype.hasOwnProperty.call(overrides, key)
+	      ? String(overrides[key] || '')
+	      : getDefaultRequestDetailTemplateText(key);
+	  }
+
+	  function renderRequestDetailTemplateText(template, vars) {
+	    const values = {
+	      scName: '',
+	      managerName: '',
+	      dateShort: todayString(),
+	      dateLong: todayFullString(),
+	      initials: '',
+	      deliverable: '',
+	      ...vars,
+	    };
+	    return String(template || '').replace(/\{(scName|managerName|dateShort|dateLong|initials|deliverable)\}/g, (match, key) => {
+	      return values[key] == null ? '' : String(values[key]);
+	    });
+	  }
+
+	  function renderConfiguredRequestDetailTemplate(key, vars) {
+	    return renderRequestDetailTemplateText(getRequestDetailTemplateText(key), vars);
+	  }
+
+	  function saveRequestDetailTemplateOverride(key, text) {
+	    const overrides = { ...getRequestDetailTemplateOverrides(), [key]: String(text || '') };
+	    saveLocalConfig({ requestDetailTemplateOverrides: overrides });
+	  }
+
+	  function resetRequestDetailTemplateOverride(key) {
+	    const overrides = { ...getRequestDetailTemplateOverrides() };
+	    delete overrides[key];
+	    saveLocalConfig({ requestDetailTemplateOverrides: overrides });
+	  }
+
+	  function buildRequestDetailTemplateOptionMarkup() {
+	    return getRequestDetailTemplateOptions()
+	      .map(item => `<option value="${escAttr(item.key)}">${escHtml(item.label)}</option>`)
+	      .join('');
+	  }
 
   let _amoDeliverableRemoteOptions = [];
   let _amoDeliverableFetchStarted = false;
@@ -4386,18 +4496,35 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               Adds each manager's active NOAM M5M1 team to <strong>My Team</strong>. Saved locally and preserved through upgrades.
             </div>
           </div>
-          <div class="sc-field" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
-            <label class="sc-label">Additional AMO Deliverables</label>
-            <textarea id="sc-extra-amo-deliverables-input" class="sc-settings-textarea"
-              placeholder="One per line: deliverable name">${escHtml(getExtraAmoDeliverablesText())}</textarea>
-            <div class="sc-field-hint">
-              Optional no-template deliverables to show if NetSuite does not expose the full AMO deliverable list.
-            </div>
-          </div>
-          <div class="sc-settings-save-row">
-            <button class="sc-save-btn" id="sc-save-dashboard-url">Save Settings</button>
-            <span class="sc-save-confirm" id="sc-save-confirm">✔ Saved!</span>
-          </div>
+	          <div class="sc-field" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
+	            <label class="sc-label">Additional AMO Deliverables</label>
+	            <textarea id="sc-extra-amo-deliverables-input" class="sc-settings-textarea"
+	              placeholder="One per line: deliverable name">${escHtml(getExtraAmoDeliverablesText())}</textarea>
+	            <div class="sc-field-hint">
+	              Optional no-template deliverables to show if NetSuite does not expose the full AMO deliverable list.
+	            </div>
+	          </div>
+	          <div class="sc-field" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
+	            <label class="sc-label" for="sc-request-template-select">Additional Customizations</label>
+	            <select id="sc-request-template-select">${buildRequestDetailTemplateOptionMarkup()}</select>
+	            <textarea id="sc-request-template-editor" class="sc-settings-textarea" style="min-height:160px;margin-top:8px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
+	              placeholder="Customize the text SCOUT inserts into Request Details"></textarea>
+	            <div class="sc-field-hint">
+	              Saved locally and preserved through upgrades. Available tokens:
+	              <code>{scName}</code>, <code>{managerName}</code>, <code>{dateShort}</code>, <code>{dateLong}</code>, <code>{initials}</code>, <code>{deliverable}</code>.
+	            </div>
+	            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
+	              <button type="button" class="sc-action-btn" id="sc-request-template-save">Save Template</button>
+	              <button type="button" class="sc-action-btn" id="sc-request-template-reset">Reset Default</button>
+	              <button type="button" class="sc-action-btn secondary" id="sc-request-template-preview-btn">Preview</button>
+	              <span class="sc-save-confirm" id="sc-request-template-status"></span>
+	            </div>
+	            <pre id="sc-request-template-preview" style="display:none;white-space:pre-wrap;margin:8px 0 0;padding:8px;border:1px solid var(--sc-border);border-radius:6px;background:#f8fafc;color:#13212C;font-size:11px;max-height:180px;overflow:auto"></pre>
+	          </div>
+	          <div class="sc-settings-save-row">
+	            <button class="sc-save-btn" id="sc-save-dashboard-url">Save Settings</button>
+	            <span class="sc-save-confirm" id="sc-save-confirm">✔ Saved!</span>
+	          </div>
         </div>
 
         <!-- Staffing Context Card — populated on panel open, stays pinned -->
@@ -5294,10 +5421,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   function setDirectManagerNotes(empName) {
     appendScManagerNotes(buildDirectManagerNotesTemplate(empName), /Staffed Deal\s*\[/i);
   }
-  function buildAdditionalRequestDetailsBlock(details) {
-    const cleaned = String(details || '').trim();
-    return cleaned ? `Additional staffing details:\n${cleaned}\n` : '';
-  }
+	  function buildAdditionalRequestDetailsBlock(details) {
+	    const cleaned = String(details || '').trim();
+	    const label = renderConfiguredRequestDetailTemplate(REQUEST_DETAIL_TEMPLATE_KEYS.additionalDetailsLabel, {}).trim() || 'Additional staffing details:';
+	    return cleaned ? `${label}\n${cleaned}\n` : '';
+	  }
 
   /** Wrap a staffing note with the standard ADDED/end markers (item 3). */
   function wrapStaffingNote(requestDetailsScript, empName, requestDetailsNote) {
@@ -5907,13 +6035,26 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     }
   }
 
-  function buildDefaultStaffingRequestNote(scName) {
-    return `${scName} has been staffed, please schedule upcoming strategy meeting with the SC.\n`;
-  }
+	  function buildDefaultStaffingRequestNote(scName, empName, templateKey) {
+	    return renderConfiguredRequestDetailTemplate(templateKey || REQUEST_DETAIL_TEMPLATE_KEYS.directStaffing, {
+	      scName,
+	      managerName: empName,
+	      initials: getCommentInitials(empName),
+	    });
+	  }
 
-  function applyDirectStaffing(scId, scName, empName, hasLeadOnOpp, notes, productIds, assignAsLead, requestDetailsNote) {
-    assignAsLead = assignAsLead !== false;
-    const requestDetailsBaseScript = buildDefaultStaffingRequestNote(scName);
+	  function buildAmoDeliverableRequestNote(deliverable, scName, empName) {
+	    return renderConfiguredRequestDetailTemplate(makeAmoRequestDetailTemplateKey(deliverable), {
+	      scName,
+	      managerName: empName,
+	      initials: getCommentInitials(empName),
+	      deliverable,
+	    });
+	  }
+
+	  function applyDirectStaffing(scId, scName, empName, hasLeadOnOpp, notes, productIds, assignAsLead, requestDetailsNote) {
+	    assignAsLead = assignAsLead !== false;
+	    const requestDetailsBaseScript = buildDefaultStaffingRequestNote(scName, empName, REQUEST_DETAIL_TEMPLATE_KEYS.directStaffing);
     const requestDetailsScript = wrapStaffingNote(requestDetailsBaseScript, empName, requestDetailsNote);
     setStatus(2);
     setAssignee(scId);
@@ -5933,8 +6074,10 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const deliverable = hasDeliverableOverride
       ? normalizeAmoDeliverableName(deliverableOverride)
       : getSelectedAmoDeliverable();
-    const tmplFn = deliverable && isValidAmoDeliverableName(deliverable) ? AMO_DELIVERABLE_TEMPLATES[deliverable] : null;
-    const requestDetailsBaseScript = tmplFn ? tmplFn(scName, empName) : buildDefaultStaffingRequestNote(scName);
+	    const tmplFn = deliverable && isValidAmoDeliverableName(deliverable) ? AMO_DELIVERABLE_TEMPLATES[deliverable] : null;
+	    const requestDetailsBaseScript = tmplFn
+	      ? buildAmoDeliverableRequestNote(deliverable, scName, empName)
+	      : buildDefaultStaffingRequestNote(scName, empName, REQUEST_DETAIL_TEMPLATE_KEYS.amoFallback);
     setStatus(2);
     setAssignee(scId);
     setLeadAssigned(assignAsLead);
@@ -5956,9 +6099,12 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     scheduleNetSuiteFieldFocusRelease();
   }
 
-  function applyCancelRequest(empName, notes) {
-    const note = `SC Request cancelled by SC Manager (${empName}). \nPlease create a new request if needed.\n---\n\n`;
-    prependRequestDetails(note);
+	  function applyCancelRequest(empName, notes) {
+	    const note = renderConfiguredRequestDetailTemplate(REQUEST_DETAIL_TEMPLATE_KEYS.cancelRequest, {
+	      managerName: empName,
+	      initials: getCommentInitials(empName),
+	    });
+	    prependRequestDetails(note);
     setStatus(4);
     setScoutHashtag();
     setStaffingPopupNotes(notes);
@@ -7735,7 +7881,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     if (pane && !enabled) pane.classList.remove('active');
   }
 
-  function populateSettingsForm() {
+	  function populateSettingsForm() {
     const calToggle = document.getElementById('sc-cal-integration-toggle');
     const inlineDrawerToggle = document.getElementById('sc-inline-drawer-toggle');
     const gptToggle = document.getElementById('sc-gpt-assist-toggle');
@@ -7762,12 +7908,80 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     if (testingUpdateUrl) testingUpdateUrl.value = getTestingUpdateUrl();
     if (commentInitials) commentInitials.value = getCommentInitialsOverride();
     if (extraTeam) extraTeam.value = getExtraTeamMembersText();
-    if (extraManagers) extraManagers.value = getExtraTeamManagersText();
-    if (extraAmoDeliverables) extraAmoDeliverables.value = getExtraAmoDeliverablesText();
-    if (feedbackWebhook) feedbackWebhook.value = getFeedbackWebhookUrl();
-  }
+	    if (extraManagers) extraManagers.value = getExtraTeamManagersText();
+	    if (extraAmoDeliverables) extraAmoDeliverables.value = getExtraAmoDeliverablesText();
+	    if (feedbackWebhook) feedbackWebhook.value = getFeedbackWebhookUrl();
+	    populateRequestDetailTemplateEditor();
+	  }
 
-  function saveSettingsFromForm() {
+	  function getSelectedRequestDetailTemplateKey() {
+	    const select = document.getElementById('sc-request-template-select');
+	    return select ? select.value : REQUEST_DETAIL_TEMPLATE_KEYS.directStaffing;
+	  }
+
+	  function showRequestDetailTemplateStatus(message) {
+	    const status = document.getElementById('sc-request-template-status');
+	    if (!status) return;
+	    status.textContent = message || '';
+	    status.classList.add('show');
+	    setTimeout(() => status.classList.remove('show'), 2500);
+	  }
+
+	  function populateRequestDetailTemplateEditor() {
+	    const select = document.getElementById('sc-request-template-select');
+	    const editor = document.getElementById('sc-request-template-editor');
+	    const preview = document.getElementById('sc-request-template-preview');
+	    const status = document.getElementById('sc-request-template-status');
+	    if (!select || !editor) return;
+	    const key = getSelectedRequestDetailTemplateKey();
+	    editor.value = getRequestDetailTemplateText(key);
+	    editor.dataset.templateKey = key;
+	    if (preview) {
+	      preview.style.display = 'none';
+	      preview.textContent = '';
+	    }
+	    if (status) {
+	      status.textContent = hasRequestDetailTemplateOverride(key) ? 'Custom template' : 'Default template';
+	      status.classList.toggle('show', true);
+	    }
+	  }
+
+	  function getRequestDetailTemplatePreviewVars(key) {
+	    const deliverable = String(key || '').startsWith('amo:') ? normalizeAmoDeliverableName(String(key).slice(4)) : '';
+	    return {
+	      scName: 'Carroll, Katie',
+	      managerName: 'Anderson, Michael C',
+	      initials: 'MCA',
+	      deliverable,
+	    };
+	  }
+
+	  function previewRequestDetailTemplate() {
+	    const editor = document.getElementById('sc-request-template-editor');
+	    const preview = document.getElementById('sc-request-template-preview');
+	    if (!editor || !preview) return;
+	    const key = getSelectedRequestDetailTemplateKey();
+	    const rendered = renderRequestDetailTemplateText(editor.value, getRequestDetailTemplatePreviewVars(key));
+	    preview.textContent = `${getRequestDetailTemplateLabel(key)} preview:\n\n${rendered}`;
+	    preview.style.display = 'block';
+	  }
+
+	  function saveSelectedRequestDetailTemplateOverride() {
+	    const editor = document.getElementById('sc-request-template-editor');
+	    if (!editor) return;
+	    const key = getSelectedRequestDetailTemplateKey();
+	    saveRequestDetailTemplateOverride(key, editor.value);
+	    showRequestDetailTemplateStatus('Saved template');
+	  }
+
+	  function resetSelectedRequestDetailTemplateOverride() {
+	    const key = getSelectedRequestDetailTemplateKey();
+	    resetRequestDetailTemplateOverride(key);
+	    populateRequestDetailTemplateEditor();
+	    showRequestDetailTemplateStatus('Reset to default');
+	  }
+
+	  function saveSettingsFromForm() {
     const calToggle = document.getElementById('sc-cal-integration-toggle');
     const inlineDrawerToggle = document.getElementById('sc-inline-drawer-toggle');
     const gptToggle = document.getElementById('sc-gpt-assist-toggle');
@@ -13158,17 +13372,34 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     });
 
     // Save local helper settings
-    document.getElementById('sc-save-dashboard-url').addEventListener('click', () => {
-      const confirmEl = document.getElementById('sc-save-confirm');
-      saveSettingsFromForm();
+	    document.getElementById('sc-save-dashboard-url').addEventListener('click', () => {
+	      const confirmEl = document.getElementById('sc-save-confirm');
+	      saveSettingsFromForm();
       myTeamLoaded = true;
       loadMyTeam(empIds, empName);
       loadStaffingContext(empName);
       confirmEl.classList.add('show');
-      setTimeout(() => confirmEl.classList.remove('show'), 2500);
-    });
+	      setTimeout(() => confirmEl.classList.remove('show'), 2500);
+	    });
 
-    // Calendar integration toggle
+	    const requestTemplateSelect = document.getElementById('sc-request-template-select');
+	    if (requestTemplateSelect) {
+	      requestTemplateSelect.addEventListener('change', populateRequestDetailTemplateEditor);
+	    }
+	    const requestTemplateSave = document.getElementById('sc-request-template-save');
+	    if (requestTemplateSave) {
+	      requestTemplateSave.addEventListener('click', saveSelectedRequestDetailTemplateOverride);
+	    }
+	    const requestTemplateReset = document.getElementById('sc-request-template-reset');
+	    if (requestTemplateReset) {
+	      requestTemplateReset.addEventListener('click', resetSelectedRequestDetailTemplateOverride);
+	    }
+	    const requestTemplatePreview = document.getElementById('sc-request-template-preview-btn');
+	    if (requestTemplatePreview) {
+	      requestTemplatePreview.addEventListener('click', previewRequestDetailTemplate);
+	    }
+
+	    // Calendar integration toggle
     applyCalIntegrationUI();
     applyInlineCalendarDrawerUI();
     applyGptAssistUI();
