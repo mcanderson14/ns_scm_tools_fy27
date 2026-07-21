@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.2.3
+// @version      27.2.4
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.2.3
+   SCOUT — SC Operations Utility Tool  27.2.4
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.2.3';
+  const SCRIPT_VERSION = '27.2.4';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -99,9 +99,10 @@
       debugModeEnabled: false,
       previousScHistoryEnabled: false,
       customerLicenseEnabled: false,
-      earlyAdopterUpdatesEnabled: false,
-      combineStaffingTabsEnabled: false,
-      testingUpdateUrl: '',
+	      earlyAdopterUpdatesEnabled: false,
+	      combineStaffingTabsEnabled: false,
+	      skillsSearchEnabled: true,
+	      testingUpdateUrl: '',
       commentInitials: '',
       extraTeamMembers: '',
 	      extraTeamManagers: '',
@@ -129,9 +130,10 @@
     merged.debugModeEnabled = Boolean(merged.debugModeEnabled);
     merged.previousScHistoryEnabled = Boolean(merged.previousScHistoryEnabled);
     merged.customerLicenseEnabled = Boolean(merged.customerLicenseEnabled);
-    merged.earlyAdopterUpdatesEnabled = Boolean(merged.earlyAdopterUpdatesEnabled);
-    merged.combineStaffingTabsEnabled = Boolean(merged.combineStaffingTabsEnabled);
-    merged.testingUpdateUrl = String(merged.testingUpdateUrl || '').trim();
+	    merged.earlyAdopterUpdatesEnabled = Boolean(merged.earlyAdopterUpdatesEnabled);
+	    merged.combineStaffingTabsEnabled = Boolean(merged.combineStaffingTabsEnabled);
+	    merged.skillsSearchEnabled = typeof merged.skillsSearchEnabled === 'boolean' ? merged.skillsSearchEnabled : true;
+	    merged.testingUpdateUrl = String(merged.testingUpdateUrl || '').trim();
     merged.commentInitials = normalizeCommentInitials(merged.commentInitials);
     merged.extraTeamMembers = String(merged.extraTeamMembers || '');
 	    merged.extraTeamManagers = String(merged.extraTeamManagers || '');
@@ -154,9 +156,10 @@
     cfg.debugModeEnabled = Boolean(cfg.debugModeEnabled);
     cfg.previousScHistoryEnabled = Boolean(cfg.previousScHistoryEnabled);
     cfg.customerLicenseEnabled = Boolean(cfg.customerLicenseEnabled);
-    cfg.earlyAdopterUpdatesEnabled = Boolean(cfg.earlyAdopterUpdatesEnabled);
-    cfg.combineStaffingTabsEnabled = Boolean(cfg.combineStaffingTabsEnabled);
-    cfg.testingUpdateUrl = String(cfg.testingUpdateUrl || '').trim();
+	    cfg.earlyAdopterUpdatesEnabled = Boolean(cfg.earlyAdopterUpdatesEnabled);
+	    cfg.combineStaffingTabsEnabled = Boolean(cfg.combineStaffingTabsEnabled);
+	    cfg.skillsSearchEnabled = typeof cfg.skillsSearchEnabled === 'boolean' ? cfg.skillsSearchEnabled : true;
+	    cfg.testingUpdateUrl = String(cfg.testingUpdateUrl || '').trim();
     cfg.commentInitials = normalizeCommentInitials(cfg.commentInitials);
     localStorage.setItem(LOCAL_CONFIG_KEY, JSON.stringify(cfg));
     localStorage.setItem('sc_cal_integration_enabled', cfg.calendarIntegrationEnabled ? 'true' : 'false');
@@ -224,9 +227,12 @@
   function getEarlyAdopterUpdatesEnabled() {
     return Boolean(getLocalConfig().earlyAdopterUpdatesEnabled);
   }
-  function getCombineStaffingTabsEnabled() {
-    return Boolean(getLocalConfig().combineStaffingTabsEnabled);
-  }
+	  function getCombineStaffingTabsEnabled() {
+	    return Boolean(getLocalConfig().combineStaffingTabsEnabled);
+	  }
+	  function getSkillsSearchEnabled() {
+	    return getLocalConfig().skillsSearchEnabled !== false;
+	  }
   function getTestingUpdateUrl() {
     return getLocalConfig().testingUpdateUrl || SCOUT_TESTING_UPDATE_CHECK_URL;
   }
@@ -1735,6 +1741,9 @@ html.sc-resizing #sc-skills-toggle { transition: none !important; }
 .sc-cal-off #sc-open-selected-btn,
 .sc-cal-off .sc-viewall-cal-btn { display: none !important; }
 .sc-gpt-off #sc-gpt-assist-card { display: none !important; }
+.sc-zero-only { display: none; }
+.sc-skills-search-off .sc-skill-search-only { display: none !important; }
+.sc-skills-search-off .sc-zero-only { display: block; }
 .sc-gpt-assist-card {
   margin-bottom: 8px;
   padding: 9px 10px;
@@ -4338,8 +4347,12 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     }
   }
 
-  function buildPanelHTML() {
-    return `
+	  function buildPanelHTML() {
+	    const skillsSearchEnabled = getSkillsSearchEnabled();
+	    const productOptionsMarkup = skillsSearchEnabled ? buildProductOptions() : '';
+	    const productSkillOptionsMarkup = skillsSearchEnabled ? buildProductSkillOptions() : '';
+	    const industryOptionsMarkup = skillsSearchEnabled ? buildIndustryOptions() : '';
+	    return `
       <div id="sc-resize-handle" title="Drag to resize panel"></div>
       <div id="sc-panel-header">
         <div class="sc-header-brand">
@@ -4409,16 +4422,25 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               Shows an <strong>Ask AI Agent</strong> prompt builder that opens ChatGPT with the staffing prompt.
             </div>
           </div>
-          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#222">
-              <input type="checkbox" id="sc-combine-tabs-toggle" style="width:14px;height:14px">
-              <span>Combine Direct and AMO staffing search</span>
-            </label>
+	          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
+	            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#222">
+	              <input type="checkbox" id="sc-combine-tabs-toggle" style="width:14px;height:14px">
+	              <span>Combine Direct and AMO staffing search</span>
+	            </label>
             <div style="font-size:10px;color:var(--sc-text-muted);margin-top:4px;margin-left:22px">
-              Adds a Combined Staffing tab that searches both groups together while preserving AMO deliverables and Direct/AMO card colors.
-            </div>
-          </div>
-          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
+	              Adds a Combined Staffing tab that searches both groups together while preserving AMO deliverables and Direct/AMO card colors.
+	            </div>
+	          </div>
+	          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
+	            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#222">
+	              <input type="checkbox" id="sc-skills-search-toggle" style="width:14px;height:14px">
+	              <span>Enable SC Skills Search</span>
+	            </label>
+	            <div style="font-size:10px;color:var(--sc-text-muted);margin-top:4px;margin-left:22px">
+	              Turn off for SCOUT Zero mode. This keeps quick lookup, My Team, requested SCs, staffing actions, and calendar/drawer features while skipping product, industry, and skills-search lists.
+	            </div>
+	          </div>
+	          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#222">
               <input type="checkbox" id="sc-debug-mode-toggle" style="width:14px;height:14px">
               <span>Enable Debug Mode</span>
@@ -4605,17 +4627,21 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         <!-- ═══════════════════════════════════════════════════════
              DIRECT STAFFING PANE
         ═══════════════════════════════════════════════════════ -->
-        <div id="sc-direct-pane" class="sc-tab-pane active">
+	        <div id="sc-direct-pane" class="sc-tab-pane active">
+	          <div class="sc-card sc-zero-only">
+	            <div class="sc-card-title">SCOUT Zero</div>
+	            <div class="sc-status">SC Skills Search is off. Use My Team, requested SCs, quick lookup, calendar details, and staffing actions without loading product, industry, and skills matrices.</div>
+	          </div>
 
           <!-- Module Insights Card (Direct) -->
-          <div class="sc-card sc-insights-card" id="sc-insights-card" style="display:none">
+          <div class="sc-card sc-insights-card sc-skill-search-only" id="sc-insights-card" style="display:none">
             <div class="sc-card-title">📦 Module Detection</div>
             <div class="sc-insights-hint">Modules found in Request Details — click to select product:</div>
             <div id="sc-insights-chips" class="sc-insights-chips"></div>
           </div>
 
           <!-- Products Demonstrated -->
-          <div class="sc-card sc-collapsible-card collapsed" id="sc-direct-products-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-skill-search-only" id="sc-direct-products-card">
             <div class="sc-card-title" id="sc-direct-products-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Products Demonstrated</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -4628,7 +4654,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               <div class="sc-field">
                 <label class="sc-label">Products <span style="font-weight:400">(select up to 4)</span></label>
                 <select id="sc-products" multiple size="7">
-                  ${buildProductOptions()}
+                  ${productOptionsMarkup}
                 </select>
                 <div class="sc-field-hint">These write to the SCR Product(s) field when staffing.</div>
               </div>
@@ -4636,7 +4662,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           </div>
 
           <!-- Product Skills -->
-          <div class="sc-card sc-collapsible-card collapsed" id="sc-direct-product-skills-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-skill-search-only" id="sc-direct-product-skills-card">
             <div class="sc-card-title" id="sc-direct-product-skills-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Product Skills Search</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -4649,7 +4675,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               <div class="sc-field">
                 <label class="sc-label">Product Skills <span style="font-weight:400">(select up to 4)</span></label>
                 <select id="sc-product-skills" multiple size="7">
-                  ${buildProductSkillOptions()}
+                  ${productSkillOptionsMarkup}
                 </select>
                 <div class="sc-field-hint">Pulled from the employee product skills matrix. Press Enter in the filter to add the best match.</div>
               </div>
@@ -4657,7 +4683,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           </div>
 
           <!-- Industry -->
-          <div class="sc-card sc-collapsible-card collapsed" id="sc-direct-industry-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-skill-search-only" id="sc-direct-industry-card">
             <div class="sc-card-title" id="sc-direct-industry-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Industry (Optional)</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -4667,14 +4693,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                 <label class="sc-label">SC Industry</label>
                 <select id="sc-industry">
                   <option value="">— Any industry —</option>
-                  ${buildIndustryOptions()}
+                  ${industryOptionsMarkup}
                 </select>
               </div>
             </div>
           </div>
 
           <!-- Additional SC Skills -->
-          <div class="sc-card sc-collapsible-card collapsed sc-additional-skills-card" id="sc-direct-additional-skills-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-additional-skills-card sc-skill-search-only" id="sc-direct-additional-skills-card">
             <div class="sc-card-title" id="sc-direct-additional-skills-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Additional SC Skills</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -4692,7 +4718,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           </div>
 
           <!-- Filters -->
-          <div class="sc-card sc-collapsible-card collapsed sc-filter-card" id="sc-direct-filters-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-filter-card sc-skill-search-only" id="sc-direct-filters-card">
             <div class="sc-card-title" id="sc-direct-filters-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Filters</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -4763,7 +4789,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           </div>
 
           <!-- Search button -->
-          <button id="sc-search-btn">
+          <button id="sc-search-btn" class="sc-skill-search-only">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
             </svg>
@@ -4771,7 +4797,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           </button>
 
           <!-- Results -->
-          <div id="sc-results-area">
+          <div id="sc-results-area" class="sc-skill-search-only">
             <div class="sc-status">Select product skills, industry, or additional SC skills and click Search.</div>
           </div>
 
@@ -4780,7 +4806,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         <!-- ═══════════════════════════════════════════════════════
              AMO STAFFING PANE
         ═══════════════════════════════════════════════════════ -->
-        <div id="sc-amo-pane" class="sc-tab-pane">
+	        <div id="sc-amo-pane" class="sc-tab-pane">
+	          <div class="sc-card sc-zero-only">
+	            <div class="sc-card-title">SCOUT Zero</div>
+	            <div class="sc-status">SC Skills Search is off. AMO deliverable and staffing actions remain available without loading product, industry, and skills matrices.</div>
+	          </div>
 
           <!-- AMO Deliverable Selector -->
           <div class="sc-card sc-card-amo">
@@ -4797,14 +4827,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           </div>
 
           <!-- Module Insights Card (AMO) -->
-          <div class="sc-card sc-insights-card" id="sc-amo-insights-card" style="display:none">
+          <div class="sc-card sc-insights-card sc-skill-search-only" id="sc-amo-insights-card" style="display:none">
             <div class="sc-card-title">📦 Module Detection</div>
             <div class="sc-insights-hint">Modules found in Request Details — click to select product:</div>
             <div id="sc-amo-insights-chips" class="sc-insights-chips"></div>
           </div>
 
           <!-- Products Demonstrated -->
-          <div class="sc-card sc-collapsible-card collapsed" id="sc-amo-products-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-skill-search-only" id="sc-amo-products-card">
             <div class="sc-card-title" id="sc-amo-products-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Products Demonstrated</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -4817,7 +4847,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               <div class="sc-field">
                 <label class="sc-label">Products <span style="font-weight:400">(select up to 4)</span></label>
                 <select id="sc-amo-products" multiple size="7">
-                  ${buildProductOptions()}
+                  ${productOptionsMarkup}
                 </select>
                 <div class="sc-field-hint">These write to the SCR Product(s) field when staffing.</div>
               </div>
@@ -4825,7 +4855,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           </div>
 
           <!-- AMO Product Skills -->
-          <div class="sc-card sc-collapsible-card collapsed" id="sc-amo-product-skills-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-skill-search-only" id="sc-amo-product-skills-card">
             <div class="sc-card-title" id="sc-amo-product-skills-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Product Skills Search</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -4838,7 +4868,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               <div class="sc-field">
                 <label class="sc-label">Product Skills <span style="font-weight:400">(select up to 4)</span></label>
                 <select id="sc-amo-product-skills" multiple size="7">
-                  ${buildProductSkillOptions()}
+                  ${productSkillOptionsMarkup}
                 </select>
                 <div class="sc-field-hint">Pulled from the employee product skills matrix. Press Enter in the filter to add the best match.</div>
               </div>
@@ -4846,7 +4876,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           </div>
 
           <!-- Industry -->
-          <div class="sc-card sc-collapsible-card collapsed" id="sc-amo-industry-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-skill-search-only" id="sc-amo-industry-card">
             <div class="sc-card-title" id="sc-amo-industry-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Industry (Optional)</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -4856,14 +4886,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                 <label class="sc-label">SC Industry</label>
                 <select id="sc-amo-industry">
                   <option value="">— Any industry —</option>
-                  ${buildIndustryOptions()}
+                  ${industryOptionsMarkup}
                 </select>
               </div>
             </div>
           </div>
 
           <!-- Additional SC Skills -->
-          <div class="sc-card sc-collapsible-card collapsed sc-additional-skills-card" id="sc-amo-additional-skills-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-additional-skills-card sc-skill-search-only" id="sc-amo-additional-skills-card">
             <div class="sc-card-title" id="sc-amo-additional-skills-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Additional SC Skills</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -4881,7 +4911,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           </div>
 
           <!-- Filters -->
-          <div class="sc-card sc-collapsible-card collapsed sc-filter-card" id="sc-amo-filters-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-filter-card sc-skill-search-only" id="sc-amo-filters-card">
             <div class="sc-card-title" id="sc-amo-filters-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Filters</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -4952,7 +4982,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           </div>
 
           <!-- AMO Search button -->
-          <button id="sc-amo-search-btn">
+          <button id="sc-amo-search-btn" class="sc-skill-search-only">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
             </svg>
@@ -4960,7 +4990,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           </button>
 
           <!-- AMO Results -->
-          <div id="sc-amo-results-area">
+          <div id="sc-amo-results-area" class="sc-skill-search-only">
             <div class="sc-status">Select product skills, industry, or additional SC skills and click Search AMO SCs.</div>
           </div>
 
@@ -4970,8 +5000,12 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         <!-- ═══════════════════════════════════════════════════════
              COMBINED STAFFING PANE
         ═══════════════════════════════════════════════════════ -->
-        <div id="sc-combined-pane" class="sc-tab-pane">
-          <div class="sc-combined-helper-note">
+	        <div id="sc-combined-pane" class="sc-tab-pane">
+	          <div class="sc-card sc-zero-only">
+	            <div class="sc-card-title">SCOUT Zero</div>
+	            <div class="sc-status">Combined skills search is off. Turn SC Skills Search back on in settings to use combined product, industry, and skills filters.</div>
+	          </div>
+	          <div class="sc-combined-helper-note">
             Combined search uses one set of filters across Direct and AMO SCs. AMO cards still require the AMO deliverable selector when staffed.
           </div>
 
@@ -4987,13 +5021,13 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
             </div>
           </div>
 
-          <div class="sc-card sc-insights-card" id="sc-combined-insights-card" style="display:none">
+          <div class="sc-card sc-insights-card sc-skill-search-only" id="sc-combined-insights-card" style="display:none">
             <div class="sc-card-title">📦 Module Detection</div>
             <div class="sc-insights-hint">Modules found in Request Details — click to select product:</div>
             <div id="sc-combined-insights-chips" class="sc-insights-chips"></div>
           </div>
 
-          <div class="sc-card sc-collapsible-card collapsed" id="sc-combined-products-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-skill-search-only" id="sc-combined-products-card">
             <div class="sc-card-title" id="sc-combined-products-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Products Demonstrated</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -5006,14 +5040,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               <div class="sc-field">
                 <label class="sc-label">Products <span style="font-weight:400">(select up to 4)</span></label>
                 <select id="sc-combined-products" multiple size="7">
-                  ${buildProductOptions()}
+                  ${productOptionsMarkup}
                 </select>
                 <div class="sc-field-hint">These write to the SCR Product(s) field when staffing.</div>
               </div>
             </div>
           </div>
 
-          <div class="sc-card sc-collapsible-card collapsed" id="sc-combined-product-skills-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-skill-search-only" id="sc-combined-product-skills-card">
             <div class="sc-card-title" id="sc-combined-product-skills-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Product Skills Search</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -5026,14 +5060,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               <div class="sc-field">
                 <label class="sc-label">Product Skills <span style="font-weight:400">(select up to 4)</span></label>
                 <select id="sc-combined-product-skills" multiple size="7">
-                  ${buildProductSkillOptions()}
+                  ${productSkillOptionsMarkup}
                 </select>
                 <div class="sc-field-hint">Pulled from the employee product skills matrix. Press Enter in the filter to add the best match.</div>
               </div>
             </div>
           </div>
 
-          <div class="sc-card sc-collapsible-card collapsed" id="sc-combined-industry-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-skill-search-only" id="sc-combined-industry-card">
             <div class="sc-card-title" id="sc-combined-industry-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Industry (Optional)</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -5043,13 +5077,13 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                 <label class="sc-label">SC Industry</label>
                 <select id="sc-combined-industry">
                   <option value="">— Any industry —</option>
-                  ${buildIndustryOptions()}
+                  ${industryOptionsMarkup}
                 </select>
               </div>
             </div>
           </div>
 
-          <div class="sc-card sc-collapsible-card collapsed sc-additional-skills-card" id="sc-combined-additional-skills-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-additional-skills-card sc-skill-search-only" id="sc-combined-additional-skills-card">
             <div class="sc-card-title" id="sc-combined-additional-skills-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Additional SC Skills</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -5066,7 +5100,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
             </div>
           </div>
 
-          <div class="sc-card sc-collapsible-card collapsed sc-filter-card" id="sc-combined-filters-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-filter-card sc-skill-search-only" id="sc-combined-filters-card">
             <div class="sc-card-title" id="sc-combined-filters-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Filters</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -5129,14 +5163,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
             </div>
           </div>
 
-          <button id="sc-combined-search-btn">
+          <button id="sc-combined-search-btn" class="sc-skill-search-only">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
             </svg>
             Search Combined SCs
           </button>
 
-          <div id="sc-combined-results-area">
+          <div id="sc-combined-results-area" class="sc-skill-search-only">
             <div class="sc-status">Turn on Combined Staffing in settings, then select product skills, industry, or additional SC skills and click Search Combined SCs.</div>
           </div>
         </div><!-- end sc-combined-pane -->
@@ -7867,8 +7901,8 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     if (cb) cb.checked = getGptAssistEnabled();
   }
 
-  function applyCombinedStaffingTabsUI() {
-    const enabled = getCombineStaffingTabsEnabled();
+	  function applyCombinedStaffingTabsUI() {
+	    const enabled = getCombineStaffingTabsEnabled();
     const tab = document.getElementById('sc-tab-combined');
     const pane = document.getElementById('sc-combined-pane');
     const cb = document.getElementById('sc-combine-tabs-toggle');
@@ -7878,15 +7912,23 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       const directTab = document.getElementById('sc-tab-direct');
       if (directTab) directTab.click();
     }
-    if (pane && !enabled) pane.classList.remove('active');
-  }
+	    if (pane && !enabled) pane.classList.remove('active');
+	  }
 
-	  function populateSettingsForm() {
+	  function applySkillsSearchUI() {
+	    const panel = document.getElementById('sc-skills-panel');
+	    if (panel) panel.classList.toggle('sc-skills-search-off', !getSkillsSearchEnabled());
+	    const cb = document.getElementById('sc-skills-search-toggle');
+	    if (cb) cb.checked = getSkillsSearchEnabled();
+	  }
+
+		  function populateSettingsForm() {
     const calToggle = document.getElementById('sc-cal-integration-toggle');
-    const inlineDrawerToggle = document.getElementById('sc-inline-drawer-toggle');
-    const gptToggle = document.getElementById('sc-gpt-assist-toggle');
-    const combineTabsToggle = document.getElementById('sc-combine-tabs-toggle');
-    const debugToggle = document.getElementById('sc-debug-mode-toggle');
+	    const inlineDrawerToggle = document.getElementById('sc-inline-drawer-toggle');
+	    const gptToggle = document.getElementById('sc-gpt-assist-toggle');
+	    const combineTabsToggle = document.getElementById('sc-combine-tabs-toggle');
+	    const skillsSearchToggle = document.getElementById('sc-skills-search-toggle');
+	    const debugToggle = document.getElementById('sc-debug-mode-toggle');
     const previousHistoryToggle = document.getElementById('sc-prev-history-setting-toggle');
     const customerLicenseToggle = document.getElementById('sc-customer-license-setting-toggle');
     const earlyAdopterToggle = document.getElementById('sc-early-adopter-toggle');
@@ -7898,10 +7940,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const feedbackWebhook = document.getElementById('sc-feedback-webhook-input');
     if (calToggle) calToggle.checked = getCalIntegrationEnabled();
     if (inlineDrawerToggle) inlineDrawerToggle.checked = getInlineCalendarDrawerEnabled();
-    if (gptToggle) gptToggle.checked = getGptAssistEnabled();
-    applyInlineCalendarDrawerUI();
-    if (combineTabsToggle) combineTabsToggle.checked = getCombineStaffingTabsEnabled();
-    if (debugToggle) debugToggle.checked = getDebugModeEnabled();
+	    if (gptToggle) gptToggle.checked = getGptAssistEnabled();
+	    applyInlineCalendarDrawerUI();
+	    if (combineTabsToggle) combineTabsToggle.checked = getCombineStaffingTabsEnabled();
+	    if (skillsSearchToggle) skillsSearchToggle.checked = getSkillsSearchEnabled();
+	    if (debugToggle) debugToggle.checked = getDebugModeEnabled();
     if (previousHistoryToggle) previousHistoryToggle.checked = getPreviousScHistoryEnabled();
     if (customerLicenseToggle) customerLicenseToggle.checked = getCustomerLicenseEnabled();
     if (earlyAdopterToggle) earlyAdopterToggle.checked = getEarlyAdopterUpdatesEnabled();
@@ -7983,10 +8026,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
 	  function saveSettingsFromForm() {
     const calToggle = document.getElementById('sc-cal-integration-toggle');
-    const inlineDrawerToggle = document.getElementById('sc-inline-drawer-toggle');
-    const gptToggle = document.getElementById('sc-gpt-assist-toggle');
-    const combineTabsToggle = document.getElementById('sc-combine-tabs-toggle');
-    const debugToggle = document.getElementById('sc-debug-mode-toggle');
+	    const inlineDrawerToggle = document.getElementById('sc-inline-drawer-toggle');
+	    const gptToggle = document.getElementById('sc-gpt-assist-toggle');
+	    const combineTabsToggle = document.getElementById('sc-combine-tabs-toggle');
+	    const skillsSearchToggle = document.getElementById('sc-skills-search-toggle');
+	    const debugToggle = document.getElementById('sc-debug-mode-toggle');
     const previousHistoryToggle = document.getElementById('sc-prev-history-setting-toggle');
     const customerLicenseToggle = document.getElementById('sc-customer-license-setting-toggle');
     const earlyAdopterToggle = document.getElementById('sc-early-adopter-toggle');
@@ -7998,10 +8042,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const feedbackWebhook = document.getElementById('sc-feedback-webhook-input');
     saveLocalConfig({
       calendarIntegrationEnabled: calToggle ? calToggle.checked : getCalIntegrationEnabled(),
-      inlineCalendarDrawerEnabled: inlineDrawerToggle ? inlineDrawerToggle.checked : getInlineCalendarDrawerEnabled(),
-      gptAssistEnabled: gptToggle ? gptToggle.checked : getGptAssistEnabled(),
-      combineStaffingTabsEnabled: combineTabsToggle ? combineTabsToggle.checked : getCombineStaffingTabsEnabled(),
-      debugModeEnabled: debugToggle ? debugToggle.checked : getDebugModeEnabled(),
+	      inlineCalendarDrawerEnabled: inlineDrawerToggle ? inlineDrawerToggle.checked : getInlineCalendarDrawerEnabled(),
+	      gptAssistEnabled: gptToggle ? gptToggle.checked : getGptAssistEnabled(),
+	      combineStaffingTabsEnabled: combineTabsToggle ? combineTabsToggle.checked : getCombineStaffingTabsEnabled(),
+	      skillsSearchEnabled: skillsSearchToggle ? skillsSearchToggle.checked : getSkillsSearchEnabled(),
+	      debugModeEnabled: debugToggle ? debugToggle.checked : getDebugModeEnabled(),
       previousScHistoryEnabled: previousHistoryToggle ? previousHistoryToggle.checked : getPreviousScHistoryEnabled(),
       customerLicenseEnabled: customerLicenseToggle ? customerLicenseToggle.checked : getCustomerLicenseEnabled(),
       earlyAdopterUpdatesEnabled: earlyAdopterToggle ? earlyAdopterToggle.checked : getEarlyAdopterUpdatesEnabled(),
@@ -8012,10 +8057,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       extraAmoDeliverables: extraAmoDeliverables ? extraAmoDeliverables.value : getExtraAmoDeliverablesText(),
       feedbackWebhookUrl: feedbackWebhook ? feedbackWebhook.value.trim() : getFeedbackWebhookUrl(),
     });
-    applyCalIntegrationUI();
-    applyInlineCalendarDrawerUI();
-    applyGptAssistUI();
-    applyCombinedStaffingTabsUI();
+	    applyCalIntegrationUI();
+	    applyInlineCalendarDrawerUI();
+		    applyGptAssistUI();
+		    applySkillsSearchUI();
+		    applyCombinedStaffingTabsUI();
     refreshAmoDeliverableOptions();
     try { localStorage.removeItem(SCOUT_UPDATE_CACHE_KEY); } catch (e) { /* ignore */ }
     checkScoutUpdate(true);
@@ -13433,14 +13479,24 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         applyGptAssistUI();
       });
     }
-    const combineTabsToggle = document.getElementById('sc-combine-tabs-toggle');
-    if (combineTabsToggle) {
-      combineTabsToggle.addEventListener('change', function () {
-        saveLocalConfig({ combineStaffingTabsEnabled: this.checked });
-        applyCombinedStaffingTabsUI();
-      });
-    }
-    const debugToggle = document.getElementById('sc-debug-mode-toggle');
+	    const combineTabsToggle = document.getElementById('sc-combine-tabs-toggle');
+	    if (combineTabsToggle) {
+	      combineTabsToggle.addEventListener('change', function () {
+	        saveLocalConfig({ combineStaffingTabsEnabled: this.checked });
+	        applyCombinedStaffingTabsUI();
+	      });
+	    }
+	    const skillsSearchToggle = document.getElementById('sc-skills-search-toggle');
+	    if (skillsSearchToggle) {
+	      skillsSearchToggle.addEventListener('change', function () {
+	        saveLocalConfig({ skillsSearchEnabled: this.checked });
+	        applySkillsSearchUI();
+	        if (this.checked) {
+	          showToast('SC Skills Search will fully reload on the next SCOUT page load.', 'info', 7000);
+	        }
+	      });
+	    }
+	    const debugToggle = document.getElementById('sc-debug-mode-toggle');
     if (debugToggle) {
       debugToggle.addEventListener('change', function () {
         saveLocalConfig({ debugModeEnabled: this.checked });
