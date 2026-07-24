@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.74
+// @version      27.0.75
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -43,7 +43,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.74";
+  const HELPER_VERSION = "27.0.75";
   const HELPER_RESTORE_OVERLAY_ID = "scr-helper-restore-overlay";
   const HELPER_RESTORE_STYLE_ID = "scr-helper-restore-overlay-styles";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
@@ -9889,21 +9889,22 @@ Health & Hospitality	DIRECT	NL	West	West
 
     const canView = productsScmUserCanView();
     const isOwner = productsScmUserIsOwner();
+    const savedOwnerMe = productsScmOwnerMeDefaultChecked();
     row.hidden = !canView;
     if (ownerLogicSelect) ownerLogicSelect.disabled = !canView;
     checkbox.disabled = !isOwner;
     if (ownerScopeCheckbox) ownerScopeCheckbox.disabled = !canView;
     input.disabled = !canView;
     if (!canView) {
-      checkbox.checked = false;
+      checkbox.checked = savedOwnerMe;
       if (ownerLogicSelect) ownerLogicSelect.value = "or";
       if (ownerScopeCheckbox) ownerScopeCheckbox.checked = false;
       renderProductsScmOwnerTokens([]);
       hideProductsScmOwnerSuggestions();
     } else if (!isOwner) {
-      checkbox.checked = false;
+      checkbox.checked = savedOwnerMe;
     } else {
-      checkbox.checked = productsScmOwnerMeDefaultChecked();
+      checkbox.checked = savedOwnerMe;
     }
 
     if (datalist) {
