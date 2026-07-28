@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.80
+// @version      27.0.81
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -43,7 +43,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.80";
+  const HELPER_VERSION = "27.0.81";
   const HELPER_RESTORE_OVERLAY_ID = "scr-helper-restore-overlay";
   const HELPER_RESTORE_STYLE_ID = "scr-helper-restore-overlay-styles";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
@@ -9237,9 +9237,13 @@ Health & Hospitality	DIRECT	NL	West	West
 
   function buildEmailComposeDraft(email, subject, body, options = {}) {
     const labels = options.labels || {};
-    const toEmails = normalizedEmailList(email);
-    const ccEmails = normalizedEmailList(options.cc)
-      .filter(ccEmail => !toEmails.some(toEmail => normalizeKey(toEmail) === normalizeKey(ccEmail)));
+    const baseToEmails = normalizedEmailList(email);
+    const baseCcEmails = normalizedEmailList(options.cc)
+      .filter(ccEmail => !baseToEmails.some(toEmail => normalizeKey(toEmail) === normalizeKey(ccEmail)));
+    const toEmails = options.promoteCcToTo
+      ? [...baseToEmails, ...baseCcEmails]
+      : baseToEmails;
+    const ccEmails = options.promoteCcToTo ? [] : baseCcEmails;
     const compactBody = body.length > 1400
       ? `${body.slice(0, 1350)}\r\n\r\n[Details trimmed for draft length. Open the SCR for full context.]`
       : body;
@@ -9261,7 +9265,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const mailtoUrl = `mailto:${encodeURIComponent(toEmails.join(","))}?${mailtoParams}`;
     return {
       email: toEmails.join(", "),
-      cc: ccEmails,
+      cc: baseCcEmails,
       subject,
       body: compactBody,
       mailtoUrl,
@@ -9281,6 +9285,7 @@ Health & Hospitality	DIRECT	NL	West	West
       requesterInfoMailText(row),
       {
         cc: ccRecipients,
+        promoteCcToTo: true,
         labels: {
           mailto: "Open email compose",
           outlook: "Open Outlook web compose"
@@ -9298,6 +9303,7 @@ Health & Hospitality	DIRECT	NL	West	West
       redirectToSalesMailText(row, messageText),
       {
         cc: ccRecipients,
+        promoteCcToTo: true,
         labels: {
           mailto: "Open email compose",
           outlook: "Open Outlook web compose"
