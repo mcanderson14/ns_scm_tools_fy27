@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.75
+// @version      27.0.77
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -43,7 +43,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.75";
+  const HELPER_VERSION = "27.0.77";
   const HELPER_RESTORE_OVERLAY_ID = "scr-helper-restore-overlay";
   const HELPER_RESTORE_STYLE_ID = "scr-helper-restore-overlay-styles";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
@@ -5339,6 +5339,41 @@ Health & Hospitality	DIRECT	NL	West	West
     return "";
   }
 
+  function debugFieldInternalId(debugText, fieldPath) {
+    const cleanPath = normalizeSpaces(fieldPath);
+    if (!cleanPath) return "";
+    const escapedPath = cleanPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const patterns = [
+      new RegExp(`${escapedPath}\\s*\\.\\s*(?:id|internalid)\\s*=\\s*["']?(\\d+)["']?`, "i"),
+      new RegExp(`${escapedPath}\\s*=\\s*["']?(\\d+)["']?`, "i")
+    ];
+    const text = String(debugText || "");
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match && match[1]) return match[1];
+    }
+    return "";
+  }
+
+  function getDebugFieldValue(fields) {
+    const field = findField(fields || [], [
+      /^debug$/i, /debug/, /script.*debug/, /ids?/
+    ]);
+    return normalizeMultiline(field && (field.rawValue || field.value) || "");
+  }
+
+  function getSavedSearchDebugIds(fields) {
+    const debugText = getDebugFieldValue(fields);
+    if (!debugText) return {};
+    return {
+      requestorId: debugFieldInternalId(debugText, REQUESTOR_FIELD_ID),
+      assigneeId: debugFieldInternalId(debugText, "custrecord_screq_assignee"),
+      salesRepId: debugFieldInternalId(debugText, "custrecord_screq_opp_salesreproster"),
+      regionalDirectorId: debugFieldInternalId(debugText, "custrecord_screq_opp_salesreproster.custrecord_emproster_ml1"),
+      regionalVpId: debugFieldInternalId(debugText, "custrecord_screq_opp_salesreproster.custrecord_emproster_ml2")
+    };
+  }
+
   function normalizeScrDisplayId(value) {
     let text = normalizeSpaces(value);
     if (!text) return "";
@@ -5621,6 +5656,7 @@ Health & Hospitality	DIRECT	NL	West	West
 
       if (!fields.length) return null;
 
+      const debugIds = getSavedSearchDebugIds(allFields);
       const staffingNotesField = getStaffingNotesField(allFields);
       const staffingNotes = getStaffingNotesValue(staffingNotesField);
       const hashtagsField = getHashtagsField(allFields);
@@ -5706,7 +5742,10 @@ Health & Hospitality	DIRECT	NL	West	West
           hashtags,
           staffingNotes,
           assignedTo,
-          billingZip
+          billingZip,
+          debugIds.requestorId,
+          debugIds.salesRepId,
+          debugIds.regionalDirectorId
         ]);
       const allText = allTextParts.join(" ").toLowerCase();
       const allKeyText = normalizeKey(allTextParts.join(" "));
@@ -5747,6 +5786,7 @@ Health & Hospitality	DIRECT	NL	West	West
         staffingNotes,
         assignedTo,
         assignedToKey: normalizeKey(assignedTo),
+        debugIds,
         internalId: internalId || recordIdFromUrl(editUrl),
         editUrl,
         allText,
@@ -8565,6 +8605,8 @@ Health & Hospitality	DIRECT	NL	West	West
   }
 
   function salesRepEmployeeIdForRow(row) {
+    const debugId = normalizeInternalIdValue(row && row.debugIds && row.debugIds.salesRepId);
+    if (debugId) return debugId;
     const summary = buildRowSummary(row);
     const salesRepName = cleanPersonName(summary.salesRep);
     const fields = row && (row.allFields || row.fields) || [];
@@ -9076,7 +9118,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const salesRepName = cleanPersonName(summary.salesRep);
     const fields = row && (row.allFields || row.fields) || [];
     const salesRepField = findSalesRepField(fields);
-    const employeeId = salesRepEmployeeIdFromField(salesRepField, salesRepName);
+    const employeeId = salesRepEmployeeIdForRow(row) || salesRepEmployeeIdFromField(salesRepField, salesRepName);
     const cacheKey = employeeId
       ? `id:${employeeId}`
       : `name:${personNameKeys(salesRepName).sort().join("|") || normalizeKey(salesRepName)}`;
@@ -9093,8 +9135,10 @@ Health & Hospitality	DIRECT	NL	West	West
   async function resolveSalesDirectorEmail(row) {
     const summary = buildRowSummary(row);
     const directorName = cleanPersonName(summary.salesDirector);
+    const employeeId = normalizeInternalIdValue(row && row.debugIds && row.debugIds.regionalDirectorId);
     return resolveEmployeeEmailByName(directorName, {
       label: "Regional Director",
+      employeeId,
       optional: true
     });
   }
@@ -9812,6 +9856,14 @@ Health & Hospitality	DIRECT	NL	West	West
     setOptionsPanelOpen(Boolean(panel && panel.hidden));
   }
 
+  function ownerMeFilterWaitingForOwnershipData(controls = getControls()) {
+    const ownerMeChecked = Boolean(controls.productsScmOwnerMe && controls.productsScmOwnerMe.checked);
+    if (!ownerMeChecked || productsScmUserIsOwner()) return false;
+    const relationshipPending = !productsScmMetadata.rowCount && !productsScmMetadata.error;
+    const authorizedManagersPending = !authorizedManagersLoaded() && !authorizedManagersMetadata.error;
+    return relationshipPending || authorizedManagersPending;
+  }
+
   function renderResults() {
     if (pageIsSuspended) return;
     const controls = getControls();
@@ -9832,9 +9884,18 @@ Health & Hospitality	DIRECT	NL	West	West
         if (leftSla.passed !== rightSla.passed) return leftSla.passed ? -1 : 1;
         return submittedOrder || ((rightSla.hours || 0) - (leftSla.hours || 0));
       });
+    const waitingForOwnerMeData = !visibleRows.length && searchRows.length && ownerMeFilterWaitingForOwnershipData(controls);
     list.innerHTML = visibleRows.length
       ? visibleRows.map(renderRow).join("")
-      : `<div class="scr-helper-empty">No visible SCRs match the selected filters.</div>`;
+      : waitingForOwnerMeData
+        ? `<div class="scr-helper-loading-splash" role="status" aria-live="polite">
+            <div class="scr-helper-loading-mark">⏳</div>
+            <div>
+              <div class="scr-helper-loading-title">Resolving SCM Owner</div>
+              <div class="scr-helper-loading-text">Rows are loaded. IQUEUE is still loading ownership mappings for Owner = Me.</div>
+            </div>
+          </div>`
+        : `<div class="scr-helper-empty">No visible SCRs match the selected filters.</div>`;
 
     const unmappedCount = visibleRows.filter(isUnmappedReviewRow).length;
     const loadedText = searchResultTotal > searchRows.length
@@ -9853,7 +9914,9 @@ Health & Hospitality	DIRECT	NL	West	West
     const ownerScopeText = controls.hideOwnedOutsideMyScGroups && controls.hideOwnedOutsideMyScGroups.checked
       ? "; owned outside my groups hidden"
       : "";
-    status.textContent = `${visibleRows.length} of ${loadedText} shown${unmappedCount ? `; ${unmappedCount} unmapped` : ""}${slaText}${assignedText}${productsOwnerText}${ownerScopeText}. ${mappingStatusText()}.`;
+    status.textContent = waitingForOwnerMeData
+      ? `Waiting for SCM ownership mapping before applying Owner = Me. ${loadedText}. ${mappingStatusText()}.`
+      : `${visibleRows.length} of ${loadedText} shown${unmappedCount ? `; ${unmappedCount} unmapped` : ""}${slaText}${assignedText}${productsOwnerText}${ownerScopeText}. ${mappingStatusText()}.`;
     refreshMappingHealthPanel();
     list.querySelectorAll(".scr-helper-edit").forEach(button => {
       button.textContent = "Staff SCR";
@@ -10442,6 +10505,14 @@ Health & Hospitality	DIRECT	NL	West	West
   function fieldInternalIdFromRow(row, fieldId) {
     const cleanFieldId = normalizeSpaces(fieldId);
     if (!row || !cleanFieldId) return "";
+    if (cleanFieldId === REQUESTOR_FIELD_ID) {
+      const requestorId = normalizeInternalIdValue(row.debugIds && row.debugIds.requestorId);
+      if (requestorId) return requestorId;
+    }
+    if (cleanFieldId === "custrecord_screq_assignee") {
+      const assigneeId = normalizeInternalIdValue(row.debugIds && row.debugIds.assigneeId);
+      if (assigneeId) return assigneeId;
+    }
     const escapedFieldId = cleanFieldId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const patterns = [
       new RegExp(`${escapedFieldId}\\s*[:=]\\s*["']?(\\d+)["']?`, "i"),
@@ -11622,14 +11693,21 @@ Health & Hospitality	DIRECT	NL	West	West
       }
 
       const salesRepName = cleanPersonName(recipient.name || buildRowSummary(row).salesRep);
-      const rawRequestorId = normalizeInternalIdValue(fieldInternalIdFromRow(row, REQUESTOR_FIELD_ID));
+      const debugRequestorId = normalizeInternalIdValue(row.debugIds && row.debugIds.requestorId);
+      const rawRequestorId = debugRequestorId || normalizeInternalIdValue(fieldInternalIdFromRow(row, REQUESTOR_FIELD_ID));
       const lookupRequestorId = rawRequestorId ? "" : normalizeInternalIdValue(await lookupSingleFieldInternal(row, REQUESTOR_FIELD_ID));
       const frameRequestorId = rawRequestorId || lookupRequestorId
         ? ""
         : normalizeInternalIdValue(await readSingleFieldViaEditFrame(row, row.internalId || recordIdFromUrl(row.editUrl), REQUESTOR_FIELD_ID, "Requester"));
       const requestorId = rawRequestorId || lookupRequestorId || frameRequestorId;
       let employeeId = requestorId || recipient.id || salesRepEmployeeIdForRow(row);
-      let assigneeSource = requestorId ? `${REQUESTOR_FIELD_ID}:${requestorId}${rawRequestorId ? " raw" : lookupRequestorId ? " lookup" : " frame"}` : "";
+      let assigneeSource = requestorId ? `${REQUESTOR_FIELD_ID}.id:${requestorId}${debugRequestorId ? " debug" : rawRequestorId ? " raw" : lookupRequestorId ? " lookup" : " frame"}` : "";
+      if (!assigneeSource && recipient.id) {
+        assigneeSource = `employee.id:${recipient.id}`;
+      }
+      if (!assigneeSource && employeeId && row.debugIds && row.debugIds.salesRepId) {
+        assigneeSource = `custrecord_screq_opp_salesreproster.id:${employeeId} debug`;
+      }
       if (!employeeId && salesRepName) {
         const employeeRecord = await resolveEmployeeRecordByName(salesRepName, {
           label: "Sales Rep",
