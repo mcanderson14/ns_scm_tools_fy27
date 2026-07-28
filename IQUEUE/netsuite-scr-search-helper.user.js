@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.77
+// @version      27.0.78
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -43,7 +43,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.77";
+  const HELPER_VERSION = "27.0.78";
   const HELPER_RESTORE_OVERLAY_ID = "scr-helper-restore-overlay";
   const HELPER_RESTORE_STYLE_ID = "scr-helper-restore-overlay-styles";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
@@ -9228,6 +9228,10 @@ Health & Hospitality	DIRECT	NL	West	West
   function normalizedEmailList(values) {
     return (Array.isArray(values) ? values : [values])
       .map(value => normalizeSpaces(value))
+      .map(value => {
+        const match = value.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+        return match ? match[0] : value;
+      })
       .filter(Boolean);
   }
 
@@ -9239,9 +9243,12 @@ Health & Hospitality	DIRECT	NL	West	West
     const compactBody = body.length > 1400
       ? `${body.slice(0, 1350)}\r\n\r\n[Details trimmed for draft length. Open the SCR for full context.]`
       : body;
+    const outlookTo = toEmails.join(",");
+    const outlookCc = ccEmails.join(",");
     const outlookParams = [
-      `to=${encodeURIComponent(toEmails.join(";"))}`,
-      ccEmails.length ? `cc=${encodeURIComponent(ccEmails.join(";"))}` : "",
+      `to=${encodeURIComponent(outlookTo)}`,
+      ccEmails.length ? `cc=${encodeURIComponent(outlookCc)}` : "",
+      ccEmails.length ? `ccRecipients=${encodeURIComponent(outlookCc)}` : "",
       `subject=${encodeURIComponent(subject)}`,
       `body=${encodeURIComponent(compactBody)}`
     ].filter(Boolean).join("&");
