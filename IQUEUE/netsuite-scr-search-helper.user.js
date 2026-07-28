@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.79
+// @version      27.0.80
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -43,7 +43,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.79";
+  const HELPER_VERSION = "27.0.80";
   const HELPER_RESTORE_OVERLAY_ID = "scr-helper-restore-overlay";
   const HELPER_RESTORE_STYLE_ID = "scr-helper-restore-overlay-styles";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
@@ -9267,7 +9267,6 @@ Health & Hospitality	DIRECT	NL	West	West
       mailtoUrl,
       outlookUrl,
       autoOpened: "",
-      preferMailto: Boolean(ccEmails.length),
       links: [
         { label: labels.outlook || "Open Outlook web compose", href: outlookUrl },
         { label: labels.mailto || "Mailto fallback", href: mailtoUrl }
@@ -10319,39 +10318,9 @@ Health & Hospitality	DIRECT	NL	West	West
     window.open(url, "_blank", "noopener,noreferrer");
   }
 
-  function openMailtoUrlInNewWindow(url) {
-    let opened = null;
-    try {
-      opened = window.open("about:blank", "_blank");
-      if (opened) {
-        try {
-          opened.opener = null;
-          opened.document.title = "Opening email compose";
-          opened.document.body.innerHTML = `
-            <p style="font-family: Arial, sans-serif; color: #3C4545;">
-              Opening email compose...
-            </p>
-          `;
-        } catch (error) {
-          // Some browser privacy settings prevent writing to the child tab; location handoff still usually works.
-        }
-        window.setTimeout(() => {
-          try {
-            opened.location.href = url;
-          } catch (error) {
-            console.warn("SCR helper child-window mailto handoff failed", error);
-          }
-        }, 0);
-        return;
-      }
-    } catch (error) {
-      console.warn("SCR helper blank-window mailto open failed", error);
-    }
-
+  function openMailtoUrl(url) {
     const link = document.createElement("a");
     link.href = url;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
     link.style.display = "none";
     document.body.appendChild(link);
     link.click();
@@ -10361,7 +10330,7 @@ Health & Hospitality	DIRECT	NL	West	West
   function openEditUrlWithGm(url) {
     if (!url) return;
     if (/^mailto:/i.test(url)) {
-      openMailtoUrlInNewWindow(url);
+      openMailtoUrl(url);
       return;
     }
     try {
@@ -10382,7 +10351,7 @@ Health & Hospitality	DIRECT	NL	West	West
 
   function openEmailDraftUrl(draft) {
     if (!draft) return "";
-    const useMailto = draft.mailtoUrl && (draft.preferMailto || browserLooksLikeFirefox());
+    const useMailto = draft.mailtoUrl && browserLooksLikeFirefox();
     const url = useMailto ? draft.mailtoUrl : draft.outlookUrl;
     openEditUrlWithGm(url);
     return useMailto ? "mailto" : "outlook";
@@ -12431,7 +12400,7 @@ Health & Hospitality	DIRECT	NL	West	West
       const mailtoLink = closestElement(event.target, ".scr-helper-notice-link[href^='mailto:']");
       if (mailtoLink) {
         event.preventDefault();
-        openMailtoUrlInNewWindow(mailtoLink.href);
+        openMailtoUrl(mailtoLink.href);
         return;
       }
 
