@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.70
+// @version      27.0.81
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -43,12 +43,13 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.70";
+  const HELPER_VERSION = "27.0.81";
   const HELPER_RESTORE_OVERLAY_ID = "scr-helper-restore-overlay";
   const HELPER_RESTORE_STYLE_ID = "scr-helper-restore-overlay-styles";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
   const SCRIPT_UPDATE_CHECK_CACHE_KEY = "iqueue-script-update-check-v1";
   const SCRIPT_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+  const RESUME_ROW_REFRESH_STALE_MS = 10 * 60 * 1000;
   const GRAPH_TOKEN_REFRESH_URL = "https://mcanderson14.github.io/ns_scm_tools_fy27/calendar-refresh.html";
   const GRAPH_TOKEN_REFRESH_RELAY_URL = `${GRAPH_TOKEN_REFRESH_URL}?iqueueRelay=1`;
   const GRAPH_TOKEN_STATUS_KEY = "iqueue-graph-token-status-v1";
@@ -1313,6 +1314,7 @@ Health & Hospitality	DIRECT	NL	West	West
   const salesRepEmailLookupCache = new Map();
   const employeeEmailLookupCache = new Map();
   let refreshSequence = 0;
+  let lastQueueRefreshAt = 0;
   let pageIsSuspended = false;
   let pageWasSuspended = false;
   let startupDeferredForVisibility = false;
@@ -1741,7 +1743,7 @@ Health & Hospitality	DIRECT	NL	West	West
   }
 
   function productsScmUserCanView(name = getCurrentUserName()) {
-    return productsScmUserIsOwner(name) || productsScmUserIsDirector(name) || productsScmUserIsViewer(name) || authorizedManagerUserCanView(name);
+    return true;
   }
 
   function productsScmUserIsAuthorized(name = getCurrentUserName()) {
@@ -5337,6 +5339,41 @@ Health & Hospitality	DIRECT	NL	West	West
     return "";
   }
 
+  function debugFieldInternalId(debugText, fieldPath) {
+    const cleanPath = normalizeSpaces(fieldPath);
+    if (!cleanPath) return "";
+    const escapedPath = cleanPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const patterns = [
+      new RegExp(`${escapedPath}\\s*\\.\\s*(?:id|internalid)\\s*=\\s*["']?(\\d+)["']?`, "i"),
+      new RegExp(`${escapedPath}\\s*=\\s*["']?(\\d+)["']?`, "i")
+    ];
+    const text = String(debugText || "");
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match && match[1]) return match[1];
+    }
+    return "";
+  }
+
+  function getDebugFieldValue(fields) {
+    const field = findField(fields || [], [
+      /^debug$/i, /debug/, /script.*debug/, /ids?/
+    ]);
+    return normalizeMultiline(field && (field.rawValue || field.value) || "");
+  }
+
+  function getSavedSearchDebugIds(fields) {
+    const debugText = getDebugFieldValue(fields);
+    if (!debugText) return {};
+    return {
+      requestorId: debugFieldInternalId(debugText, REQUESTOR_FIELD_ID),
+      assigneeId: debugFieldInternalId(debugText, "custrecord_screq_assignee"),
+      salesRepId: debugFieldInternalId(debugText, "custrecord_screq_opp_salesreproster"),
+      regionalDirectorId: debugFieldInternalId(debugText, "custrecord_screq_opp_salesreproster.custrecord_emproster_ml1"),
+      regionalVpId: debugFieldInternalId(debugText, "custrecord_screq_opp_salesreproster.custrecord_emproster_ml2")
+    };
+  }
+
   function normalizeScrDisplayId(value) {
     let text = normalizeSpaces(value);
     if (!text) return "";
@@ -5619,6 +5656,7 @@ Health & Hospitality	DIRECT	NL	West	West
 
       if (!fields.length) return null;
 
+      const debugIds = getSavedSearchDebugIds(allFields);
       const staffingNotesField = getStaffingNotesField(allFields);
       const staffingNotes = getStaffingNotesValue(staffingNotesField);
       const hashtagsField = getHashtagsField(allFields);
@@ -5661,6 +5699,9 @@ Health & Hospitality	DIRECT	NL	West	West
       const projectedAcv = getByIndex(paddedCells, indexes, "projectedAcv") || getConciseFieldValue(fields, [
         /acv.*commit/, /projected.*acv/, /\bacv\b/
       ], [], labeledValuePatterns.projectedAcv);
+      const salesRepYearsLive = getConciseFieldValue(fields, [
+        /sales.*rep.*yrs.*live/, /sales.*rep.*years.*live/, /rep.*yrs.*live/, /rep.*years.*live/
+      ], [], labeledValuePatterns.salesRepYearsLive);
       const billingZip = billingZipFromText(getConciseFieldValue(fields, [
         /billing.*(?:zip|postal)/, /bill.*(?:zip|postal)/, /zip\s*code/, /\bzip\b/, /postal/
       ], [], labeledValuePatterns.billingZip));
@@ -5693,6 +5734,7 @@ Health & Hospitality	DIRECT	NL	West	West
           crossVertical,
           scrAge,
           projectedAcv,
+          salesRepYearsLive,
           submittedDate,
           salesVertical,
           amoDirect,
@@ -5700,7 +5742,10 @@ Health & Hospitality	DIRECT	NL	West	West
           hashtags,
           staffingNotes,
           assignedTo,
-          billingZip
+          billingZip,
+          debugIds.requestorId,
+          debugIds.salesRepId,
+          debugIds.regionalDirectorId
         ]);
       const allText = allTextParts.join(" ").toLowerCase();
       const allKeyText = normalizeKey(allTextParts.join(" "));
@@ -5729,6 +5774,7 @@ Health & Hospitality	DIRECT	NL	West	West
         crossVertical,
         scrAge,
         projectedAcv,
+        salesRepYearsLive,
         billingZip,
         submittedDate,
         salesVertical,
@@ -5740,6 +5786,7 @@ Health & Hospitality	DIRECT	NL	West	West
         staffingNotes,
         assignedTo,
         assignedToKey: normalizeKey(assignedTo),
+        debugIds,
         internalId: internalId || recordIdFromUrl(editUrl),
         editUrl,
         allText,
@@ -6581,6 +6628,24 @@ Health & Hospitality	DIRECT	NL	West	West
     `;
   }
 
+  function formatSalesRepTenure(value) {
+    const text = normalizeSpaces(value);
+    if (!text) return "";
+    const numeric = text.match(/-?\d+(?:\.\d+)?/);
+    if (!numeric) return text;
+    const years = Number(numeric[0]);
+    if (!Number.isFinite(years)) return text;
+    const rounded = Math.round(years * 10) / 10;
+    return `${rounded.toFixed(1)} year${rounded === 1 ? "" : "s"}`;
+  }
+
+  function salesRepWithTenureLabel(name, yearsLive) {
+    const repName = normalizeSpaces(name);
+    const tenure = formatSalesRepTenure(yearsLive);
+    if (!repName) return "";
+    return tenure ? `${repName} [Tenure: ${tenure}]` : repName;
+  }
+
   function renderSummaryColumn(title, items, modifier = "") {
     const visibleItems = items.filter(Boolean);
     return `
@@ -6712,12 +6777,15 @@ Health & Hospitality	DIRECT	NL	West	West
 
   function renderAssignedToWithOwnership(row, assignedTo) {
     const assignedName = normalizeSpaces(assignedTo);
+    const canOwn = productsScmUserIsOwner();
     const isAssignedMine = rowAssignedToMatchesCurrentUser(row);
     const isExplicitOwnerMine = rowExplicitScmOwnerMatchesCurrentUser(row);
     const isMine = isAssignedMine || isExplicitOwnerMine;
-    const disabled = !row.internalId || isMine ? "disabled" : "";
+    const disabled = !canOwn || !row.internalId || isMine ? "disabled" : "";
     const title = !row.internalId
       ? "No SCR internal id was returned on this row."
+      : !canOwn
+        ? "View-only users can inspect queues but cannot take ownership."
       : isExplicitOwnerMine
         ? "This SCR is already explicitly owned by you."
         : isAssignedMine
@@ -6933,6 +7001,9 @@ Health & Hospitality	DIRECT	NL	West	West
     const salesRep = getConciseFieldValue(fields, [
       /sales\s*rep$/, /salesrep$/, /opp.*sales.*rep/, /sales.*representative/
     ], [/manager/, /yrs.*live/], labeledValuePatterns.salesRep);
+    const salesRepYearsLive = row.salesRepYearsLive || getConciseFieldValue(fields, [
+      /sales.*rep.*yrs.*live/, /sales.*rep.*years.*live/, /rep.*yrs.*live/, /rep.*years.*live/
+    ], [], labeledValuePatterns.salesRepYearsLive);
     const salesDirector = row.salesDirector || getConciseFieldValue(fields, [
       /regional.*director/, /regionaldirector/, /regional.*dir\b/, /regionaldir\b/, /sales.*director/, /salesdirector/, /sales.*dir\b/, /salesdir\b/, /sales.*rep.*manager/, /salesrepmanager/, /sales.*manager/
     ], [], labeledValuePatterns.salesDirector);
@@ -7003,6 +7074,8 @@ Health & Hospitality	DIRECT	NL	West	West
       projectArr,
       projectedAcv,
       salesRep,
+      salesRepYearsLive,
+      salesRepWithTenure: salesRepWithTenureLabel(salesRep, salesRepYearsLive),
       salesDirector,
       regionalVp,
       industryLeader,
@@ -7230,7 +7303,7 @@ Health & Hospitality	DIRECT	NL	West	West
         renderSummaryItem("Expected Close Date", summary.expectedCloseDate),
         renderSummaryItem("Projected ARR", summary.projectArr),
         renderSummaryItem("Projected ACV", summary.projectedAcv),
-        renderSummaryItem("Sales Rep", summary.salesRep),
+        renderSummaryItem("Sales Rep", summary.salesRepWithTenure || summary.salesRep),
         renderSummaryItem("Regional Director", summary.salesDirector),
         renderSummaryItem("Regional VP", summary.regionalVp),
         renderSummaryItem("Industry Leader/AVP", summary.industryLeader),
@@ -7554,6 +7627,13 @@ Health & Hospitality	DIRECT	NL	West	West
       maximized: getPortletMaximized(),
       filtersCollapsed,
       filters: getFilterState()
+    });
+  }
+
+  function saveHelperLayoutState() {
+    writeHelperState({
+      maximized: getPortletMaximized(),
+      filtersCollapsed
     });
   }
 
@@ -8525,6 +8605,8 @@ Health & Hospitality	DIRECT	NL	West	West
   }
 
   function salesRepEmployeeIdForRow(row) {
+    const debugId = normalizeInternalIdValue(row && row.debugIds && row.debugIds.salesRepId);
+    if (debugId) return debugId;
     const summary = buildRowSummary(row);
     const salesRepName = cleanPersonName(summary.salesRep);
     const fields = row && (row.allFields || row.fields) || [];
@@ -9036,7 +9118,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const salesRepName = cleanPersonName(summary.salesRep);
     const fields = row && (row.allFields || row.fields) || [];
     const salesRepField = findSalesRepField(fields);
-    const employeeId = salesRepEmployeeIdFromField(salesRepField, salesRepName);
+    const employeeId = salesRepEmployeeIdForRow(row) || salesRepEmployeeIdFromField(salesRepField, salesRepName);
     const cacheKey = employeeId
       ? `id:${employeeId}`
       : `name:${personNameKeys(salesRepName).sort().join("|") || normalizeKey(salesRepName)}`;
@@ -9053,8 +9135,10 @@ Health & Hospitality	DIRECT	NL	West	West
   async function resolveSalesDirectorEmail(row) {
     const summary = buildRowSummary(row);
     const directorName = cleanPersonName(summary.salesDirector);
+    const employeeId = normalizeInternalIdValue(row && row.debugIds && row.debugIds.regionalDirectorId);
     return resolveEmployeeEmailByName(directorName, {
       label: "Regional Director",
+      employeeId,
       optional: true
     });
   }
@@ -9144,20 +9228,31 @@ Health & Hospitality	DIRECT	NL	West	West
   function normalizedEmailList(values) {
     return (Array.isArray(values) ? values : [values])
       .map(value => normalizeSpaces(value))
+      .map(value => {
+        const match = value.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+        return match ? match[0] : value;
+      })
       .filter(Boolean);
   }
 
   function buildEmailComposeDraft(email, subject, body, options = {}) {
     const labels = options.labels || {};
-    const toEmails = normalizedEmailList(email);
-    const ccEmails = normalizedEmailList(options.cc)
-      .filter(ccEmail => !toEmails.some(toEmail => normalizeKey(toEmail) === normalizeKey(ccEmail)));
+    const baseToEmails = normalizedEmailList(email);
+    const baseCcEmails = normalizedEmailList(options.cc)
+      .filter(ccEmail => !baseToEmails.some(toEmail => normalizeKey(toEmail) === normalizeKey(ccEmail)));
+    const toEmails = options.promoteCcToTo
+      ? [...baseToEmails, ...baseCcEmails]
+      : baseToEmails;
+    const ccEmails = options.promoteCcToTo ? [] : baseCcEmails;
     const compactBody = body.length > 1400
       ? `${body.slice(0, 1350)}\r\n\r\n[Details trimmed for draft length. Open the SCR for full context.]`
       : body;
+    const outlookTo = toEmails.join(",");
+    const outlookCc = ccEmails.join(",");
     const outlookParams = [
-      `to=${encodeURIComponent(toEmails.join(";"))}`,
-      ccEmails.length ? `cc=${encodeURIComponent(ccEmails.join(";"))}` : "",
+      `to=${encodeURIComponent(outlookTo)}`,
+      ccEmails.length ? `cc=${encodeURIComponent(outlookCc)}` : "",
+      ccEmails.length ? `ccRecipients=${encodeURIComponent(outlookCc)}` : "",
       `subject=${encodeURIComponent(subject)}`,
       `body=${encodeURIComponent(compactBody)}`
     ].filter(Boolean).join("&");
@@ -9170,7 +9265,7 @@ Health & Hospitality	DIRECT	NL	West	West
     const mailtoUrl = `mailto:${encodeURIComponent(toEmails.join(","))}?${mailtoParams}`;
     return {
       email: toEmails.join(", "),
-      cc: ccEmails,
+      cc: baseCcEmails,
       subject,
       body: compactBody,
       mailtoUrl,
@@ -9190,6 +9285,7 @@ Health & Hospitality	DIRECT	NL	West	West
       requesterInfoMailText(row),
       {
         cc: ccRecipients,
+        promoteCcToTo: true,
         labels: {
           mailto: "Open email compose",
           outlook: "Open Outlook web compose"
@@ -9207,6 +9303,7 @@ Health & Hospitality	DIRECT	NL	West	West
       redirectToSalesMailText(row, messageText),
       {
         cc: ccRecipients,
+        promoteCcToTo: true,
         labels: {
           mailto: "Open email compose",
           outlook: "Open Outlook web compose"
@@ -9345,7 +9442,7 @@ Health & Hospitality	DIRECT	NL	West	West
   }
 
   function allScmOwnerOptions() {
-    return uniqueSorted(productsScmAuthorizedScms.concat(authorizedManagerCanOwnNames));
+    return uniqueSorted(productsScmAuthorizedScms.concat(authorizedManagerCanOwnNames, authorizedManagerCanViewNames));
   }
 
   function productsScmOwnerOptions() {
@@ -9772,6 +9869,14 @@ Health & Hospitality	DIRECT	NL	West	West
     setOptionsPanelOpen(Boolean(panel && panel.hidden));
   }
 
+  function ownerMeFilterWaitingForOwnershipData(controls = getControls()) {
+    const ownerMeChecked = Boolean(controls.productsScmOwnerMe && controls.productsScmOwnerMe.checked);
+    if (!ownerMeChecked || productsScmUserIsOwner()) return false;
+    const relationshipPending = !productsScmMetadata.rowCount && !productsScmMetadata.error;
+    const authorizedManagersPending = !authorizedManagersLoaded() && !authorizedManagersMetadata.error;
+    return relationshipPending || authorizedManagersPending;
+  }
+
   function renderResults() {
     if (pageIsSuspended) return;
     const controls = getControls();
@@ -9792,9 +9897,18 @@ Health & Hospitality	DIRECT	NL	West	West
         if (leftSla.passed !== rightSla.passed) return leftSla.passed ? -1 : 1;
         return submittedOrder || ((rightSla.hours || 0) - (leftSla.hours || 0));
       });
+    const waitingForOwnerMeData = !visibleRows.length && searchRows.length && ownerMeFilterWaitingForOwnershipData(controls);
     list.innerHTML = visibleRows.length
       ? visibleRows.map(renderRow).join("")
-      : `<div class="scr-helper-empty">No visible SCRs match the selected filters.</div>`;
+      : waitingForOwnerMeData
+        ? `<div class="scr-helper-loading-splash" role="status" aria-live="polite">
+            <div class="scr-helper-loading-mark">⏳</div>
+            <div>
+              <div class="scr-helper-loading-title">Resolving SCM Owner</div>
+              <div class="scr-helper-loading-text">Rows are loaded. IQUEUE is still loading ownership mappings for Owner = Me.</div>
+            </div>
+          </div>`
+        : `<div class="scr-helper-empty">No visible SCRs match the selected filters.</div>`;
 
     const unmappedCount = visibleRows.filter(isUnmappedReviewRow).length;
     const loadedText = searchResultTotal > searchRows.length
@@ -9813,7 +9927,9 @@ Health & Hospitality	DIRECT	NL	West	West
     const ownerScopeText = controls.hideOwnedOutsideMyScGroups && controls.hideOwnedOutsideMyScGroups.checked
       ? "; owned outside my groups hidden"
       : "";
-    status.textContent = `${visibleRows.length} of ${loadedText} shown${unmappedCount ? `; ${unmappedCount} unmapped` : ""}${slaText}${assignedText}${productsOwnerText}${ownerScopeText}. ${mappingStatusText()}.`;
+    status.textContent = waitingForOwnerMeData
+      ? `Waiting for SCM ownership mapping before applying Owner = Me. ${loadedText}. ${mappingStatusText()}.`
+      : `${visibleRows.length} of ${loadedText} shown${unmappedCount ? `; ${unmappedCount} unmapped` : ""}${slaText}${assignedText}${productsOwnerText}${ownerScopeText}. ${mappingStatusText()}.`;
     refreshMappingHealthPanel();
     list.querySelectorAll(".scr-helper-edit").forEach(button => {
       button.textContent = "Staff SCR";
@@ -9849,21 +9965,22 @@ Health & Hospitality	DIRECT	NL	West	West
 
     const canView = productsScmUserCanView();
     const isOwner = productsScmUserIsOwner();
+    const savedOwnerMe = productsScmOwnerMeDefaultChecked();
     row.hidden = !canView;
     if (ownerLogicSelect) ownerLogicSelect.disabled = !canView;
     checkbox.disabled = !isOwner;
     if (ownerScopeCheckbox) ownerScopeCheckbox.disabled = !canView;
     input.disabled = !canView;
     if (!canView) {
-      checkbox.checked = false;
+      checkbox.checked = savedOwnerMe;
       if (ownerLogicSelect) ownerLogicSelect.value = "or";
       if (ownerScopeCheckbox) ownerScopeCheckbox.checked = false;
       renderProductsScmOwnerTokens([]);
       hideProductsScmOwnerSuggestions();
     } else if (!isOwner) {
-      checkbox.checked = false;
+      checkbox.checked = savedOwnerMe;
     } else {
-      checkbox.checked = productsScmOwnerMeDefaultChecked();
+      checkbox.checked = savedOwnerMe;
     }
 
     if (datalist) {
@@ -9884,7 +10001,7 @@ Health & Hospitality	DIRECT	NL	West	West
       } else if (productsScmUserIsViewer()) {
         note.textContent = `SCM queue viewer: ${currentProductsScmViewerName() || getCurrentUserName()}`;
       } else {
-        note.textContent = "SCM owner controls hidden for this user";
+        note.textContent = "View only: choose a manager below";
       }
     }
     updateFilterSummary();
@@ -10178,6 +10295,7 @@ Health & Hospitality	DIRECT	NL	West	West
     updateIndustrySubgroupFilterOptions();
     restoreStoredFilters({ includeDynamic: true, dynamicOnly: true });
     renderResults();
+    lastQueueRefreshAt = Date.now();
     scheduleRoutingHashtagHydration(searchRows, sequence);
 
     const extraRows = await fetchAdditionalSearchRows();
@@ -10197,6 +10315,7 @@ Health & Hospitality	DIRECT	NL	West	West
     updateIndustrySubgroupFilterOptions();
     restoreStoredFilters({ includeDynamic: true, dynamicOnly: true });
     renderResults();
+    lastQueueRefreshAt = Date.now();
     scheduleRoutingHashtagHydration(searchRows, sequence);
   }
 
@@ -10205,39 +10324,9 @@ Health & Hospitality	DIRECT	NL	West	West
     window.open(url, "_blank", "noopener,noreferrer");
   }
 
-  function openMailtoUrlInNewWindow(url) {
-    let opened = null;
-    try {
-      opened = window.open("about:blank", "_blank");
-      if (opened) {
-        try {
-          opened.opener = null;
-          opened.document.title = "Opening email compose";
-          opened.document.body.innerHTML = `
-            <p style="font-family: Arial, sans-serif; color: #3C4545;">
-              Opening email compose...
-            </p>
-          `;
-        } catch (error) {
-          // Some browser privacy settings prevent writing to the child tab; location handoff still usually works.
-        }
-        window.setTimeout(() => {
-          try {
-            opened.location.href = url;
-          } catch (error) {
-            console.warn("SCR helper child-window mailto handoff failed", error);
-          }
-        }, 0);
-        return;
-      }
-    } catch (error) {
-      console.warn("SCR helper blank-window mailto open failed", error);
-    }
-
+  function openMailtoUrl(url) {
     const link = document.createElement("a");
     link.href = url;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
     link.style.display = "none";
     document.body.appendChild(link);
     link.click();
@@ -10247,7 +10336,7 @@ Health & Hospitality	DIRECT	NL	West	West
   function openEditUrlWithGm(url) {
     if (!url) return;
     if (/^mailto:/i.test(url)) {
-      openMailtoUrlInNewWindow(url);
+      openMailtoUrl(url);
       return;
     }
     try {
@@ -10268,7 +10357,7 @@ Health & Hospitality	DIRECT	NL	West	West
 
   function openEmailDraftUrl(draft) {
     if (!draft) return "";
-    const useMailto = browserLooksLikeFirefox() && draft.mailtoUrl;
+    const useMailto = draft.mailtoUrl && browserLooksLikeFirefox();
     const url = useMailto ? draft.mailtoUrl : draft.outlookUrl;
     openEditUrlWithGm(url);
     return useMailto ? "mailto" : "outlook";
@@ -10399,6 +10488,14 @@ Health & Hospitality	DIRECT	NL	West	West
   function fieldInternalIdFromRow(row, fieldId) {
     const cleanFieldId = normalizeSpaces(fieldId);
     if (!row || !cleanFieldId) return "";
+    if (cleanFieldId === REQUESTOR_FIELD_ID) {
+      const requestorId = normalizeInternalIdValue(row.debugIds && row.debugIds.requestorId);
+      if (requestorId) return requestorId;
+    }
+    if (cleanFieldId === "custrecord_screq_assignee") {
+      const assigneeId = normalizeInternalIdValue(row.debugIds && row.debugIds.assigneeId);
+      if (assigneeId) return assigneeId;
+    }
     const escapedFieldId = cleanFieldId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const patterns = [
       new RegExp(`${escapedFieldId}\\s*[:=]\\s*["']?(\\d+)["']?`, "i"),
@@ -11472,6 +11569,12 @@ Health & Hospitality	DIRECT	NL	West	West
     const card = button.closest(".scr-helper-card");
     const row = searchRows.find(item => item.id === button.dataset.rowId);
     if (!row || !row.internalId) return;
+    if (!productsScmUserIsOwner()) {
+      button.disabled = true;
+      setOwnershipStatus(button, "View only", "error");
+      setStaffingNotesStatus(card, "View-only users can inspect queues but cannot take ownership.", "error");
+      return;
+    }
 
     button.disabled = true;
     setOwnershipStatus(button, "Resolving current user...");
@@ -11532,7 +11635,7 @@ Health & Hospitality	DIRECT	NL	West	West
       const ccRecipient = await resolveSalesDirectorEmail(row);
       const draft = openRequesterInfoDraft(row, recipient, ccRecipient ? [ccRecipient.email] : []);
       const openedText = draft.autoOpened === "mailto"
-        ? "email compose opened using the Firefox fallback"
+        ? "email compose opened using the CC-safe mail fallback"
         : "Outlook compose opened";
       row.routingNotice = {
         message: `Info request ${openedText} for ${draft.email}${draft.cc && draft.cc.length ? `, cc ${draft.cc.join(", ")}` : ""}. Review and send it. If it did not appear, use the links below.`,
@@ -11573,14 +11676,21 @@ Health & Hospitality	DIRECT	NL	West	West
       }
 
       const salesRepName = cleanPersonName(recipient.name || buildRowSummary(row).salesRep);
-      const rawRequestorId = normalizeInternalIdValue(fieldInternalIdFromRow(row, REQUESTOR_FIELD_ID));
+      const debugRequestorId = normalizeInternalIdValue(row.debugIds && row.debugIds.requestorId);
+      const rawRequestorId = debugRequestorId || normalizeInternalIdValue(fieldInternalIdFromRow(row, REQUESTOR_FIELD_ID));
       const lookupRequestorId = rawRequestorId ? "" : normalizeInternalIdValue(await lookupSingleFieldInternal(row, REQUESTOR_FIELD_ID));
       const frameRequestorId = rawRequestorId || lookupRequestorId
         ? ""
         : normalizeInternalIdValue(await readSingleFieldViaEditFrame(row, row.internalId || recordIdFromUrl(row.editUrl), REQUESTOR_FIELD_ID, "Requester"));
       const requestorId = rawRequestorId || lookupRequestorId || frameRequestorId;
       let employeeId = requestorId || recipient.id || salesRepEmployeeIdForRow(row);
-      let assigneeSource = requestorId ? `${REQUESTOR_FIELD_ID}:${requestorId}${rawRequestorId ? " raw" : lookupRequestorId ? " lookup" : " frame"}` : "";
+      let assigneeSource = requestorId ? `${REQUESTOR_FIELD_ID}.id:${requestorId}${debugRequestorId ? " debug" : rawRequestorId ? " raw" : lookupRequestorId ? " lookup" : " frame"}` : "";
+      if (!assigneeSource && recipient.id) {
+        assigneeSource = `employee.id:${recipient.id}`;
+      }
+      if (!assigneeSource && employeeId && row.debugIds && row.debugIds.salesRepId) {
+        assigneeSource = `custrecord_screq_opp_salesreproster.id:${employeeId} debug`;
+      }
       if (!employeeId && salesRepName) {
         const employeeRecord = await resolveEmployeeRecordByName(salesRepName, {
           label: "Sales Rep",
@@ -11600,7 +11710,7 @@ Health & Hospitality	DIRECT	NL	West	West
       const ccRecipient = await resolveSalesDirectorEmail(row);
       const draft = openRedirectToSalesDraft(row, recipient, ccRecipient ? [ccRecipient.email] : [], dialog.body);
       const openedText = draft.autoOpened === "mailto"
-        ? "email compose opened using the Firefox fallback"
+        ? "email compose opened using the CC-safe mail fallback"
         : "Outlook compose opened";
       row.routingNotice = {
         message: `SCR assigned back to ${recipient.name || recipient.email}${assigneeSource ? ` (${assigneeSource})` : ""}; #gravity saved. Redirect-to-sales ${openedText} for ${draft.email}${draft.cc && draft.cc.length ? `, cc ${draft.cc.join(", ")}` : ""}. Review and send it. If it did not appear, use the links below.`,
@@ -11737,7 +11847,7 @@ Health & Hospitality	DIRECT	NL	West	West
           setStaffingNotesStatus(card, "⏳ Route saved. Opening owner notification draft...", "working");
           const notice = await sendOwnerRouteEmail(row, assignment.ownerName, target, routeNoteLine, routeDetails);
           const openedText = notice.autoOpened === "mailto"
-            ? "email compose opened using the Firefox fallback"
+            ? "email compose opened using the CC-safe mail fallback"
             : "Outlook compose opened";
           row.routingNotice = {
             message: `Route saved${routeNoteLine ? "; redirect note added" : ""}; ${openedText} for ${notice.email}. Review and send it. If it did not appear, use the links below.`,
@@ -12296,7 +12406,7 @@ Health & Hospitality	DIRECT	NL	West	West
       const mailtoLink = closestElement(event.target, ".scr-helper-notice-link[href^='mailto:']");
       if (mailtoLink) {
         event.preventDefault();
-        openMailtoUrlInNewWindow(mailtoLink.href);
+        openMailtoUrl(mailtoLink.href);
         return;
       }
 
@@ -14559,6 +14669,9 @@ Health & Hospitality	DIRECT	NL	West	West
     applyCachedProductsScmTerritoryMapping();
     applyCachedAuthorizedManagers();
     updateMappingFilterOptions();
+    restoreStoredFilters({ includeDynamic: true });
+    updateIndustrySubgroupFilterOptions();
+    restoreStoredFilters({ includeDynamic: true, dynamicOnly: true });
     updateProductsScmControls();
     updateFilterSummary();
   }
@@ -14595,7 +14708,7 @@ Health & Hospitality	DIRECT	NL	West	West
     pageIsSuspended = true;
     pageWasSuspended = true;
     startupDeferredForVisibility = true;
-    saveHelperState();
+    saveHelperLayoutState();
   }
 
   function resumeHelperWork(message = `Resuming ${CURRENT_QUEUE.loadingLabel}.`) {
@@ -14619,12 +14732,10 @@ Health & Hospitality	DIRECT	NL	West	West
     }
     if (canPreserveRenderedRows) {
       hideRestoreOverlay();
-      const status = document.getElementById("scr-helper-status");
-      if (status) status.textContent = message;
-      applyStartupCachedData();
-      updateFilterSummary();
-      scheduleBackgroundTask(() => refreshRows({ quiet: true, preserveRendered: true }), 500);
-      scheduleBackgroundTask(loadStartupBackgroundData, 1000);
+      const staleRows = !lastQueueRefreshAt || Date.now() - lastQueueRefreshAt > RESUME_ROW_REFRESH_STALE_MS;
+      if (staleRows) {
+        scheduleBackgroundTask(() => refreshRows({ quiet: true, preserveRendered: true }), 4000);
+      }
       return;
     }
 
@@ -14638,7 +14749,7 @@ Health & Hospitality	DIRECT	NL	West	West
     pageIsSuspended = true;
     pageWasSuspended = true;
     refreshSequence += 1;
-    saveHelperState();
+    saveHelperLayoutState();
   }
 
   function handlePageShow(event) {
@@ -14654,7 +14765,7 @@ Health & Hospitality	DIRECT	NL	West	West
   function handleVisibilityChange() {
     if (pageShouldPauseWork()) {
       suspendHelperForVisibility();
-      renderStartupSplash(`Paused ${CURRENT_QUEUE.loadingLabel} until this tab is visible.`);
+      if (!helperHasRenderedRows()) renderStartupSplash(`Paused ${CURRENT_QUEUE.loadingLabel} until this tab is visible.`);
       return;
     }
     if (startupDeferredForVisibility || pageWasSuspended || pageIsSuspended) {
