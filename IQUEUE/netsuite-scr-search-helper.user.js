@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.81
+// @version      27.0.83
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -38,12 +38,13 @@
   const CROSS_VERTICAL_FIELD_ID = "custrecord_screq_cross_vertical";
   const ASSIGNEE_FIELD_ID = "custrecord_screq_assignee";
   const REQUESTOR_FIELD_ID = "custrecord_screq_requestor";
+  const EMPLOYEE_ORACLE_EMAIL_FIELD_ID = "custrecord_emproster_oracle_email";
   const ROSTER_RECORD_TYPE = "customrecord_emproster";
   const ROSTER_COST_CENTER_ID = "M5M1";
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.81";
+  const HELPER_VERSION = "27.0.83";
   const HELPER_RESTORE_OVERLAY_ID = "scr-helper-restore-overlay";
   const HELPER_RESTORE_STYLE_ID = "scr-helper-restore-overlay-styles";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
@@ -8667,11 +8668,26 @@ Health & Hospitality	DIRECT	NL	West	West
     };
   }
 
+  function preferredEmployeeEmail(oracleEmail, email) {
+    const cleanOracleEmail = normalizeSpaces(oracleEmail);
+    const cleanEmail = normalizeSpaces(email);
+    return {
+      email: cleanOracleEmail || cleanEmail,
+      sourceNote: cleanOracleEmail
+        ? cleanEmail && normalizeKey(cleanEmail) !== normalizeKey(cleanOracleEmail)
+          ? "employee Oracle Email Address; standard email differs"
+          : "employee Oracle Email Address"
+        : "employee email"
+    };
+  }
+
   function lookupEmployeeEmailWithNlapi(pageWindow, names, employeeId) {
     if (employeeId && typeof pageWindow.nlapiLookupField === "function") {
       const email = normalizeLookupFieldValue(pageWindow.nlapiLookupField("employee", employeeId, "email"));
+      const oracleEmail = normalizeLookupFieldValue(pageWindow.nlapiLookupField("employee", employeeId, EMPLOYEE_ORACLE_EMAIL_FIELD_ID));
       const name = normalizeLookupFieldValue(pageWindow.nlapiLookupField("employee", employeeId, "entityid"));
-      const row = employeeLookupRow(employeeId, name || names[0], email, "employee record");
+      const preferred = preferredEmployeeEmail(oracleEmail, email);
+      const row = employeeLookupRow(employeeId, name || names[0], preferred.email, preferred.sourceNote);
       if (row) return row;
     }
 
@@ -8728,8 +8744,10 @@ Health & Hospitality	DIRECT	NL	West	West
   function lookupEmployeeRecordWithNlapi(pageWindow, names, employeeId) {
     if (employeeId && typeof pageWindow.nlapiLookupField === "function") {
       const email = normalizeLookupFieldValue(pageWindow.nlapiLookupField("employee", employeeId, "email"));
+      const oracleEmail = normalizeLookupFieldValue(pageWindow.nlapiLookupField("employee", employeeId, EMPLOYEE_ORACLE_EMAIL_FIELD_ID));
       const name = normalizeLookupFieldValue(pageWindow.nlapiLookupField("employee", employeeId, "entityid"));
-      const row = employeeRecordLookupRow(employeeId, name || names[0], email, "employee record");
+      const preferred = preferredEmployeeEmail(oracleEmail, email);
+      const row = employeeRecordLookupRow(employeeId, name || names[0], preferred.email, preferred.sourceNote);
       if (row) return row;
     }
 
@@ -8828,13 +8846,17 @@ Health & Hospitality	DIRECT	NL	West	West
               const result = search.lookupFields({
                 type: employeeType,
                 id: employeeId,
-                columns: ["entityid", "email"]
+                columns: ["entityid", "email", EMPLOYEE_ORACLE_EMAIL_FIELD_ID]
               });
+              const preferred = preferredEmployeeEmail(
+                normalizeLookupFieldValue(result && result[EMPLOYEE_ORACLE_EMAIL_FIELD_ID]),
+                normalizeLookupFieldValue(result && result.email)
+              );
               finish(resolve)(employeeLookupRow(
                 employeeId,
                 normalizeLookupFieldValue(result && result.entityid) || names[0],
-                normalizeLookupFieldValue(result && result.email),
-                "employee record"
+                preferred.email,
+                preferred.sourceNote
               ));
               return;
             }
@@ -8935,13 +8957,17 @@ Health & Hospitality	DIRECT	NL	West	West
               const result = search.lookupFields({
                 type: employeeType,
                 id: employeeId,
-                columns: ["entityid", "email"]
+                columns: ["entityid", "email", EMPLOYEE_ORACLE_EMAIL_FIELD_ID]
               });
+              const preferred = preferredEmployeeEmail(
+                normalizeLookupFieldValue(result && result[EMPLOYEE_ORACLE_EMAIL_FIELD_ID]),
+                normalizeLookupFieldValue(result && result.email)
+              );
               finish(resolve)(employeeRecordLookupRow(
                 employeeId,
                 normalizeLookupFieldValue(result && result.entityid) || names[0],
-                normalizeLookupFieldValue(result && result.email),
-                "employee record"
+                preferred.email,
+                preferred.sourceNote
               ));
               return;
             }
@@ -9053,6 +9079,10 @@ Health & Hospitality	DIRECT	NL	West	West
       } catch (error) {
         console.warn(`IQUEUE N/search ${label} email lookup failed`, error);
       }
+    }
+    if (!match && employeeId) {
+      if (options.optional) return null;
+      throw new Error(`No ${label} email was available on employee record ${employeeId} for ${employeeName}.`);
     }
     if (!match) {
       const inferred = inferOracleEmailFromName(employeeName);
@@ -11637,8 +11667,9 @@ Health & Hospitality	DIRECT	NL	West	West
       const openedText = draft.autoOpened === "mailto"
         ? "email compose opened using the CC-safe mail fallback"
         : "Outlook compose opened";
+      const recipientSource = recipient.source ? ` (${recipient.source})` : "";
       row.routingNotice = {
-        message: `Info request ${openedText} for ${draft.email}${draft.cc && draft.cc.length ? `, cc ${draft.cc.join(", ")}` : ""}. Review and send it. If it did not appear, use the links below.`,
+        message: `Info request ${openedText} for ${draft.email}${recipientSource}${draft.cc && draft.cc.length ? `, cc ${draft.cc.join(", ")}` : ""}. Review and send it. If it did not appear, use the links below.`,
         state: "success",
         links: draft.links || []
       };
@@ -11712,8 +11743,9 @@ Health & Hospitality	DIRECT	NL	West	West
       const openedText = draft.autoOpened === "mailto"
         ? "email compose opened using the CC-safe mail fallback"
         : "Outlook compose opened";
+      const recipientSource = recipient.source ? ` (${recipient.source})` : "";
       row.routingNotice = {
-        message: `SCR assigned back to ${recipient.name || recipient.email}${assigneeSource ? ` (${assigneeSource})` : ""}; #gravity saved. Redirect-to-sales ${openedText} for ${draft.email}${draft.cc && draft.cc.length ? `, cc ${draft.cc.join(", ")}` : ""}. Review and send it. If it did not appear, use the links below.`,
+        message: `SCR assigned back to ${recipient.name || recipient.email}${assigneeSource ? ` (${assigneeSource})` : ""}; #gravity saved. Redirect-to-sales ${openedText} for ${draft.email}${recipientSource}${draft.cc && draft.cc.length ? `, cc ${draft.cc.join(", ")}` : ""}. Review and send it. If it did not appear, use the links below.`,
         state: "success",
         links: draft.links || []
       };
