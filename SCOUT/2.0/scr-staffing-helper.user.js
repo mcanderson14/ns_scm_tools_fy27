@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.2.0
+// @version      27.2.7
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -17,12 +17,12 @@
 // @connect      nlcorp-sb2.app.netsuite.com
 // @grant        unsafeWindow
 // @run-at       document-idle
-// @downloadURL  https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/scr-staffing-helper.user.js
-// @updateURL    https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/scr-staffing-helper.user.js
+// @downloadURL  https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/2.0/scr-staffing-helper.user.js
+// @updateURL    https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/2.0/scr-staffing-helper.user.js
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.2.0
+   SCOUT — SC Operations Utility Tool  27.2.7
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,13 +32,13 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.2.0';
+  const SCRIPT_VERSION = '27.2.7';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
   const SCOUT_GPT_URL = 'https://chatgpt.com/';
-  const SCOUT_INSTALL_URL = 'https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/scr-staffing-helper.user.js';
-  const SCOUT_UPDATE_CHECK_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_tools_fy27/main/SCOUT/scr-staffing-helper.user.js';
+  const SCOUT_INSTALL_URL = 'https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/2.0/scr-staffing-helper.user.js';
+  const SCOUT_UPDATE_CHECK_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_tools_fy27/main/SCOUT/2.0/scr-staffing-helper.user.js';
   const SCOUT_TESTING_INSTALL_URL = 'https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/testing/scr-staffing-helper.user.js';
   const SCOUT_TESTING_UPDATE_CHECK_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_tools_fy27/main/SCOUT/testing/scr-staffing-helper.user.js';
   const SCOUT_UPDATE_CACHE_KEY = 'scout_update_check_cache_v2';
@@ -88,8 +88,9 @@
      SCOUT opens the GitHub Pages staffing dashboard static host directly.
   ──────────────────────────────────────────────────────────────── */
   const DASHBOARD_URL_DEFAULT = 'https://mcanderson14.github.io/ns_scm_tools_fy27/SCOUT/2.0/staffing-dashboard.html';
-  const INLINE_DRAWER_INSTALL_URL = 'https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/2.0/scout-calendar-inline-drawer.user.js';
-  const LOCAL_CONFIG_KEY      = 'sc_staffing_helper_config_v1';
+	  const INLINE_DRAWER_INSTALL_URL = 'https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/SCOUT/2.0/scout-calendar-inline-drawer.user.js';
+	  const LOCAL_CONFIG_KEY      = 'sc_staffing_helper_config_v1';
+	  const SKILLS_SEARCH_ENABLED_KEY = 'sc_skills_search_enabled';
 
   function getLocalConfig() {
     const defaults = {
@@ -99,15 +100,17 @@
       debugModeEnabled: false,
       previousScHistoryEnabled: false,
       customerLicenseEnabled: false,
-      earlyAdopterUpdatesEnabled: false,
-      combineStaffingTabsEnabled: false,
-      testingUpdateUrl: '',
+	      earlyAdopterUpdatesEnabled: false,
+	      combineStaffingTabsEnabled: false,
+	      skillsSearchEnabled: true,
+	      testingUpdateUrl: '',
       commentInitials: '',
       extraTeamMembers: '',
-      extraTeamManagers: '',
-      extraAmoDeliverables: '',
-      feedbackWebhookUrl: '',
-    };
+	      extraTeamManagers: '',
+	      extraAmoDeliverables: '',
+	      feedbackWebhookUrl: '',
+	      requestDetailTemplateOverrides: {},
+	    };
     let cfg = {};
     try {
       cfg = JSON.parse(localStorage.getItem(LOCAL_CONFIG_KEY) || '{}') || {};
@@ -115,50 +118,59 @@
       cfg = {};
     }
 
-    const legacyCalendar = localStorage.getItem('sc_cal_integration_enabled');
-    const merged = {
-      ...defaults,
-      ...cfg,
-    };
-    if (typeof cfg.calendarIntegrationEnabled !== 'boolean' && legacyCalendar !== null) {
-      merged.calendarIntegrationEnabled = legacyCalendar === 'true';
-    }
+	    const legacyCalendar = localStorage.getItem('sc_cal_integration_enabled');
+	    const legacySkillsSearch = localStorage.getItem(SKILLS_SEARCH_ENABLED_KEY);
+	    const merged = {
+	      ...defaults,
+	      ...cfg,
+	    };
+	    if (typeof cfg.calendarIntegrationEnabled !== 'boolean' && legacyCalendar !== null) {
+	      merged.calendarIntegrationEnabled = legacyCalendar === 'true';
+	    }
+	    if (legacySkillsSearch !== null) {
+	      merged.skillsSearchEnabled = legacySkillsSearch === 'true';
+	    }
     merged.inlineCalendarDrawerEnabled = Boolean(merged.inlineCalendarDrawerEnabled);
     merged.gptAssistEnabled = Boolean(merged.gptAssistEnabled);
     merged.debugModeEnabled = Boolean(merged.debugModeEnabled);
     merged.previousScHistoryEnabled = Boolean(merged.previousScHistoryEnabled);
     merged.customerLicenseEnabled = Boolean(merged.customerLicenseEnabled);
-    merged.earlyAdopterUpdatesEnabled = Boolean(merged.earlyAdopterUpdatesEnabled);
-    merged.combineStaffingTabsEnabled = Boolean(merged.combineStaffingTabsEnabled);
-    merged.testingUpdateUrl = String(merged.testingUpdateUrl || '').trim();
+	    merged.earlyAdopterUpdatesEnabled = Boolean(merged.earlyAdopterUpdatesEnabled);
+	    merged.combineStaffingTabsEnabled = Boolean(merged.combineStaffingTabsEnabled);
+	    merged.skillsSearchEnabled = typeof merged.skillsSearchEnabled === 'boolean' ? merged.skillsSearchEnabled : true;
+	    merged.testingUpdateUrl = String(merged.testingUpdateUrl || '').trim();
     merged.commentInitials = normalizeCommentInitials(merged.commentInitials);
     merged.extraTeamMembers = String(merged.extraTeamMembers || '');
-    merged.extraTeamManagers = String(merged.extraTeamManagers || '');
-    merged.extraAmoDeliverables = String(merged.extraAmoDeliverables || '');
-    merged.feedbackWebhookUrl = String(merged.feedbackWebhookUrl || '').trim();
-    return merged;
-  }
+	    merged.extraTeamManagers = String(merged.extraTeamManagers || '');
+	    merged.extraAmoDeliverables = String(merged.extraAmoDeliverables || '');
+	    merged.feedbackWebhookUrl = String(merged.feedbackWebhookUrl || '').trim();
+	    merged.requestDetailTemplateOverrides = sanitizeRequestDetailTemplateOverrides(merged.requestDetailTemplateOverrides);
+	    return merged;
+	  }
 
   function saveLocalConfig(patch) {
     const cfg = { ...getLocalConfig(), ...(patch || {}) };
     cfg.extraTeamMembers = String(cfg.extraTeamMembers || '');
     cfg.extraTeamManagers = String(cfg.extraTeamManagers || '');
-    cfg.extraAmoDeliverables = String(cfg.extraAmoDeliverables || '');
-    cfg.feedbackWebhookUrl = String(cfg.feedbackWebhookUrl || '').trim();
-    cfg.calendarIntegrationEnabled = Boolean(cfg.calendarIntegrationEnabled);
+	    cfg.extraAmoDeliverables = String(cfg.extraAmoDeliverables || '');
+	    cfg.feedbackWebhookUrl = String(cfg.feedbackWebhookUrl || '').trim();
+	    cfg.requestDetailTemplateOverrides = sanitizeRequestDetailTemplateOverrides(cfg.requestDetailTemplateOverrides);
+	    cfg.calendarIntegrationEnabled = Boolean(cfg.calendarIntegrationEnabled);
     cfg.inlineCalendarDrawerEnabled = Boolean(cfg.inlineCalendarDrawerEnabled);
     cfg.gptAssistEnabled = Boolean(cfg.gptAssistEnabled);
     cfg.debugModeEnabled = Boolean(cfg.debugModeEnabled);
     cfg.previousScHistoryEnabled = Boolean(cfg.previousScHistoryEnabled);
     cfg.customerLicenseEnabled = Boolean(cfg.customerLicenseEnabled);
-    cfg.earlyAdopterUpdatesEnabled = Boolean(cfg.earlyAdopterUpdatesEnabled);
-    cfg.combineStaffingTabsEnabled = Boolean(cfg.combineStaffingTabsEnabled);
-    cfg.testingUpdateUrl = String(cfg.testingUpdateUrl || '').trim();
+	    cfg.earlyAdopterUpdatesEnabled = Boolean(cfg.earlyAdopterUpdatesEnabled);
+	    cfg.combineStaffingTabsEnabled = Boolean(cfg.combineStaffingTabsEnabled);
+	    cfg.skillsSearchEnabled = typeof cfg.skillsSearchEnabled === 'boolean' ? cfg.skillsSearchEnabled : true;
+	    cfg.testingUpdateUrl = String(cfg.testingUpdateUrl || '').trim();
     cfg.commentInitials = normalizeCommentInitials(cfg.commentInitials);
-    localStorage.setItem(LOCAL_CONFIG_KEY, JSON.stringify(cfg));
-    localStorage.setItem('sc_cal_integration_enabled', cfg.calendarIntegrationEnabled ? 'true' : 'false');
-    return cfg;
-  }
+	    localStorage.setItem(LOCAL_CONFIG_KEY, JSON.stringify(cfg));
+	    localStorage.setItem('sc_cal_integration_enabled', cfg.calendarIntegrationEnabled ? 'true' : 'false');
+	    localStorage.setItem(SKILLS_SEARCH_ENABLED_KEY, cfg.skillsSearchEnabled ? 'true' : 'false');
+	    return cfg;
+	  }
 
   function getDashboardUrl() {
     return DASHBOARD_URL_DEFAULT;
@@ -221,9 +233,12 @@
   function getEarlyAdopterUpdatesEnabled() {
     return Boolean(getLocalConfig().earlyAdopterUpdatesEnabled);
   }
-  function getCombineStaffingTabsEnabled() {
-    return Boolean(getLocalConfig().combineStaffingTabsEnabled);
-  }
+	  function getCombineStaffingTabsEnabled() {
+	    return Boolean(getLocalConfig().combineStaffingTabsEnabled);
+	  }
+	  function getSkillsSearchEnabled() {
+	    return getLocalConfig().skillsSearchEnabled !== false;
+	  }
   function getTestingUpdateUrl() {
     return getLocalConfig().testingUpdateUrl || SCOUT_TESTING_UPDATE_CHECK_URL;
   }
@@ -311,9 +326,116 @@ Good luck with ${sc}!
 `,
   };
 
-  const AMO_DELIVERABLE_NO_TEMPLATE_OPTIONS = [
-    'Business Discussion',
-  ];
+	  const AMO_DELIVERABLE_NO_TEMPLATE_OPTIONS = [
+	    'Business Discussion',
+	  ];
+
+	  const REQUEST_DETAIL_TEMPLATE_KEYS = {
+	    directStaffing: 'directStaffing',
+	    amoFallback: 'amoFallback',
+	    cancelRequest: 'cancelRequest',
+	    additionalDetailsLabel: 'additionalDetailsLabel',
+	  };
+
+	  function makeAmoRequestDetailTemplateKey(deliverable) {
+	    return `amo:${normalizeAmoDeliverableName(deliverable)}`;
+	  }
+
+	  function sanitizeRequestDetailTemplateOverrides(value) {
+	    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+	    const clean = {};
+	    Object.keys(value).forEach(key => {
+	      const text = value[key];
+	      if (typeof text === 'string') clean[key] = text;
+	    });
+	    return clean;
+	  }
+
+	  function getRequestDetailTemplateOptions() {
+	    const amoTemplates = Object.keys(AMO_DELIVERABLE_TEMPLATES)
+	      .map(name => ({ key: makeAmoRequestDetailTemplateKey(name), label: `AMO - ${name}` }));
+	    return [
+	      { key: REQUEST_DETAIL_TEMPLATE_KEYS.directStaffing, label: 'Direct Staffing' },
+	      ...amoTemplates,
+	      { key: REQUEST_DETAIL_TEMPLATE_KEYS.amoFallback, label: 'AMO - No Template / Fallback' },
+	      { key: REQUEST_DETAIL_TEMPLATE_KEYS.cancelRequest, label: 'Cancel Request' },
+	      { key: REQUEST_DETAIL_TEMPLATE_KEYS.additionalDetailsLabel, label: 'Additional Request Details Label' },
+	    ];
+	  }
+
+	  function getRequestDetailTemplateLabel(key) {
+	    const option = getRequestDetailTemplateOptions().find(item => item.key === key);
+	    return option ? option.label : key;
+	  }
+
+	  function getDefaultRequestDetailTemplateText(key) {
+	    if (key === REQUEST_DETAIL_TEMPLATE_KEYS.directStaffing || key === REQUEST_DETAIL_TEMPLATE_KEYS.amoFallback) {
+	      return `{scName} has been staffed, please schedule upcoming strategy meeting with the SC.\n`;
+	    }
+	    if (key === REQUEST_DETAIL_TEMPLATE_KEYS.cancelRequest) {
+	      return `SC Request cancelled by SC Manager ({managerName}). \nPlease create a new request if needed.\n---\n\n`;
+	    }
+	    if (key === REQUEST_DETAIL_TEMPLATE_KEYS.additionalDetailsLabel) {
+	      return 'Additional staffing details:';
+	    }
+	    if (String(key || '').startsWith('amo:')) {
+	      const deliverable = normalizeAmoDeliverableName(String(key).slice(4));
+	      const tmplFn = AMO_DELIVERABLE_TEMPLATES[deliverable];
+	      if (tmplFn) return tmplFn('{scName}', '{managerName}');
+	    }
+	    return '';
+	  }
+
+	  function getRequestDetailTemplateOverrides() {
+	    return getLocalConfig().requestDetailTemplateOverrides || {};
+	  }
+
+	  function hasRequestDetailTemplateOverride(key) {
+	    return Object.prototype.hasOwnProperty.call(getRequestDetailTemplateOverrides(), key);
+	  }
+
+	  function getRequestDetailTemplateText(key) {
+	    const overrides = getRequestDetailTemplateOverrides();
+	    return Object.prototype.hasOwnProperty.call(overrides, key)
+	      ? String(overrides[key] || '')
+	      : getDefaultRequestDetailTemplateText(key);
+	  }
+
+	  function renderRequestDetailTemplateText(template, vars) {
+	    const values = {
+	      scName: '',
+	      managerName: '',
+	      dateShort: todayString(),
+	      dateLong: todayFullString(),
+	      initials: '',
+	      deliverable: '',
+	      ...vars,
+	    };
+	    return String(template || '').replace(/\{(scName|managerName|dateShort|dateLong|initials|deliverable)\}/g, (match, key) => {
+	      return values[key] == null ? '' : String(values[key]);
+	    });
+	  }
+
+	  function renderConfiguredRequestDetailTemplate(key, vars) {
+	    return renderRequestDetailTemplateText(getRequestDetailTemplateText(key), vars);
+	  }
+
+	  function saveRequestDetailTemplateOverride(key, text) {
+	    const overrides = { ...getRequestDetailTemplateOverrides(), [key]: String(text || '') };
+	    saveLocalConfig({ requestDetailTemplateOverrides: overrides });
+	  }
+
+	  function resetRequestDetailTemplateOverride(key) {
+	    const overrides = { ...getRequestDetailTemplateOverrides() };
+	    delete overrides[key];
+	    saveLocalConfig({ requestDetailTemplateOverrides: overrides });
+	  }
+
+	  function buildRequestDetailTemplateOptionMarkup() {
+	    return getRequestDetailTemplateOptions()
+	      .map(item => `<option value="${escAttr(item.key)}">${escHtml(item.label)}</option>`)
+	      .join('');
+	  }
 
   let _amoDeliverableRemoteOptions = [];
   let _amoDeliverableFetchStarted = false;
@@ -531,6 +653,7 @@ Good luck with ${sc}!
   let SCOUT_CAN_READ_MANAGER_AVAIL_RES = false;
   let SCOUT_CAN_READ_VERTICAL_AMO = false;
   let SCOUT_CAN_READ_SALES_SUBREGION = false;
+  let SCOUT_CAN_FILTER_SALES_REGION = false;
   let SCOUT_ROLE_CONTEXT = { roleId: '', roleCenter: '', roleText: '', isScIc: false, isScManager: false };
 
   function availabilityNotesColumns(joinField) {
@@ -599,6 +722,12 @@ Good luck with ${sc}!
     } catch (e) {
       return '';
     }
+  }
+
+  function salesRegionFilters(joinField) {
+    return SCOUT_CAN_FILTER_SALES_REGION
+      ? [new nlobjSearchFilter('custrecord_emproster_salesregion', joinField, 'is', ROSTER_SALES_REGION_ID)]
+      : [];
   }
 
   // Guard: only SC Request records (rectype=2840)
@@ -1625,6 +1754,9 @@ html.sc-resizing #sc-skills-toggle { transition: none !important; }
 .sc-cal-off #sc-open-selected-btn,
 .sc-cal-off .sc-viewall-cal-btn { display: none !important; }
 .sc-gpt-off #sc-gpt-assist-card { display: none !important; }
+.sc-zero-only { display: none; }
+.sc-skills-search-off .sc-skill-search-only { display: none !important; }
+.sc-skills-search-off .sc-zero-only { display: block; }
 .sc-gpt-assist-card {
   margin-bottom: 8px;
   padding: 9px 10px;
@@ -4150,7 +4282,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         new nlobjSearchFilter('custrecord_emproster_eminactive',   join, 'is', 'F'),
         new nlobjSearchFilter('custrecord_emproster_sales_qb',     join, 'is', 25),
         new nlobjSearchFilter('custrecord_emproster_ocostcenter',  join, 'is', ROSTER_COST_CENTER_ID),
-        new nlobjSearchFilter('custrecord_emproster_salesregion',  join, 'is', ROSTER_SALES_REGION_ID),
+        ...salesRegionFilters(join),
       ];
       if (skillActiveFilterSupported) {
         filters.push(new nlobjSearchFilter('isinactive', skillEntryJoin, 'is', 'F'));
@@ -4228,8 +4360,12 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     }
   }
 
-  function buildPanelHTML() {
-    return `
+	  function buildPanelHTML() {
+	    const skillsSearchEnabled = getSkillsSearchEnabled();
+	    const productOptionsMarkup = skillsSearchEnabled ? buildProductOptions() : '';
+	    const productSkillOptionsMarkup = skillsSearchEnabled ? buildProductSkillOptions() : '';
+	    const industryOptionsMarkup = skillsSearchEnabled ? buildIndustryOptions() : '';
+	    return `
       <div id="sc-resize-handle" title="Drag to resize panel"></div>
       <div id="sc-panel-header">
         <div class="sc-header-brand">
@@ -4299,16 +4435,25 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               Shows an <strong>Ask AI Agent</strong> prompt builder that opens ChatGPT with the staffing prompt.
             </div>
           </div>
-          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#222">
-              <input type="checkbox" id="sc-combine-tabs-toggle" style="width:14px;height:14px">
-              <span>Combine Direct and AMO staffing search</span>
-            </label>
+	          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
+	            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#222">
+	              <input type="checkbox" id="sc-combine-tabs-toggle" style="width:14px;height:14px">
+	              <span>Combine Direct and AMO staffing search</span>
+	            </label>
             <div style="font-size:10px;color:var(--sc-text-muted);margin-top:4px;margin-left:22px">
-              Adds a Combined Staffing tab that searches both groups together while preserving AMO deliverables and Direct/AMO card colors.
-            </div>
-          </div>
-          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
+	              Adds a Combined Staffing tab that searches both groups together while preserving AMO deliverables and Direct/AMO card colors.
+	            </div>
+	          </div>
+	          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
+	            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#222">
+	              <input type="checkbox" id="sc-skills-search-toggle" style="width:14px;height:14px">
+	              <span>Enable SC Skills Search</span>
+	            </label>
+	            <div style="font-size:10px;color:var(--sc-text-muted);margin-top:4px;margin-left:22px">
+	              Turn off for SCOUT Zero mode. This keeps quick lookup, My Team, requested SCs, staffing actions, and calendar/drawer features while skipping product, industry, and skills-search lists.
+	            </div>
+	          </div>
+	          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#222">
               <input type="checkbox" id="sc-debug-mode-toggle" style="width:14px;height:14px">
               <span>Enable Debug Mode</span>
@@ -4386,18 +4531,35 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               Adds each manager's active NOAM M5M1 team to <strong>My Team</strong>. Saved locally and preserved through upgrades.
             </div>
           </div>
-          <div class="sc-field" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
-            <label class="sc-label">Additional AMO Deliverables</label>
-            <textarea id="sc-extra-amo-deliverables-input" class="sc-settings-textarea"
-              placeholder="One per line: deliverable name">${escHtml(getExtraAmoDeliverablesText())}</textarea>
-            <div class="sc-field-hint">
-              Optional no-template deliverables to show if NetSuite does not expose the full AMO deliverable list.
-            </div>
-          </div>
-          <div class="sc-settings-save-row">
-            <button class="sc-save-btn" id="sc-save-dashboard-url">Save Settings</button>
-            <span class="sc-save-confirm" id="sc-save-confirm">✔ Saved!</span>
-          </div>
+	          <div class="sc-field" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
+	            <label class="sc-label">Additional AMO Deliverables</label>
+	            <textarea id="sc-extra-amo-deliverables-input" class="sc-settings-textarea"
+	              placeholder="One per line: deliverable name">${escHtml(getExtraAmoDeliverablesText())}</textarea>
+	            <div class="sc-field-hint">
+	              Optional no-template deliverables to show if NetSuite does not expose the full AMO deliverable list.
+	            </div>
+	          </div>
+	          <div class="sc-field" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sc-border)">
+	            <label class="sc-label" for="sc-request-template-select">Additional Customizations</label>
+	            <select id="sc-request-template-select">${buildRequestDetailTemplateOptionMarkup()}</select>
+	            <textarea id="sc-request-template-editor" class="sc-settings-textarea" style="min-height:160px;margin-top:8px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
+	              placeholder="Customize the text SCOUT inserts into Request Details"></textarea>
+	            <div class="sc-field-hint">
+	              Saved locally and preserved through upgrades. Available tokens:
+	              <code>{scName}</code>, <code>{managerName}</code>, <code>{dateShort}</code>, <code>{dateLong}</code>, <code>{initials}</code>, <code>{deliverable}</code>.
+	            </div>
+	            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
+	              <button type="button" class="sc-action-btn" id="sc-request-template-save">Save Template</button>
+	              <button type="button" class="sc-action-btn" id="sc-request-template-reset">Reset Default</button>
+	              <button type="button" class="sc-action-btn secondary" id="sc-request-template-preview-btn">Preview</button>
+	              <span class="sc-save-confirm" id="sc-request-template-status"></span>
+	            </div>
+	            <pre id="sc-request-template-preview" style="display:none;white-space:pre-wrap;margin:8px 0 0;padding:8px;border:1px solid var(--sc-border);border-radius:6px;background:#f8fafc;color:#13212C;font-size:11px;max-height:180px;overflow:auto"></pre>
+	          </div>
+	          <div class="sc-settings-save-row">
+	            <button class="sc-save-btn" id="sc-save-dashboard-url">Save Settings</button>
+	            <span class="sc-save-confirm" id="sc-save-confirm">✔ Saved!</span>
+	          </div>
         </div>
 
         <!-- Staffing Context Card — populated on panel open, stays pinned -->
@@ -4478,17 +4640,21 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         <!-- ═══════════════════════════════════════════════════════
              DIRECT STAFFING PANE
         ═══════════════════════════════════════════════════════ -->
-        <div id="sc-direct-pane" class="sc-tab-pane active">
+	        <div id="sc-direct-pane" class="sc-tab-pane active">
+	          <div class="sc-card sc-zero-only">
+	            <div class="sc-card-title">SCOUT Zero</div>
+	            <div class="sc-status">SC Skills Search is off. Use My Team, requested SCs, quick lookup, calendar details, and staffing actions without loading product, industry, and skills matrices.</div>
+	          </div>
 
           <!-- Module Insights Card (Direct) -->
-          <div class="sc-card sc-insights-card" id="sc-insights-card" style="display:none">
+          <div class="sc-card sc-insights-card sc-skill-search-only" id="sc-insights-card" style="display:none">
             <div class="sc-card-title">📦 Module Detection</div>
             <div class="sc-insights-hint">Modules found in Request Details — click to select product:</div>
             <div id="sc-insights-chips" class="sc-insights-chips"></div>
           </div>
 
           <!-- Products Demonstrated -->
-          <div class="sc-card sc-collapsible-card collapsed" id="sc-direct-products-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-skill-search-only" id="sc-direct-products-card">
             <div class="sc-card-title" id="sc-direct-products-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Products Demonstrated</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -4501,7 +4667,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               <div class="sc-field">
                 <label class="sc-label">Products <span style="font-weight:400">(select up to 4)</span></label>
                 <select id="sc-products" multiple size="7">
-                  ${buildProductOptions()}
+                  ${productOptionsMarkup}
                 </select>
                 <div class="sc-field-hint">These write to the SCR Product(s) field when staffing.</div>
               </div>
@@ -4509,7 +4675,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           </div>
 
           <!-- Product Skills -->
-          <div class="sc-card sc-collapsible-card collapsed" id="sc-direct-product-skills-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-skill-search-only" id="sc-direct-product-skills-card">
             <div class="sc-card-title" id="sc-direct-product-skills-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Product Skills Search</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -4522,7 +4688,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               <div class="sc-field">
                 <label class="sc-label">Product Skills <span style="font-weight:400">(select up to 4)</span></label>
                 <select id="sc-product-skills" multiple size="7">
-                  ${buildProductSkillOptions()}
+                  ${productSkillOptionsMarkup}
                 </select>
                 <div class="sc-field-hint">Pulled from the employee product skills matrix. Press Enter in the filter to add the best match.</div>
               </div>
@@ -4530,7 +4696,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           </div>
 
           <!-- Industry -->
-          <div class="sc-card sc-collapsible-card collapsed" id="sc-direct-industry-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-skill-search-only" id="sc-direct-industry-card">
             <div class="sc-card-title" id="sc-direct-industry-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Industry (Optional)</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -4540,14 +4706,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                 <label class="sc-label">SC Industry</label>
                 <select id="sc-industry">
                   <option value="">— Any industry —</option>
-                  ${buildIndustryOptions()}
+                  ${industryOptionsMarkup}
                 </select>
               </div>
             </div>
           </div>
 
           <!-- Additional SC Skills -->
-          <div class="sc-card sc-collapsible-card collapsed sc-additional-skills-card" id="sc-direct-additional-skills-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-additional-skills-card sc-skill-search-only" id="sc-direct-additional-skills-card">
             <div class="sc-card-title" id="sc-direct-additional-skills-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Additional SC Skills</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -4565,7 +4731,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           </div>
 
           <!-- Filters -->
-          <div class="sc-card sc-collapsible-card collapsed sc-filter-card" id="sc-direct-filters-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-filter-card sc-skill-search-only" id="sc-direct-filters-card">
             <div class="sc-card-title" id="sc-direct-filters-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Filters</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -4636,7 +4802,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           </div>
 
           <!-- Search button -->
-          <button id="sc-search-btn">
+          <button id="sc-search-btn" class="sc-skill-search-only">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
             </svg>
@@ -4644,7 +4810,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           </button>
 
           <!-- Results -->
-          <div id="sc-results-area">
+          <div id="sc-results-area" class="sc-skill-search-only">
             <div class="sc-status">Select product skills, industry, or additional SC skills and click Search.</div>
           </div>
 
@@ -4653,7 +4819,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         <!-- ═══════════════════════════════════════════════════════
              AMO STAFFING PANE
         ═══════════════════════════════════════════════════════ -->
-        <div id="sc-amo-pane" class="sc-tab-pane">
+	        <div id="sc-amo-pane" class="sc-tab-pane">
+	          <div class="sc-card sc-zero-only">
+	            <div class="sc-card-title">SCOUT Zero</div>
+	            <div class="sc-status">SC Skills Search is off. AMO deliverable and staffing actions remain available without loading product, industry, and skills matrices.</div>
+	          </div>
 
           <!-- AMO Deliverable Selector -->
           <div class="sc-card sc-card-amo">
@@ -4670,14 +4840,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           </div>
 
           <!-- Module Insights Card (AMO) -->
-          <div class="sc-card sc-insights-card" id="sc-amo-insights-card" style="display:none">
+          <div class="sc-card sc-insights-card sc-skill-search-only" id="sc-amo-insights-card" style="display:none">
             <div class="sc-card-title">📦 Module Detection</div>
             <div class="sc-insights-hint">Modules found in Request Details — click to select product:</div>
             <div id="sc-amo-insights-chips" class="sc-insights-chips"></div>
           </div>
 
           <!-- Products Demonstrated -->
-          <div class="sc-card sc-collapsible-card collapsed" id="sc-amo-products-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-skill-search-only" id="sc-amo-products-card">
             <div class="sc-card-title" id="sc-amo-products-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Products Demonstrated</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -4690,7 +4860,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               <div class="sc-field">
                 <label class="sc-label">Products <span style="font-weight:400">(select up to 4)</span></label>
                 <select id="sc-amo-products" multiple size="7">
-                  ${buildProductOptions()}
+                  ${productOptionsMarkup}
                 </select>
                 <div class="sc-field-hint">These write to the SCR Product(s) field when staffing.</div>
               </div>
@@ -4698,7 +4868,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           </div>
 
           <!-- AMO Product Skills -->
-          <div class="sc-card sc-collapsible-card collapsed" id="sc-amo-product-skills-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-skill-search-only" id="sc-amo-product-skills-card">
             <div class="sc-card-title" id="sc-amo-product-skills-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Product Skills Search</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -4711,7 +4881,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               <div class="sc-field">
                 <label class="sc-label">Product Skills <span style="font-weight:400">(select up to 4)</span></label>
                 <select id="sc-amo-product-skills" multiple size="7">
-                  ${buildProductSkillOptions()}
+                  ${productSkillOptionsMarkup}
                 </select>
                 <div class="sc-field-hint">Pulled from the employee product skills matrix. Press Enter in the filter to add the best match.</div>
               </div>
@@ -4719,7 +4889,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           </div>
 
           <!-- Industry -->
-          <div class="sc-card sc-collapsible-card collapsed" id="sc-amo-industry-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-skill-search-only" id="sc-amo-industry-card">
             <div class="sc-card-title" id="sc-amo-industry-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Industry (Optional)</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -4729,14 +4899,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                 <label class="sc-label">SC Industry</label>
                 <select id="sc-amo-industry">
                   <option value="">— Any industry —</option>
-                  ${buildIndustryOptions()}
+                  ${industryOptionsMarkup}
                 </select>
               </div>
             </div>
           </div>
 
           <!-- Additional SC Skills -->
-          <div class="sc-card sc-collapsible-card collapsed sc-additional-skills-card" id="sc-amo-additional-skills-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-additional-skills-card sc-skill-search-only" id="sc-amo-additional-skills-card">
             <div class="sc-card-title" id="sc-amo-additional-skills-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Additional SC Skills</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -4754,7 +4924,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           </div>
 
           <!-- Filters -->
-          <div class="sc-card sc-collapsible-card collapsed sc-filter-card" id="sc-amo-filters-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-filter-card sc-skill-search-only" id="sc-amo-filters-card">
             <div class="sc-card-title" id="sc-amo-filters-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Filters</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -4825,7 +4995,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           </div>
 
           <!-- AMO Search button -->
-          <button id="sc-amo-search-btn">
+          <button id="sc-amo-search-btn" class="sc-skill-search-only">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
             </svg>
@@ -4833,7 +5003,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           </button>
 
           <!-- AMO Results -->
-          <div id="sc-amo-results-area">
+          <div id="sc-amo-results-area" class="sc-skill-search-only">
             <div class="sc-status">Select product skills, industry, or additional SC skills and click Search AMO SCs.</div>
           </div>
 
@@ -4843,8 +5013,12 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         <!-- ═══════════════════════════════════════════════════════
              COMBINED STAFFING PANE
         ═══════════════════════════════════════════════════════ -->
-        <div id="sc-combined-pane" class="sc-tab-pane">
-          <div class="sc-combined-helper-note">
+	        <div id="sc-combined-pane" class="sc-tab-pane">
+	          <div class="sc-card sc-zero-only">
+	            <div class="sc-card-title">SCOUT Zero</div>
+	            <div class="sc-status">Combined skills search is off. Turn SC Skills Search back on in settings to use combined product, industry, and skills filters.</div>
+	          </div>
+	          <div class="sc-combined-helper-note">
             Combined search uses one set of filters across Direct and AMO SCs. AMO cards still require the AMO deliverable selector when staffed.
           </div>
 
@@ -4860,13 +5034,13 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
             </div>
           </div>
 
-          <div class="sc-card sc-insights-card" id="sc-combined-insights-card" style="display:none">
+          <div class="sc-card sc-insights-card sc-skill-search-only" id="sc-combined-insights-card" style="display:none">
             <div class="sc-card-title">📦 Module Detection</div>
             <div class="sc-insights-hint">Modules found in Request Details — click to select product:</div>
             <div id="sc-combined-insights-chips" class="sc-insights-chips"></div>
           </div>
 
-          <div class="sc-card sc-collapsible-card collapsed" id="sc-combined-products-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-skill-search-only" id="sc-combined-products-card">
             <div class="sc-card-title" id="sc-combined-products-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Products Demonstrated</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -4879,14 +5053,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               <div class="sc-field">
                 <label class="sc-label">Products <span style="font-weight:400">(select up to 4)</span></label>
                 <select id="sc-combined-products" multiple size="7">
-                  ${buildProductOptions()}
+                  ${productOptionsMarkup}
                 </select>
                 <div class="sc-field-hint">These write to the SCR Product(s) field when staffing.</div>
               </div>
             </div>
           </div>
 
-          <div class="sc-card sc-collapsible-card collapsed" id="sc-combined-product-skills-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-skill-search-only" id="sc-combined-product-skills-card">
             <div class="sc-card-title" id="sc-combined-product-skills-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Product Skills Search</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -4899,14 +5073,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               <div class="sc-field">
                 <label class="sc-label">Product Skills <span style="font-weight:400">(select up to 4)</span></label>
                 <select id="sc-combined-product-skills" multiple size="7">
-                  ${buildProductSkillOptions()}
+                  ${productSkillOptionsMarkup}
                 </select>
                 <div class="sc-field-hint">Pulled from the employee product skills matrix. Press Enter in the filter to add the best match.</div>
               </div>
             </div>
           </div>
 
-          <div class="sc-card sc-collapsible-card collapsed" id="sc-combined-industry-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-skill-search-only" id="sc-combined-industry-card">
             <div class="sc-card-title" id="sc-combined-industry-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Industry (Optional)</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -4916,13 +5090,13 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                 <label class="sc-label">SC Industry</label>
                 <select id="sc-combined-industry">
                   <option value="">— Any industry —</option>
-                  ${buildIndustryOptions()}
+                  ${industryOptionsMarkup}
                 </select>
               </div>
             </div>
           </div>
 
-          <div class="sc-card sc-collapsible-card collapsed sc-additional-skills-card" id="sc-combined-additional-skills-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-additional-skills-card sc-skill-search-only" id="sc-combined-additional-skills-card">
             <div class="sc-card-title" id="sc-combined-additional-skills-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Additional SC Skills</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -4939,7 +5113,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
             </div>
           </div>
 
-          <div class="sc-card sc-collapsible-card collapsed sc-filter-card" id="sc-combined-filters-card">
+          <div class="sc-card sc-collapsible-card collapsed sc-filter-card sc-skill-search-only" id="sc-combined-filters-card">
             <div class="sc-card-title" id="sc-combined-filters-toggle" role="button" tabindex="0" aria-expanded="false">
               <span>Filters</span>
               <span class="sc-collapsible-chevron">▼</span>
@@ -5002,14 +5176,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
             </div>
           </div>
 
-          <button id="sc-combined-search-btn">
+          <button id="sc-combined-search-btn" class="sc-skill-search-only">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
             </svg>
             Search Combined SCs
           </button>
 
-          <div id="sc-combined-results-area">
+          <div id="sc-combined-results-area" class="sc-skill-search-only">
             <div class="sc-status">Turn on Combined Staffing in settings, then select product skills, industry, or additional SC skills and click Search Combined SCs.</div>
           </div>
         </div><!-- end sc-combined-pane -->
@@ -5294,10 +5468,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   function setDirectManagerNotes(empName) {
     appendScManagerNotes(buildDirectManagerNotesTemplate(empName), /Staffed Deal\s*\[/i);
   }
-  function buildAdditionalRequestDetailsBlock(details) {
-    const cleaned = String(details || '').trim();
-    return cleaned ? `Additional staffing details:\n${cleaned}\n` : '';
-  }
+	  function buildAdditionalRequestDetailsBlock(details) {
+	    const cleaned = String(details || '').trim();
+	    const label = renderConfiguredRequestDetailTemplate(REQUEST_DETAIL_TEMPLATE_KEYS.additionalDetailsLabel, {}).trim() || 'Additional staffing details:';
+	    return cleaned ? `${label}\n${cleaned}\n` : '';
+	  }
 
   /** Wrap a staffing note with the standard ADDED/end markers (item 3). */
   function wrapStaffingNote(requestDetailsScript, empName, requestDetailsNote) {
@@ -5907,13 +6082,26 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     }
   }
 
-  function buildDefaultStaffingRequestNote(scName) {
-    return `${scName} has been staffed, please schedule upcoming strategy meeting with the SC.\n`;
-  }
+	  function buildDefaultStaffingRequestNote(scName, empName, templateKey) {
+	    return renderConfiguredRequestDetailTemplate(templateKey || REQUEST_DETAIL_TEMPLATE_KEYS.directStaffing, {
+	      scName,
+	      managerName: empName,
+	      initials: getCommentInitials(empName),
+	    });
+	  }
 
-  function applyDirectStaffing(scId, scName, empName, hasLeadOnOpp, notes, productIds, assignAsLead, requestDetailsNote) {
-    assignAsLead = assignAsLead !== false;
-    const requestDetailsBaseScript = buildDefaultStaffingRequestNote(scName);
+	  function buildAmoDeliverableRequestNote(deliverable, scName, empName) {
+	    return renderConfiguredRequestDetailTemplate(makeAmoRequestDetailTemplateKey(deliverable), {
+	      scName,
+	      managerName: empName,
+	      initials: getCommentInitials(empName),
+	      deliverable,
+	    });
+	  }
+
+	  function applyDirectStaffing(scId, scName, empName, hasLeadOnOpp, notes, productIds, assignAsLead, requestDetailsNote) {
+	    assignAsLead = assignAsLead !== false;
+	    const requestDetailsBaseScript = buildDefaultStaffingRequestNote(scName, empName, REQUEST_DETAIL_TEMPLATE_KEYS.directStaffing);
     const requestDetailsScript = wrapStaffingNote(requestDetailsBaseScript, empName, requestDetailsNote);
     setStatus(2);
     setAssignee(scId);
@@ -5933,8 +6121,10 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const deliverable = hasDeliverableOverride
       ? normalizeAmoDeliverableName(deliverableOverride)
       : getSelectedAmoDeliverable();
-    const tmplFn = deliverable && isValidAmoDeliverableName(deliverable) ? AMO_DELIVERABLE_TEMPLATES[deliverable] : null;
-    const requestDetailsBaseScript = tmplFn ? tmplFn(scName, empName) : buildDefaultStaffingRequestNote(scName);
+	    const tmplFn = deliverable && isValidAmoDeliverableName(deliverable) ? AMO_DELIVERABLE_TEMPLATES[deliverable] : null;
+	    const requestDetailsBaseScript = tmplFn
+	      ? buildAmoDeliverableRequestNote(deliverable, scName, empName)
+	      : buildDefaultStaffingRequestNote(scName, empName, REQUEST_DETAIL_TEMPLATE_KEYS.amoFallback);
     setStatus(2);
     setAssignee(scId);
     setLeadAssigned(assignAsLead);
@@ -5956,9 +6146,12 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     scheduleNetSuiteFieldFocusRelease();
   }
 
-  function applyCancelRequest(empName, notes) {
-    const note = `SC Request cancelled by SC Manager (${empName}). \nPlease create a new request if needed.\n---\n\n`;
-    prependRequestDetails(note);
+	  function applyCancelRequest(empName, notes) {
+	    const note = renderConfiguredRequestDetailTemplate(REQUEST_DETAIL_TEMPLATE_KEYS.cancelRequest, {
+	      managerName: empName,
+	      initials: getCommentInitials(empName),
+	    });
+	    prependRequestDetails(note);
     setStatus(4);
     setScoutHashtag();
     setStaffingPopupNotes(notes);
@@ -7063,7 +7256,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       new nlobjSearchFilter('custrecord_emproster_rosterstatus', joinField, 'is', 1),
       new nlobjSearchFilter('custrecord_emproster_eminactive',   joinField, 'is', 'F'),
       new nlobjSearchFilter('custrecord_emproster_ocostcenter',  joinField, 'is', ROSTER_COST_CENTER_ID),
-      new nlobjSearchFilter('custrecord_emproster_salesregion',  joinField, 'is', ROSTER_SALES_REGION_ID),
+      ...salesRegionFilters(joinField),
       new nlobjSearchFilter('custrecord_emproster_sales_qb',     joinField, 'is', 25),
     ];
     return filters;
@@ -7078,7 +7271,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       new nlobjSearchFilter('custrecord_emproster_rosterstatus', joinField, 'is', 1),
       new nlobjSearchFilter('custrecord_emproster_eminactive',   joinField, 'is', 'F'),
       new nlobjSearchFilter('custrecord_emproster_ocostcenter',  joinField, 'is', ROSTER_COST_CENTER_ID),
-      new nlobjSearchFilter('custrecord_emproster_salesregion',  joinField, 'is', ROSTER_SALES_REGION_ID),
+      ...salesRegionFilters(joinField),
       new nlobjSearchFilter('custrecord_emproster_sales_qb',     joinField, 'is', 25),
     ];
   }
@@ -7721,8 +7914,8 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     if (cb) cb.checked = getGptAssistEnabled();
   }
 
-  function applyCombinedStaffingTabsUI() {
-    const enabled = getCombineStaffingTabsEnabled();
+	  function applyCombinedStaffingTabsUI() {
+	    const enabled = getCombineStaffingTabsEnabled();
     const tab = document.getElementById('sc-tab-combined');
     const pane = document.getElementById('sc-combined-pane');
     const cb = document.getElementById('sc-combine-tabs-toggle');
@@ -7732,15 +7925,31 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       const directTab = document.getElementById('sc-tab-direct');
       if (directTab) directTab.click();
     }
-    if (pane && !enabled) pane.classList.remove('active');
-  }
+	    if (pane && !enabled) pane.classList.remove('active');
+	  }
 
-  function populateSettingsForm() {
+	  function applySkillsSearchUI() {
+	    const enabled = getSkillsSearchEnabled();
+	    document.documentElement.classList.toggle('sc-skills-search-off', !enabled);
+	    if (document.body) document.body.classList.toggle('sc-skills-search-off', !enabled);
+	    const panel = document.getElementById('sc-skills-panel');
+	    if (panel) {
+	      panel.classList.toggle('sc-skills-search-off', !enabled);
+	      panel.dataset.skillsSearchEnabled = enabled ? 'T' : 'F';
+	    }
+	    document.querySelectorAll('.sc-skill-search-only').forEach(function (el) { el.hidden = !enabled; });
+	    document.querySelectorAll('.sc-zero-only').forEach(function (el) { el.hidden = enabled; });
+	    const cb = document.getElementById('sc-skills-search-toggle');
+	    if (cb) cb.checked = enabled;
+	  }
+
+		  function populateSettingsForm() {
     const calToggle = document.getElementById('sc-cal-integration-toggle');
-    const inlineDrawerToggle = document.getElementById('sc-inline-drawer-toggle');
-    const gptToggle = document.getElementById('sc-gpt-assist-toggle');
-    const combineTabsToggle = document.getElementById('sc-combine-tabs-toggle');
-    const debugToggle = document.getElementById('sc-debug-mode-toggle');
+	    const inlineDrawerToggle = document.getElementById('sc-inline-drawer-toggle');
+	    const gptToggle = document.getElementById('sc-gpt-assist-toggle');
+	    const combineTabsToggle = document.getElementById('sc-combine-tabs-toggle');
+	    const skillsSearchToggle = document.getElementById('sc-skills-search-toggle');
+	    const debugToggle = document.getElementById('sc-debug-mode-toggle');
     const previousHistoryToggle = document.getElementById('sc-prev-history-setting-toggle');
     const customerLicenseToggle = document.getElementById('sc-customer-license-setting-toggle');
     const earlyAdopterToggle = document.getElementById('sc-early-adopter-toggle');
@@ -7752,26 +7961,97 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const feedbackWebhook = document.getElementById('sc-feedback-webhook-input');
     if (calToggle) calToggle.checked = getCalIntegrationEnabled();
     if (inlineDrawerToggle) inlineDrawerToggle.checked = getInlineCalendarDrawerEnabled();
-    if (gptToggle) gptToggle.checked = getGptAssistEnabled();
-    applyInlineCalendarDrawerUI();
-    if (combineTabsToggle) combineTabsToggle.checked = getCombineStaffingTabsEnabled();
-    if (debugToggle) debugToggle.checked = getDebugModeEnabled();
+	    if (gptToggle) gptToggle.checked = getGptAssistEnabled();
+	    applyInlineCalendarDrawerUI();
+	    if (combineTabsToggle) combineTabsToggle.checked = getCombineStaffingTabsEnabled();
+	    if (skillsSearchToggle) skillsSearchToggle.checked = getSkillsSearchEnabled();
+	    if (debugToggle) debugToggle.checked = getDebugModeEnabled();
     if (previousHistoryToggle) previousHistoryToggle.checked = getPreviousScHistoryEnabled();
     if (customerLicenseToggle) customerLicenseToggle.checked = getCustomerLicenseEnabled();
     if (earlyAdopterToggle) earlyAdopterToggle.checked = getEarlyAdopterUpdatesEnabled();
     if (testingUpdateUrl) testingUpdateUrl.value = getTestingUpdateUrl();
     if (commentInitials) commentInitials.value = getCommentInitialsOverride();
     if (extraTeam) extraTeam.value = getExtraTeamMembersText();
-    if (extraManagers) extraManagers.value = getExtraTeamManagersText();
-    if (extraAmoDeliverables) extraAmoDeliverables.value = getExtraAmoDeliverablesText();
-    if (feedbackWebhook) feedbackWebhook.value = getFeedbackWebhookUrl();
-  }
+	    if (extraManagers) extraManagers.value = getExtraTeamManagersText();
+	    if (extraAmoDeliverables) extraAmoDeliverables.value = getExtraAmoDeliverablesText();
+	    if (feedbackWebhook) feedbackWebhook.value = getFeedbackWebhookUrl();
+	    populateRequestDetailTemplateEditor();
+	  }
 
-  function saveSettingsFromForm() {
+	  function getSelectedRequestDetailTemplateKey() {
+	    const select = document.getElementById('sc-request-template-select');
+	    return select ? select.value : REQUEST_DETAIL_TEMPLATE_KEYS.directStaffing;
+	  }
+
+	  function showRequestDetailTemplateStatus(message) {
+	    const status = document.getElementById('sc-request-template-status');
+	    if (!status) return;
+	    status.textContent = message || '';
+	    status.classList.add('show');
+	    setTimeout(() => status.classList.remove('show'), 2500);
+	  }
+
+	  function populateRequestDetailTemplateEditor() {
+	    const select = document.getElementById('sc-request-template-select');
+	    const editor = document.getElementById('sc-request-template-editor');
+	    const preview = document.getElementById('sc-request-template-preview');
+	    const status = document.getElementById('sc-request-template-status');
+	    if (!select || !editor) return;
+	    const key = getSelectedRequestDetailTemplateKey();
+	    editor.value = getRequestDetailTemplateText(key);
+	    editor.dataset.templateKey = key;
+	    if (preview) {
+	      preview.style.display = 'none';
+	      preview.textContent = '';
+	    }
+	    if (status) {
+	      status.textContent = hasRequestDetailTemplateOverride(key) ? 'Custom template' : 'Default template';
+	      status.classList.toggle('show', true);
+	    }
+	  }
+
+	  function getRequestDetailTemplatePreviewVars(key) {
+	    const deliverable = String(key || '').startsWith('amo:') ? normalizeAmoDeliverableName(String(key).slice(4)) : '';
+	    return {
+	      scName: 'Carroll, Katie',
+	      managerName: 'Anderson, Michael C',
+	      initials: 'MCA',
+	      deliverable,
+	    };
+	  }
+
+	  function previewRequestDetailTemplate() {
+	    const editor = document.getElementById('sc-request-template-editor');
+	    const preview = document.getElementById('sc-request-template-preview');
+	    if (!editor || !preview) return;
+	    const key = getSelectedRequestDetailTemplateKey();
+	    const rendered = renderRequestDetailTemplateText(editor.value, getRequestDetailTemplatePreviewVars(key));
+	    preview.textContent = `${getRequestDetailTemplateLabel(key)} preview:\n\n${rendered}`;
+	    preview.style.display = 'block';
+	  }
+
+	  function saveSelectedRequestDetailTemplateOverride() {
+	    const editor = document.getElementById('sc-request-template-editor');
+	    if (!editor) return;
+	    const key = getSelectedRequestDetailTemplateKey();
+	    saveRequestDetailTemplateOverride(key, editor.value);
+	    showRequestDetailTemplateStatus('Saved template');
+	  }
+
+	  function resetSelectedRequestDetailTemplateOverride() {
+	    const key = getSelectedRequestDetailTemplateKey();
+	    resetRequestDetailTemplateOverride(key);
+	    populateRequestDetailTemplateEditor();
+	    showRequestDetailTemplateStatus('Reset to default');
+	  }
+
+	  function saveSettingsFromForm() {
     const calToggle = document.getElementById('sc-cal-integration-toggle');
-    const gptToggle = document.getElementById('sc-gpt-assist-toggle');
-    const combineTabsToggle = document.getElementById('sc-combine-tabs-toggle');
-    const debugToggle = document.getElementById('sc-debug-mode-toggle');
+	    const inlineDrawerToggle = document.getElementById('sc-inline-drawer-toggle');
+	    const gptToggle = document.getElementById('sc-gpt-assist-toggle');
+	    const combineTabsToggle = document.getElementById('sc-combine-tabs-toggle');
+	    const skillsSearchToggle = document.getElementById('sc-skills-search-toggle');
+	    const debugToggle = document.getElementById('sc-debug-mode-toggle');
     const previousHistoryToggle = document.getElementById('sc-prev-history-setting-toggle');
     const customerLicenseToggle = document.getElementById('sc-customer-license-setting-toggle');
     const earlyAdopterToggle = document.getElementById('sc-early-adopter-toggle');
@@ -7783,10 +8063,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const feedbackWebhook = document.getElementById('sc-feedback-webhook-input');
     saveLocalConfig({
       calendarIntegrationEnabled: calToggle ? calToggle.checked : getCalIntegrationEnabled(),
-      inlineCalendarDrawerEnabled: inlineDrawerToggle ? inlineDrawerToggle.checked : getInlineCalendarDrawerEnabled(),
-      gptAssistEnabled: gptToggle ? gptToggle.checked : getGptAssistEnabled(),
-      combineStaffingTabsEnabled: combineTabsToggle ? combineTabsToggle.checked : getCombineStaffingTabsEnabled(),
-      debugModeEnabled: debugToggle ? debugToggle.checked : getDebugModeEnabled(),
+	      inlineCalendarDrawerEnabled: inlineDrawerToggle ? inlineDrawerToggle.checked : getInlineCalendarDrawerEnabled(),
+	      gptAssistEnabled: gptToggle ? gptToggle.checked : getGptAssistEnabled(),
+	      combineStaffingTabsEnabled: combineTabsToggle ? combineTabsToggle.checked : getCombineStaffingTabsEnabled(),
+	      skillsSearchEnabled: skillsSearchToggle ? skillsSearchToggle.checked : getSkillsSearchEnabled(),
+	      debugModeEnabled: debugToggle ? debugToggle.checked : getDebugModeEnabled(),
       previousScHistoryEnabled: previousHistoryToggle ? previousHistoryToggle.checked : getPreviousScHistoryEnabled(),
       customerLicenseEnabled: customerLicenseToggle ? customerLicenseToggle.checked : getCustomerLicenseEnabled(),
       earlyAdopterUpdatesEnabled: earlyAdopterToggle ? earlyAdopterToggle.checked : getEarlyAdopterUpdatesEnabled(),
@@ -7797,10 +8078,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       extraAmoDeliverables: extraAmoDeliverables ? extraAmoDeliverables.value : getExtraAmoDeliverablesText(),
       feedbackWebhookUrl: feedbackWebhook ? feedbackWebhook.value.trim() : getFeedbackWebhookUrl(),
     });
-    applyCalIntegrationUI();
-    applyInlineCalendarDrawerUI();
-    applyGptAssistUI();
-    applyCombinedStaffingTabsUI();
+	    applyCalIntegrationUI();
+	    applyInlineCalendarDrawerUI();
+		    applyGptAssistUI();
+		    applySkillsSearchUI();
+		    applyCombinedStaffingTabsUI();
     refreshAmoDeliverableOptions();
     try { localStorage.removeItem(SCOUT_UPDATE_CACHE_KEY); } catch (e) { /* ignore */ }
     checkScoutUpdate(true);
@@ -8304,7 +8586,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       new nlobjSearchFilter('custrecord_emproster_rosterstatus', null, 'is', 1),
       new nlobjSearchFilter('custrecord_emproster_eminactive',  null, 'is', 'F'),
       new nlobjSearchFilter('custrecord_emproster_ocostcenter', null, 'is', ROSTER_COST_CENTER_ID),
-      new nlobjSearchFilter('custrecord_emproster_salesregion', null, 'is', ROSTER_SALES_REGION_ID),
+      ...salesRegionFilters(null),
     ];
   }
 
@@ -8877,6 +9159,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       const employee    = escHtml(e.employee);
       const employeeAtr = escAttr(e.employee);
       const email       = escAttr(e.email);
+      const manager     = escHtml(e.manager);
       const managerAtr  = escAttr(e.manager);
       const vertical    = escHtml(e.vertical);
       const verticalAtr = escAttr(e.vertical);
@@ -8905,6 +9188,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                  href="/app/common/custom/custrecordentry.nl?rectype=1572&id=${empHrefId}"
                  target="_blank"
                  title="${employeeAtr}">${employee}</a>
+              ${e.manager ? `<div class="sc-card-mgr">${manager}</div>` : ''}
               <div class="sc-card-badges">
                 ${e.vertical ? `<span class="sc-attr-badge">${vertical}</span>` : ''}
                 ${e.tier     ? `<span class="sc-attr-badge">${tier}</span>`     : ''}
@@ -9891,7 +10175,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       new nlobjSearchFilter('custrecord_emproster_rosterstatus', null, 'is', 1),
       new nlobjSearchFilter('custrecord_emproster_eminactive', null, 'is', 'F'),
       new nlobjSearchFilter('custrecord_emproster_ocostcenter', null, 'is', ROSTER_COST_CENTER_ID),
-      new nlobjSearchFilter('custrecord_emproster_salesregion', null, 'is', ROSTER_SALES_REGION_ID),
+      ...salesRegionFilters(null),
       new nlobjSearchFilter('custrecord_emproster_sales_qb', null, 'is', 25),
     ];
     const cols = [
@@ -10090,6 +10374,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         const employee    = escHtml(e.employee);
         const employeeAtr = escAttr(e.employee);
         const email       = escAttr(e.email);
+        const manager     = escHtml(e.manager);
         const managerAtr  = escAttr(e.manager);
         const vertical    = escHtml(e.vertical);
         const verticalAtr = escAttr(e.vertical);
@@ -10115,6 +10400,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                    href="/app/common/custom/custrecordentry.nl?rectype=1572&id=${empHrefId}"
                    target="_blank"
                    title="${employeeAtr}">${employee}</a>
+                ${e.manager ? `<div class="sc-card-mgr">${manager}</div>` : ''}
                 <div class="sc-card-badges">
                   ${e.vertical ? `<span class="sc-attr-badge">${vertical}</span>` : ''}
                   ${e.tier     ? `<span class="sc-attr-badge">${tier}</span>`     : ''}
@@ -10213,6 +10499,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           const employee    = escHtml(e.employee);
           const employeeAtr = escAttr(e.employee);
           const email       = escAttr(e.email);
+          const manager     = escHtml(e.manager);
           const managerAtr  = escAttr(e.manager);
           const vertical    = escHtml(e.vertical);
           const verticalAtr = escAttr(e.vertical);
@@ -10238,6 +10525,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                      href="/app/common/custom/custrecordentry.nl?rectype=1572&id=${empHrefId}"
                      target="_blank"
                      title="${employeeAtr}">${employee}</a>
+                  ${e.manager ? `<div class="sc-card-mgr">${manager}</div>` : ''}
                   <div class="sc-card-badges">
                     ${e.vertical ? `<span class="sc-attr-badge">${vertical}</span>` : ''}
                     ${e.tier     ? `<span class="sc-attr-badge">${tier}</span>`     : ''}
@@ -13013,6 +13301,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
     const panel = document.createElement('div');
     panel.id = 'sc-skills-panel';
+    const skillsSearchEnabled = getSkillsSearchEnabled();
+    panel.classList.toggle('sc-skills-search-off', !skillsSearchEnabled);
+    panel.dataset.skillsSearchEnabled = skillsSearchEnabled ? 'T' : 'F';
+    document.documentElement.classList.toggle('sc-skills-search-off', !skillsSearchEnabled);
+    if (document.body) document.body.classList.toggle('sc-skills-search-off', !skillsSearchEnabled);
     panel.innerHTML = buildPanelHTML();
     document.body.appendChild(panel);
     wireScoutUpdateBanner();
@@ -13151,17 +13444,34 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     });
 
     // Save local helper settings
-    document.getElementById('sc-save-dashboard-url').addEventListener('click', () => {
-      const confirmEl = document.getElementById('sc-save-confirm');
-      saveSettingsFromForm();
+	    document.getElementById('sc-save-dashboard-url').addEventListener('click', () => {
+	      const confirmEl = document.getElementById('sc-save-confirm');
+	      saveSettingsFromForm();
       myTeamLoaded = true;
       loadMyTeam(empIds, empName);
       loadStaffingContext(empName);
       confirmEl.classList.add('show');
-      setTimeout(() => confirmEl.classList.remove('show'), 2500);
-    });
+	      setTimeout(() => confirmEl.classList.remove('show'), 2500);
+	    });
 
-    // Calendar integration toggle
+	    const requestTemplateSelect = document.getElementById('sc-request-template-select');
+	    if (requestTemplateSelect) {
+	      requestTemplateSelect.addEventListener('change', populateRequestDetailTemplateEditor);
+	    }
+	    const requestTemplateSave = document.getElementById('sc-request-template-save');
+	    if (requestTemplateSave) {
+	      requestTemplateSave.addEventListener('click', saveSelectedRequestDetailTemplateOverride);
+	    }
+	    const requestTemplateReset = document.getElementById('sc-request-template-reset');
+	    if (requestTemplateReset) {
+	      requestTemplateReset.addEventListener('click', resetSelectedRequestDetailTemplateOverride);
+	    }
+	    const requestTemplatePreview = document.getElementById('sc-request-template-preview-btn');
+	    if (requestTemplatePreview) {
+	      requestTemplatePreview.addEventListener('click', previewRequestDetailTemplate);
+	    }
+
+	    // Calendar integration toggle
     applyCalIntegrationUI();
     applyInlineCalendarDrawerUI();
     applyGptAssistUI();
@@ -13195,14 +13505,27 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         applyGptAssistUI();
       });
     }
-    const combineTabsToggle = document.getElementById('sc-combine-tabs-toggle');
-    if (combineTabsToggle) {
-      combineTabsToggle.addEventListener('change', function () {
-        saveLocalConfig({ combineStaffingTabsEnabled: this.checked });
-        applyCombinedStaffingTabsUI();
-      });
-    }
-    const debugToggle = document.getElementById('sc-debug-mode-toggle');
+	    const combineTabsToggle = document.getElementById('sc-combine-tabs-toggle');
+	    if (combineTabsToggle) {
+	      combineTabsToggle.addEventListener('change', function () {
+	        saveLocalConfig({ combineStaffingTabsEnabled: this.checked });
+	        applyCombinedStaffingTabsUI();
+	      });
+	    }
+	    const skillsSearchToggle = document.getElementById('sc-skills-search-toggle');
+	    if (skillsSearchToggle) {
+	      skillsSearchToggle.addEventListener('change', function () {
+	        try { localStorage.setItem(SKILLS_SEARCH_ENABLED_KEY, this.checked ? 'true' : 'false'); } catch (e) { /* ignore */ }
+	        saveLocalConfig({ skillsSearchEnabled: this.checked });
+	        applySkillsSearchUI();
+	        if (this.checked) {
+	          showToast('SC Skills Search is enabled. Product, industry, and skills lists will load on the next NetSuite page refresh.', 'info', 7000);
+	        } else {
+	          showToast('SCOUT Zero is enabled. Product, industry, and skills search will stay off after reload.', 'info', 7000);
+	        }
+	      });
+	    }
+	    const debugToggle = document.getElementById('sc-debug-mode-toggle');
     if (debugToggle) {
       debugToggle.addEventListener('change', function () {
         saveLocalConfig({ debugModeEnabled: this.checked });
@@ -13603,6 +13926,22 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     return detectRosterColumnAccess(rosterId, 'custrecord_emproster_salessubregion', 'Sales subregion');
   }
 
+  function detectSalesRegionFilterAccess(rosterId) {
+    if (!rosterId) return false;
+    try {
+      nlapiSearchRecord('customrecord_emproster', null, [
+        new nlobjSearchFilter('internalid', null, 'is', rosterId),
+        new nlobjSearchFilter('custrecord_emproster_salesregion', null, 'is', ROSTER_SALES_REGION_ID),
+      ], [
+        new nlobjSearchColumn('internalid'),
+      ]);
+      return true;
+    } catch (e) {
+      console.warn('[Staffing Helper] Sales region filter unavailable for this role:', e.message || e);
+      return false;
+    }
+  }
+
   function getCurrentEmp() {
     let curUser = '';
     try {
@@ -13611,7 +13950,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       const cols = [
         new nlobjSearchColumn('name'),
         new nlobjSearchColumn('custrecord_emproster_salesteam'),
-        new nlobjSearchColumn('custrecord_emproster_salesregion'),
         new nlobjSearchColumn('custrecord_emproster_sales_tier'),
       ];
       const res = nlapiSearchRecord('customrecord_emproster', null, filters, cols);
@@ -13640,6 +13978,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     SCOUT_CAN_READ_MANAGER_AVAIL_RES = detectManagerAvailabilityResolutionAccess(rosterIdForProbe);
     SCOUT_CAN_READ_VERTICAL_AMO = detectVerticalAmoAccess(rosterIdForProbe);
     SCOUT_CAN_READ_SALES_SUBREGION = detectSalesSubregionAccess(rosterIdForProbe);
+    SCOUT_CAN_FILTER_SALES_REGION = detectSalesRegionFilterAccess(rosterIdForProbe);
     const empIds  = {
       me:      limitedMode ? '' : empRec.getId(),
       rob:     71312,
