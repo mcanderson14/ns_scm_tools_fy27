@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.2.7
+// @version      27.2.9
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.2.7
+   SCOUT — SC Operations Utility Tool  27.2.9
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.2.7';
+  const SCRIPT_VERSION = '27.2.9';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -654,7 +654,21 @@ Good luck with ${sc}!
   let SCOUT_CAN_READ_VERTICAL_AMO = false;
   let SCOUT_CAN_READ_SALES_SUBREGION = false;
   let SCOUT_CAN_FILTER_SALES_REGION = false;
+  let SCOUT_CAN_FILTER_SALES_QB = false;
+  let SCOUT_ROSTER_GROUP_FIELD_ID = '';
   let SCOUT_ROLE_CONTEXT = { roleId: '', roleCenter: '', roleText: '', isScIc: false, isScManager: false };
+  const ROSTER_GROUP_FIELD_CANDIDATES = [
+    'custrecord_emproster_salesrep_roster_group',
+    'custrecord_emproster_sales_rep_roster_group',
+    'custrecord_emproster_salesrepgroup',
+    'custrecord_emproster_sales_rep_group',
+    'custrecord_emproster_salesrostergrp',
+    'custrecord_emproster_sales_roster_group',
+    'custrecord_emproster_rep_roster_group',
+    'custrecord_emproster_roster_group',
+    'custrecord_emproster_rostergrp',
+    'custrecord_emproster_srg',
+  ];
 
   function availabilityNotesColumns(joinField) {
     return SCOUT_CAN_READ_AVAIL_NOTES
@@ -728,6 +742,52 @@ Good luck with ${sc}!
     return SCOUT_CAN_FILTER_SALES_REGION
       ? [new nlobjSearchFilter('custrecord_emproster_salesregion', joinField, 'is', ROSTER_SALES_REGION_ID)]
       : [];
+  }
+
+  function salesQbFilters(joinField) {
+    return SCOUT_CAN_FILTER_SALES_QB
+      ? [new nlobjSearchFilter('custrecord_emproster_sales_qb', joinField, 'is', 25)]
+      : [];
+  }
+
+  function rosterGroupColumns(joinField) {
+    return SCOUT_ROSTER_GROUP_FIELD_ID
+      ? [new nlobjSearchColumn(SCOUT_ROSTER_GROUP_FIELD_ID, joinField)]
+      : [];
+  }
+
+  function readRosterGroup(result, joinField) {
+    if (!SCOUT_ROSTER_GROUP_FIELD_ID) return '';
+    try {
+      return (joinField
+        ? (result.getText(SCOUT_ROSTER_GROUP_FIELD_ID, joinField) || result.getValue(SCOUT_ROSTER_GROUP_FIELD_ID, joinField))
+        : (result.getText(SCOUT_ROSTER_GROUP_FIELD_ID) || result.getValue(SCOUT_ROSTER_GROUP_FIELD_ID))) || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function parseRosterGroupText(text) {
+    const parts = String(text || '').split('-').map(part => part.trim()).filter(Boolean);
+    if (parts.length < 4) return {};
+    return {
+      salesRegion: parts[0] || '',
+      region: parts[1] || '',
+      salesteam: parts[2] || '',
+      vertical: parts[3] || '',
+      tier: parts.slice(4).join(' - ') || '',
+    };
+  }
+
+  function applyRosterGroupFallback(row, result, joinField) {
+    const rosterGroup = readRosterGroup(result, joinField);
+    const parsed = parseRosterGroupText(rosterGroup);
+    row.rosterGroup = rosterGroup || row.rosterGroup || '';
+    if (!row.region && parsed.region) row.region = parsed.region;
+    if (!row.vertical && parsed.vertical) row.vertical = parsed.vertical;
+    if (!row.salesteam && parsed.salesteam) row.salesteam = parsed.salesteam;
+    if (!row.tier && parsed.tier) row.tier = parsed.tier.replace('Solution Consultant - ', '');
+    return row;
   }
 
   // Guard: only SC Request records (rectype=2840)
@@ -4280,7 +4340,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         new nlobjSearchFilter('custrecord_ssm_skill_entry', null, 'noneof', '@NONE@'),
         new nlobjSearchFilter('custrecord_emproster_rosterstatus', join, 'is', 1),
         new nlobjSearchFilter('custrecord_emproster_eminactive',   join, 'is', 'F'),
-        new nlobjSearchFilter('custrecord_emproster_sales_qb',     join, 'is', 25),
+        ...salesQbFilters(join),
         new nlobjSearchFilter('custrecord_emproster_ocostcenter',  join, 'is', ROSTER_COST_CENTER_ID),
         ...salesRegionFilters(join),
       ];
@@ -7257,7 +7317,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       new nlobjSearchFilter('custrecord_emproster_eminactive',   joinField, 'is', 'F'),
       new nlobjSearchFilter('custrecord_emproster_ocostcenter',  joinField, 'is', ROSTER_COST_CENTER_ID),
       ...salesRegionFilters(joinField),
-      new nlobjSearchFilter('custrecord_emproster_sales_qb',     joinField, 'is', 25),
+      ...salesQbFilters(joinField),
     ];
     return filters;
   }
@@ -7272,7 +7332,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       new nlobjSearchFilter('custrecord_emproster_eminactive',   joinField, 'is', 'F'),
       new nlobjSearchFilter('custrecord_emproster_ocostcenter',  joinField, 'is', ROSTER_COST_CENTER_ID),
       ...salesRegionFilters(joinField),
-      new nlobjSearchFilter('custrecord_emproster_sales_qb',     joinField, 'is', 25),
+      ...salesQbFilters(joinField),
     ];
   }
 
@@ -7329,13 +7389,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       ...verticalAmoColumns(join),
       new nlobjSearchColumn('custrecord_emproster_sales_tier',      join),
       new nlobjSearchColumn('custrecord_emproster_salesteam',       join),
+      ...rosterGroupColumns(join),
       new nlobjSearchColumn('custrecord_emproster_emp',             join),
       new nlobjSearchColumn('custrecord_ssm_skill_entry'),
       new nlobjSearchColumn('custrecord_ssm_skill_rating'),
     ];
     const results = nlapiSearchRecord('customrecord_ssm_entry', null, filters, cols);
     if (!results) return [];
-    return results.map(r => ({
+    return results.map(r => applyRosterGroupFallback({
       employeeId:   r.getValue('internalid', join),
       employee:     r.getText('custrecord_ssm_skill_employee'),
       manager:      r.getText('custrecord_emproster_mgrroster', join),
@@ -7350,7 +7411,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       employeeRecId: r.getValue('custrecord_emproster_emp', join) || '',
       skill:        r.getText('custrecord_ssm_skill_entry'),
       ratingRaw:    parseRatingValue(r.getText('custrecord_ssm_skill_rating') || r.getValue('custrecord_ssm_skill_rating')),
-    })).filter(r => parseInt(r.ratingRaw, 10) >= 1);
+    }, r, join)).filter(r => parseInt(r.ratingRaw, 10) >= 1);
   }
 
   function splitIndustryIdList(industryId) {
@@ -7397,13 +7458,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       new nlobjSearchColumn('custrecord_emproster_olocation', join),
       new nlobjSearchColumn('custrecord_emproster_emp', join),
       new nlobjSearchColumn('custrecord_emproster_salesteam', join),
+      ...rosterGroupColumns(join),
       new nlobjSearchColumn('custrecord_emproster_sales_tier', join),
       ...salesSubregionColumns(join),
       ...verticalAmoColumns(join),
     ];
     const results = nlapiSearchRecord('customrecord_sr_industry_rating_entry', null, filters, cols);
     if (!results) return [];
-    return results.map(r => ({
+    return results.map(r => applyRosterGroupFallback({
       employeeId:     r.getValue('internalid', join),
       employee:       r.getText('custrecord_sr_ind_rating_employee'),
       manager:        r.getText('custrecord_emproster_mgrroster', join),
@@ -7417,7 +7479,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       region:         readSalesSubregion(r, join),
       vertical:       readVerticalAmo(r, join),
       industryRating: parseRatingValue(r.getText('custrecord_sr_ind_rating') || r.getValue('custrecord_sr_ind_rating')),
-    })).filter(r => parseInt(r.industryRating, 10) >= 1);
+    }, r, join)).filter(r => parseInt(r.industryRating, 10) >= 1);
   }
 
   function parseRatingValue(value) {
@@ -7491,6 +7553,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         new nlobjSearchColumn('custrecord_emproster_emp'),
         new nlobjSearchColumn('custrecord_emproster_olocation'),
         new nlobjSearchColumn('custrecord_emproster_salesteam'),
+        ...rosterGroupColumns(null),
         ...salesSubregionColumns(null),
         new nlobjSearchColumn('email', 'custrecord_emproster_emp'),
       ];
@@ -7500,7 +7563,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       results.forEach(function (r) {
         const id = r.getValue('internalid');
         if (!id) return;
-        map[id] = {
+        map[id] = applyRosterGroupFallback({
           availability: (r.getText('custrecord_emproster_avail')             || '').toLowerCase(),
           availNotes:    readAvailabilityNotes(r, null),
           availRes:      readManagerAvailRes(r, null),
@@ -7509,7 +7572,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           salesteam:     r.getText('custrecord_emproster_salesteam')          || '',
           region:        readSalesSubregion(r, null),
           email:         r.getValue('email', 'custrecord_emproster_emp')      || '',
-        };
+        }, r, null);
       });
       members.forEach(function (m) {
         const d = map[m.employeeId];
@@ -7521,6 +7584,9 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         if (d.location) m.location = d.location;
         m.salesteam    = d.salesteam;
         if (d.region) m.region = d.region;
+        if (d.vertical) m.vertical = d.vertical;
+        if (d.tier) m.tier = d.tier;
+        if (d.rosterGroup) m.rosterGroup = d.rosterGroup;
         m.email        = d.email;
       });
     } catch (e) {
@@ -8577,6 +8643,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       ...verticalAmoColumns(null),
       new nlobjSearchColumn('custrecord_emproster_sales_tier'),
       new nlobjSearchColumn('custrecord_emproster_salesteam'),
+      ...rosterGroupColumns(null),
       new nlobjSearchColumn('custrecord_emproster_emp'),
     ];
   }
@@ -8591,7 +8658,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   }
 
   function mapRosterResult(r, sourceLabel) {
-    return {
+    return applyRosterGroupFallback({
       employeeId:    r.getValue('internalid'),
       employee:      r.getValue('name'),
       manager:       sourceLabel || '',
@@ -8610,7 +8677,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       skills:        {},
       industryRating: 0,
       industryScore:  0,
-    };
+    }, r, null);
   }
 
   function rosterNameVariants(token) {
@@ -9543,6 +9610,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
             ...verticalAmoColumns(join),
             new nlobjSearchColumn('custrecord_emproster_sales_tier',      join),
             new nlobjSearchColumn('custrecord_emproster_salesteam',       join),
+            ...rosterGroupColumns(join),
             new nlobjSearchColumn('custrecord_emproster_emp',             join),
             new nlobjSearchColumn('custrecord_ssm_skill_entry'),
             new nlobjSearchColumn('custrecord_ssm_skill_rating'),
@@ -9550,7 +9618,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
           const rawSkill = nlapiSearchRecord('customrecord_ssm_entry', null, amoSkillFilters, skillCols) || [];
           await yieldToBrowser();
           skillRows = rawSkill
-            .map(r => ({
+            .map(r => applyRosterGroupFallback({
               employeeId:   r.getValue('internalid', join),
               employee:     r.getText('custrecord_ssm_skill_employee'),
               manager:      r.getText('custrecord_emproster_mgrroster', join),
@@ -9565,7 +9633,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               employeeRecId: r.getValue('custrecord_emproster_emp', join) || '',
               skill:        r.getText('custrecord_ssm_skill_entry'),
               ratingRaw:    parseRatingValue(r.getText('custrecord_ssm_skill_rating') || r.getValue('custrecord_ssm_skill_rating')),
-            }))
+            }, r, join))
             .filter(r => isAmoSalesTeam(r.salesteam) && !isExcludedVertical(r.vertical) && parseInt(r.ratingRaw, 10) >= 1);
           skillRows = applySalesVerticalFilter(skillRows, filterOpts);
         }
@@ -9592,6 +9660,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
               new nlobjSearchColumn('custrecord_emproster_mgrroster', indJoin),
               new nlobjSearchColumn('custrecord_emproster_olocation', indJoin),
               new nlobjSearchColumn('custrecord_emproster_salesteam', indJoin),
+              ...rosterGroupColumns(indJoin),
               new nlobjSearchColumn('custrecord_emproster_sales_tier', indJoin),
               ...salesSubregionColumns(indJoin),
               ...verticalAmoColumns(indJoin),
@@ -9600,7 +9669,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
             const rawInd = nlapiSearchRecord('customrecord_sr_industry_rating_entry', null, amoIndFilters, indCols) || [];
             await yieldToBrowser();
             industryRows = rawInd
-              .map(r => ({
+              .map(r => applyRosterGroupFallback({
                 employeeId:     r.getValue('internalid', indJoin),
                 employee:       r.getText('custrecord_sr_ind_rating_employee'),
                 employeeRecId:  r.getValue('custrecord_emproster_emp', indJoin) || '',
@@ -9614,7 +9683,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                 region:         readSalesSubregion(r, indJoin),
                 vertical:       readVerticalAmo(r, indJoin),
                 industryRating: parseRatingValue(r.getText('custrecord_sr_ind_rating') || r.getValue('custrecord_sr_ind_rating')),
-              }))
+              }, r, indJoin))
               .filter(r => isAmoSalesTeam(r.salesteam) && !isExcludedVertical(r.vertical) && parseInt(r.industryRating, 10) >= 1);
             industryRows = applySalesVerticalFilter(industryRows, filterOpts);
           }
@@ -10146,7 +10215,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   }
 
   function rosterMemberFromRosterSearch(r) {
-    return {
+    return applyRosterGroupFallback({
       employeeId:   r.getValue('internalid'),
       employee:     r.getValue('name') || '',
       manager:      r.getText('custrecord_emproster_mgrroster') || '',
@@ -10160,7 +10229,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       salesteam:    r.getText('custrecord_emproster_salesteam') || '',
       employeeRecId: r.getValue('custrecord_emproster_emp') || '',
       email:        r.getValue('email', 'custrecord_emproster_emp') || '',
-    };
+    }, r, null);
   }
 
   function scNameToneClass(member) {
@@ -10176,7 +10245,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       new nlobjSearchFilter('custrecord_emproster_eminactive', null, 'is', 'F'),
       new nlobjSearchFilter('custrecord_emproster_ocostcenter', null, 'is', ROSTER_COST_CENTER_ID),
       ...salesRegionFilters(null),
-      new nlobjSearchFilter('custrecord_emproster_sales_qb', null, 'is', 25),
+      ...salesQbFilters(null),
     ];
     const cols = [
       new nlobjSearchColumn('internalid'),
@@ -10189,6 +10258,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       ...verticalAmoColumns(null),
       new nlobjSearchColumn('custrecord_emproster_sales_tier'),
       new nlobjSearchColumn('custrecord_emproster_salesteam'),
+      ...rosterGroupColumns(null),
       new nlobjSearchColumn('custrecord_emproster_emp'),
       new nlobjSearchColumn('custrecord_emproster_mgrroster'),
       new nlobjSearchColumn('email', 'custrecord_emproster_emp'),
@@ -10220,6 +10290,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       ...verticalAmoColumns(null),
       new nlobjSearchColumn('custrecord_emproster_sales_tier'),
       new nlobjSearchColumn('custrecord_emproster_salesteam'),
+      ...rosterGroupColumns(null),
       new nlobjSearchColumn('custrecord_emproster_emp'),
       new nlobjSearchColumn('custrecord_emproster_mgrroster'),
       new nlobjSearchColumn('email', 'custrecord_emproster_emp'),
@@ -10247,6 +10318,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       ...verticalAmoColumns(join),
       new nlobjSearchColumn('custrecord_emproster_sales_tier',      join),
       new nlobjSearchColumn('custrecord_emproster_salesteam',       join),
+      ...rosterGroupColumns(join),
       new nlobjSearchColumn('custrecord_emproster_emp',             join),
       new nlobjSearchColumn('custrecord_emproster_mgrroster',       join),
     ];
@@ -10260,7 +10332,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       const id = r.getValue('internalid', join);
       if (!id || seen[id]) return;
       seen[id] = true;
-      members.push({
+      members.push(applyRosterGroupFallback({
         employeeId:   id,
         employee:     r.getText('custrecord_ssm_skill_employee'),
         manager:      r.getText('custrecord_emproster_mgrroster',       join) || '',
@@ -10274,7 +10346,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         salesteam:    r.getText('custrecord_emproster_salesteam',       join) || '',
         employeeRecId: r.getValue('custrecord_emproster_emp',           join) || '',
         email:        '',
-      });
+      }, r, join));
     });
 
     return { members: members, searched: results.length, lastName: searchTerm, enriched: false, source: 'skills' };
@@ -13942,6 +14014,42 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     }
   }
 
+  function detectSalesQbFilterAccess(rosterId) {
+    if (!rosterId) return false;
+    try {
+      nlapiSearchRecord('customrecord_emproster', null, [
+        new nlobjSearchFilter('internalid', null, 'is', rosterId),
+        new nlobjSearchFilter('custrecord_emproster_sales_qb', null, 'is', 25),
+      ], [
+        new nlobjSearchColumn('internalid'),
+      ]);
+      return true;
+    } catch (e) {
+      console.warn('[Staffing Helper] Sales QB filter unavailable for this role:', e.message || e);
+      return false;
+    }
+  }
+
+  function detectRosterGroupFieldAccess(rosterId) {
+    if (!rosterId) return '';
+    for (const fieldId of ROSTER_GROUP_FIELD_CANDIDATES) {
+      try {
+        nlapiSearchRecord('customrecord_emproster', null, [
+          new nlobjSearchFilter('internalid', null, 'is', rosterId),
+        ], [
+          new nlobjSearchColumn('internalid'),
+          new nlobjSearchColumn(fieldId),
+        ]);
+        console.info('[Staffing Helper] Sales Rep Roster Group field detected:', fieldId);
+        return fieldId;
+      } catch (e) {
+        // Try the next likely script id.
+      }
+    }
+    console.warn('[Staffing Helper] Sales Rep Roster Group field was not found from candidate script IDs.');
+    return '';
+  }
+
   function getCurrentEmp() {
     let curUser = '';
     try {
@@ -13973,12 +14081,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const empName = empRec.getValue('name') || 'SCOUT User';
     SCOUT_ROLE_CONTEXT = getScoutRoleContext();
     const restrictedIcRole = Boolean(SCOUT_ROLE_CONTEXT.isScIc && !SCOUT_ROLE_CONTEXT.isScManager);
-    const rosterIdForProbe = limitedMode || restrictedIcRole ? '' : empRec.getId();
+    const rosterIdForProbe = limitedMode ? '' : empRec.getId();
     SCOUT_CAN_READ_AVAIL_NOTES = detectAvailabilityNotesAccess(rosterIdForProbe);
     SCOUT_CAN_READ_MANAGER_AVAIL_RES = detectManagerAvailabilityResolutionAccess(rosterIdForProbe);
     SCOUT_CAN_READ_VERTICAL_AMO = detectVerticalAmoAccess(rosterIdForProbe);
     SCOUT_CAN_READ_SALES_SUBREGION = detectSalesSubregionAccess(rosterIdForProbe);
     SCOUT_CAN_FILTER_SALES_REGION = detectSalesRegionFilterAccess(rosterIdForProbe);
+    SCOUT_CAN_FILTER_SALES_QB = detectSalesQbFilterAccess(rosterIdForProbe);
+    SCOUT_ROSTER_GROUP_FIELD_ID = detectRosterGroupFieldAccess(rosterIdForProbe);
     const empIds  = {
       me:      limitedMode ? '' : empRec.getId(),
       rob:     71312,
