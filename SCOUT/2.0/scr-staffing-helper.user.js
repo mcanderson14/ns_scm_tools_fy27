@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.2.20
+// @version      27.2.23
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.2.20
+   SCOUT — SC Operations Utility Tool  27.2.23
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.2.20';
+  const SCRIPT_VERSION = '27.2.23';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -2231,6 +2231,19 @@ html.sc-resizing #sc-skills-toggle { transition: none !important; }
 }
 .sc-quick-assign-btn:hover { background: var(--sc-blue-dark); }
 #sc-quick-assign-area { margin-top: 8px; }
+.sc-shadow-later-btn {
+  margin-top: 6px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid #d6ae4f;
+  border-radius: 6px;
+  background: var(--sc-yellow);
+  color: var(--sc-navy);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sc-shadow-later-btn:hover { filter: brightness(0.97); }
 
 /* ── Module Insights Card ────────────────────────────────────────── */
 .sc-insights-hint {
@@ -4807,6 +4820,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
                    class="sc-quick-assign-input">
             <button id="sc-quick-assign-btn" class="sc-quick-assign-btn" title="Look up SC by name">🔍</button>
           </div>
+          <button id="sc-create-shadow-scr-btn" class="sc-shadow-later-btn" type="button">Create Shadow SCR</button>
           <div id="sc-quick-assign-area" style="display:none"></div>
         </div>
 
@@ -5643,14 +5657,19 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const rosterId = String(member.employeeId || '').trim();
     if (!rosterId) return '';
     const employeeRecId = String(member.employeeRecId || getRosterEmployeeId(rosterId) || '').trim();
+    const shadowName = String(member.employee || '').trim() || 'Shadow SC';
+    const opportunityName = readFormField(SCR_FIELD_OPP) || readFormFieldValue(SCR_FIELD_OPP) || 'Shadow Opportunity';
+    const shadowScrName = `${shadowName} | ${opportunityName}`.slice(0, 300);
     const params = new URLSearchParams();
     const sourceScrId = getCurrentScrId() || '';
     const payloadKey = `scout_shadow_payload_${sourceScrId || 'new'}_${rosterId}_${Date.now()}`;
     const shadowDetails = buildShadowRequestDetails(member, leadScName, empName);
+    addPrefillParam(params, 'name', shadowScrName);
     try {
       localStorage.setItem(payloadKey, JSON.stringify({
         createdAt: Date.now(),
         fields: {
+          name: shadowScrName,
           [SCR_FIELD_DETAILS]: shadowDetails,
         },
       }));
@@ -5967,6 +5986,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   function applyShadowPrefillParamsFromUrl() {
     if (!isScoutShadowAutosaveRequest()) return;
     const textFields = [
+      'name',
       SCR_FIELD_DETAILS,
       SCR_FIELD_ENGAGEMENT_NOTES,
     ];
@@ -5997,6 +6017,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
   function validateShadowAutosaveDraft() {
     const required = [
+      { id: 'name', label: 'Name' },
       { id: SCR_FIELD_TYPE, label: 'Request Type' },
       { id: SCR_FIELD_DETAILS, label: 'Request Details' },
       { id: SCR_FIELD_STATUS, label: 'Request Status' },
@@ -6019,27 +6040,23 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   function resumeShadowAutosaveDraft() {
     if (!isScoutShadowAutosaveRequest()) return;
     const key = getShadowAutosaveKey();
-    if (sessionStorage.getItem(key) === 'saving') return;
-    sessionStorage.setItem(key, 'saving');
-    showToast('SCOUT is validating and saving the shadow SCR draft…', 'info', 7000);
-    runWhenNetSuiteFormInitialized('saving shadow SCR draft', function () {
+    if (sessionStorage.getItem(key) === 'prefilled') return;
+    sessionStorage.setItem(key, 'prefilling');
+    showToast('SCOUT is prefilling the shadow SCR draft. Review it, then click NetSuite Save.', 'info', 9000);
+    runWhenNetSuiteFormInitialized('prefilling shadow SCR draft', function () {
       setTimeout(function () {
         applyShadowPrefillParamsFromUrl();
         const missing = validateShadowAutosaveDraft();
         if (missing.length) {
           sessionStorage.removeItem(key);
-          showToast(`Shadow SCR auto-save stopped: ${missing.join(', ')}. Review and save manually.`, 'error', 12000);
-          console.warn('[SCOUT] Shadow SCR auto-save validation failed:', missing);
+          showToast(`Shadow SCR draft needs review: ${missing.join(', ')}. Complete it and click NetSuite Save.`, 'error', 12000);
+          console.warn('[SCOUT] Shadow SCR prefill validation found missing values:', missing);
           return;
         }
-        const saved = saveNetSuiteForm();
-        if (saved) {
-          cleanupShadowPrefillPayload();
-          showToast('Saving shadow SCR…', 'success', 7000);
-        } else {
-          sessionStorage.removeItem(key);
-          showToast('Shadow SCR is ready, but SCOUT could not click Save. Review and save manually.', 'error', 10000);
-        }
+        sessionStorage.setItem(key, 'prefilled');
+        cleanupShadowPrefillPayload();
+        releaseActiveNetSuiteFieldFocus();
+        showToast('Shadow SCR draft is ready. Review it and click NetSuite Save.', 'success', 10000);
       }, 900);
     });
   }
@@ -8623,7 +8640,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
             <span class="sc-current-shadow-subtitle">Shown when staffing this SC as secondary.</span>
           </div>
           <label class="sc-lead-switch" title="Mark current SCR as Shadow">
-            <input type="checkbox" id="sc-current-shadow-toggle" checked>
+            <input type="checkbox" id="sc-current-shadow-toggle">
             <span class="sc-lead-switch-slider"></span>
           </label>
         </div>` : '';
@@ -8681,7 +8698,6 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       if (!currentShadowRow) return;
       const show = !assignAsLead();
       currentShadowRow.classList.toggle('visible', show);
-      if (show && currentShadowToggle) currentShadowToggle.checked = true;
     }
     if (leadToggle) leadToggle.addEventListener('change', syncCurrentShadowVisibility);
     syncCurrentShadowVisibility();
@@ -8817,6 +8833,145 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     }
     ta.addEventListener('keydown', handleSubmitShortcut);
     if (requestDetailsTa) requestDetailsTa.addEventListener('keydown', handleSubmitShortcut);
+  }
+
+  function getCurrentLeadScNameForShadow() {
+    const assignedText = String(readFormField(SCR_FIELD_ASSIGNEE) || '').trim();
+    if (assignedText && !/^\d+$/.test(assignedText)) return assignedText;
+    const assignedId = String(readFormFieldValue(SCR_FIELD_ASSIGNEE) || '').trim();
+    if (assignedId) {
+      try {
+        const rosterName = nlapiLookupField('customrecord_emproster', assignedId, 'name', true) ||
+          nlapiLookupField('customrecord_emproster', assignedId, 'name') || '';
+        if (rosterName) return String(rosterName).trim();
+      } catch (e) { /* best effort */ }
+    }
+    return '';
+  }
+
+  function openCreateShadowScrDialog(empName) {
+    const overlay = document.createElement('div');
+    overlay.className = 'sc-notes-overlay';
+    overlay.innerHTML = `
+      <div class="sc-notes-dialog">
+        <h3>Create Shadow SCR</h3>
+        <label for="sc-shadow-later-input">Shadow SC</label>
+        <input id="sc-shadow-later-input" class="sc-shadow-sc-input" type="text" autocomplete="off" placeholder="Type shadow SC name...">
+        <div id="sc-shadow-later-results" class="sc-shadow-results"></div>
+        <div id="sc-shadow-later-status" class="sc-shadow-status"></div>
+        <div class="sc-notes-btn-row">
+          <button class="sc-notes-cancel-btn" id="sc-shadow-later-cancel">Cancel</button>
+          <button class="sc-notes-ok-btn" id="sc-shadow-later-ok">Create Draft</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    const input = overlay.querySelector('#sc-shadow-later-input');
+    const results = overlay.querySelector('#sc-shadow-later-results');
+    const status = overlay.querySelector('#sc-shadow-later-status');
+    const primaryScId = String(readFormFieldValue(SCR_FIELD_ASSIGNEE) || '').trim();
+    let selected = null;
+    let timer = null;
+
+    function cleanup() { overlay.remove(); }
+    function setStatus(message, isError) {
+      if (!status) return;
+      status.textContent = message || '';
+      status.style.color = isError ? '#b3261e' : '';
+    }
+    function renderMatches(members) {
+      const list = (members || []).slice(0, 6);
+      if (!list.length) {
+        if (results) results.innerHTML = '';
+        selected = null;
+        return;
+      }
+      results.innerHTML = list.map(function (member, idx) {
+        const meta = [member.manager, member.salesteam, member.region || member.location].filter(Boolean).join(' · ');
+        return `<button type="button" class="sc-shadow-result-btn${idx === 0 ? ' selected' : ''}" data-idx="${idx}">
+          ${escHtml(member.employee || '')}
+          ${meta ? `<span class="sc-shadow-result-meta">${escHtml(meta)}</span>` : ''}
+        </button>`;
+      }).join('');
+      selected = list[0] || null;
+      results.querySelectorAll('.sc-shadow-result-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          const idx = Number(btn.dataset.idx || 0);
+          selected = list[idx] || null;
+          results.querySelectorAll('.sc-shadow-result-btn').forEach(b => b.classList.remove('selected'));
+          btn.classList.add('selected');
+          if (input && selected) input.value = selected.employee || '';
+          setStatus(selected ? `Selected ${selected.employee}` : '', false);
+        });
+      });
+      setStatus(list.length === 1 ? `Selected ${list[0].employee}` : `${list.length} matches found. Click the correct shadow SC.`, false);
+    }
+    function searchNow() {
+      const value = input ? input.value.trim() : '';
+      selected = null;
+      if (results) results.innerHTML = '';
+      if (value.length < 2) {
+        setStatus('Type at least 2 letters to find a shadow SC.', false);
+        return;
+      }
+      setStatus('Searching active SC roster...', false);
+      try {
+        const found = getRequestedSCRoster(value, { strictName: false });
+        const members = (found.members || []).filter(member => String(member.employeeId || '') !== primaryScId);
+        renderMatches(members);
+        if (!members.length) setStatus('No active SC roster match found.', true);
+      } catch (e) {
+        console.warn('[SCOUT] Shadow SCR lookup failed:', e);
+        setStatus('Could not search roster for shadow SC.', true);
+      }
+    }
+    function resolveSelected() {
+      const typed = input ? input.value.trim() : '';
+      let member = selected;
+      if (!member && typed.length >= 2) {
+        const strict = getRequestedSCRoster(typed, { strictName: true });
+        member = strict.members && strict.members.length === 1 ? strict.members[0] : null;
+        if (!member) {
+          const loose = getRequestedSCRoster(typed, { strictName: false });
+          const matches = (loose.members || []).filter(candidate => String(candidate.employeeId || '') !== primaryScId);
+          if (matches.length === 1) member = matches[0];
+        }
+      }
+      if (!member || !member.employeeId) {
+        setStatus('Select a valid shadow SC before creating the draft.', true);
+        if (input) input.focus();
+        return null;
+      }
+      return member;
+    }
+    function createDraft() {
+      const member = resolveSelected();
+      if (!member) return;
+      const url = buildShadowScrPrefillUrl(member, getCurrentLeadScNameForShadow(), empName || 'SCOUT User');
+      if (!url) {
+        setStatus('Could not build the shadow SCR link.', true);
+        return;
+      }
+      cleanup();
+      openShadowScrPrefillUrl(url, member.employee);
+    }
+
+    overlay.querySelector('#sc-shadow-later-cancel').addEventListener('click', cleanup);
+    overlay.querySelector('#sc-shadow-later-ok').addEventListener('click', createDraft);
+    input.addEventListener('input', function () {
+      selected = null;
+      clearTimeout(timer);
+      timer = setTimeout(searchNow, 300);
+    });
+    input.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter' && !ev.ctrlKey) {
+        ev.preventDefault();
+        if (selected) createDraft();
+        else searchNow();
+      }
+    });
+    input.focus();
+    setStatus('Type at least 2 letters to find a shadow SC.', false);
   }
 
   function showAmoBlankDeliverableWarning(onContinue) {
@@ -14472,6 +14627,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       if (quickInput) quickInput.addEventListener('keydown', function (ev) {
         if (ev.key === 'Enter') { ev.preventDefault(); runQuickAssign(); }
       });
+
+      const createShadowBtn = document.getElementById('sc-create-shadow-scr-btn');
+      if (createShadowBtn) {
+        createShadowBtn.addEventListener('click', () => openCreateShadowScrDialog(empName));
+      }
     })();
 
     // Product text filter
