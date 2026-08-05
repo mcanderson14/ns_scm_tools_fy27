@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.2.9
+// @version      27.2.10
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -2049,6 +2049,92 @@ html.sc-resizing #sc-skills-toggle { transition: none !important; }
 }
 .sc-lead-switch input:checked + .sc-lead-switch-slider { background: var(--sc-green-dark); }
 .sc-lead-switch input:checked + .sc-lead-switch-slider:before { transform: translateX(18px); }
+.sc-shadow-request-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid #d7e4ea;
+  border-radius: 6px;
+  background: #f8fbfc;
+}
+.sc-shadow-request-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+}
+.sc-shadow-request-toggle input {
+  margin-top: 2px;
+}
+.sc-shadow-request-title {
+  color: #1a2e45;
+  font-size: 12px;
+  font-weight: 800;
+}
+.sc-shadow-request-subtitle {
+  color: var(--sc-text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.sc-shadow-request-controls {
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+}
+.sc-shadow-request-row.enabled .sc-shadow-request-controls {
+  display: flex;
+}
+.sc-shadow-sc-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 9px;
+  border: 1px solid var(--sc-border);
+  border-radius: 6px;
+  font-size: 12px;
+  color: #222;
+}
+.sc-shadow-sc-input:focus {
+  outline: 2px solid var(--sc-blue);
+  border-color: transparent;
+}
+.sc-shadow-results {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 140px;
+  overflow: auto;
+}
+.sc-shadow-result-btn {
+  border: 1px solid #d7e4ea;
+  border-radius: 6px;
+  background: #fff;
+  color: #1a2e45;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 6px 8px;
+  text-align: left;
+}
+.sc-shadow-result-btn:hover,
+.sc-shadow-result-btn.selected {
+  border-color: var(--sc-blue);
+  background: #eaf5f8;
+}
+.sc-shadow-result-meta {
+  display: block;
+  color: var(--sc-text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+.sc-shadow-status {
+  min-height: 14px;
+  color: var(--sc-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
 .sc-notes-btn-row {
   display: flex;
   justify-content: flex-end;
@@ -5473,6 +5559,62 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     if (employeeId) setFieldValueWithSyncSourcing(SCR_FIELD_ASSIGNEE_EMPLOYEE, employeeId);
     setTimeout(() => triggerNetSuiteFieldEvents(SCR_FIELD_ASSIGNEE), 250);
   }
+  function getCurrentScrRequestTypeId() {
+    if (isCurrentScrAmo()) return SCR_REQUEST_TYPE_AMO_ID;
+    const requestTypeText = readFormField(SCR_FIELD_TYPE);
+    if (/direct/i.test(requestTypeText)) return SCR_REQUEST_TYPE_DIRECT_ID;
+    return readFormFieldValue(SCR_FIELD_TYPE) || SCR_REQUEST_TYPE_DIRECT_ID;
+  }
+  function addPrefillParam(params, fieldId, value) {
+    const v = normalizeFieldReadResult(value);
+    if (!fieldId || !v) return;
+    params.set(`record.${fieldId}`, v);
+  }
+  function buildShadowScrPrefillUrl(shadowMember) {
+    const member = shadowMember || {};
+    const rosterId = String(member.employeeId || '').trim();
+    if (!rosterId) return '';
+    const employeeRecId = String(member.employeeRecId || getRosterEmployeeId(rosterId) || '').trim();
+    const params = new URLSearchParams();
+    params.set('rectype', SCR_RECORD_TYPE_ID);
+
+    addPrefillParam(params, SCR_FIELD_TYPE, getCurrentScrRequestTypeId());
+    addPrefillParam(params, SCR_FIELD_REQUESTOR, readFormFieldValue(SCR_FIELD_REQUESTOR));
+    addPrefillParam(params, SCR_FIELD_DETAILS, getRequestDetails());
+    addPrefillParam(params, SCR_FIELD_STATUS, SCR_STATUS_STAFFED_ID);
+    addPrefillParam(params, SCR_FIELD_DATE_SC_NEEDED, readFormFieldValue(SCR_FIELD_DATE_SC_NEEDED) || readFormFieldValue(SCR_FIELD_DATE_NEEDED));
+    addPrefillParam(params, SCR_FIELD_ONSITE, readFormFieldValue(SCR_FIELD_ONSITE));
+    addPrefillParam(params, SCR_FIELD_COMPANY, readFormFieldValue(SCR_FIELD_COMPANY));
+    addPrefillParam(params, SCR_FIELD_OPP, readFormFieldValue(SCR_FIELD_OPP));
+    addPrefillParam(params, SCR_FIELD_ASSIGNEE, rosterId);
+    addPrefillParam(params, SCR_FIELD_ASSIGNEE_EMPLOYEE, employeeRecId);
+    addPrefillParam(params, SCR_FIELD_ASSIGNED_LEAD, 'F');
+    addPrefillParam(params, SCR_FIELD_SHADOW, 'T');
+    addPrefillParam(params, SCR_FIELD_DELIVERABLE, readFormFieldValue(SCR_FIELD_DELIVERABLE));
+    addPrefillParam(params, SCR_FIELD_ENGAGEMENT_NOTES, readFormFieldValue(SCR_FIELD_ENGAGEMENT_NOTES));
+
+    return `${window.location.origin}/app/common/custom/custrecordentry.nl?${params.toString()}`;
+  }
+  function openShadowScrPrefillUrl(url, shadowName) {
+    if (!url) return;
+    try {
+      const opener = (typeof GM_openInTab !== 'undefined') ? GM_openInTab
+                   : (typeof GM !== 'undefined' && GM.openInTab) ? GM.openInTab
+                   : null;
+      if (opener) {
+        opener(url, { active: false, insert: true });
+        showToast(`Opened shadow SCR draft for ${shadowName || 'selected SC'} in a new tab. Review and save it in NetSuite.`, 'success', 9000);
+        return;
+      }
+    } catch (e) { /* use fallback below */ }
+    try {
+      window.open(url, '_blank', 'noopener,noreferrer');
+      showToast(`Opened shadow SCR draft for ${shadowName || 'selected SC'} in a new tab. Review and save it in NetSuite.`, 'success', 9000);
+      return;
+    } catch (e) { /* copy fallback below */ }
+    copyToClipboardQuietly(url);
+    showToast('Shadow SCR link copied — paste it in a new tab to review and save.', 'info', 9000);
+  }
   function setLeadAssigned(assignAsLead) {
     nlapiSetFieldValue('custrecord_screq_assigned_lead', assignAsLead ? 'T' : 'F', true);
   }
@@ -6255,6 +6397,9 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       } else {
         applyDirectStaffing(pending.scId, pending.scName, pending.empName, pending.hasLeadOnOpp, pending.notes, pending.productIds, pending.assignAsLead !== false, pending.requestDetailsNote);
       }
+      if (pending.shadowRequest && pending.shadowRequest.url) {
+        openShadowScrPrefillUrl(pending.shadowRequest.url, pending.shadowRequest.name);
+      }
       sessionStorage.removeItem(STAFFING_PENDING_KEY);
       showToast(`✔ Applied ${actionLabel}; saving record…`, 'success', 5000);
       setTimeout(function () {
@@ -6275,16 +6420,21 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       const notes = dialog.staffingNotes;
       const assignAsLead = dialog.assignAsLead;
       const requestDetailsNote = dialog.requestDetailsNote;
+      const shadowRequest = dialog.shadowRequest ? {
+        url: dialog.shadowRequest.url,
+        name: dialog.shadowRequest.member && dialog.shadowRequest.member.employee,
+      } : null;
       const assignmentLabel = assignAsLead ? 'Lead SC' : 'Secondary SC';
       if (!isScrEditMode()) {
-        storePendingStaffAction({ type: 'direct', scId, scName, empName, hasLeadOnOpp, notes, requestDetailsNote, assignAsLead, productIds: getProductsForStaffing(sourceIds.productSelectId || 'sc-products', sourceIds.productSkillSelectId || 'sc-product-skills') });
+        storePendingStaffAction({ type: 'direct', scId, scName, empName, hasLeadOnOpp, notes, requestDetailsNote, shadowRequest, assignAsLead, productIds: getProductsForStaffing(sourceIds.productSelectId || 'sc-products', sourceIds.productSkillSelectId || 'sc-product-skills') });
         return;
       }
       runWhenNetSuiteFormInitialized(`staffing ${scName}`, function () {
         applyDirectStaffing(scId, scName, empName, hasLeadOnOpp, notes, getProductsForStaffing(sourceIds.productSelectId || 'sc-products', sourceIds.productSkillSelectId || 'sc-product-skills'), assignAsLead, requestDetailsNote);
+        if (shadowRequest && shadowRequest.url) openShadowScrPrefillUrl(shadowRequest.url, shadowRequest.name);
         showToast(`✔ Staffed: ${scName} as ${assignmentLabel} — save the record to confirm.`, 'success', 6000);
       });
-    }, { showLeadToggle: true, showRequestDetailsBox: true });
+    }, { showLeadToggle: true, showRequestDetailsBox: true, showShadowRequest: true, primaryScId: scId });
   }
 
   function getSelectedAmoDeliverableFromPicker(pickerId) {
@@ -6328,15 +6478,20 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       const notes = dialog.staffingNotes;
       const assignAsLead = dialog.assignAsLead;
       const requestDetailsNote = dialog.requestDetailsNote;
+      const shadowRequest = dialog.shadowRequest ? {
+        url: dialog.shadowRequest.url,
+        name: dialog.shadowRequest.member && dialog.shadowRequest.member.employee,
+      } : null;
       const deliverable = getSelectedAmoDeliverable({ requirePickerSelection: true, deliverablePickerId: sourceIds.deliverablePickerId || 'sc-amo-deliverable' });
       const assignmentLabel = assignAsLead ? 'Lead SC' : 'Secondary SC';
       const continueStaffing = function () {
         if (!isScrEditMode()) {
-          storePendingStaffAction({ type: 'amo', scId, scName, empName, hasLeadOnOpp, notes, requestDetailsNote, deliverable, assignAsLead, productIds: getProductsForStaffing(sourceIds.productSelectId || 'sc-amo-products', sourceIds.productSkillSelectId || 'sc-amo-product-skills') });
+          storePendingStaffAction({ type: 'amo', scId, scName, empName, hasLeadOnOpp, notes, requestDetailsNote, shadowRequest, deliverable, assignAsLead, productIds: getProductsForStaffing(sourceIds.productSelectId || 'sc-amo-products', sourceIds.productSkillSelectId || 'sc-amo-product-skills') });
           return;
         }
         runWhenNetSuiteFormInitialized(`staffing ${scName}`, function () {
           applyAmoStaffing(scId, scName, empName, hasLeadOnOpp, notes, deliverable, getProductsForStaffing(sourceIds.productSelectId || 'sc-amo-products', sourceIds.productSkillSelectId || 'sc-amo-product-skills'), assignAsLead, requestDetailsNote);
+          if (shadowRequest && shadowRequest.url) openShadowScrPrefillUrl(shadowRequest.url, shadowRequest.name);
           const label = deliverable ? ` (${deliverable})` : '';
           showToast(`✔ Staffed: ${scName}${label} as ${assignmentLabel} — save the record to confirm.`, 'success', 6000);
         });
@@ -6346,7 +6501,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         return;
       }
       continueStaffing();
-    }, { showLeadToggle: true, showRequestDetailsBox: true });
+    }, { showLeadToggle: true, showRequestDetailsBox: true, showShadowRequest: true, primaryScId: scId });
   }
 
   function staffFromActiveTab(scId, scName, empName, hasLeadOnOpp) {
@@ -8176,6 +8331,21 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
             <span class="sc-lead-switch-slider"></span>
           </label>
         </div>` : '';
+    const shadowRequestHtml = opts.showShadowRequest ? `
+        <div class="sc-shadow-request-row" id="sc-shadow-request-row">
+          <label class="sc-shadow-request-toggle" for="sc-shadow-request-toggle">
+            <input type="checkbox" id="sc-shadow-request-toggle">
+            <span>
+              <span class="sc-shadow-request-title">Create Shadow SCR</span>
+              <span class="sc-shadow-request-subtitle">Open a secondary SC Request for a shadowing SC. Lead SC stays off and Shadow is checked.</span>
+            </span>
+          </label>
+          <div class="sc-shadow-request-controls">
+            <input id="sc-shadow-sc-input" class="sc-shadow-sc-input" type="text" autocomplete="off" placeholder="Type shadow SC name...">
+            <div id="sc-shadow-results" class="sc-shadow-results"></div>
+            <div id="sc-shadow-status" class="sc-shadow-status"></div>
+          </div>
+        </div>` : '';
     const overlay = document.createElement('div');
     overlay.className = 'sc-notes-overlay';
     overlay.innerHTML = `
@@ -8185,6 +8355,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         <textarea id="sc-notes-textarea" placeholder="Enter SCM staffing notes..."></textarea>
         ${requestDetailsHtml}
         ${leadToggleHtml}
+        ${shadowRequestHtml}
         <div class="sc-notes-btn-row">
           <button class="sc-notes-cancel-btn" id="sc-notes-cancel">Cancel</button>
           <button class="sc-notes-ok-btn"     id="sc-notes-ok">Confirm</button>
@@ -8193,17 +8364,138 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     document.body.appendChild(overlay);
     const ta = overlay.querySelector('#sc-notes-textarea');
     const requestDetailsTa = overlay.querySelector('#sc-request-details-textarea');
+    const shadowRow = overlay.querySelector('#sc-shadow-request-row');
+    const shadowToggle = overlay.querySelector('#sc-shadow-request-toggle');
+    const shadowInput = overlay.querySelector('#sc-shadow-sc-input');
+    const shadowResults = overlay.querySelector('#sc-shadow-results');
+    const shadowStatus = overlay.querySelector('#sc-shadow-status');
+    let shadowSelected = null;
+    let shadowSearchTimer = null;
     ta.focus();
     function assignAsLead() {
       const toggle = overlay.querySelector('#sc-assign-lead-toggle');
       return toggle ? toggle.checked : true;
     }
+    function setShadowStatus(message, isError) {
+      if (!shadowStatus) return;
+      shadowStatus.textContent = message || '';
+      shadowStatus.style.color = isError ? '#b3261e' : '';
+    }
+    function renderShadowMatches(members) {
+      if (!shadowResults) return;
+      const list = (members || []).slice(0, 6);
+      if (!list.length) {
+        shadowResults.innerHTML = '';
+        return;
+      }
+      shadowResults.innerHTML = list.map(function (member, idx) {
+        const name = member.employee || '';
+        const meta = [member.manager, member.salesteam, member.region || member.location].filter(Boolean).join(' · ');
+        return `<button type="button" class="sc-shadow-result-btn${idx === 0 ? ' selected' : ''}" data-idx="${idx}">
+          ${escHtml(name)}
+          ${meta ? `<span class="sc-shadow-result-meta">${escHtml(meta)}</span>` : ''}
+        </button>`;
+      }).join('');
+      shadowSelected = list[0] || null;
+      shadowResults.querySelectorAll('.sc-shadow-result-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          const idx = Number(btn.dataset.idx || 0);
+          shadowSelected = list[idx] || null;
+          shadowResults.querySelectorAll('.sc-shadow-result-btn').forEach(b => b.classList.remove('selected'));
+          btn.classList.add('selected');
+          if (shadowInput && shadowSelected) shadowInput.value = shadowSelected.employee || '';
+          setShadowStatus(shadowSelected ? `Selected ${shadowSelected.employee}` : '', false);
+        });
+      });
+      setShadowStatus(list.length === 1 ? `Selected ${list[0].employee}` : `${list.length} matches found. Click the correct shadow SC.`, false);
+    }
+    function searchShadowScNow() {
+      if (!shadowToggle || !shadowToggle.checked || !shadowInput) return;
+      const value = shadowInput.value.trim();
+      shadowSelected = null;
+      if (shadowResults) shadowResults.innerHTML = '';
+      if (value.length < 2) {
+        setShadowStatus('Type at least 2 letters to find a shadow SC.', false);
+        return;
+      }
+      setShadowStatus('Searching active SC roster...', false);
+      try {
+        const result = getRequestedSCRoster(value, { strictName: false });
+        const members = (result.members || []).filter(function (member) {
+          return String(member.employeeId || '') !== String(opts.primaryScId || '');
+        });
+        renderShadowMatches(members);
+        if (!members.length) setShadowStatus('No active SC roster match found.', true);
+      } catch (e) {
+        console.warn('[Staffing Helper] Shadow SC lookup failed:', e);
+        setShadowStatus('Could not search roster for shadow SC.', true);
+      }
+    }
+    function syncShadowEnabled() {
+      if (!shadowRow || !shadowToggle) return;
+      shadowRow.classList.toggle('enabled', shadowToggle.checked);
+      if (shadowToggle.checked) {
+        setTimeout(() => shadowInput && shadowInput.focus(), 0);
+        searchShadowScNow();
+      } else {
+        shadowSelected = null;
+        if (shadowResults) shadowResults.innerHTML = '';
+        setShadowStatus('', false);
+      }
+    }
+    if (shadowToggle) shadowToggle.addEventListener('change', syncShadowEnabled);
+    if (shadowInput) {
+      shadowInput.addEventListener('input', function () {
+        shadowSelected = null;
+        clearTimeout(shadowSearchTimer);
+        shadowSearchTimer = setTimeout(searchShadowScNow, 300);
+      });
+      shadowInput.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' && !ev.ctrlKey) {
+          ev.preventDefault();
+          searchShadowScNow();
+        }
+      });
+    }
+    function resolveShadowRequest() {
+      if (!shadowToggle || !shadowToggle.checked) return null;
+      const typed = shadowInput ? shadowInput.value.trim() : '';
+      let member = shadowSelected;
+      if (!member && typed.length >= 2) {
+        const strict = getRequestedSCRoster(typed, { strictName: true });
+        member = strict.members && strict.members.length === 1 ? strict.members[0] : null;
+        if (!member) {
+          const loose = getRequestedSCRoster(typed, { strictName: false });
+          const matches = (loose.members || []).filter(function (candidate) {
+            return String(candidate.employeeId || '') !== String(opts.primaryScId || '');
+          });
+          if (matches.length === 1) member = matches[0];
+        }
+      }
+      if (!member || !member.employeeId) {
+        setShadowStatus('Select a valid shadow SC before confirming.', true);
+        if (shadowInput) shadowInput.focus();
+        return false;
+      }
+      if (String(member.employeeId) === String(opts.primaryScId || '')) {
+        setShadowStatus('Shadow SC must be different from the primary SC.', true);
+        return false;
+      }
+      const url = buildShadowScrPrefillUrl(member);
+      if (!url) {
+        setShadowStatus('Could not build the shadow SCR link.', true);
+        return false;
+      }
+      return { member, url };
+    }
     function submitDialog() {
       const staffingNotes = ta.value.trim();
       const requestDetailsNote = requestDetailsTa ? requestDetailsTa.value.trim() : '';
       const lead = assignAsLead();
+      const shadowRequest = resolveShadowRequest();
+      if (shadowRequest === false) return;
       cleanup();
-      callback({ staffingNotes, assignAsLead: lead, requestDetailsNote });
+      callback({ staffingNotes, assignAsLead: lead, requestDetailsNote, shadowRequest });
     }
     function cleanup() { overlay.remove(); }
     overlay.querySelector('#sc-notes-cancel').addEventListener('click', cleanup);
@@ -12908,12 +13200,21 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   const SCR_FIELD_TYPE         = 'custrecord_screq_type';
   const SCR_FIELD_DELIVERABLE  = 'custrecord_screq_engmnt_deliverable';
   const SCR_FIELD_COMPANY      = 'custrecord_screq_opp_company';
+  const SCR_FIELD_REQUESTOR    = 'custrecord_screq_requestor';
+  const SCR_FIELD_STATUS       = 'custrecord_screq_status';
+  const SCR_FIELD_ONSITE       = 'custrecord_screq_onsite';
+  const SCR_FIELD_DETAILS      = 'custrecord_screq_details';
   const SCR_RECORD_TYPE        = 'customrecord2840';   // rectype=2840 from URL
+  const SCR_RECORD_TYPE_ID     = '2840';
+  const SCR_REQUEST_TYPE_AMO_ID = '18';
+  const SCR_REQUEST_TYPE_DIRECT_ID = '19';
+  const SCR_STATUS_STAFFED_ID  = '2';
   // ── Fields that need confirmation against live NetSuite schema ────
   const SCR_FIELD_OPP          = 'custrecord_screq_opportunity';    // opportunity link on SCR
   const SCR_FIELD_ASSIGNEE     = 'custrecord_screq_assignee';       // assigned SC on SCR
   const SCR_FIELD_ASSIGNEE_EMPLOYEE = 'custrecord_screq_assignee_employee'; // Employee behind assigned roster entry
   const SCR_FIELD_ASSIGNED_LEAD = 'custrecord_screq_assigned_lead'; // already confirmed
+  const SCR_FIELD_SHADOW       = 'custrecord_screq_shadow';
   const SCR_FIELD_PRODUCTS     = 'custrecord_screq_products';       // multi-select product(s) field
   const SCR_RECORD_PRODUCT_FIELD_CANDIDATES = [
     SCR_FIELD_PRODUCTS,
