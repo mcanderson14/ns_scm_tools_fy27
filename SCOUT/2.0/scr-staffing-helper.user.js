@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.2.12
+// @version      27.2.15
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.2.12
+   SCOUT — SC Operations Utility Tool  27.2.15
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.2.12';
+  const SCRIPT_VERSION = '27.2.15';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -335,6 +335,7 @@ Good luck with ${sc}!
 	    amoFallback: 'amoFallback',
 	    cancelRequest: 'cancelRequest',
 	    additionalDetailsLabel: 'additionalDetailsLabel',
+	    shadowScr: 'shadowScr',
 	  };
 
 	  function makeAmoRequestDetailTemplateKey(deliverable) {
@@ -358,6 +359,7 @@ Good luck with ${sc}!
 	      { key: REQUEST_DETAIL_TEMPLATE_KEYS.directStaffing, label: 'Direct Staffing' },
 	      ...amoTemplates,
 	      { key: REQUEST_DETAIL_TEMPLATE_KEYS.amoFallback, label: 'AMO - No Template / Fallback' },
+	      { key: REQUEST_DETAIL_TEMPLATE_KEYS.shadowScr, label: 'Shadow SCR Request Details' },
 	      { key: REQUEST_DETAIL_TEMPLATE_KEYS.cancelRequest, label: 'Cancel Request' },
 	      { key: REQUEST_DETAIL_TEMPLATE_KEYS.additionalDetailsLabel, label: 'Additional Request Details Label' },
 	    ];
@@ -374,6 +376,9 @@ Good luck with ${sc}!
 	    }
 	    if (key === REQUEST_DETAIL_TEMPLATE_KEYS.cancelRequest) {
 	      return `SC Request cancelled by SC Manager ({managerName}). \nPlease create a new request if needed.\n---\n\n`;
+	    }
+	    if (key === REQUEST_DETAIL_TEMPLATE_KEYS.shadowScr) {
+	      return `Assigning {shadowScName} to shadow this {dealType} deal. Please include {shadowFirstName} in all deal meetings with {leadFirstName}.\n`;
 	    }
 	    if (key === REQUEST_DETAIL_TEMPLATE_KEYS.additionalDetailsLabel) {
 	      return 'Additional staffing details:';
@@ -409,9 +414,14 @@ Good luck with ${sc}!
 	      dateLong: todayFullString(),
 	      initials: '',
 	      deliverable: '',
+	      shadowScName: '',
+	      shadowFirstName: '',
+	      leadScName: '',
+	      leadFirstName: '',
+	      dealType: '',
 	      ...vars,
 	    };
-	    return String(template || '').replace(/\{(scName|managerName|dateShort|dateLong|initials|deliverable)\}/g, (match, key) => {
+	    return String(template || '').replace(/\{(scName|managerName|dateShort|dateLong|initials|deliverable|shadowScName|shadowFirstName|leadScName|leadFirstName|dealType)\}/g, (match, key) => {
 	      return values[key] == null ? '' : String(values[key]);
 	    });
 	  }
@@ -1334,22 +1344,26 @@ html.sc-resizing #sc-skills-toggle { transition: none !important; }
 }
 
 /* ── Search Button ───────────────────────────────────────────────── */
-#sc-search-btn {
+#sc-search-btn,
+#sc-amo-search-btn,
+#sc-combined-search-btn {
   width: 100%;
   padding: 10px;
-  background: var(--sc-blue);
-  color: #fff;
   border: none;
   border-radius: var(--sc-radius);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 700;
   cursor: pointer;
-  letter-spacing: 0.3px;
-  transition: background 0.15s;
+  letter-spacing: 0.01em;
+  transition: background 0.15s, filter 0.15s;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
+}
+#sc-search-btn {
+  background: var(--sc-blue);
+  color: #fff;
 }
 #sc-search-btn:hover { background: var(--sc-blue-dark); }
 #sc-search-btn:disabled { background: #a0b8c4; cursor: not-allowed; }
@@ -2770,22 +2784,9 @@ html.sc-resizing #sc-skills-toggle { transition: none !important; }
 
 /* ── AMO Search Button ───────────────────────────────────────────── */
 #sc-amo-search-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  width: 100%;
-  padding: 10px;
   margin: 14px 0 8px;
   background: var(--sc-red);
   color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: filter 0.15s;
-  letter-spacing: 0.01em;
 }
 #sc-amo-search-btn:hover { filter: brightness(0.88); }
 #sc-amo-search-btn:disabled { background: #aaa; cursor: not-allowed; }
@@ -2814,7 +2815,17 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 .sc-result-card.sc-result-card-amo .sc-skill-tag { background: #fff2ef; color: var(--sc-red-dark); border-color: #f2c2b8; }
 .sc-result-card.sc-result-card-amo .sc-card-select-label input[type="checkbox"] { accent-color: var(--sc-red); }
 #sc-combined-search-btn {
-  background: linear-gradient(90deg, var(--sc-blue) 0%, var(--sc-blue) 49%, var(--sc-red) 51%, var(--sc-red) 100%);
+  margin: 14px 0 8px;
+  background: var(--sc-brand-yellow);
+  color: var(--sc-blue-dark);
+}
+#sc-combined-search-btn:hover {
+  background: #efcc79;
+}
+#sc-combined-search-btn:disabled {
+  background: #d7c9a6;
+  color: #6a7880;
+  cursor: not-allowed;
 }
 .sc-combined-helper-note {
   font-size: 11px;
@@ -5607,7 +5618,13 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const shadowFirst = getPersonFirstName(shadowName) || 'them';
     const leadFirst = getPersonFirstName(leadScName) || 'the lead SC';
     const dealType = isCurrentScrAmo() ? 'AMO' : 'Direct';
-    const note = `Assigning ${shadowName || 'selected SC'} for shadowing the ${dealType} deal. Please include ${shadowFirst} in all deal meetings with ${leadFirst}.`;
+    const note = renderConfiguredRequestDetailTemplate(REQUEST_DETAIL_TEMPLATE_KEYS.shadowScr, {
+      shadowScName: shadowName || 'selected SC',
+      shadowFirstName: shadowFirst,
+      leadScName: leadScName || '',
+      leadFirstName: leadFirst,
+      dealType,
+    }).trim();
     const existing = getRequestDetails();
     return existing ? `${note}\n\n${existing}` : note;
   }
@@ -5618,6 +5635,8 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const employeeRecId = String(member.employeeRecId || getRosterEmployeeId(rosterId) || '').trim();
     const params = new URLSearchParams();
     params.set('rectype', SCR_RECORD_TYPE_ID);
+    params.set('scout_shadow_autosave', 'T');
+    params.set('scout_shadow_source', getCurrentScrId() || '');
 
     addPrefillParam(params, SCR_FIELD_TYPE, getCurrentScrRequestTypeId());
     addPrefillParam(params, SCR_FIELD_REQUESTOR, readFormFieldValue(SCR_FIELD_REQUESTOR));
@@ -5852,6 +5871,96 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     }));
     showToast('Opening edit mode to apply and save SCOUT changes…', 'info', 5000);
     goToEditMode();
+  }
+
+  function isScoutShadowAutosaveRequest() {
+    try {
+      const url = new URL(window.location.href);
+      return url.searchParams.get('scout_shadow_autosave') === 'T' &&
+        url.searchParams.get('rectype') === SCR_RECORD_TYPE_ID &&
+        !url.searchParams.get('id');
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function getShadowAutosaveKey() {
+    try {
+      const url = new URL(window.location.href);
+      return `scout_shadow_autosave_${url.searchParams.get('scout_shadow_source') || 'new'}_${url.searchParams.get(`record.${SCR_FIELD_ASSIGNEE}`) || ''}_${url.searchParams.get(`record.${SCR_FIELD_OPP}`) || ''}`;
+    } catch (e) {
+      return `scout_shadow_autosave_${Date.now()}`;
+    }
+  }
+
+  function readDomFieldValue(fieldId) {
+    try {
+      const controls = findFieldControls(fieldId);
+      for (const el of controls) {
+        if (!el) continue;
+        if (el.type && String(el.type).toLowerCase() === 'checkbox') {
+          if (el.checked) return 'T';
+          const raw = el.value;
+          if (raw === 'T' || raw === 'F') return raw;
+          return 'F';
+        }
+        if ('value' in el && el.value != null && String(el.value).trim() !== '') {
+          return String(el.value).trim();
+        }
+      }
+    } catch (e) { /* best effort */ }
+    return '';
+  }
+
+  function getCurrentFieldRawValue(fieldId) {
+    return normalizeFieldReadResult(readFormFieldValue(fieldId) || readDomFieldValue(fieldId));
+  }
+
+  function validateShadowAutosaveDraft() {
+    const required = [
+      { id: SCR_FIELD_TYPE, label: 'Request Type' },
+      { id: SCR_FIELD_DETAILS, label: 'Request Details' },
+      { id: SCR_FIELD_STATUS, label: 'Request Status' },
+      { id: SCR_FIELD_DATE_SC_NEEDED, label: 'Anticipated Customer Meeting Date' },
+      { id: SCR_FIELD_ASSIGNEE, label: 'Assigned To' },
+    ];
+    const missing = required.filter(item => !getCurrentFieldRawValue(item.id)).map(item => item.label);
+    const leadValue = getCurrentFieldRawValue(SCR_FIELD_ASSIGNED_LEAD).toUpperCase();
+    const shadowValue = getCurrentFieldRawValue(SCR_FIELD_SHADOW).toUpperCase();
+
+    if (leadValue === 'T' || leadValue === 'TRUE' || leadValue === '1') {
+      missing.push('Lead SC must be unchecked');
+    }
+    if (!(shadowValue === 'T' || shadowValue === 'TRUE' || shadowValue === '1')) {
+      missing.push('Shadow must be checked');
+    }
+    return missing;
+  }
+
+  function resumeShadowAutosaveDraft() {
+    if (!isScoutShadowAutosaveRequest()) return;
+    const key = getShadowAutosaveKey();
+    if (sessionStorage.getItem(key) === 'saving') return;
+    sessionStorage.setItem(key, 'saving');
+    showToast('SCOUT is validating and saving the shadow SCR draft…', 'info', 7000);
+    runWhenNetSuiteFormInitialized('saving shadow SCR draft', function () {
+      setTimeout(function () {
+        const missing = validateShadowAutosaveDraft();
+        if (missing.length) {
+          sessionStorage.removeItem(key);
+          showToast(`Shadow SCR auto-save stopped: ${missing.join(', ')}. Review and save manually.`, 'error', 12000);
+          console.warn('[SCOUT] Shadow SCR auto-save validation failed:', missing);
+          return;
+        }
+        const saved = saveNetSuiteForm();
+        if (saved) {
+          showToast('Saving shadow SCR…', 'success', 7000);
+        } else {
+          sessionStorage.removeItem(key);
+          showToast('Shadow SCR is ready, but SCOUT could not click Save. Review and save manually.', 'error', 10000);
+        }
+      }, 900);
+    });
   }
 
   function normalizeProductIds(productIds) {
@@ -8288,6 +8397,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 	      managerName: 'Anderson, Michael C',
 	      initials: 'MCA',
 	      deliverable,
+	      shadowScName: 'Stoltzner, Erik',
+	      shadowFirstName: 'Erik',
+	      leadScName: 'Carroll, Katie',
+	      leadFirstName: 'Katie',
+	      dealType: 'AMO',
 	    };
 	  }
 
@@ -13758,6 +13872,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     wireScoutUpdateBanner();
     setTimeout(() => checkScoutUpdate(false), 1200);
     setTimeout(resumePendingStaffAction, 700);
+    setTimeout(resumeShadowAutosaveDraft, 900);
 
     // Initialise the panel width CSS variable from localStorage
     document.documentElement.style.setProperty('--sc-panel-w', getPanelWidth() + 'px');
