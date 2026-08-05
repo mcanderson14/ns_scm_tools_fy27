@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.2.18
+// @version      27.2.19
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.2.18
+   SCOUT — SC Operations Utility Tool  27.2.19
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.2.18';
+  const SCRIPT_VERSION = '27.2.19';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -5892,7 +5892,10 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       scrId: getCurrentScrId(),
       savedAt: Date.now(),
     }));
-    showToast('Opening edit mode to apply and save SCOUT changes…', 'info', 5000);
+    const message = action && action.noAutoSave
+      ? 'Opening edit mode to apply SCOUT changes. Review the SCR and click NetSuite Save.'
+      : 'Opening edit mode to apply and save SCOUT changes…';
+    showToast(message, 'info', 5000);
     goToEditMode();
   }
 
@@ -6635,6 +6638,12 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         openShadowScrPrefillUrl(pending.shadowRequest.url, pending.shadowRequest.name);
       }
       sessionStorage.removeItem(STAFFING_PENDING_KEY);
+      if (pending.noAutoSave) {
+        triggerNetSuiteFieldEvents(SCR_FIELD_ASSIGNEE);
+        releaseActiveNetSuiteFieldFocus();
+        showToast(`✔ Applied ${actionLabel}. Review the SCR and click NetSuite Save.`, 'success', 9000);
+        return;
+      }
       showToast(`✔ Applied ${actionLabel}; saving record…`, 'success', 5000);
       setTimeout(function () {
         triggerNetSuiteFieldEvents(SCR_FIELD_ASSIGNEE);
@@ -6650,6 +6659,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
    */
   function staffSC(scId, scName, empName, hasLeadOnOpp, sourceOptions) {
     const sourceIds = sourceOptions || {};
+    const noAutoSave = Boolean(sourceIds.noAutoSave);
     showNotesDialog('Staff ' + scName, function (dialog) {
       const notes = dialog.staffingNotes;
       const assignAsLead = dialog.assignAsLead;
@@ -6661,7 +6671,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       } : null;
       const assignmentLabel = assignAsLead ? 'Lead SC' : 'Secondary SC';
       if (!isScrEditMode()) {
-        storePendingStaffAction({ type: 'direct', scId, scName, empName, hasLeadOnOpp, notes, requestDetailsNote, shadowRequest, assignAsLead, assignAsShadow, productIds: getProductsForStaffing(sourceIds.productSelectId || 'sc-products', sourceIds.productSkillSelectId || 'sc-product-skills') });
+        storePendingStaffAction({ type: 'direct', scId, scName, empName, hasLeadOnOpp, notes, requestDetailsNote, shadowRequest, assignAsLead, assignAsShadow, noAutoSave, productIds: getProductsForStaffing(sourceIds.productSelectId || 'sc-products', sourceIds.productSkillSelectId || 'sc-product-skills') });
         return;
       }
       runWhenNetSuiteFormInitialized(`staffing ${scName}`, function () {
@@ -6720,6 +6730,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
    */
   function staffSCWithDeliverable(scId, scName, empName, hasLeadOnOpp, sourceOptions) {
     const sourceIds = sourceOptions || {};
+    const noAutoSave = Boolean(sourceIds.noAutoSave);
     showNotesDialog('Staff ' + scName + ' (AMO)', function (dialog) {
       const notes = dialog.staffingNotes;
       const assignAsLead = dialog.assignAsLead;
@@ -6733,7 +6744,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       const assignmentLabel = assignAsLead ? 'Lead SC' : 'Secondary SC';
       const continueStaffing = function () {
         if (!isScrEditMode()) {
-          storePendingStaffAction({ type: 'amo', scId, scName, empName, hasLeadOnOpp, notes, requestDetailsNote, shadowRequest, deliverable, assignAsLead, assignAsShadow, productIds: getProductsForStaffing(sourceIds.productSelectId || 'sc-amo-products', sourceIds.productSkillSelectId || 'sc-amo-product-skills') });
+          storePendingStaffAction({ type: 'amo', scId, scName, empName, hasLeadOnOpp, notes, requestDetailsNote, shadowRequest, deliverable, assignAsLead, assignAsShadow, noAutoSave, productIds: getProductsForStaffing(sourceIds.productSelectId || 'sc-amo-products', sourceIds.productSkillSelectId || 'sc-amo-product-skills') });
           return;
         }
         runWhenNetSuiteFormInitialized(`staffing ${scName}`, function () {
@@ -11101,7 +11112,10 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
       const member = matches[0];
       const cardMode = isAmoSalesTeam(member.salesteam) ? 'amo' : 'direct';
-      const sourceIds = getStaffingSourceIds(activeStaffingContainerId(), cardMode);
+      const sourceIds = {
+        ...getStaffingSourceIds(activeStaffingContainerId(), cardMode),
+        noAutoSave: true,
+      };
       showToast(`SCOUT handoff accepted: ${member.employee}. Complete the staffing dialog, then review and click NetSuite Save.`, 'info', 9000);
       if (cardMode === 'amo') {
         staffSCWithDeliverable(member.employeeId, member.employee, empName, _hasLeadOnOpp, sourceIds);
