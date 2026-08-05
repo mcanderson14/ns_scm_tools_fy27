@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.2.11
+// @version      27.2.12
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.2.11
+   SCOUT — SC Operations Utility Tool  27.2.12
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.2.11';
+  const SCRIPT_VERSION = '27.2.12';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -2049,6 +2049,29 @@ html.sc-resizing #sc-skills-toggle { transition: none !important; }
 }
 .sc-lead-switch input:checked + .sc-lead-switch-slider { background: var(--sc-green-dark); }
 .sc-lead-switch input:checked + .sc-lead-switch-slider:before { transform: translateX(18px); }
+.sc-current-shadow-row {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid #e7d49a;
+  border-radius: 6px;
+  background: #fffaf0;
+}
+.sc-current-shadow-row.visible {
+  display: flex;
+}
+.sc-current-shadow-title {
+  color: #1a2e45;
+  font-size: 12px;
+  font-weight: 800;
+}
+.sc-current-shadow-subtitle {
+  color: var(--sc-text-muted);
+  font-size: 10px;
+  font-weight: 600;
+}
 .sc-shadow-request-row {
   display: flex;
   flex-direction: column;
@@ -5636,6 +5659,9 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   function setLeadAssigned(assignAsLead) {
     nlapiSetFieldValue('custrecord_screq_assigned_lead', assignAsLead ? 'T' : 'F', true);
   }
+  function setShadowAssigned(assignAsShadow) {
+    setFieldValueWithSyncSourcing(SCR_FIELD_SHADOW, assignAsShadow ? 'T' : 'F');
+  }
   function setLeadTrue()   { setLeadAssigned(true); }
   function prependRequestDetails(text) {
     const prefix = String(text || '');
@@ -6319,13 +6345,15 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 	    });
 	  }
 
-	  function applyDirectStaffing(scId, scName, empName, hasLeadOnOpp, notes, productIds, assignAsLead, requestDetailsNote) {
+	  function applyDirectStaffing(scId, scName, empName, hasLeadOnOpp, notes, productIds, assignAsLead, requestDetailsNote, assignAsShadow) {
 	    assignAsLead = assignAsLead !== false;
+	    assignAsShadow = !assignAsLead && assignAsShadow !== false;
 	    const requestDetailsBaseScript = buildDefaultStaffingRequestNote(scName, empName, REQUEST_DETAIL_TEMPLATE_KEYS.directStaffing);
     const requestDetailsScript = wrapStaffingNote(requestDetailsBaseScript, empName, requestDetailsNote);
     setStatus(2);
     setAssignee(scId);
     setLeadAssigned(assignAsLead);
+    setShadowAssigned(assignAsShadow);
     setScoutHashtag();
     prependRequestDetails(requestDetailsScript);
     setDirectManagerNotes(empName);
@@ -6335,8 +6363,9 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     scheduleNetSuiteFieldFocusRelease();
   }
 
-  function applyAmoStaffing(scId, scName, empName, hasLeadOnOpp, notes, deliverableOverride, productIds, assignAsLead, requestDetailsNote) {
+  function applyAmoStaffing(scId, scName, empName, hasLeadOnOpp, notes, deliverableOverride, productIds, assignAsLead, requestDetailsNote, assignAsShadow) {
     assignAsLead = assignAsLead !== false;
+    assignAsShadow = !assignAsLead && assignAsShadow !== false;
     const hasDeliverableOverride = arguments.length >= 6;
     const deliverable = hasDeliverableOverride
       ? normalizeAmoDeliverableName(deliverableOverride)
@@ -6348,6 +6377,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     setStatus(2);
     setAssignee(scId);
     setLeadAssigned(assignAsLead);
+    setShadowAssigned(assignAsShadow);
     setScoutHashtag();
     prependRequestDetails(wrapStaffingNote(requestDetailsBaseScript, empName, requestDetailsNote));
     setStaffingPopupNotes(notes);
@@ -6407,13 +6437,13 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         : `staffing changes for ${pending.scName}`;
     runWhenNetSuiteFormInitialized(actionLabel, function () {
       if (pending.type === 'amo') {
-        applyAmoStaffing(pending.scId, pending.scName, pending.empName, pending.hasLeadOnOpp, pending.notes, pending.deliverable, pending.productIds, pending.assignAsLead !== false, pending.requestDetailsNote);
+        applyAmoStaffing(pending.scId, pending.scName, pending.empName, pending.hasLeadOnOpp, pending.notes, pending.deliverable, pending.productIds, pending.assignAsLead !== false, pending.requestDetailsNote, pending.assignAsShadow === true);
       } else if (pending.type === 'onhold') {
         applyOnHold(pending.meId, pending.notes);
       } else if (pending.type === 'cancel') {
         applyCancelRequest(pending.empName, pending.notes);
       } else {
-        applyDirectStaffing(pending.scId, pending.scName, pending.empName, pending.hasLeadOnOpp, pending.notes, pending.productIds, pending.assignAsLead !== false, pending.requestDetailsNote);
+        applyDirectStaffing(pending.scId, pending.scName, pending.empName, pending.hasLeadOnOpp, pending.notes, pending.productIds, pending.assignAsLead !== false, pending.requestDetailsNote, pending.assignAsShadow === true);
       }
       if (pending.shadowRequest && pending.shadowRequest.url) {
         openShadowScrPrefillUrl(pending.shadowRequest.url, pending.shadowRequest.name);
@@ -6437,6 +6467,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     showNotesDialog('Staff ' + scName, function (dialog) {
       const notes = dialog.staffingNotes;
       const assignAsLead = dialog.assignAsLead;
+      const assignAsShadow = dialog.assignAsShadow;
       const requestDetailsNote = dialog.requestDetailsNote;
       const shadowRequest = dialog.shadowRequest ? {
         url: dialog.shadowRequest.url,
@@ -6444,11 +6475,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       } : null;
       const assignmentLabel = assignAsLead ? 'Lead SC' : 'Secondary SC';
       if (!isScrEditMode()) {
-        storePendingStaffAction({ type: 'direct', scId, scName, empName, hasLeadOnOpp, notes, requestDetailsNote, shadowRequest, assignAsLead, productIds: getProductsForStaffing(sourceIds.productSelectId || 'sc-products', sourceIds.productSkillSelectId || 'sc-product-skills') });
+        storePendingStaffAction({ type: 'direct', scId, scName, empName, hasLeadOnOpp, notes, requestDetailsNote, shadowRequest, assignAsLead, assignAsShadow, productIds: getProductsForStaffing(sourceIds.productSelectId || 'sc-products', sourceIds.productSkillSelectId || 'sc-product-skills') });
         return;
       }
       runWhenNetSuiteFormInitialized(`staffing ${scName}`, function () {
-        applyDirectStaffing(scId, scName, empName, hasLeadOnOpp, notes, getProductsForStaffing(sourceIds.productSelectId || 'sc-products', sourceIds.productSkillSelectId || 'sc-product-skills'), assignAsLead, requestDetailsNote);
+        applyDirectStaffing(scId, scName, empName, hasLeadOnOpp, notes, getProductsForStaffing(sourceIds.productSelectId || 'sc-products', sourceIds.productSkillSelectId || 'sc-product-skills'), assignAsLead, requestDetailsNote, assignAsShadow);
         if (shadowRequest && shadowRequest.url) openShadowScrPrefillUrl(shadowRequest.url, shadowRequest.name);
         showToast(`✔ Staffed: ${scName} as ${assignmentLabel} — save the record to confirm.`, 'success', 6000);
       });
@@ -6495,6 +6526,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     showNotesDialog('Staff ' + scName + ' (AMO)', function (dialog) {
       const notes = dialog.staffingNotes;
       const assignAsLead = dialog.assignAsLead;
+      const assignAsShadow = dialog.assignAsShadow;
       const requestDetailsNote = dialog.requestDetailsNote;
       const shadowRequest = dialog.shadowRequest ? {
         url: dialog.shadowRequest.url,
@@ -6504,11 +6536,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       const assignmentLabel = assignAsLead ? 'Lead SC' : 'Secondary SC';
       const continueStaffing = function () {
         if (!isScrEditMode()) {
-          storePendingStaffAction({ type: 'amo', scId, scName, empName, hasLeadOnOpp, notes, requestDetailsNote, shadowRequest, deliverable, assignAsLead, productIds: getProductsForStaffing(sourceIds.productSelectId || 'sc-amo-products', sourceIds.productSkillSelectId || 'sc-amo-product-skills') });
+          storePendingStaffAction({ type: 'amo', scId, scName, empName, hasLeadOnOpp, notes, requestDetailsNote, shadowRequest, deliverable, assignAsLead, assignAsShadow, productIds: getProductsForStaffing(sourceIds.productSelectId || 'sc-amo-products', sourceIds.productSkillSelectId || 'sc-amo-product-skills') });
           return;
         }
         runWhenNetSuiteFormInitialized(`staffing ${scName}`, function () {
-          applyAmoStaffing(scId, scName, empName, hasLeadOnOpp, notes, deliverable, getProductsForStaffing(sourceIds.productSelectId || 'sc-amo-products', sourceIds.productSkillSelectId || 'sc-amo-product-skills'), assignAsLead, requestDetailsNote);
+          applyAmoStaffing(scId, scName, empName, hasLeadOnOpp, notes, deliverable, getProductsForStaffing(sourceIds.productSelectId || 'sc-amo-products', sourceIds.productSkillSelectId || 'sc-amo-product-skills'), assignAsLead, requestDetailsNote, assignAsShadow);
           if (shadowRequest && shadowRequest.url) openShadowScrPrefillUrl(shadowRequest.url, shadowRequest.name);
           const label = deliverable ? ` (${deliverable})` : '';
           showToast(`✔ Staffed: ${scName}${label} as ${assignmentLabel} — save the record to confirm.`, 'success', 6000);
@@ -8348,6 +8380,16 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
             <input type="checkbox" id="sc-assign-lead-toggle" checked>
             <span class="sc-lead-switch-slider"></span>
           </label>
+        </div>
+        <div class="sc-current-shadow-row" id="sc-current-shadow-row">
+          <div class="sc-lead-toggle-text">
+            <span class="sc-current-shadow-title">Mark Current SCR as Shadow</span>
+            <span class="sc-current-shadow-subtitle">Shown when staffing this SC as secondary.</span>
+          </div>
+          <label class="sc-lead-switch" title="Mark current SCR as Shadow">
+            <input type="checkbox" id="sc-current-shadow-toggle" checked>
+            <span class="sc-lead-switch-slider"></span>
+          </label>
         </div>` : '';
     const shadowRequestHtml = opts.showShadowRequest ? `
         <div class="sc-shadow-request-row" id="sc-shadow-request-row">
@@ -8387,13 +8429,26 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const shadowInput = overlay.querySelector('#sc-shadow-sc-input');
     const shadowResults = overlay.querySelector('#sc-shadow-results');
     const shadowStatus = overlay.querySelector('#sc-shadow-status');
+    const leadToggle = overlay.querySelector('#sc-assign-lead-toggle');
+    const currentShadowRow = overlay.querySelector('#sc-current-shadow-row');
+    const currentShadowToggle = overlay.querySelector('#sc-current-shadow-toggle');
     let shadowSelected = null;
     let shadowSearchTimer = null;
     ta.focus();
     function assignAsLead() {
-      const toggle = overlay.querySelector('#sc-assign-lead-toggle');
-      return toggle ? toggle.checked : true;
+      return leadToggle ? leadToggle.checked : true;
     }
+    function assignCurrentAsShadow() {
+      return !assignAsLead() && currentShadowToggle ? currentShadowToggle.checked : false;
+    }
+    function syncCurrentShadowVisibility() {
+      if (!currentShadowRow) return;
+      const show = !assignAsLead();
+      currentShadowRow.classList.toggle('visible', show);
+      if (show && currentShadowToggle) currentShadowToggle.checked = true;
+    }
+    if (leadToggle) leadToggle.addEventListener('change', syncCurrentShadowVisibility);
+    syncCurrentShadowVisibility();
     function setShadowStatus(message, isError) {
       if (!shadowStatus) return;
       shadowStatus.textContent = message || '';
@@ -8510,10 +8565,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       const staffingNotes = ta.value.trim();
       const requestDetailsNote = requestDetailsTa ? requestDetailsTa.value.trim() : '';
       const lead = assignAsLead();
+      const currentShadow = assignCurrentAsShadow();
       const shadowRequest = resolveShadowRequest();
       if (shadowRequest === false) return;
       cleanup();
-      callback({ staffingNotes, assignAsLead: lead, requestDetailsNote, shadowRequest });
+      callback({ staffingNotes, assignAsLead: lead, assignAsShadow: currentShadow, requestDetailsNote, shadowRequest });
     }
     function cleanup() { overlay.remove(); }
     overlay.querySelector('#sc-notes-cancel').addEventListener('click', cleanup);
