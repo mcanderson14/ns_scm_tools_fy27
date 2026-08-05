@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.2.15
+// @version      27.2.18
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.2.15
+   SCOUT — SC Operations Utility Tool  27.2.18
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.2.15';
+  const SCRIPT_VERSION = '27.2.18';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -5618,13 +5618,22 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const shadowFirst = getPersonFirstName(shadowName) || 'them';
     const leadFirst = getPersonFirstName(leadScName) || 'the lead SC';
     const dealType = isCurrentScrAmo() ? 'AMO' : 'Direct';
-    const note = renderConfiguredRequestDetailTemplate(REQUEST_DETAIL_TEMPLATE_KEYS.shadowScr, {
+    let note = renderConfiguredRequestDetailTemplate(REQUEST_DETAIL_TEMPLATE_KEYS.shadowScr, {
       shadowScName: shadowName || 'selected SC',
       shadowFirstName: shadowFirst,
       leadScName: leadScName || '',
       leadFirstName: leadFirst,
       dealType,
     }).trim();
+    if (!note) {
+      note = renderRequestDetailTemplateText(getDefaultRequestDetailTemplateText(REQUEST_DETAIL_TEMPLATE_KEYS.shadowScr), {
+        shadowScName: shadowName || 'selected SC',
+        shadowFirstName: shadowFirst,
+        leadScName: leadScName || '',
+        leadFirstName: leadFirst,
+        dealType,
+      }).trim();
+    }
     const existing = getRequestDetails();
     return existing ? `${note}\n\n${existing}` : note;
   }
@@ -5634,13 +5643,27 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     if (!rosterId) return '';
     const employeeRecId = String(member.employeeRecId || getRosterEmployeeId(rosterId) || '').trim();
     const params = new URLSearchParams();
+    const sourceScrId = getCurrentScrId() || '';
+    const payloadKey = `scout_shadow_payload_${sourceScrId || 'new'}_${rosterId}_${Date.now()}`;
+    const shadowDetails = buildShadowRequestDetails(member, leadScName);
+    try {
+      localStorage.setItem(payloadKey, JSON.stringify({
+        createdAt: Date.now(),
+        fields: {
+          [SCR_FIELD_DETAILS]: shadowDetails,
+        },
+      }));
+      params.set('scout_shadow_payload_key', payloadKey);
+    } catch (e) {
+      console.warn('[SCOUT] Could not store shadow SCR payload locally; falling back to URL prefill:', e.message || e);
+      addPrefillParam(params, SCR_FIELD_DETAILS, shadowDetails);
+    }
     params.set('rectype', SCR_RECORD_TYPE_ID);
     params.set('scout_shadow_autosave', 'T');
-    params.set('scout_shadow_source', getCurrentScrId() || '');
+    params.set('scout_shadow_source', sourceScrId);
 
     addPrefillParam(params, SCR_FIELD_TYPE, getCurrentScrRequestTypeId());
     addPrefillParam(params, SCR_FIELD_REQUESTOR, readFormFieldValue(SCR_FIELD_REQUESTOR));
-    addPrefillParam(params, SCR_FIELD_DETAILS, buildShadowRequestDetails(member, leadScName));
     addPrefillParam(params, SCR_FIELD_STATUS, SCR_STATUS_STAFFED_ID);
     addPrefillParam(params, SCR_FIELD_DATE_SC_NEEDED, readFormFieldValue(SCR_FIELD_DATE_SC_NEEDED) || readFormFieldValue(SCR_FIELD_DATE_NEEDED));
     addPrefillParam(params, SCR_FIELD_ONSITE, readFormFieldValue(SCR_FIELD_ONSITE));
@@ -5916,6 +5939,58 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     return normalizeFieldReadResult(readFormFieldValue(fieldId) || readDomFieldValue(fieldId));
   }
 
+  function getShadowPrefillParam(fieldId) {
+    try {
+      const url = new URL(window.location.href);
+      const directValue = url.searchParams.get(`record.${fieldId}`) || '';
+      if (directValue) return directValue;
+      const payloadKey = url.searchParams.get('scout_shadow_payload_key') || '';
+      if (!payloadKey) return '';
+      const payload = JSON.parse(localStorage.getItem(payloadKey) || 'null');
+      return payload && payload.fields ? String(payload.fields[fieldId] || '') : '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function cleanupShadowPrefillPayload() {
+    try {
+      const payloadKey = new URL(window.location.href).searchParams.get('scout_shadow_payload_key') || '';
+      if (payloadKey) localStorage.removeItem(payloadKey);
+    } catch (e) { /* ignore */ }
+  }
+
+  function applyShadowPrefillParamsFromUrl() {
+    if (!isScoutShadowAutosaveRequest()) return;
+    const textFields = [
+      SCR_FIELD_DETAILS,
+      SCR_FIELD_ENGAGEMENT_NOTES,
+    ];
+    const valueFields = [
+      SCR_FIELD_TYPE,
+      SCR_FIELD_REQUESTOR,
+      SCR_FIELD_STATUS,
+      SCR_FIELD_DATE_SC_NEEDED,
+      SCR_FIELD_ONSITE,
+      SCR_FIELD_COMPANY,
+      SCR_FIELD_OPP,
+      SCR_FIELD_ASSIGNEE,
+      SCR_FIELD_ASSIGNEE_EMPLOYEE,
+      SCR_FIELD_ASSIGNED_LEAD,
+      SCR_FIELD_SHADOW,
+      SCR_FIELD_DELIVERABLE,
+    ];
+
+    textFields.forEach(fieldId => {
+      const value = getShadowPrefillParam(fieldId);
+      if (value && !getCurrentFieldRawValue(fieldId)) setFormTextField(fieldId, value);
+    });
+    valueFields.forEach(fieldId => {
+      const value = getShadowPrefillParam(fieldId);
+      if (value && !getCurrentFieldRawValue(fieldId)) setFieldValueWithSyncSourcing(fieldId, value);
+    });
+  }
+
   function validateShadowAutosaveDraft() {
     const required = [
       { id: SCR_FIELD_TYPE, label: 'Request Type' },
@@ -5945,6 +6020,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     showToast('SCOUT is validating and saving the shadow SCR draft…', 'info', 7000);
     runWhenNetSuiteFormInitialized('saving shadow SCR draft', function () {
       setTimeout(function () {
+        applyShadowPrefillParamsFromUrl();
         const missing = validateShadowAutosaveDraft();
         if (missing.length) {
           sessionStorage.removeItem(key);
@@ -5954,6 +6030,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         }
         const saved = saveNetSuiteForm();
         if (saved) {
+          cleanupShadowPrefillPayload();
           showToast('Saving shadow SCR…', 'success', 7000);
         } else {
           sessionStorage.removeItem(key);
@@ -6597,8 +6674,19 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
   function getSelectedAmoDeliverableFromPicker(pickerId) {
     const picker = document.getElementById(pickerId || 'sc-amo-deliverable');
-    const selected = normalizeAmoDeliverableName(picker && picker.value);
-    return isValidAmoDeliverableName(selected) ? selected : '';
+    if (!picker) return '';
+    const candidates = [
+      picker.value,
+      picker.selectedOptions && picker.selectedOptions[0] && picker.selectedOptions[0].value,
+      picker.selectedOptions && picker.selectedOptions[0] && picker.selectedOptions[0].text,
+      picker.options && picker.selectedIndex >= 0 && picker.options[picker.selectedIndex] && picker.options[picker.selectedIndex].value,
+      picker.options && picker.selectedIndex >= 0 && picker.options[picker.selectedIndex] && picker.options[picker.selectedIndex].text,
+    ];
+    for (const candidate of candidates) {
+      const selected = normalizeAmoDeliverableName(candidate);
+      if (isValidAmoDeliverableName(selected)) return selected;
+    }
+    return '';
   }
 
   function getCurrentAmoDeliverableFromForm() {
@@ -7465,6 +7553,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     }
   }
 
+  function buildScoutSkillPrompt(prompt) {
+    const body = String(prompt || '').trim();
+    return body ? `$scout\n\n${body}` : '$scout';
+  }
+
   function showGptAssistDialog() {
     const mode = activeStaffingModeLabel();
     const defaultValues = {
@@ -7518,6 +7611,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         <div class="sc-notes-btn-row">
           <button class="sc-notes-cancel-btn" id="sc-gpt-cancel">Cancel</button>
           <button class="sc-notes-cancel-btn" id="sc-gpt-copy">Copy Prompt</button>
+          <button class="sc-notes-ok-btn" id="sc-gpt-open-scout">Open SCOUT in GPT</button>
           <button class="sc-notes-ok-btn" id="sc-gpt-open">Open GPT</button>
         </div>
       </div>`;
@@ -7589,6 +7683,22 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         ? 'Opening ChatGPT. Copy the prompt manually if needed.'
         : 'Opening ChatGPT with the prompt URL. Copy the prompt manually if needed.';
       const messageMs = firefoxMode ? 8000 : 6500;
+      showToast(copied ? successMsg : fallbackMsg, copied ? 'success' : 'info', messageMs);
+      showPageToast(copied ? successMsg : fallbackMsg, copied ? 'success' : 'info', messageMs);
+      cleanup();
+      setTimeout(() => gmOpenUrl(buildGptAssistUrl(prompt)), 500);
+    });
+    overlay.querySelector('#sc-gpt-open-scout').addEventListener('click', function () {
+      const prompt = buildScoutSkillPrompt(controls.preview.value);
+      const copied = copyToClipboardQuietly(prompt);
+      const firefoxMode = isFirefoxBrowser();
+      const successMsg = firefoxMode
+        ? 'SCOUT prompt copied. Paste it into ChatGPT with the SCOUT skill installed.'
+        : 'Opening ChatGPT with the SCOUT prompt in the URL.';
+      const fallbackMsg = firefoxMode
+        ? 'Opening ChatGPT. Copy the SCOUT prompt manually if needed.'
+        : 'Opening ChatGPT with the SCOUT prompt URL. Copy the prompt manually if needed.';
+      const messageMs = firefoxMode ? 9000 : 7000;
       showToast(copied ? successMsg : fallbackMsg, copied ? 'success' : 'info', messageMs);
       showPageToast(copied ? successMsg : fallbackMsg, copied ? 'success' : 'info', messageMs);
       cleanup();
@@ -10878,6 +10988,129 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     }
   }
 
+  function handoffNameKeys(value) {
+    const raw = String(value || '').trim();
+    const keys = new Set();
+    const compact = normalizeLoose(raw);
+    if (compact) keys.add(compact);
+
+    if (raw.includes(',')) {
+      const parts = raw.split(',').map(part => part.trim()).filter(Boolean);
+      if (parts.length >= 2) {
+        const last = parts[0];
+        const first = parts.slice(1).join(' ');
+        const firstTokens = normalizeLoose(first).split(/\s+/).filter(Boolean);
+        const lastTokens = normalizeLoose(last).split(/\s+/).filter(Boolean);
+        if (firstTokens.length && lastTokens.length) {
+          keys.add(`${firstTokens[0]} ${lastTokens.join(' ')}`);
+          keys.add(`${lastTokens.join(' ')} ${firstTokens[0]}`);
+        }
+      }
+    } else {
+      const tokens = compact.split(/\s+/).filter(Boolean);
+      if (tokens.length >= 2) {
+        const first = tokens[0];
+        const last = tokens[tokens.length - 1];
+        keys.add(`${first} ${last}`);
+        keys.add(`${last} ${first}`);
+      }
+    }
+    Array.from(keys).forEach(key => {
+      const joined = String(key || '').replace(/\s+/g, '');
+      if (joined) keys.add(joined);
+    });
+    return keys;
+  }
+
+  function handoffNameExactMatch(member, requestedName) {
+    const requestedKeys = handoffNameKeys(requestedName);
+    const memberKeys = handoffNameKeys(member && member.employee);
+    if (!requestedKeys.size || !memberKeys.size) return false;
+    return Array.from(requestedKeys).some(key => memberKeys.has(key));
+  }
+
+  function resolveHandoffRosterMember(scName) {
+    const searchTerms = requestedRosterSearchTerms(scName);
+    const byId = new Map();
+    for (const term of searchTerms) {
+      if (!term) continue;
+      const result = searchRosterByName(term);
+      (result.members || []).forEach(member => {
+        if (!handoffNameExactMatch(member, scName)) return;
+        const key = String(member.employeeId || member.employee || '').trim();
+        if (key && !byId.has(key)) byId.set(key, member);
+      });
+    }
+    return Array.from(byId.values());
+  }
+
+  function activeStaffingContainerId() {
+    const combinedPane = document.getElementById('sc-combined-pane');
+    if (combinedPane && combinedPane.classList.contains('active')) return 'sc-combined-results-area';
+    const amoPane = document.getElementById('sc-amo-pane');
+    if (amoPane && amoPane.classList.contains('active')) return 'sc-amo-results-area';
+    return 'sc-results-area';
+  }
+
+  let _scoutStaffingHandoffListenerInstalled = false;
+  function installStaffingHandoffListener(empName) {
+    if (_scoutStaffingHandoffListenerInstalled) return;
+    _scoutStaffingHandoffListenerInstalled = true;
+
+    window.addEventListener('message', function (event) {
+      if (event.origin !== window.location.origin) return;
+      const data = event.data || {};
+      if (!data || data.type !== 'scout:staffing-handoff') return;
+
+      const openScrId = String(getCurrentScrId() || '').trim();
+      const handoffScrId = String(data.scrId || '').trim();
+      const scName = String(data.scName || '').trim();
+
+      function reject(message) {
+        showToast(message, 'error', 9000);
+        showPageToast(message, 'error', 9000);
+      }
+
+      if (!openScrId || !handoffScrId || openScrId !== handoffScrId) {
+        reject(`SCOUT handoff rejected: SCR mismatch. Open SCR is ${openScrId || 'unknown'}, handoff SCR is ${handoffScrId || 'missing'}.`);
+        return;
+      }
+      if (!scName) {
+        reject('SCOUT handoff rejected: missing confirmed SC name.');
+        return;
+      }
+
+      let matches = [];
+      try {
+        matches = resolveHandoffRosterMember(scName);
+      } catch (e) {
+        console.warn('[SCOUT] Staffing handoff roster lookup failed:', e);
+        reject(`SCOUT handoff rejected: could not search the active roster for ${scName}.`);
+        return;
+      }
+
+      if (matches.length === 0) {
+        reject(`SCOUT handoff rejected: no active roster match found for ${scName}.`);
+        return;
+      }
+      if (matches.length > 1) {
+        const names = matches.map(member => member.employee).filter(Boolean).slice(0, 4).join(', ');
+        reject(`SCOUT handoff rejected: ${scName} matched multiple active roster records${names ? ` (${names})` : ''}.`);
+        return;
+      }
+
+      const member = matches[0];
+      const cardMode = isAmoSalesTeam(member.salesteam) ? 'amo' : 'direct';
+      const sourceIds = getStaffingSourceIds(activeStaffingContainerId(), cardMode);
+      showToast(`SCOUT handoff accepted: ${member.employee}. Complete the staffing dialog, then review and click NetSuite Save.`, 'info', 9000);
+      if (cardMode === 'amo') {
+        staffSCWithDeliverable(member.employeeId, member.employee, empName, _hasLeadOnOpp, sourceIds);
+      } else {
+        staffSC(member.employeeId, member.employee, empName, _hasLeadOnOpp, sourceIds);
+      }
+    });
+  }
+
   function isValidRequestedSCName(rawName) {
     const name = (rawName || '').trim();
     if (!name) return false;
@@ -13746,15 +13979,22 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   }
 
   function refreshAmoDeliverableOptions() {
-    const picker = document.getElementById('sc-amo-deliverable');
-    if (!picker) return;
+    const pickers = ['sc-amo-deliverable', 'sc-combined-amo-deliverable']
+      .map(id => document.getElementById(id))
+      .filter(Boolean);
+    if (!pickers.length) return;
 
-    const current = getSelectedAmoDeliverableFromPicker() || getCurrentAmoDeliverableFromForm();
+    const currentById = {};
+    pickers.forEach(picker => {
+      currentById[picker.id] = getSelectedAmoDeliverableFromPicker(picker.id);
+    });
+    const formCurrent = getCurrentAmoDeliverableFromForm();
     const seen = new Set();
     const options = [
       ...getBaseAmoDeliverableOptions(),
       ...readAmoDeliverableOptionsFromForm(),
-      current,
+      ...Object.values(currentById),
+      formCurrent,
     ].map(normalizeAmoDeliverableName)
       .filter(name => {
         const key = name.toLowerCase();
@@ -13763,12 +14003,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         return true;
       });
 
-    picker.innerHTML = `<option value="">— Select deliverable (optional) —</option>${buildAmoDeliverableOptionMarkup(options)}`;
-
-    if (current) {
-      const match = matchPickerOption(picker, current);
-      if (match) picker.value = match.value;
-    }
+    pickers.forEach(picker => {
+      const current = currentById[picker.id] || formCurrent;
+      picker.innerHTML = `<option value="">— Select deliverable (optional) —</option>${buildAmoDeliverableOptionMarkup(options)}`;
+      if (current) {
+        const match = matchPickerOption(picker, current);
+        if (match) picker.value = match.value;
+      }
+    });
   }
 
   function autoPopulateFromForm() {
@@ -14572,6 +14814,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     SCOUT_ROLE_CONTEXT = getScoutRoleContext();
     const restrictedIcRole = Boolean(SCOUT_ROLE_CONTEXT.isScIc && !SCOUT_ROLE_CONTEXT.isScManager);
     const rosterIdForProbe = limitedMode ? '' : empRec.getId();
+    installStaffingHandoffListener(empName);
     SCOUT_CAN_READ_AVAIL_NOTES = detectAvailabilityNotesAccess(rosterIdForProbe);
     SCOUT_CAN_READ_MANAGER_AVAIL_RES = detectManagerAvailabilityResolutionAccess(rosterIdForProbe);
     SCOUT_CAN_READ_VERTICAL_AMO = detectVerticalAmoAccess(rosterIdForProbe);
