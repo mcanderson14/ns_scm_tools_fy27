@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.2.10
+// @version      27.2.11
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.2.9
+   SCOUT — SC Operations Utility Tool  27.2.11
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.2.9';
+  const SCRIPT_VERSION = '27.2.11';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -5570,7 +5570,25 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     if (!fieldId || !v) return;
     params.set(`record.${fieldId}`, v);
   }
-  function buildShadowScrPrefillUrl(shadowMember) {
+  function getPersonFirstName(name) {
+    const raw = String(name || '').trim();
+    if (!raw) return '';
+    if (raw.includes(',')) {
+      const firstPart = raw.split(',').slice(1).join(',').trim();
+      return (firstPart.split(/\s+/).filter(Boolean)[0] || '').trim();
+    }
+    return (raw.split(/\s+/).filter(Boolean)[0] || '').trim();
+  }
+  function buildShadowRequestDetails(shadowMember, leadScName) {
+    const shadowName = String(shadowMember && shadowMember.employee || '').trim();
+    const shadowFirst = getPersonFirstName(shadowName) || 'them';
+    const leadFirst = getPersonFirstName(leadScName) || 'the lead SC';
+    const dealType = isCurrentScrAmo() ? 'AMO' : 'Direct';
+    const note = `Assigning ${shadowName || 'selected SC'} for shadowing the ${dealType} deal. Please include ${shadowFirst} in all deal meetings with ${leadFirst}.`;
+    const existing = getRequestDetails();
+    return existing ? `${note}\n\n${existing}` : note;
+  }
+  function buildShadowScrPrefillUrl(shadowMember, leadScName) {
     const member = shadowMember || {};
     const rosterId = String(member.employeeId || '').trim();
     if (!rosterId) return '';
@@ -5580,7 +5598,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
     addPrefillParam(params, SCR_FIELD_TYPE, getCurrentScrRequestTypeId());
     addPrefillParam(params, SCR_FIELD_REQUESTOR, readFormFieldValue(SCR_FIELD_REQUESTOR));
-    addPrefillParam(params, SCR_FIELD_DETAILS, getRequestDetails());
+    addPrefillParam(params, SCR_FIELD_DETAILS, buildShadowRequestDetails(member, leadScName));
     addPrefillParam(params, SCR_FIELD_STATUS, SCR_STATUS_STAFFED_ID);
     addPrefillParam(params, SCR_FIELD_DATE_SC_NEEDED, readFormFieldValue(SCR_FIELD_DATE_SC_NEEDED) || readFormFieldValue(SCR_FIELD_DATE_NEEDED));
     addPrefillParam(params, SCR_FIELD_ONSITE, readFormFieldValue(SCR_FIELD_ONSITE));
@@ -6434,7 +6452,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         if (shadowRequest && shadowRequest.url) openShadowScrPrefillUrl(shadowRequest.url, shadowRequest.name);
         showToast(`✔ Staffed: ${scName} as ${assignmentLabel} — save the record to confirm.`, 'success', 6000);
       });
-    }, { showLeadToggle: true, showRequestDetailsBox: true, showShadowRequest: true, primaryScId: scId });
+    }, { showLeadToggle: true, showRequestDetailsBox: true, showShadowRequest: true, primaryScId: scId, primaryScName: scName });
   }
 
   function getSelectedAmoDeliverableFromPicker(pickerId) {
@@ -6501,7 +6519,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         return;
       }
       continueStaffing();
-    }, { showLeadToggle: true, showRequestDetailsBox: true, showShadowRequest: true, primaryScId: scId });
+    }, { showLeadToggle: true, showRequestDetailsBox: true, showShadowRequest: true, primaryScId: scId, primaryScName: scName });
   }
 
   function staffFromActiveTab(scId, scName, empName, hasLeadOnOpp) {
@@ -8481,7 +8499,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         setShadowStatus('Shadow SC must be different from the primary SC.', true);
         return false;
       }
-      const url = buildShadowScrPrefillUrl(member);
+      const url = buildShadowScrPrefillUrl(member, opts.primaryScName || '');
       if (!url) {
         setShadowStatus('Could not build the shadow SCR link.', true);
         return false;
