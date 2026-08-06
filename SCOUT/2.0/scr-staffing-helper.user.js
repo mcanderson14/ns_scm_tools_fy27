@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.2.23
+// @version      27.2.24
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.2.23
+   SCOUT — SC Operations Utility Tool  27.2.24
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.2.23';
+  const SCRIPT_VERSION = '27.2.24';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -5976,6 +5976,27 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     }
   }
 
+  function getShadowRequestTypeLabel(typeId) {
+    const id = String(typeId || '').trim();
+    if (id === SCR_REQUEST_TYPE_DIRECT_ID) return 'Solution Consultant - Direct';
+    if (id === SCR_REQUEST_TYPE_AMO_ID) return 'Solution Consultant - AMO';
+    return 'selected request type';
+  }
+
+  function ensureShadowRequestTypeBeforePrefill() {
+    const targetType = getShadowPrefillParam(SCR_FIELD_TYPE);
+    if (!targetType) return true;
+    const currentType = getCurrentFieldRawValue(SCR_FIELD_TYPE);
+    if (String(currentType || '').trim() === String(targetType || '').trim()) return true;
+
+    setFieldValueWithSyncSourcing(SCR_FIELD_TYPE, targetType);
+    showToast(`Switching shadow SCR to ${getShadowRequestTypeLabel(targetType)}. NetSuite may reload the form before SCOUT finishes prefilling.`, 'info', 10000);
+    try {
+      sessionStorage.setItem(getShadowAutosaveKey(), 'switching-request-type');
+    } catch (e) { /* best effort */ }
+    return false;
+  }
+
   function cleanupShadowPrefillPayload() {
     try {
       const payloadKey = new URL(window.location.href).searchParams.get('scout_shadow_payload_key') || '';
@@ -5985,13 +6006,13 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
 
   function applyShadowPrefillParamsFromUrl() {
     if (!isScoutShadowAutosaveRequest()) return;
+    if (!ensureShadowRequestTypeBeforePrefill()) return false;
     const textFields = [
       'name',
       SCR_FIELD_DETAILS,
       SCR_FIELD_ENGAGEMENT_NOTES,
     ];
     const valueFields = [
-      SCR_FIELD_TYPE,
       SCR_FIELD_REQUESTOR,
       SCR_FIELD_STATUS,
       SCR_FIELD_DATE_SC_NEEDED,
@@ -6013,6 +6034,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       const value = getShadowPrefillParam(fieldId);
       if (value && !getCurrentFieldRawValue(fieldId)) setFieldValueWithSyncSourcing(fieldId, value);
     });
+    return true;
   }
 
   function validateShadowAutosaveDraft() {
@@ -6045,7 +6067,10 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     showToast('SCOUT is prefilling the shadow SCR draft. Review it, then click NetSuite Save.', 'info', 9000);
     runWhenNetSuiteFormInitialized('prefilling shadow SCR draft', function () {
       setTimeout(function () {
-        applyShadowPrefillParamsFromUrl();
+        if (applyShadowPrefillParamsFromUrl() === false) {
+          sessionStorage.removeItem(key);
+          return;
+        }
         const missing = validateShadowAutosaveDraft();
         if (missing.length) {
           sessionStorage.removeItem(key);
