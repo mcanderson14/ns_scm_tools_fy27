@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.2.25
+// @version      27.2.27
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.2.25
+   SCOUT — SC Operations Utility Tool  27.2.27
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.2.25';
+  const SCRIPT_VERSION = '27.2.27';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -5585,6 +5585,33 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     return wrote;
   }
 
+  function isTruthyNetSuiteValue(value) {
+    return /^(T|TRUE|1|Y|YES)$/i.test(String(value || '').trim());
+  }
+
+  function setCheckboxFieldWithSyncSourcing(fieldId, checked) {
+    const value = checked ? 'T' : 'F';
+    let wrote = setFieldValueWithSyncSourcing(fieldId, value);
+    findFieldControls(fieldId).forEach(el => {
+      try {
+        const type = String(el.type || '').toLowerCase();
+        if (type === 'checkbox') {
+          el.checked = Boolean(checked);
+          el.value = value;
+          el.setAttribute('value', value);
+          wrote = true;
+        } else if ('value' in el) {
+          el.value = value;
+          el.setAttribute('value', value);
+          wrote = true;
+        }
+        dispatchFieldEvents(el);
+      } catch (e) { /* keep trying remaining controls */ }
+    });
+    triggerNetSuiteFieldEvents(fieldId);
+    return wrote;
+  }
+
   function getRosterEmployeeId(rosterId) {
     const key = String(rosterId || '').trim();
     if (!key) return '';
@@ -5613,6 +5640,12 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const requestTypeText = readFormField(SCR_FIELD_TYPE);
     if (/direct/i.test(requestTypeText)) return SCR_REQUEST_TYPE_DIRECT_ID;
     return readFormFieldValue(SCR_FIELD_TYPE) || SCR_REQUEST_TYPE_DIRECT_ID;
+  }
+  function getScrFormIdForRequestType(requestTypeId) {
+    const id = String(requestTypeId || '').trim();
+    if (id === SCR_REQUEST_TYPE_DIRECT_ID) return SCR_FORM_DIRECT_ID;
+    if (id === SCR_REQUEST_TYPE_AMO_ID) return SCR_FORM_AMO_ID;
+    return '';
   }
   function addPrefillParam(params, fieldId, value) {
     const v = normalizeFieldReadResult(value);
@@ -5665,10 +5698,12 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const sourceScrId = getCurrentScrId() || '';
     const payloadKey = `scout_shadow_payload_${sourceScrId || 'new'}_${rosterId}_${Date.now()}`;
     const shadowDetails = buildShadowRequestDetails(member, leadScName, empName);
+    const shadowRequestTypeId = getCurrentScrRequestTypeId();
+    const shadowFormId = getScrFormIdForRequestType(shadowRequestTypeId);
     const shadowFields = {
       name: shadowScrName,
       [SCR_FIELD_DETAILS]: shadowDetails,
-      [SCR_FIELD_TYPE]: getCurrentScrRequestTypeId(),
+      [SCR_FIELD_TYPE]: shadowRequestTypeId,
       [SCR_FIELD_REQUESTOR]: readFormFieldValue(SCR_FIELD_REQUESTOR),
       [SCR_FIELD_STATUS]: SCR_STATUS_STAFFED_ID,
       [SCR_FIELD_DATE_SC_NEEDED]: readFormFieldValue(SCR_FIELD_DATE_SC_NEEDED) || readFormFieldValue(SCR_FIELD_DATE_NEEDED),
@@ -5694,6 +5729,8 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       addPrefillParam(params, SCR_FIELD_DETAILS, shadowDetails);
     }
     params.set('rectype', SCR_RECORD_TYPE_ID);
+    if (shadowFormId) params.set('cf', shadowFormId);
+    if (shadowRequestTypeId) params.set('custparam_requesttype_id', shadowRequestTypeId);
     params.set('scout_shadow_autosave', 'T');
     params.set('scout_shadow_source', sourceScrId);
 
@@ -5725,7 +5762,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     nlapiSetFieldValue('custrecord_screq_assigned_lead', assignAsLead ? 'T' : 'F', true);
   }
   function setShadowAssigned(assignAsShadow) {
-    setFieldValueWithSyncSourcing(SCR_FIELD_SHADOW, assignAsShadow ? 'T' : 'F');
+    setCheckboxFieldWithSyncSourcing(SCR_FIELD_SHADOW, assignAsShadow);
   }
   function setLeadTrue()   { setLeadAssigned(true); }
   function prependRequestDetails(text) {
@@ -5976,10 +6013,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       for (const el of controls) {
         if (!el) continue;
         if (el.type && String(el.type).toLowerCase() === 'checkbox') {
-          if (el.checked) return 'T';
-          const raw = el.value;
-          if (raw === 'T' || raw === 'F') return raw;
-          return 'F';
+          return el.checked ? 'T' : 'F';
         }
         if ('value' in el && el.value != null && String(el.value).trim() !== '') {
           return String(el.value).trim();
@@ -6063,9 +6097,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       SCR_FIELD_OPP,
       SCR_FIELD_ASSIGNEE,
       SCR_FIELD_ASSIGNEE_EMPLOYEE,
+      SCR_FIELD_DELIVERABLE,
+    ];
+    const checkboxFields = [
       SCR_FIELD_ASSIGNED_LEAD,
       SCR_FIELD_SHADOW,
-      SCR_FIELD_DELIVERABLE,
     ];
 
     textFields.forEach(fieldId => {
@@ -6075,6 +6111,10 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     valueFields.forEach(fieldId => {
       const value = getShadowPrefillParam(fieldId);
       if (value && !getCurrentFieldRawValue(fieldId)) setFieldValueWithSyncSourcing(fieldId, value);
+    });
+    checkboxFields.forEach(fieldId => {
+      const value = getShadowPrefillParam(fieldId);
+      if (value) setCheckboxFieldWithSyncSourcing(fieldId, isTruthyNetSuiteValue(value));
     });
     return true;
   }
@@ -9123,18 +9163,21 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const ids = [
       fieldId,
       `${fieldId}_fs`,
+      `${fieldId}_fs_inp`,
       `${fieldId}_val`,
       `${fieldId}_display`,
       `${fieldId}_selected`,
       `${fieldId}_unselected`,
       `${fieldId}_avail`,
+      `hddn_${fieldId}_fs`,
       `inpt_${fieldId}`,
       `inpt_${fieldId}_display`,
     ];
-    const allowedPrefixSuffixes = ['_fs', '_val', '_display', '_selected', '_unselected', '_avail'];
+    const allowedPrefixSuffixes = ['_fs', '_fs_inp', '_val', '_display', '_selected', '_unselected', '_avail'];
     const isAllowedPrefixedField = value => {
       value = String(value || '');
-      return allowedPrefixSuffixes.some(suffix => value === `${fieldId}${suffix}` || value.startsWith(`${fieldId}${suffix}_`));
+      return value === `hddn_${fieldId}_fs` ||
+        allowedPrefixSuffixes.some(suffix => value === `${fieldId}${suffix}` || value.startsWith(`${fieldId}${suffix}_`));
     };
 
     function add(el, trusted) {
@@ -13866,6 +13909,8 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   const SCR_RECORD_TYPE_ID     = '2840';
   const SCR_REQUEST_TYPE_AMO_ID = '18';
   const SCR_REQUEST_TYPE_DIRECT_ID = '19';
+  const SCR_FORM_AMO_ID = '1872';
+  const SCR_FORM_DIRECT_ID = '1874';
   const SCR_STATUS_STAFFED_ID  = '2';
   // ── Fields that need confirmation against live NetSuite schema ────
   const SCR_FIELD_OPP          = 'custrecord_screq_opportunity';    // opportunity link on SCR
