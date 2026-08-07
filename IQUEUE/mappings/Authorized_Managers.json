@@ -2,11 +2,12 @@
   "schema": "ns-scm-tools.authorized-managers.v1",
   "generator": {
     "name": "FY27 Queue Mapping JSON Maker",
-    "version": "27.0.5"
+    "version": "27.0.18"
   },
-  "generatedAt": "2026-06-04T02:35:37.140Z",
+  "generatedAt": "2026-08-07T20:57:50.780Z",
+  "outputFileName": "Authorized_Managers.json",
   "source": {
-    "fileName": "FY27IQUEUESCMRosterActiveResults443.xls",
+    "fileName": "FY27IQUEUESCMRosterActiveResults287.xls",
     "sheetName": "FYIQUEUESCMRosterActiveResults",
     "searchUrl": "https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl?searchid=1319617",
     "headerRow": 1,
@@ -24,30 +25,36 @@
         "column": "E",
         "label": "Title"
       },
-      "groups": {
-        "column": "G",
-        "label": "SC Industry"
-      },
+      "groups": [
+        {
+          "column": "G",
+          "label": "SC Industry"
+        },
+        {
+          "column": "H",
+          "label": "Sales Vertical"
+        }
+      ],
       "canOwn": {
-        "column": "",
-        "label": ""
+        "column": "J",
+        "label": "CAN OWN"
       },
       "canView": {
-        "column": "",
-        "label": ""
+        "column": "K",
+        "label": "CAN VIEW"
       },
       "active": {
-        "column": "",
-        "label": ""
+        "column": "L",
+        "label": "ACTIVE"
       }
     }
   },
   "counts": {
-    "managers": 45,
-    "activeManagers": 45,
-    "canOwn": 30,
-    "canView": 45,
-    "industryGroups": 11,
+    "managers": 44,
+    "activeManagers": 44,
+    "canOwn": 38,
+    "canView": 44,
+    "industryGroups": 10,
     "incompleteRows": 0,
     "duplicateManagers": 0,
     "missingGroups": 0
@@ -57,11 +64,10 @@
     "Construction & Energy",
     "Consumer Services",
     "EPM",
-    "General Business",
     "Health & Hospitality",
     "Horizontal",
-    "OpenAir",
     "Products",
+    "SCAI",
     "Software",
     "TCOE"
   ],
@@ -201,10 +207,10 @@
       "email": "luke.bradley@oracle.com",
       "role": "Sales Consulting Senior Manager",
       "groups": [
-        "Horizontal"
+        "SCAI"
       ],
       "groupKeys": [
-        "horizontal"
+        "scai"
       ],
       "canOwn": true,
       "canView": true,
@@ -304,41 +310,23 @@
       "sourceRows": [
         15
       ],
-      "name": "Eberhardt, Karl",
-      "nameKey": "eberhardtkarl",
-      "email": "karl.eberhardt@oracle.com",
-      "role": "Senior Director, Presales Operations",
+      "name": "Friedman, Joe",
+      "nameKey": "friedmanjoe",
+      "email": "joe.friedman@oracle.com",
+      "role": "Sr. Director, AI Innovation",
       "groups": [
-        "Horizontal"
+        "SCAI"
       ],
       "groupKeys": [
-        "horizontal"
+        "scai"
       ],
-      "canOwn": false,
+      "canOwn": true,
       "canView": true,
       "active": true
     },
     {
       "sourceRows": [
         16
-      ],
-      "name": "Friedman, Joe",
-      "nameKey": "friedmanjoe",
-      "email": "joe.friedman@oracle.com",
-      "role": "Sr. Director, AI Innovation",
-      "groups": [
-        "OpenAir"
-      ],
-      "groupKeys": [
-        "openair"
-      ],
-      "canOwn": false,
-      "canView": true,
-      "active": true
-    },
-    {
-      "sourceRows": [
-        17
       ],
       "name": "Garrison, Allison I",
       "nameKey": "garrisonallisoni",
@@ -356,7 +344,7 @@
     },
     {
       "sourceRows": [
-        18
+        17
       ],
       "name": "Gorajek, Carrie",
       "nameKey": "gorajekcarrie",
@@ -374,7 +362,7 @@
     },
     {
       "sourceRows": [
-        19
+        18
       ],
       "name": "Hassett, Drew",
       "nameKey": "hassettdrew",
@@ -386,13 +374,13 @@
       "groupKeys": [
         "businessservices"
       ],
-      "canOwn": false,
+      "canOwn": true,
       "canView": true,
       "active": true
     },
     {
       "sourceRows": [
-        20
+        19
       ],
       "name": "Hatch, Ryan A",
       "nameKey": "hatchryana",
@@ -410,7 +398,7 @@
     },
     {
       "sourceRows": [
-        21
+        20
       ],
       "name": "Heyne, Robert",
       "nameKey": "heynerobert",
@@ -428,7 +416,7 @@
     },
     {
       "sourceRows": [
-        22
+        21
       ],
       "name": "Hidding, Michael",
       "nameKey": "hiddingmichael",
@@ -446,7 +434,7 @@
     },
     {
       "sourceRows": [
-        23
+        22
       ],
       "name": "Horan, Timothy",
       "nameKey": "horantimothy",
@@ -464,7 +452,7 @@
     },
     {
       "sourceRows": [
-        24
+        23
       ],
       "name": "Hudema, Raul",
       "nameKey": "hudemaraul",
@@ -482,7 +470,7 @@
     },
     {
       "sourceRows": [
-        25
+        24
       ],
       "name": "Killeen, John",
       "nameKey": "killeenjohn",
@@ -500,25 +488,7 @@
     },
     {
       "sourceRows": [
-        26
-      ],
-      "name": "Kim, Todd",
-      "nameKey": "kimtodd",
-      "email": "todd.kim@oracle.com",
-      "role": "Pre-Sales Solution Consulting Manager",
-      "groups": [
-        "Business Services"
-      ],
-      "groupKeys": [
-        "businessservices"
-      ],
-      "canOwn": true,
-      "canView": true,
-      "active": true
-    },
-    {
-      "sourceRows": [
-        27
+        25
       ],
       "name": "Kuderka, Robert J",
       "nameKey": "kuderkarobertj",
@@ -536,7 +506,7 @@
     },
     {
       "sourceRows": [
-        28
+        26
       ],
       "name": "Lau, Danielle",
       "nameKey": "laudanielle",
@@ -554,7 +524,7 @@
     },
     {
       "sourceRows": [
-        29
+        27
       ],
       "name": "Luna, Jessie",
       "nameKey": "lunajessie",
@@ -572,7 +542,7 @@
     },
     {
       "sourceRows": [
-        30
+        28
       ],
       "name": "Ma, Jaclyn",
       "nameKey": "majaclyn",
@@ -590,7 +560,7 @@
     },
     {
       "sourceRows": [
-        31
+        29
       ],
       "name": "Malone, Moira",
       "nameKey": "malonemoira",
@@ -608,7 +578,7 @@
     },
     {
       "sourceRows": [
-        32
+        30
       ],
       "name": "Monahan, Matthew G",
       "nameKey": "monahanmatthewg",
@@ -620,31 +590,31 @@
       "groupKeys": [
         "healthandhospitality"
       ],
-      "canOwn": false,
+      "canOwn": true,
       "canView": true,
       "active": true
     },
     {
       "sourceRows": [
-        33
+        31
       ],
       "name": "Morrissey, Ryan",
       "nameKey": "morrisseyryan",
       "email": "ryan.morrissey@oracle.com",
       "role": "Director, Sales Consulting",
       "groups": [
-        "Horizontal"
+        "SCAI"
       ],
       "groupKeys": [
-        "horizontal"
+        "scai"
       ],
-      "canOwn": false,
+      "canOwn": true,
       "canView": true,
       "active": true
     },
     {
       "sourceRows": [
-        34
+        32
       ],
       "name": "Mumford, Tyler J",
       "nameKey": "mumfordtylerj",
@@ -662,7 +632,25 @@
     },
     {
       "sourceRows": [
-        35
+        33
+      ],
+      "name": "Murphy, Ryan P",
+      "nameKey": "murphyryanp",
+      "email": "ryan.p.murphy@oracle.com",
+      "role": "Sales Consulting Manager",
+      "groups": [
+        "Business Services"
+      ],
+      "groupKeys": [
+        "businessservices"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        34
       ],
       "name": "O'Brien, Charles",
       "nameKey": "obriencharles",
@@ -674,13 +662,13 @@
       "groupKeys": [
         "software"
       ],
-      "canOwn": false,
+      "canOwn": true,
       "canView": true,
       "active": true
     },
     {
       "sourceRows": [
-        36
+        35
       ],
       "name": "Ransom, Rob",
       "nameKey": "ransomrob",
@@ -698,7 +686,7 @@
     },
     {
       "sourceRows": [
-        37
+        36
       ],
       "name": "Recht, Frank R",
       "nameKey": "rechtfrankr",
@@ -716,7 +704,7 @@
     },
     {
       "sourceRows": [
-        38
+        37
       ],
       "name": "Rousseau, Elena",
       "nameKey": "rousseauelena",
@@ -734,7 +722,7 @@
     },
     {
       "sourceRows": [
-        39
+        38
       ],
       "name": "Sankar, Saran",
       "nameKey": "sankarsaran",
@@ -746,13 +734,13 @@
       "groupKeys": [
         "tcoe"
       ],
-      "canOwn": false,
+      "canOwn": true,
       "canView": true,
       "active": true
     },
     {
       "sourceRows": [
-        40
+        39
       ],
       "name": "Schafer, Nicholas",
       "nameKey": "schafernicholas",
@@ -770,43 +758,7 @@
     },
     {
       "sourceRows": [
-        41
-      ],
-      "name": "Schwandt, Brad",
-      "nameKey": "schwandtbrad",
-      "email": "brad.schwandt@oracle.com",
-      "role": "Sales Consulting Manager",
-      "groups": [
-        "Products"
-      ],
-      "groupKeys": [
-        "products"
-      ],
-      "canOwn": true,
-      "canView": true,
-      "active": true
-    },
-    {
-      "sourceRows": [
-        42
-      ],
-      "name": "Simon, Meagan",
-      "nameKey": "simonmeagan",
-      "email": "meagan.wheeler@oracle.com",
-      "role": "Sales Consulting Senior Manager",
-      "groups": [
-        "Construction & Energy"
-      ],
-      "groupKeys": [
-        "constructionandenergy"
-      ],
-      "canOwn": true,
-      "canView": true,
-      "active": true
-    },
-    {
-      "sourceRows": [
-        43
+        40
       ],
       "name": "Sunshine, Aaron F",
       "nameKey": "sunshineaaronf",
@@ -824,7 +776,7 @@
     },
     {
       "sourceRows": [
-        44
+        41
       ],
       "name": "Underdahl, Jeffrey",
       "nameKey": "underdahljeffrey",
@@ -842,7 +794,7 @@
     },
     {
       "sourceRows": [
-        45
+        42
       ],
       "name": "VanHousen, Rebecca A",
       "nameKey": "vanhousenrebeccaa",
@@ -860,7 +812,43 @@
     },
     {
       "sourceRows": [
-        46
+        43
+      ],
+      "name": "Walz, Andrew",
+      "nameKey": "walzandrew",
+      "email": "andrew.walz@oracle.com",
+      "role": "Sales Consulting Manager",
+      "groups": [
+        "Products"
+      ],
+      "groupKeys": [
+        "products"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        44
+      ],
+      "name": "Wheeler, Meagan",
+      "nameKey": "wheelermeagan",
+      "email": "meagan.wheeler@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "Construction & Energy"
+      ],
+      "groupKeys": [
+        "constructionandenergy"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    {
+      "sourceRows": [
+        45
       ],
       "name": "Yazbeck, David",
       "nameKey": "yazbeckdavid",
@@ -888,25 +876,33 @@
     "Chapman, Trey",
     "Chelmow, Benjamin",
     "Cillo, Daniel",
+    "Friedman, Joe",
     "Garrison, Allison I",
     "Gorajek, Carrie",
+    "Hassett, Drew",
     "Hatch, Ryan A",
     "Heyne, Robert",
+    "Hidding, Michael",
+    "Horan, Timothy",
     "Hudema, Raul",
     "Killeen, John",
-    "Kim, Todd",
     "Kuderka, Robert J",
     "Lau, Danielle",
     "Luna, Jessie",
     "Ma, Jaclyn",
     "Malone, Moira",
+    "Monahan, Matthew G",
+    "Morrissey, Ryan",
     "Mumford, Tyler J",
+    "Murphy, Ryan P",
+    "O'Brien, Charles",
     "Recht, Frank R",
     "Rousseau, Elena",
+    "Sankar, Saran",
     "Schafer, Nicholas",
-    "Schwandt, Brad",
-    "Simon, Meagan",
     "Sunshine, Aaron F",
+    "Walz, Andrew",
+    "Wheeler, Meagan",
     "Yazbeck, David"
   ],
   "canViewManagers": [
@@ -923,7 +919,6 @@
     "Chapman, Trey",
     "Chelmow, Benjamin",
     "Cillo, Daniel",
-    "Eberhardt, Karl",
     "Friedman, Joe",
     "Garrison, Allison I",
     "Gorajek, Carrie",
@@ -934,7 +929,6 @@
     "Horan, Timothy",
     "Hudema, Raul",
     "Killeen, John",
-    "Kim, Todd",
     "Kuderka, Robert J",
     "Lau, Danielle",
     "Luna, Jessie",
@@ -943,17 +937,18 @@
     "Monahan, Matthew G",
     "Morrissey, Ryan",
     "Mumford, Tyler J",
+    "Murphy, Ryan P",
     "O'Brien, Charles",
     "Ransom, Rob",
     "Recht, Frank R",
     "Rousseau, Elena",
     "Sankar, Saran",
     "Schafer, Nicholas",
-    "Schwandt, Brad",
-    "Simon, Meagan",
     "Sunshine, Aaron F",
     "Underdahl, Jeffrey",
     "VanHousen, Rebecca A",
+    "Walz, Andrew",
+    "Wheeler, Meagan",
     "Yazbeck, David"
   ],
   "managerLookup": {
@@ -1092,10 +1087,10 @@
       "email": "luke.bradley@oracle.com",
       "role": "Sales Consulting Senior Manager",
       "groups": [
-        "Horizontal"
+        "SCAI"
       ],
       "groupKeys": [
-        "horizontal"
+        "scai"
       ],
       "canOwn": true,
       "canView": true,
@@ -1191,45 +1186,27 @@
       "canView": true,
       "active": true
     },
-    "eberhardtkarl": {
-      "sourceRows": [
-        15
-      ],
-      "name": "Eberhardt, Karl",
-      "nameKey": "eberhardtkarl",
-      "email": "karl.eberhardt@oracle.com",
-      "role": "Senior Director, Presales Operations",
-      "groups": [
-        "Horizontal"
-      ],
-      "groupKeys": [
-        "horizontal"
-      ],
-      "canOwn": false,
-      "canView": true,
-      "active": true
-    },
     "friedmanjoe": {
       "sourceRows": [
-        16
+        15
       ],
       "name": "Friedman, Joe",
       "nameKey": "friedmanjoe",
       "email": "joe.friedman@oracle.com",
       "role": "Sr. Director, AI Innovation",
       "groups": [
-        "OpenAir"
+        "SCAI"
       ],
       "groupKeys": [
-        "openair"
+        "scai"
       ],
-      "canOwn": false,
+      "canOwn": true,
       "canView": true,
       "active": true
     },
     "garrisonallisoni": {
       "sourceRows": [
-        17
+        16
       ],
       "name": "Garrison, Allison I",
       "nameKey": "garrisonallisoni",
@@ -1247,7 +1224,7 @@
     },
     "gorajekcarrie": {
       "sourceRows": [
-        18
+        17
       ],
       "name": "Gorajek, Carrie",
       "nameKey": "gorajekcarrie",
@@ -1265,7 +1242,7 @@
     },
     "hassettdrew": {
       "sourceRows": [
-        19
+        18
       ],
       "name": "Hassett, Drew",
       "nameKey": "hassettdrew",
@@ -1277,13 +1254,13 @@
       "groupKeys": [
         "businessservices"
       ],
-      "canOwn": false,
+      "canOwn": true,
       "canView": true,
       "active": true
     },
     "hatchryana": {
       "sourceRows": [
-        20
+        19
       ],
       "name": "Hatch, Ryan A",
       "nameKey": "hatchryana",
@@ -1301,7 +1278,7 @@
     },
     "heynerobert": {
       "sourceRows": [
-        21
+        20
       ],
       "name": "Heyne, Robert",
       "nameKey": "heynerobert",
@@ -1319,7 +1296,7 @@
     },
     "hiddingmichael": {
       "sourceRows": [
-        22
+        21
       ],
       "name": "Hidding, Michael",
       "nameKey": "hiddingmichael",
@@ -1331,13 +1308,13 @@
       "groupKeys": [
         "products"
       ],
-      "canOwn": false,
+      "canOwn": true,
       "canView": true,
       "active": true
     },
     "horantimothy": {
       "sourceRows": [
-        23
+        22
       ],
       "name": "Horan, Timothy",
       "nameKey": "horantimothy",
@@ -1349,13 +1326,13 @@
       "groupKeys": [
         "epm"
       ],
-      "canOwn": false,
+      "canOwn": true,
       "canView": true,
       "active": true
     },
     "hudemaraul": {
       "sourceRows": [
-        24
+        23
       ],
       "name": "Hudema, Raul",
       "nameKey": "hudemaraul",
@@ -1373,7 +1350,7 @@
     },
     "killeenjohn": {
       "sourceRows": [
-        25
+        24
       ],
       "name": "Killeen, John",
       "nameKey": "killeenjohn",
@@ -1389,27 +1366,9 @@
       "canView": true,
       "active": true
     },
-    "kimtodd": {
-      "sourceRows": [
-        26
-      ],
-      "name": "Kim, Todd",
-      "nameKey": "kimtodd",
-      "email": "todd.kim@oracle.com",
-      "role": "Pre-Sales Solution Consulting Manager",
-      "groups": [
-        "Business Services"
-      ],
-      "groupKeys": [
-        "businessservices"
-      ],
-      "canOwn": true,
-      "canView": true,
-      "active": true
-    },
     "kuderkarobertj": {
       "sourceRows": [
-        27
+        25
       ],
       "name": "Kuderka, Robert J",
       "nameKey": "kuderkarobertj",
@@ -1427,7 +1386,7 @@
     },
     "laudanielle": {
       "sourceRows": [
-        28
+        26
       ],
       "name": "Lau, Danielle",
       "nameKey": "laudanielle",
@@ -1445,7 +1404,7 @@
     },
     "lunajessie": {
       "sourceRows": [
-        29
+        27
       ],
       "name": "Luna, Jessie",
       "nameKey": "lunajessie",
@@ -1463,7 +1422,7 @@
     },
     "majaclyn": {
       "sourceRows": [
-        30
+        28
       ],
       "name": "Ma, Jaclyn",
       "nameKey": "majaclyn",
@@ -1481,7 +1440,7 @@
     },
     "malonemoira": {
       "sourceRows": [
-        31
+        29
       ],
       "name": "Malone, Moira",
       "nameKey": "malonemoira",
@@ -1499,7 +1458,7 @@
     },
     "monahanmatthewg": {
       "sourceRows": [
-        32
+        30
       ],
       "name": "Monahan, Matthew G",
       "nameKey": "monahanmatthewg",
@@ -1511,31 +1470,31 @@
       "groupKeys": [
         "healthandhospitality"
       ],
-      "canOwn": false,
+      "canOwn": true,
       "canView": true,
       "active": true
     },
     "morrisseyryan": {
       "sourceRows": [
-        33
+        31
       ],
       "name": "Morrissey, Ryan",
       "nameKey": "morrisseyryan",
       "email": "ryan.morrissey@oracle.com",
       "role": "Director, Sales Consulting",
       "groups": [
-        "Horizontal"
+        "SCAI"
       ],
       "groupKeys": [
-        "horizontal"
+        "scai"
       ],
-      "canOwn": false,
+      "canOwn": true,
       "canView": true,
       "active": true
     },
     "mumfordtylerj": {
       "sourceRows": [
-        34
+        32
       ],
       "name": "Mumford, Tyler J",
       "nameKey": "mumfordtylerj",
@@ -1551,9 +1510,27 @@
       "canView": true,
       "active": true
     },
+    "murphyryanp": {
+      "sourceRows": [
+        33
+      ],
+      "name": "Murphy, Ryan P",
+      "nameKey": "murphyryanp",
+      "email": "ryan.p.murphy@oracle.com",
+      "role": "Sales Consulting Manager",
+      "groups": [
+        "Business Services"
+      ],
+      "groupKeys": [
+        "businessservices"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
     "obriencharles": {
       "sourceRows": [
-        35
+        34
       ],
       "name": "O'Brien, Charles",
       "nameKey": "obriencharles",
@@ -1565,13 +1542,13 @@
       "groupKeys": [
         "software"
       ],
-      "canOwn": false,
+      "canOwn": true,
       "canView": true,
       "active": true
     },
     "ransomrob": {
       "sourceRows": [
-        36
+        35
       ],
       "name": "Ransom, Rob",
       "nameKey": "ransomrob",
@@ -1589,7 +1566,7 @@
     },
     "rechtfrankr": {
       "sourceRows": [
-        37
+        36
       ],
       "name": "Recht, Frank R",
       "nameKey": "rechtfrankr",
@@ -1607,7 +1584,7 @@
     },
     "rousseauelena": {
       "sourceRows": [
-        38
+        37
       ],
       "name": "Rousseau, Elena",
       "nameKey": "rousseauelena",
@@ -1625,7 +1602,7 @@
     },
     "sankarsaran": {
       "sourceRows": [
-        39
+        38
       ],
       "name": "Sankar, Saran",
       "nameKey": "sankarsaran",
@@ -1637,13 +1614,13 @@
       "groupKeys": [
         "tcoe"
       ],
-      "canOwn": false,
+      "canOwn": true,
       "canView": true,
       "active": true
     },
     "schafernicholas": {
       "sourceRows": [
-        40
+        39
       ],
       "name": "Schafer, Nicholas",
       "nameKey": "schafernicholas",
@@ -1659,45 +1636,9 @@
       "canView": true,
       "active": true
     },
-    "schwandtbrad": {
-      "sourceRows": [
-        41
-      ],
-      "name": "Schwandt, Brad",
-      "nameKey": "schwandtbrad",
-      "email": "brad.schwandt@oracle.com",
-      "role": "Sales Consulting Manager",
-      "groups": [
-        "Products"
-      ],
-      "groupKeys": [
-        "products"
-      ],
-      "canOwn": true,
-      "canView": true,
-      "active": true
-    },
-    "simonmeagan": {
-      "sourceRows": [
-        42
-      ],
-      "name": "Simon, Meagan",
-      "nameKey": "simonmeagan",
-      "email": "meagan.wheeler@oracle.com",
-      "role": "Sales Consulting Senior Manager",
-      "groups": [
-        "Construction & Energy"
-      ],
-      "groupKeys": [
-        "constructionandenergy"
-      ],
-      "canOwn": true,
-      "canView": true,
-      "active": true
-    },
     "sunshineaaronf": {
       "sourceRows": [
-        43
+        40
       ],
       "name": "Sunshine, Aaron F",
       "nameKey": "sunshineaaronf",
@@ -1715,7 +1656,7 @@
     },
     "underdahljeffrey": {
       "sourceRows": [
-        44
+        41
       ],
       "name": "Underdahl, Jeffrey",
       "nameKey": "underdahljeffrey",
@@ -1733,7 +1674,7 @@
     },
     "vanhousenrebeccaa": {
       "sourceRows": [
-        45
+        42
       ],
       "name": "VanHousen, Rebecca A",
       "nameKey": "vanhousenrebeccaa",
@@ -1749,9 +1690,45 @@
       "canView": true,
       "active": true
     },
+    "walzandrew": {
+      "sourceRows": [
+        43
+      ],
+      "name": "Walz, Andrew",
+      "nameKey": "walzandrew",
+      "email": "andrew.walz@oracle.com",
+      "role": "Sales Consulting Manager",
+      "groups": [
+        "Products"
+      ],
+      "groupKeys": [
+        "products"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
+    "wheelermeagan": {
+      "sourceRows": [
+        44
+      ],
+      "name": "Wheeler, Meagan",
+      "nameKey": "wheelermeagan",
+      "email": "meagan.wheeler@oracle.com",
+      "role": "Sales Consulting Senior Manager",
+      "groups": [
+        "Construction & Energy"
+      ],
+      "groupKeys": [
+        "constructionandenergy"
+      ],
+      "canOwn": true,
+      "canView": true,
+      "active": true
+    },
     "yazbeckdavid": {
       "sourceRows": [
-        46
+        45
       ],
       "name": "Yazbeck, David",
       "nameKey": "yazbeckdavid",
@@ -1772,14 +1749,15 @@
     "businessservices": [
       "Baum, Karlin",
       "Chelmow, Benjamin",
-      "Kim, Todd",
-      "Mumford, Tyler J"
+      "Hassett, Drew",
+      "Mumford, Tyler J",
+      "Murphy, Ryan P"
     ],
     "constructionandenergy": [
       "Belle Isle, Matthew J",
       "Heyne, Robert",
       "Malone, Moira",
-      "Simon, Meagan"
+      "Wheeler, Meagan"
     ],
     "consumerservices": [
       "Garrison, Allison I",
@@ -1789,33 +1767,42 @@
     "epm": [
       "Anderson, Dennis",
       "Cecchini, Corey",
-      "Chapman, Trey"
+      "Chapman, Trey",
+      "Horan, Timothy"
     ],
     "healthandhospitality": [
       "Hudema, Raul",
       "Lau, Danielle",
       "Luna, Jessie",
+      "Monahan, Matthew G",
       "Rousseau, Elena"
     ],
-    "horizontal": [
-      "Bradley, Luke"
-    ],
-    "openair": [],
+    "horizontal": [],
     "products": [
       "Anderson, Michael C",
       "Cillo, Daniel",
       "Gorajek, Carrie",
       "Hatch, Ryan A",
+      "Hidding, Michael",
       "Killeen, John",
       "Recht, Frank R",
       "Sunshine, Aaron F",
+      "Walz, Andrew",
       "Yazbeck, David"
+    ],
+    "scai": [
+      "Bradley, Luke",
+      "Friedman, Joe",
+      "Morrissey, Ryan"
     ],
     "software": [
       "Bradford, Alexandra J",
-      "Ma, Jaclyn"
+      "Ma, Jaclyn",
+      "O'Brien, Charles"
     ],
-    "tcoe": []
+    "tcoe": [
+      "Sankar, Saran"
+    ]
   },
   "review": {
     "incompleteRows": [],
