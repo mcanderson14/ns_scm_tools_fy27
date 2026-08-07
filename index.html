@@ -12,67 +12,96 @@
       <div>
         <p class="eyebrow">NetSuite SCM Tools</p>
         <h1>FY27 Queue Mapping JSON Maker</h1>
-        <div id="app-version" class="app-version">Version 27.0.7</div>
+        <div id="app-version" class="app-version">Version 27.0.19</div>
       </div>
-      <span id="status-pill" class="status-pill">Waiting for Excel</span>
+      <span id="status-pill" class="status-pill">Waiting for source</span>
     </header>
 
     <section class="panel input-panel">
       <div class="panel-head">
         <h2>Source</h2>
         <p id="source-description">Use an Excel workbook where row 1 contains SC industry groups, row 2 contains Direct/AMO, and column A contains state/province codes.</p>
+        <div id="mapping-type-links" class="mapping-type-links"></div>
       </div>
 
-      <div class="mode-grid" role="radiogroup" aria-label="Mapping type">
+      <div class="mode-tabs" role="radiogroup" aria-label="Mapping type">
         <label class="mode-card">
           <input type="radio" name="mapping-type" value="region" checked>
           <span>
-            <strong>SC Industry State Region Mapping</strong>
-            <small>Generates the queue staffing-region JSON used by IQUEUE.</small>
+            <strong>State Regions</strong>
+            <small>SC Industry by state</small>
           </span>
         </label>
         <label class="mode-card">
           <input type="radio" name="mapping-type" value="productsScm">
           <span>
             <strong>SCM Relationships</strong>
-            <small>Generates the SCM owner mapping for regional relationships.</small>
+            <small>RD/RSM ownership</small>
+          </span>
+        </label>
+        <label class="mode-card">
+          <input type="radio" name="mapping-type" value="productsScmTerritories">
+          <span>
+            <strong>Products Territories</strong>
+            <small>State/ZIP ownership</small>
           </span>
         </label>
         <label class="mode-card">
           <input type="radio" name="mapping-type" value="authorizedManagers">
           <span>
             <strong>Authorized Managers</strong>
-            <small>Generates the SCM owner/viewer list from saved search 1319617.</small>
+            <small>Can view / can own</small>
           </span>
         </label>
         <label class="mode-card">
           <input type="radio" name="mapping-type" value="gtmScIndustry">
           <span>
             <strong>GTM to SC Industry</strong>
-            <small>Generates the FY27 GTM Industry/Subgroup to SC Industry Group mapping.</small>
+            <small>FY27 GTM mapping</small>
           </span>
         </label>
       </div>
 
-      <div class="input-grid">
-        <label class="file-drop" for="workbook-file">
-          <span>Upload Excel File</span>
-          <strong id="file-name">Choose .xlsx file</strong>
-          <input id="workbook-file" type="file" accept=".xlsx,.xls,.xlsm,.xlsb">
+      <div class="json-import-grid">
+        <label class="url-box">
+          <span>GitHub JSON Source</span>
+          <div class="url-row">
+            <input id="json-url" type="url" placeholder="Current GitHub JSON URL">
+            <button id="load-json" type="button">Reload JSON</button>
+          </div>
+          <small>The selected mapping tab loads from the GitHub mappings folder automatically. Reload uses this exact URL.</small>
         </label>
 
-        <label class="url-box">
-          <span>Workbook URL</span>
-          <div class="url-row">
-            <input id="sharepoint-url" type="url" placeholder="Paste a workbook link">
-            <button id="load-url" type="button">Try URL</button>
-          </div>
-          <small>Works only when the URL allows browser download access from this page. Manual upload is the reliable fallback.</small>
+        <label class="file-drop json-file-drop" for="json-file">
+          <span>Upload JSON File</span>
+          <strong id="json-file-name">Choose .json file</strong>
+          <input id="json-file" type="file" accept=".json,application/json">
         </label>
       </div>
 
+      <details class="advanced rebuild-section">
+        <summary>Rebuild from spreadsheet</summary>
+        <div id="export-guidance" class="export-guidance"></div>
+        <div class="input-grid">
+          <label class="file-drop" for="workbook-file">
+            <span>Upload Export File</span>
+            <strong id="file-name">Choose .xlsx or .csv file</strong>
+            <input id="workbook-file" type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.csv,text/csv">
+          </label>
+
+          <label class="url-box">
+            <span>Workbook URL</span>
+            <div class="url-row">
+              <input id="sharepoint-url" type="url" placeholder="Paste a workbook link">
+              <button id="load-url" type="button">Try URL</button>
+            </div>
+            <small>Works only when the URL allows browser download access from this page. Manual upload is the reliable fallback.</small>
+          </label>
+        </div>
+      </details>
+
       <details id="region-parsing-settings" class="advanced">
-        <summary>Parsing settings</summary>
+        <summary>Region spreadsheet parsing settings</summary>
         <div class="settings-grid">
           <label>
             <span>Industry header row</span>
@@ -158,6 +187,28 @@
       </div>
 
       <div class="stats-grid" id="stats-grid"></div>
+
+      <section class="compare-panel" id="compare-panel" hidden>
+        <div class="compare-head">
+          <div>
+            <h3>Compare to GitHub JSON</h3>
+            <p id="compare-summary"></p>
+          </div>
+          <span id="compare-status" class="compare-status"></span>
+        </div>
+        <div class="stats-grid compare-stats" id="compare-stats"></div>
+        <div id="compare-details" class="table-wrap compare-details"></div>
+      </section>
+
+      <section class="manual-edit-panel" id="manual-edit-panel" hidden>
+        <div class="panel-head row compact-head">
+          <div>
+            <h3>Manual Adjustments</h3>
+            <p id="manual-edit-summary"></p>
+          </div>
+        </div>
+        <div id="manual-edit-table" class="table-wrap manual-edit-table"></div>
+      </section>
 
       <div class="preview-grid">
         <section>

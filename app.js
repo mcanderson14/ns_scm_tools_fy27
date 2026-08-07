@@ -3,24 +3,43 @@
 
   const SCHEMA = "ns-scm-tools.region-map.v3";
   const PRODUCTS_SCM_SCHEMA = "ns-scm-tools.scm-relationships.v3";
+  const PRODUCTS_SCM_TERRITORY_SCHEMA = "ns-scm-tools.products-scm-territories.v1";
   const AUTHORIZED_MANAGERS_SCHEMA = "ns-scm-tools.authorized-managers.v1";
   const GTM_SC_INDUSTRY_SCHEMA = "ns-scm-tools.gtm-sc-industry.v1";
-  const TOOL_VERSION = "27.0.7";
+  const TOOL_VERSION = "27.0.19";
   const TOOL_NAME = "FY27 Queue Mapping JSON Maker";
   const CONFIG_STORAGE_KEY = "ns-scm-tools-region-map-industry-config-v1";
   const EMOJI_CONFIG_STORAGE_KEY = "ns-scm-tools-emoji-config-v1";
   const REGION_MAPPING_TYPE = "region";
   const PRODUCTS_SCM_MAPPING_TYPE = "productsScm";
+  const PRODUCTS_SCM_TERRITORY_MAPPING_TYPE = "productsScmTerritories";
   const AUTHORIZED_MANAGERS_MAPPING_TYPE = "authorizedManagers";
   const GTM_SC_INDUSTRY_MAPPING_TYPE = "gtmScIndustry";
   const REGION_OUTPUT_FILE_NAME = "SC_Industry_State_Region_Mapping.json";
   const PRODUCTS_SCM_OUTPUT_FILE_NAME = "Products_SCM_Relationship_Mapping.json";
+  const PRODUCTS_SCM_TERRITORY_OUTPUT_FILE_NAME = "Products_SCM_Territory_Mapping.json";
   const AUTHORIZED_MANAGERS_OUTPUT_FILE_NAME = "Authorized_Managers.json";
   const GTM_SC_INDUSTRY_OUTPUT_FILE_NAME = "GTM_to_SC_Industry_Mapping.json";
   const AUTHORIZED_MANAGERS_SEARCH_URL = "https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl?searchid=1319617";
+  const GITHUB_MAPPING_BASE_URL = "https://raw.githubusercontent.com/mcanderson14/ns_scm_tools_fy27/refs/heads/main/IQUEUE/mappings/";
+  const GITHUB_JSON_URLS = {
+    [REGION_MAPPING_TYPE]: `${GITHUB_MAPPING_BASE_URL}${REGION_OUTPUT_FILE_NAME}`,
+    [PRODUCTS_SCM_MAPPING_TYPE]: `${GITHUB_MAPPING_BASE_URL}${PRODUCTS_SCM_OUTPUT_FILE_NAME}`,
+    [PRODUCTS_SCM_TERRITORY_MAPPING_TYPE]: `${GITHUB_MAPPING_BASE_URL}${PRODUCTS_SCM_TERRITORY_OUTPUT_FILE_NAME}`,
+    [AUTHORIZED_MANAGERS_MAPPING_TYPE]: `${GITHUB_MAPPING_BASE_URL}${AUTHORIZED_MANAGERS_OUTPUT_FILE_NAME}`,
+    [GTM_SC_INDUSTRY_MAPPING_TYPE]: `${GITHUB_MAPPING_BASE_URL}${GTM_SC_INDUSTRY_OUTPUT_FILE_NAME}`
+  };
+  const SCHEMA_TO_MAPPING_TYPE = {
+    [SCHEMA]: REGION_MAPPING_TYPE,
+    [PRODUCTS_SCM_SCHEMA]: PRODUCTS_SCM_MAPPING_TYPE,
+    [PRODUCTS_SCM_TERRITORY_SCHEMA]: PRODUCTS_SCM_TERRITORY_MAPPING_TYPE,
+    [AUTHORIZED_MANAGERS_SCHEMA]: AUTHORIZED_MANAGERS_MAPPING_TYPE,
+    [GTM_SC_INDUSTRY_SCHEMA]: GTM_SC_INDUSTRY_MAPPING_TYPE
+  };
   const SOURCE_DESCRIPTIONS = {
     [REGION_MAPPING_TYPE]: "Use an Excel workbook where row 1 contains SC industry groups, row 2 contains Direct/AMO, and column A contains state/province codes.",
-    [PRODUCTS_SCM_MAPPING_TYPE]: "Use an Excel workbook with columns for Sales Region, AMO/Direct, Regional Director or RSM, SCM owner, and optional SCM Director. SCM ownership applies across SC Industry Groups.",
+    [PRODUCTS_SCM_MAPPING_TYPE]: "Use an Excel workbook with columns for Sales Region, AMO/Direct, Regional Director or RSM, SCM owner or Raw SCM Name, and optional SCM Director. SCM ownership applies across SC Industry Groups.",
+    [PRODUCTS_SCM_TERRITORY_MAPPING_TYPE]: "Use an Excel workbook with Products territory rows: Territory, SCM Owner, Include/Exclude, State, optional ZIP Min, ZIP Max, Priority, and optional Active. Territory rules are used only when Products SCM relationship mapping has no owner.",
     [AUTHORIZED_MANAGERS_MAPPING_TYPE]: "Use an Excel export from NetSuite saved search 1319617. Expected columns include Manager/Name, Email, Role, SC Industry/Group, Sales Vertical, Can Own, Can View, and Active.",
     [GTM_SC_INDUSTRY_MAPPING_TYPE]: "Use an Excel workbook with columns for SC Industry Group, GTM Industry, and GTM Industry Subgroup. Optional emoji columns can override default display icons."
   };
@@ -28,8 +47,19 @@
     salesRegion: ["salesregion", "region", "salesarea"],
     requestType: ["amodirect", "directamo", "requesttype", "type"],
     regionalDirector: ["rd", "regionaldirector", "regionalsalesmanager", "rsm", "salesdirector", "salesdir", "regionaldirectorregionalsalesmanager"],
-    scm: ["scm", "scmanager", "solutionconsultingmanager", "productsscm", "productsscmmanager", "scmowner", "queueowner", "productsscmqueueowner"],
+    scm: ["scm", "scmname", "rawscm", "rawscmname", "scmanager", "solutionconsultingmanager", "productsscm", "productsscmmanager", "scmowner", "scmownername", "queueowner", "productsscmqueueowner"],
     scmDirector: ["scmdirector", "scmdirectors", "scdirector", "scdirectors", "queuedirector", "queuedirectors", "managerdirector", "managerdirectors", "authorizeddirector", "authorizeddirectors", "director", "directors"]
+  };
+  const PRODUCTS_SCM_TERRITORY_HEADER_ALIASES = {
+    territory: ["territory", "geography", "geo", "region", "regionname", "territoryname", "geographyname", "alignment"],
+    scm: ["scm", "scmowner", "scmownername", "scmanager", "productsscm", "productsscmmanager", "owner", "queueowner"],
+    action: ["action", "type", "includeexclude", "incexc", "rule", "ruleincexc", "ruletype", "condition", "includeorexclude"],
+    state: ["state", "states", "province", "stateprovince", "territorycode"],
+    zipMin: ["zipmin", "minzip", "zipfrom", "fromzip", "startzip", "zipstart", "postalmin", "postalfrom"],
+    zipMax: ["zipmax", "maxzip", "zipto", "tozip", "endzip", "zipend", "postalmax", "postalto"],
+    priority: ["priority", "sort", "sortorder", "order", "sequence"],
+    active: ["active", "enabled", "isinactive", "inactive", "status"],
+    notes: ["notes", "note", "comments", "comment"]
   };
   const AUTHORIZED_MANAGER_HEADER_ALIASES = {
     name: ["name", "manager", "scm", "scmanager", "solutionconsultingmanager", "authorizedmanager", "employee", "employeename", "owner", "queueowner"],
@@ -53,6 +83,7 @@
     "Health & Hospitality",
     "Construction & Energy",
     "Consumer Services",
+    "Life Science",
     "Software",
     "EPM",
     "Tech COE"
@@ -64,8 +95,8 @@
     "HH": "Health & Hospitality",
     "Health & Hospitality": "Health & Hospitality",
     "Health and Hospitality": "Health & Hospitality",
-    "Life Science": "Health & Hospitality",
-    "Life Sciences": "Health & Hospitality",
+    "Life Science": "Life Science",
+    "Life Sciences": "Life Science",
     "Construction": "Construction & Energy",
     "Construction & Energy": "Construction & Energy",
     "Construction and Energy": "Construction & Energy",
@@ -159,7 +190,13 @@
     industryConfig: loadIndustryConfig(),
     emojiConfig: loadEmojiConfig(),
     jsonText: "",
-    outputFileName: REGION_OUTPUT_FILE_NAME
+    outputFileName: REGION_OUTPUT_FILE_NAME,
+    jsonLoadToken: 0,
+    baselineJson: null,
+    baselineJsonText: "",
+    baselineMappingType: REGION_MAPPING_TYPE,
+    referenceAuthorizedManagers: [],
+    referenceScIndustryGroups: []
   };
 
   const elements = {};
@@ -170,8 +207,14 @@
       "app-version",
       "file-name",
       "source-description",
+      "mapping-type-links",
       "sharepoint-url",
       "load-url",
+      "json-url",
+      "load-json",
+      "json-file",
+      "json-file-name",
+      "export-guidance",
       "region-parsing-settings",
       "industry-row",
       "mode-row",
@@ -193,6 +236,14 @@
       "results-panel",
       "summary-text",
       "stats-grid",
+      "compare-panel",
+      "compare-summary",
+      "compare-status",
+      "compare-stats",
+      "compare-details",
+      "manual-edit-panel",
+      "manual-edit-summary",
+      "manual-edit-table",
       "columns-preview-title",
       "columns-preview",
       "spot-checks-title",
@@ -207,6 +258,8 @@
     elements["workbook-file"].addEventListener("change", handleFileInput);
     if (elements["app-version"]) elements["app-version"].textContent = `Version ${TOOL_VERSION}`;
     elements["load-url"].addEventListener("click", handleUrlLoad);
+    elements["load-json"].addEventListener("click", handleJsonUrlLoad);
+    elements["json-file"].addEventListener("change", handleJsonFileInput);
     document.querySelectorAll("input[name='mapping-type']").forEach(input => {
       input.addEventListener("change", handleMappingTypeChange);
     });
@@ -222,12 +275,16 @@
     elements["emoji-map-filter"].addEventListener("input", renderEmojiMappingTable);
     elements["emoji-map-missing-only"].addEventListener("change", renderEmojiMappingTable);
     elements["emoji-map-table"].addEventListener("change", handleEmojiMappingChange);
+    elements["manual-edit-table"].addEventListener("change", handleManualEditChange);
     ["industry-row", "mode-row", "data-row", "state-column"].forEach(id => {
       elements[id].addEventListener("change", reprocessWorkbook);
     });
     elements["copy-json"].addEventListener("click", copyJson);
     elements["download-json"].addEventListener("click", downloadJson);
+    elements["json-output"].addEventListener("input", handleJsonOutputEdit);
     updateMappingTypeUi();
+    loadReferenceJsons();
+    loadCurrentGitHubJson();
   });
 
   async function handleFileInput(event) {
@@ -236,6 +293,10 @@
     elements["file-name"].textContent = file.name;
     state.workbookName = file.name;
     state.outputFileName = outputFileNameForMode();
+    if (isCsvFile(file.name)) {
+      await parseWorkbookText(await file.text());
+      return;
+    }
     await parseArrayBuffer(await file.arrayBuffer());
   }
 
@@ -244,11 +305,12 @@
     state.mappingType = event.target.value || REGION_MAPPING_TYPE;
     state.outputFileName = outputFileNameForMode();
     updateMappingTypeUi();
-    reprocessWorkbook();
+    loadCurrentGitHubJson();
   }
 
   function outputFileNameForMode() {
     if (state.mappingType === PRODUCTS_SCM_MAPPING_TYPE) return PRODUCTS_SCM_OUTPUT_FILE_NAME;
+    if (state.mappingType === PRODUCTS_SCM_TERRITORY_MAPPING_TYPE) return PRODUCTS_SCM_TERRITORY_OUTPUT_FILE_NAME;
     if (state.mappingType === AUTHORIZED_MANAGERS_MAPPING_TYPE) return AUTHORIZED_MANAGERS_OUTPUT_FILE_NAME;
     if (state.mappingType === GTM_SC_INDUSTRY_MAPPING_TYPE) return GTM_SC_INDUSTRY_OUTPUT_FILE_NAME;
     return REGION_OUTPUT_FILE_NAME;
@@ -256,11 +318,17 @@
 
   function updateMappingTypeUi() {
     const usesFlatWorkbook = state.mappingType === PRODUCTS_SCM_MAPPING_TYPE
+      || state.mappingType === PRODUCTS_SCM_TERRITORY_MAPPING_TYPE
       || state.mappingType === AUTHORIZED_MANAGERS_MAPPING_TYPE
       || state.mappingType === GTM_SC_INDUSTRY_MAPPING_TYPE;
     if (elements["source-description"]) {
       elements["source-description"].textContent = SOURCE_DESCRIPTIONS[state.mappingType] || SOURCE_DESCRIPTIONS[REGION_MAPPING_TYPE];
     }
+    if (elements["json-url"]) {
+      elements["json-url"].value = GITHUB_JSON_URLS[state.mappingType] || "";
+    }
+    renderMappingTypeLinks();
+    renderExportGuidance();
     if (elements["region-parsing-settings"]) {
       elements["region-parsing-settings"].hidden = usesFlatWorkbook;
     }
@@ -269,6 +337,219 @@
     }
     if (elements["emoji-map-panel"] && state.mappingType !== GTM_SC_INDUSTRY_MAPPING_TYPE) {
       elements["emoji-map-panel"].hidden = true;
+    }
+  }
+
+  function renderMappingTypeLinks() {
+    const target = elements["mapping-type-links"];
+    if (!target) return;
+    const links = [];
+    const githubUrl = GITHUB_JSON_URLS[state.mappingType];
+    if (githubUrl) {
+      links.push(`<a href="${escapeHtml(githubUrl)}" target="_blank" rel="noopener noreferrer">Open current GitHub JSON</a>`);
+    }
+    if (state.mappingType === AUTHORIZED_MANAGERS_MAPPING_TYPE) {
+      links.push(`<a href="${escapeHtml(AUTHORIZED_MANAGERS_SEARCH_URL)}" target="_blank" rel="noopener noreferrer">Open NetSuite saved search 1319617</a>`);
+    }
+    target.innerHTML = links.join("");
+  }
+
+  function renderExportGuidance() {
+    const target = elements["export-guidance"];
+    if (!target) return;
+    if (state.mappingType === AUTHORIZED_MANAGERS_MAPPING_TYPE) {
+      target.innerHTML = `
+        <div class="guidance-card">
+          <strong>Authorized Managers NetSuite refresh</strong>
+          <span>Open saved search 1319617, export CSV or Excel, then upload that export here to regenerate Authorized_Managers.json.</span>
+          <a href="${escapeHtml(AUTHORIZED_MANAGERS_SEARCH_URL)}" target="_blank" rel="noopener noreferrer">Open saved search 1319617</a>
+        </div>
+      `;
+      return;
+    }
+    target.innerHTML = `
+      <div class="guidance-card">
+        <strong>Spreadsheet rebuild</strong>
+        <span>Upload the current source spreadsheet or CSV export for this mapping tab to regenerate the JSON.</span>
+      </div>
+    `;
+  }
+
+  async function handleJsonUrlLoad() {
+    const rawUrl = (elements["json-url"].value || "").trim();
+    const url = normalizeJsonSourceUrl(rawUrl);
+    if (!url) {
+      setStatus("Paste a JSON URL first", true);
+      return;
+    }
+
+    setStatus("Loading existing JSON...");
+    const loadToken = ++state.jsonLoadToken;
+    try {
+      if (elements["json-url"].value !== url) elements["json-url"].value = url;
+      const response = await fetch(url, { cache: "no-store" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const text = await response.text();
+      const output = parseFetchedJson(text, url);
+      if (loadToken !== state.jsonLoadToken) return;
+      applyImportedJson(output, fileNameFromUrl(url) || outputFileNameForMode(), "GitHub JSON", { setBaseline: true });
+    } catch (error) {
+      if (loadToken !== state.jsonLoadToken) return;
+      setStatus(error.message ? `JSON load failed: ${error.message}` : "JSON load failed", true);
+      console.warn("JSON URL load failed", error);
+    }
+  }
+
+  function loadCurrentGitHubJson() {
+    if (!elements["json-url"]) return;
+    elements["json-url"].value = GITHUB_JSON_URLS[state.mappingType] || "";
+    handleJsonUrlLoad();
+  }
+
+  async function loadReferenceJsons() {
+    await Promise.all([
+      loadReferenceJson(AUTHORIZED_MANAGERS_MAPPING_TYPE),
+      loadReferenceJson(GTM_SC_INDUSTRY_MAPPING_TYPE)
+    ]);
+  }
+
+  async function loadReferenceJson(mappingType) {
+    const url = GITHUB_JSON_URLS[mappingType];
+    if (!url) return;
+    try {
+      const response = await fetch(url, { cache: "no-store" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const output = parseFetchedJson(await response.text(), url);
+      updateReferenceData(output);
+    } catch (error) {
+      console.warn("Reference JSON load failed", mappingType, error);
+    }
+  }
+
+  async function handleJsonFileInput(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    elements["json-file-name"].textContent = file.name;
+    setStatus("Reading JSON file...");
+    try {
+      const output = JSON.parse(await file.text());
+      applyImportedJson(output, file.name, "Uploaded JSON");
+    } catch (error) {
+      setStatus(error.message ? `JSON file failed: ${error.message}` : "JSON file failed", true);
+      console.warn("JSON file load failed", error);
+    }
+  }
+
+  function applyImportedJson(output, fileName, sourceLabel, options = {}) {
+    if (!output || typeof output !== "object" || Array.isArray(output)) {
+      throw new Error("JSON file did not contain a mapping object.");
+    }
+
+    const detectedType = SCHEMA_TO_MAPPING_TYPE[output.schema];
+    if (detectedType && detectedType !== state.mappingType) {
+      setMappingType(detectedType);
+    } else {
+      state.outputFileName = fileName || outputFileNameForMode();
+      updateMappingTypeUi();
+    }
+
+    state.workbook = null;
+    state.workbookName = sourceLabel || fileName || "";
+    state.outputFileName = outputFileNameForOutput(output);
+    state.jsonText = JSON.stringify(output, null, 2);
+    if (options.setBaseline) {
+      state.baselineJson = output;
+      state.baselineJsonText = state.jsonText;
+      state.baselineMappingType = state.mappingType;
+    }
+    updateReferenceData(output);
+    renderOutput(output);
+    renderComparison(output);
+    setStatus(`${sourceLabel || "JSON"} loaded`);
+  }
+
+  function setMappingType(mappingType) {
+    state.mappingType = mappingType || REGION_MAPPING_TYPE;
+    state.outputFileName = outputFileNameForMode();
+    const radio = document.querySelector(`input[name='mapping-type'][value='${state.mappingType}']`);
+    if (radio) radio.checked = true;
+    updateMappingTypeUi();
+  }
+
+  function updateReferenceData(output) {
+    if (!output || typeof output !== "object") return;
+    if (output.schema === AUTHORIZED_MANAGERS_SCHEMA) {
+      state.referenceAuthorizedManagers = (output.authorizedManagers || [])
+        .filter(manager => manager && manager.active !== false)
+        .map(manager => cleanPersonName(manager.name))
+        .filter(Boolean)
+        .sort(alphaSort);
+    }
+    if (output.schema === GTM_SC_INDUSTRY_SCHEMA) {
+      state.referenceScIndustryGroups = uniqueSorted((output.scIndustryGroups || [])
+        .concat((output.rows || []).map(row => row.scIndustryGroup))
+        .map(cleanCell)
+        .filter(Boolean));
+    }
+    const current = currentOutputJson();
+    if (current && [PRODUCTS_SCM_SCHEMA, PRODUCTS_SCM_TERRITORY_SCHEMA].includes(current.schema)) {
+      renderManualEditPanel(current);
+    }
+  }
+
+  function handleJsonOutputEdit(event) {
+    state.jsonText = event.target.value;
+    if (!state.jsonText.trim()) {
+      setStatus("JSON output cleared", true);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(state.jsonText);
+      const detectedType = SCHEMA_TO_MAPPING_TYPE[parsed.schema];
+      if (detectedType) {
+        setMappingType(detectedType);
+      }
+      renderComparison(parsed);
+      setStatus("Edited JSON is valid");
+    } catch (error) {
+      setStatus("Edited JSON is not valid yet", true);
+    }
+  }
+
+  function normalizeJsonSourceUrl(value) {
+    let url = String(value || "").trim();
+    url = url.replace(/[),.;\s]+$/g, "");
+    if (!url) return "";
+
+    try {
+      const parsed = new URL(url);
+      if (parsed.hostname === "github.com") {
+        const parts = parsed.pathname.split("/").filter(Boolean);
+        const blobIndex = parts.indexOf("blob");
+        if (parts.length >= 5 && blobIndex === 2) {
+          const owner = parts[0];
+          const repo = parts[1];
+          const branch = parts[3];
+          const filePath = parts.slice(4).map(encodeURIComponent).join("/");
+          return `https://raw.githubusercontent.com/${owner}/${repo}/refs/heads/${branch}/${filePath}`;
+        }
+      }
+      return parsed.href.replace(/[),.;\s]+$/g, "");
+    } catch (error) {
+      return url;
+    }
+  }
+
+  function parseFetchedJson(text, url) {
+    const trimmed = String(text || "").trim();
+    if (!trimmed) throw new Error("The URL returned an empty response.");
+    if (/^<!doctype html/i.test(trimmed) || /^<html[\s>]/i.test(trimmed)) {
+      throw new Error("The URL returned a GitHub page, not raw JSON. Open a specific JSON file and use Raw, or use the default GitHub URL.");
+    }
+    try {
+      return JSON.parse(trimmed);
+    } catch (error) {
+      throw new Error(`The URL did not return valid JSON (${fileNameFromUrl(url) || "selected URL"}).`);
     }
   }
 
@@ -283,10 +564,13 @@
     try {
       const response = await fetch(url, { credentials: "include" });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const buffer = await response.arrayBuffer();
       state.workbookName = fileNameFromUrl(url) || "linked-workbook.xlsx";
       state.outputFileName = outputFileNameForMode();
-      await parseArrayBuffer(buffer);
+      if (isCsvFile(state.workbookName)) {
+        await parseWorkbookText(await response.text());
+        return;
+      }
+      await parseArrayBuffer(await response.arrayBuffer());
     } catch (error) {
       setStatus("URL load blocked. Use manual upload.", true);
       console.warn("Workbook URL load failed", error);
@@ -308,18 +592,36 @@
     }
   }
 
+  async function parseWorkbookText(text) {
+    if (!window.XLSX) {
+      setStatus("XLSX library did not load", true);
+      return;
+    }
+
+    try {
+      state.workbook = window.XLSX.read(text, { type: "string" });
+      reprocessWorkbook();
+    } catch (error) {
+      setStatus("Could not read CSV export", true);
+      console.error(error);
+    }
+  }
+
   function reprocessWorkbook() {
     if (!state.workbook) return;
     try {
       const output = buildJsonForCurrentMode(state.workbook, state.workbookName);
       state.jsonText = JSON.stringify(output, null, 2);
       renderOutput(output);
+      renderComparison(output);
       if (output.schema === AUTHORIZED_MANAGERS_SCHEMA && (output.counts.incompleteRows || output.counts.duplicateManagers || output.counts.missingGroups)) {
         const reviewCount = output.counts.incompleteRows + output.counts.duplicateManagers + output.counts.missingGroups;
         setStatus(`Review ${reviewCount} manager issue${reviewCount === 1 ? "" : "s"}`, true);
       } else if (output.schema === PRODUCTS_SCM_SCHEMA && (output.counts.incompleteRows || output.counts.duplicateExactKeys)) {
         const reviewCount = output.counts.incompleteRows + output.counts.duplicateExactKeys;
         setStatus(`Review ${reviewCount} SCM relationship issue${reviewCount === 1 ? "" : "s"}`, true);
+      } else if (output.schema === PRODUCTS_SCM_TERRITORY_SCHEMA && output.counts.incompleteRows) {
+        setStatus(`Review ${output.counts.incompleteRows} Products territory issue${output.counts.incompleteRows === 1 ? "" : "s"}`, true);
       } else if (output.schema === GTM_SC_INDUSTRY_SCHEMA && (output.counts.incompleteRows || output.counts.duplicateMappings || output.counts.missingEmojiMappings)) {
         const reviewCount = output.counts.incompleteRows + output.counts.duplicateMappings + output.counts.missingEmojiMappings;
         setStatus(`Review ${reviewCount} GTM mapping issue${reviewCount === 1 ? "" : "s"}`, true);
@@ -336,6 +638,7 @@
 
   function buildJsonForCurrentMode(workbook, fileName) {
     if (state.mappingType === PRODUCTS_SCM_MAPPING_TYPE) return buildProductsScmJson(workbook, fileName);
+    if (state.mappingType === PRODUCTS_SCM_TERRITORY_MAPPING_TYPE) return buildProductsScmTerritoryJson(workbook, fileName);
     if (state.mappingType === AUTHORIZED_MANAGERS_MAPPING_TYPE) return buildAuthorizedManagersJson(workbook, fileName);
     if (state.mappingType === GTM_SC_INDUSTRY_MAPPING_TYPE) return buildGtmScIndustryJson(workbook, fileName);
     return buildMappingJson(workbook, fileName);
@@ -435,6 +738,7 @@
         version: TOOL_VERSION
       },
       generatedAt: new Date().toISOString(),
+      outputFileName: outputFileNameForMode(),
       source: {
         fileName: fileName || "",
         sheetName,
@@ -558,6 +862,7 @@
         version: TOOL_VERSION
       },
       generatedAt: new Date().toISOString(),
+      outputFileName: outputFileNameForMode(),
       source: {
         fileName: fileName || "",
         sheetName,
@@ -590,6 +895,119 @@
         incompleteRows,
         duplicateExactKeys,
         ambiguousDirectorKeys
+      }
+    };
+  }
+
+  function buildProductsScmTerritoryJson(workbook, fileName) {
+    const detected = workbook.SheetNames.map(sheetName => {
+      const sheet = workbook.Sheets[sheetName];
+      const matrix = window.XLSX.utils.sheet_to_json(sheet, {
+        header: 1,
+        blankrows: false,
+        raw: false
+      });
+      return { sheetName, matrix, header: detectProductsScmTerritoryHeader(matrix) };
+    }).find(candidate => candidate.header);
+    if (!detected) throw new Error("No Products SCM territory header row was found.");
+
+    const { sheetName, matrix, header } = detected;
+    if (!header) throw new Error("No Products SCM territory header row was found.");
+
+    const rows = [];
+    const incompleteRows = [];
+    const scms = new Set();
+    const territories = new Set();
+    const states = new Set();
+    let nextPriority = 100;
+
+    for (let rowIndex = header.rowIndex + 1; rowIndex < matrix.length; rowIndex += 1) {
+      const row = matrix[rowIndex] || [];
+      if (!row.some(cleanCell)) continue;
+
+      const active = header.indexes.active >= 0
+        ? parseBooleanCell(row[header.indexes.active], true, { inactiveMeansFalse: true })
+        : true;
+      if (!active) continue;
+
+      const territory = cleanCell(row[header.indexes.territory]) || "Products Territory";
+      const scm = cleanPersonName(row[header.indexes.scm]);
+      const action = normalizeTerritoryAction(row[header.indexes.action]);
+      const stateValues = splitListCell(row[header.indexes.state]).map(normalizeStateCode).filter(Boolean);
+      const zipMin = normalizeZipValue(row[header.indexes.zipMin]);
+      const zipMax = normalizeZipValue(row[header.indexes.zipMax]);
+      const priority = positiveInteger(row[header.indexes.priority], nextPriority);
+      const notes = header.indexes.notes >= 0 ? cleanCell(row[header.indexes.notes]) : "";
+      const missing = [];
+      if (!scm) missing.push("SCM Owner");
+      if (!stateValues.length) missing.push("State");
+      if (!action) missing.push("Include/Exclude");
+      if ((zipMin && !zipMax) || (!zipMin && zipMax)) missing.push("ZIP Min and ZIP Max");
+
+      if (missing.length) {
+        incompleteRows.push({
+          sourceRow: rowIndex + 1,
+          missing,
+          values: row.map(cleanCell).filter(Boolean)
+        });
+        continue;
+      }
+
+      stateValues.forEach(stateValue => {
+        const rule = {
+          sourceRow: rowIndex + 1,
+          industryFamily: "Products",
+          industryKey: "products",
+          territory,
+          territoryKey: normalizeKey(territory),
+          scm,
+          scmKey: normalizePersonKey(scm),
+          action,
+          state: stateValue,
+          stateKey: stateValue,
+          zipMin,
+          zipMax,
+          priority,
+          notes
+        };
+        rows.push(rule);
+        scms.add(scm);
+        territories.add(territory);
+        states.add(stateValue);
+      });
+      nextPriority = Math.max(nextPriority + 10, priority + 10);
+    }
+
+    rows.sort((left, right) => left.priority - right.priority || alphaSort(left.territory, right.territory) || alphaSort(left.state, right.state));
+    const grouped = buildProductsScmTerritorySummaries(rows);
+
+    return {
+      schema: PRODUCTS_SCM_TERRITORY_SCHEMA,
+      generator: {
+        name: TOOL_NAME,
+        version: TOOL_VERSION
+      },
+      generatedAt: new Date().toISOString(),
+      outputFileName: outputFileNameForMode(),
+      source: {
+        fileName: fileName || "",
+        sheetName,
+        headerRow: header.rowIndex + 1,
+        firstDataRow: header.rowIndex + 2,
+        detectedHeaders: header.detectedHeaders
+      },
+      counts: {
+        rules: rows.length,
+        territories: territories.size,
+        scms: scms.size,
+        states: states.size,
+        incompleteRows: incompleteRows.length
+      },
+      industryFamily: "Products",
+      territories: grouped,
+      rules: rows,
+      review: {
+        incompleteRows
       }
     };
   }
@@ -711,6 +1129,7 @@
         version: TOOL_VERSION
       },
       generatedAt: new Date().toISOString(),
+      outputFileName: outputFileNameForMode(),
       source: {
         fileName: fileName || "",
         sheetName,
@@ -847,6 +1266,7 @@
         version: TOOL_VERSION
       },
       generatedAt: new Date().toISOString(),
+      outputFileName: outputFileNameForMode(),
       source: {
         fileName: fileName || "",
         sheetName,
@@ -948,6 +1368,50 @@
         regionalDirector: productsHeaderCellInfo(winner.row, winner.indexes.regionalDirector),
         scm: productsHeaderCellInfo(winner.row, winner.indexes.scm),
         scmDirector: productsHeaderCellInfo(winner.row, winner.indexes.scmDirector)
+      }
+    };
+  }
+
+  function detectProductsScmTerritoryHeader(matrix) {
+    const maxRows = Math.min(matrix.length, 15);
+    const candidates = [];
+
+    for (let rowIndex = 0; rowIndex < maxRows; rowIndex += 1) {
+      const row = matrix[rowIndex] || [];
+      const normalizedHeaders = row.map(normalizeKey);
+      const indexes = {
+        territory: findProductsHeaderIndex(normalizedHeaders, PRODUCTS_SCM_TERRITORY_HEADER_ALIASES.territory),
+        scm: findProductsHeaderIndex(normalizedHeaders, PRODUCTS_SCM_TERRITORY_HEADER_ALIASES.scm),
+        action: findProductsHeaderIndex(normalizedHeaders, PRODUCTS_SCM_TERRITORY_HEADER_ALIASES.action),
+        state: findProductsHeaderIndex(normalizedHeaders, PRODUCTS_SCM_TERRITORY_HEADER_ALIASES.state)
+      };
+      indexes.zipMin = findProductsHeaderIndex(normalizedHeaders, PRODUCTS_SCM_TERRITORY_HEADER_ALIASES.zipMin);
+      indexes.zipMax = findProductsHeaderIndex(normalizedHeaders, PRODUCTS_SCM_TERRITORY_HEADER_ALIASES.zipMax);
+      indexes.priority = findProductsHeaderIndex(normalizedHeaders, PRODUCTS_SCM_TERRITORY_HEADER_ALIASES.priority);
+      indexes.active = findProductsHeaderIndex(normalizedHeaders, PRODUCTS_SCM_TERRITORY_HEADER_ALIASES.active);
+      indexes.notes = findProductsHeaderIndex(normalizedHeaders, PRODUCTS_SCM_TERRITORY_HEADER_ALIASES.notes);
+      const requiredCount = ["scm", "action", "state"].filter(key => indexes[key] >= 0).length;
+      const score = requiredCount * 5 + (indexes.territory >= 0 ? 2 : 0) + (indexes.zipMin >= 0 || indexes.zipMax >= 0 ? 1 : 0);
+      if (requiredCount === 3) candidates.push({ rowIndex, row, indexes, score });
+    }
+
+    candidates.sort((left, right) => right.score - left.score || left.rowIndex - right.rowIndex);
+    const winner = candidates[0];
+    if (!winner) return null;
+
+    return {
+      rowIndex: winner.rowIndex,
+      indexes: winner.indexes,
+      detectedHeaders: {
+        territory: productsHeaderCellInfo(winner.row, winner.indexes.territory),
+        scm: productsHeaderCellInfo(winner.row, winner.indexes.scm),
+        action: productsHeaderCellInfo(winner.row, winner.indexes.action),
+        state: productsHeaderCellInfo(winner.row, winner.indexes.state),
+        zipMin: productsHeaderCellInfo(winner.row, winner.indexes.zipMin),
+        zipMax: productsHeaderCellInfo(winner.row, winner.indexes.zipMax),
+        priority: productsHeaderCellInfo(winner.row, winner.indexes.priority),
+        active: productsHeaderCellInfo(winner.row, winner.indexes.active),
+        notes: productsHeaderCellInfo(winner.row, winner.indexes.notes)
       }
     };
   }
@@ -1203,10 +1667,65 @@
     return Boolean(fallback);
   }
 
+  function splitListCell(value) {
+    const text = cleanCell(value);
+    if (!text) return [];
+    return text
+      .split(/\s*(?:,|;|\||\n|\r|\t)\s*/g)
+      .map(cleanCell)
+      .filter(Boolean);
+  }
+
+  function normalizeStateCode(value) {
+    return cleanCell(value).toUpperCase().replace(/[^A-Z0-9]/g, "");
+  }
+
+  function normalizeZipValue(value) {
+    const text = cleanCell(value);
+    if (!text) return "";
+    const match = text.match(/\d{1,5}/);
+    return match ? match[0].padStart(5, "0").slice(0, 5) : "";
+  }
+
+  function normalizeTerritoryAction(value) {
+    const text = cleanCell(value);
+    if (!text) return "include";
+    if (/^(?:exc|exclude|except|omit|remove|out)$/i.test(text)) return "exclude";
+    if (/^(?:inc|include|add|in|yes|y)$/i.test(text)) return "include";
+    if (/exclude|except|omit|remove/i.test(text)) return "exclude";
+    if (/include/i.test(text)) return "include";
+    return "";
+  }
+
+  function territoryRuleLabel(rule) {
+    const zip = rule.zipMin || rule.zipMax
+      ? `${rule.state} ${rule.zipMin || "00000"}-${rule.zipMax || "99999"}`
+      : rule.state;
+    return zip;
+  }
+
+  function buildProductsScmTerritorySummaries(rows) {
+    const grouped = new Map();
+    rows.forEach(row => {
+      const key = `${row.territoryKey}|${row.scmKey}`;
+      const summary = grouped.get(key) || {
+        territory: row.territory,
+        territoryKey: row.territoryKey,
+        scm: row.scm,
+        scmKey: row.scmKey,
+        includes: [],
+        excludes: [],
+        rules: 0
+      };
+      if (row.action === "exclude") summary.excludes.push(territoryRuleLabel(row));
+      else summary.includes.push(territoryRuleLabel(row));
+      summary.rules += 1;
+      grouped.set(key, summary);
+    });
+    return Array.from(grouped.values()).sort((left, right) => alphaSort(left.territory, right.territory) || alphaSort(left.scm, right.scm));
+  }
+
   function defaultCanOwnForRole(role) {
-    const text = cleanCell(role);
-    if (!text) return true;
-    if (/\b(?:director|avp|vp|vice\s*president|leader|executive)\b/i.test(text)) return false;
     return true;
   }
 
@@ -1243,9 +1762,14 @@
     elements["results-panel"].hidden = false;
     elements["json-output"].value = state.jsonText;
     updateMappingTypeUi();
+    renderManualEditPanel(output);
 
     if (output.schema === PRODUCTS_SCM_SCHEMA) {
       renderProductsScmOutput(output);
+      return;
+    }
+    if (output.schema === PRODUCTS_SCM_TERRITORY_SCHEMA) {
+      renderProductsScmTerritoryOutput(output);
       return;
     }
     if (output.schema === AUTHORIZED_MANAGERS_SCHEMA) {
@@ -1260,12 +1784,17 @@
     renderRegionOutput(output);
   }
 
+  function outputFileNameForOutput(output) {
+    return output && output.outputFileName || state.outputFileName || outputFileNameForMode();
+  }
+
   function renderRegionOutput(output) {
     elements["columns-preview-title"].textContent = "Detected Columns";
     elements["spot-checks-title"].textContent = "Spot Checks";
-    elements["summary-text"].textContent = `${output.counts.rows.toLocaleString()} mapping rows generated from ${output.source.sheetName}.`;
+    elements["summary-text"].textContent = `${output.counts.rows.toLocaleString()} mapping rows generated from ${output.source.sheetName}. JSON file: ${outputFileNameForOutput(output)}.`;
 
     renderStats([
+      ["JSON File", outputFileNameForOutput(output)],
       ["Rows", output.counts.rows],
       ["States", output.counts.states],
       ["SC Groups", output.counts.industryGroups],
@@ -1299,9 +1828,10 @@
   function renderProductsScmOutput(output) {
     elements["columns-preview-title"].textContent = "Generated Relationships";
     elements["spot-checks-title"].textContent = "SCM Coverage";
-    elements["summary-text"].textContent = `${output.counts.relationships.toLocaleString()} SCM relationship rows generated from ${output.source.sheetName}.`;
+    elements["summary-text"].textContent = `${output.counts.relationships.toLocaleString()} SCM relationship rows generated from ${output.source.sheetName}. JSON file: ${outputFileNameForOutput(output)}.`;
 
     renderStats([
+      ["JSON File", outputFileNameForOutput(output)],
       ["Relationships", output.counts.relationships],
       ["SCM Owners", output.counts.scms],
       ["Authorized Directors", output.counts.authorizedDirectors],
@@ -1335,12 +1865,51 @@
     );
   }
 
+  function renderProductsScmTerritoryOutput(output) {
+    elements["columns-preview-title"].textContent = "Generated Territory Rules";
+    elements["spot-checks-title"].textContent = "Territory Coverage";
+    elements["summary-text"].textContent = `${output.counts.rules.toLocaleString()} Products territory rule${output.counts.rules === 1 ? "" : "s"} generated from ${output.source.sheetName}. JSON file: ${outputFileNameForOutput(output)}.`;
+
+    renderStats([
+      ["JSON File", outputFileNameForOutput(output)],
+      ["Rules", output.counts.rules],
+      ["Territories", output.counts.territories],
+      ["SCM Owners", output.counts.scms],
+      ["States", output.counts.states],
+      ["Review Items", output.counts.incompleteRows]
+    ]);
+
+    elements["columns-preview"].innerHTML = renderTable(
+      ["Priority", "Action", "Territory", "State", "ZIP Range", "SCM Owner", "Source Row"],
+      output.rules.map(row => [
+        row.priority,
+        row.action,
+        row.territory,
+        row.state,
+        row.zipMin || row.zipMax ? `${row.zipMin || "00000"}-${row.zipMax || "99999"}` : "All",
+        row.scm,
+        row.sourceRow
+      ])
+    );
+
+    elements["spot-checks"].innerHTML = renderTable(
+      ["Territory", "SCM Owner", "Included", "Excluded"],
+      output.territories.map(row => [
+        row.territory,
+        row.scm,
+        row.includes.join(", ") || "None",
+        row.excludes.join(", ") || "None"
+      ])
+    );
+  }
+
   function renderAuthorizedManagersOutput(output) {
     elements["columns-preview-title"].textContent = "Authorized Managers";
     elements["spot-checks-title"].textContent = "Assignment Groups";
-    elements["summary-text"].textContent = `${output.counts.managers.toLocaleString()} authorized manager row${output.counts.managers === 1 ? "" : "s"} generated from ${output.source.sheetName}.`;
+    elements["summary-text"].textContent = `${output.counts.managers.toLocaleString()} authorized manager row${output.counts.managers === 1 ? "" : "s"} generated from ${output.source.sheetName}. JSON file: ${outputFileNameForOutput(output)}.`;
 
     renderStats([
+      ["JSON File", outputFileNameForOutput(output)],
       ["Managers", output.counts.managers],
       ["Active", output.counts.activeManagers],
       ["Can Own", output.counts.canOwn],
@@ -1375,9 +1944,10 @@
   function renderGtmScIndustryOutput(output) {
     elements["columns-preview-title"].textContent = "GTM to SC Industry Rows";
     elements["spot-checks-title"].textContent = "Emoji Coverage";
-    elements["summary-text"].textContent = `${output.counts.rows.toLocaleString()} GTM mapping row${output.counts.rows === 1 ? "" : "s"} generated from ${output.source.sheetName}.`;
+    elements["summary-text"].textContent = `${output.counts.rows.toLocaleString()} GTM mapping row${output.counts.rows === 1 ? "" : "s"} generated from ${output.source.sheetName}. JSON file: ${outputFileNameForOutput(output)}.`;
 
     renderStats([
+      ["JSON File", outputFileNameForOutput(output)],
       ["Rows", output.counts.rows],
       ["SC Groups", output.counts.scIndustryGroups],
       ["GTM Industries", output.counts.gtmIndustries],
@@ -1420,6 +1990,534 @@
         <strong>${escapeHtml(String(value))}</strong>
       </div>
     `).join("");
+  }
+
+  function renderManualEditPanel(output) {
+    const panel = elements["manual-edit-panel"];
+    const table = elements["manual-edit-table"];
+    if (!panel || !table) return;
+    if (!output || ![AUTHORIZED_MANAGERS_SCHEMA, PRODUCTS_SCM_SCHEMA, PRODUCTS_SCM_TERRITORY_SCHEMA].includes(output.schema)) {
+      panel.hidden = true;
+      table.innerHTML = "";
+      return;
+    }
+
+    panel.hidden = false;
+    if (output.schema === PRODUCTS_SCM_SCHEMA) {
+      renderProductsScmManualEdit(output);
+      return;
+    }
+    if (output.schema === PRODUCTS_SCM_TERRITORY_SCHEMA) {
+      renderProductsTerritoryManualEdit(output);
+      return;
+    }
+    elements["manual-edit-summary"].textContent = "Adjust manager groups, role, email, and ownership flags before downloading the JSON.";
+    table.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Manager</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>SC Industry Groups</th>
+            <th>Can Own</th>
+            <th>Can View</th>
+            <th>Active</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${(output.authorizedManagers || []).map(manager => `
+            <tr>
+              <td>${escapeHtml(manager.name)}</td>
+              <td><input data-auth-manager="${escapeHtml(manager.nameKey)}" data-auth-field="email" type="email" value="${escapeHtml(manager.email || "")}"></td>
+              <td><input data-auth-manager="${escapeHtml(manager.nameKey)}" data-auth-field="role" type="text" value="${escapeHtml(manager.role || "")}"></td>
+              <td><input data-auth-manager="${escapeHtml(manager.nameKey)}" data-auth-field="groups" type="text" value="${escapeHtml((manager.groups || []).join(", "))}" placeholder="EPM, Products"></td>
+              <td class="center-cell"><input data-auth-manager="${escapeHtml(manager.nameKey)}" data-auth-field="canOwn" type="checkbox"${manager.canOwn ? " checked" : ""}></td>
+              <td class="center-cell"><input data-auth-manager="${escapeHtml(manager.nameKey)}" data-auth-field="canView" type="checkbox"${manager.canView ? " checked" : ""}></td>
+              <td class="center-cell"><input data-auth-manager="${escapeHtml(manager.nameKey)}" data-auth-field="active" type="checkbox"${manager.active ? " checked" : ""}></td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+  }
+
+  function renderProductsScmManualEdit(output) {
+    elements["manual-edit-summary"].textContent = "Adjust relationship rows before downloading the JSON. SCM Owner uses the Authorized Managers list.";
+    const scmOptions = managerOptionsForSelect(output.authorizedScms || []);
+    elements["manual-edit-table"].innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Sales Region</th>
+            <th>Regional Director/RSM</th>
+            <th>SCM Owner</th>
+            <th>SCM Director(s)</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${(output.relationships || []).map((row, index) => `
+            <tr>
+              <td><select data-products-scm-row="${index}" data-products-scm-field="requestType">${optionHtml(["Direct", "AMO"], row.requestType)}</select></td>
+              <td><input data-products-scm-row="${index}" data-products-scm-field="salesRegion" type="text" value="${escapeHtml(row.salesRegion || "")}"></td>
+              <td><input data-products-scm-row="${index}" data-products-scm-field="regionalDirector" type="text" value="${escapeHtml(row.regionalDirector || "")}"></td>
+              <td><select data-products-scm-row="${index}" data-products-scm-field="scm">${optionHtml(scmOptions, row.scm)}</select></td>
+              <td><input data-products-scm-row="${index}" data-products-scm-field="directors" type="text" value="${escapeHtml((row.directors || []).join(", "))}"></td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+  }
+
+  function renderProductsTerritoryManualEdit(output) {
+    elements["manual-edit-summary"].textContent = "Adjust Products territory rules before downloading the JSON. SCM Owner uses Authorized Managers; Industry uses the GTM mapping.";
+    const rules = output.rules || [];
+    const scmOptions = managerOptionsForSelect(output.authorizedScms || rules.map(row => row.scm));
+    const industryOptions = industryOptionsForSelect([output.industryFamily].concat(rules.map(row => row.industryFamily)));
+    elements["manual-edit-table"].innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Priority</th>
+            <th>Industry</th>
+            <th>Action</th>
+            <th>Territory</th>
+            <th>State</th>
+            <th>ZIP Min</th>
+            <th>ZIP Max</th>
+            <th>SCM Owner</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rules.map((row, index) => `
+            <tr>
+              <td><input data-territory-row="${index}" data-territory-field="priority" type="number" min="1" value="${escapeHtml(row.priority || "")}"></td>
+              <td><select data-territory-row="${index}" data-territory-field="industryFamily">${optionHtml(industryOptions, row.industryFamily || output.industryFamily || "Products")}</select></td>
+              <td><select data-territory-row="${index}" data-territory-field="action">${optionHtml(["include", "exclude"], row.action)}</select></td>
+              <td><input data-territory-row="${index}" data-territory-field="territory" type="text" value="${escapeHtml(row.territory || "")}"></td>
+              <td><input data-territory-row="${index}" data-territory-field="state" type="text" maxlength="6" value="${escapeHtml(row.state || "")}"></td>
+              <td><input data-territory-row="${index}" data-territory-field="zipMin" type="text" maxlength="10" value="${escapeHtml(row.zipMin || "")}"></td>
+              <td><input data-territory-row="${index}" data-territory-field="zipMax" type="text" maxlength="10" value="${escapeHtml(row.zipMax || "")}"></td>
+              <td><select data-territory-row="${index}" data-territory-field="scm">${optionHtml(scmOptions, row.scm)}</select></td>
+              <td><input data-territory-row="${index}" data-territory-field="notes" type="text" value="${escapeHtml(row.notes || "")}"></td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+  }
+
+  function handleManualEditChange(event) {
+    if (handleProductsScmEditChange(event) || handleProductsTerritoryEditChange(event)) return;
+    const input = event.target && event.target.matches("[data-auth-manager][data-auth-field]")
+      ? event.target
+      : null;
+    if (!input) return;
+    const output = currentOutputJson();
+    if (!output || output.schema !== AUTHORIZED_MANAGERS_SCHEMA) return;
+    const manager = (output.authorizedManagers || []).find(row => row.nameKey === input.dataset.authManager);
+    if (!manager) return;
+
+    const field = input.dataset.authField;
+    if (field === "groups") {
+      manager.groups = parseManualGroupList(input.value);
+      manager.groupKeys = manager.groups.map(normalizeKey);
+    } else if (field === "canOwn" || field === "canView" || field === "active") {
+      manager[field] = Boolean(input.checked);
+    } else if (field === "email") {
+      manager.email = cleanEmail(input.value);
+      input.value = manager.email;
+    } else if (field === "role") {
+      manager.role = cleanCell(input.value);
+      input.value = manager.role;
+    }
+
+    refreshAuthorizedManagersDerivedFields(output);
+    applyManualOutputUpdate(output);
+  }
+
+  function handleProductsScmEditChange(event) {
+    const input = event.target && event.target.matches("[data-products-scm-row][data-products-scm-field]")
+      ? event.target
+      : null;
+    if (!input) return false;
+    const output = currentOutputJson();
+    if (!output || output.schema !== PRODUCTS_SCM_SCHEMA) return true;
+    const row = (output.relationships || [])[Number(input.dataset.productsScmRow)];
+    if (!row) return true;
+    const field = input.dataset.productsScmField;
+    const value = cleanCell(input.value);
+
+    if (field === "requestType") {
+      row.requestType = normalizeAmoDirect(value);
+      row.requestTypeKey = normalizeKey(row.requestType);
+    } else if (field === "salesRegion") {
+      row.salesRegion = value;
+      row.salesRegionKey = normalizeKey(value);
+      input.value = row.salesRegion;
+    } else if (field === "regionalDirector") {
+      row.regionalDirector = cleanPersonName(value);
+      row.regionalDirectorKey = normalizePersonKey(row.regionalDirector);
+      input.value = row.regionalDirector;
+    } else if (field === "scm") {
+      row.scm = cleanPersonName(value);
+      row.scmKey = normalizePersonKey(row.scm);
+    } else if (field === "directors") {
+      row.directors = cleanPersonList(value);
+      row.directorKeys = row.directors.map(normalizePersonKey);
+      input.value = row.directors.join(", ");
+    }
+
+    refreshProductsScmDerivedFields(output);
+    applyManualOutputUpdate(output);
+    return true;
+  }
+
+  function handleProductsTerritoryEditChange(event) {
+    const input = event.target && event.target.matches("[data-territory-row][data-territory-field]")
+      ? event.target
+      : null;
+    if (!input) return false;
+    const output = currentOutputJson();
+    if (!output || output.schema !== PRODUCTS_SCM_TERRITORY_SCHEMA) return true;
+    const row = (output.rules || [])[Number(input.dataset.territoryRow)];
+    if (!row) return true;
+    const field = input.dataset.territoryField;
+    const value = cleanCell(input.value);
+
+    if (field === "priority") {
+      row.priority = positiveInteger(value, row.priority || 100);
+    } else if (field === "industryFamily") {
+      row.industryFamily = value || "Products";
+      row.industryKey = normalizeKey(row.industryFamily);
+    } else if (field === "action") {
+      row.action = normalizeTerritoryAction(value);
+    } else if (field === "territory") {
+      row.territory = value;
+      row.territoryKey = normalizeKey(value);
+      input.value = row.territory;
+    } else if (field === "state") {
+      row.state = normalizeStateCode(value);
+      row.stateKey = row.state;
+      input.value = row.state;
+    } else if (field === "zipMin" || field === "zipMax") {
+      row[field] = normalizeZipValue(value);
+      input.value = row[field];
+    } else if (field === "scm") {
+      row.scm = cleanPersonName(value);
+      row.scmKey = normalizePersonKey(row.scm);
+    } else if (field === "notes") {
+      row.notes = value;
+      input.value = row.notes;
+    }
+
+    refreshProductsTerritoryDerivedFields(output);
+    applyManualOutputUpdate(output);
+    return true;
+  }
+
+  function applyManualOutputUpdate(output) {
+    output.generatedAt = new Date().toISOString();
+    state.jsonText = JSON.stringify(output, null, 2);
+    elements["json-output"].value = state.jsonText;
+    renderOutput(output);
+    renderComparison(output);
+    setStatus("Manual adjustment applied");
+  }
+
+  function optionHtml(options, selectedValue) {
+    const selectedKey = normalizeKey(selectedValue);
+    const cleanOptions = uniqueSorted((options || []).map(cleanCell).filter(Boolean));
+    if (selectedValue && !cleanOptions.some(option => normalizeKey(option) === selectedKey)) {
+      cleanOptions.unshift(cleanCell(selectedValue));
+    }
+    return cleanOptions.map(option => `<option value="${escapeHtml(option)}"${normalizeKey(option) === selectedKey ? " selected" : ""}>${escapeHtml(option)}</option>`).join("");
+  }
+
+  function managerOptionsForSelect(extraNames = []) {
+    return uniqueSorted(state.referenceAuthorizedManagers.concat(extraNames || []).map(cleanPersonName).filter(Boolean));
+  }
+
+  function industryOptionsForSelect(extraIndustries = []) {
+    const fallback = ["Business Services", "Construction & Energy", "Consumer Services", "EPM", "Health & Hospitality", "Life Science", "Products", "Software", "Tech COE"];
+    return uniqueSorted(state.referenceScIndustryGroups.concat(extraIndustries || []).concat(fallback).map(cleanCell).filter(Boolean));
+  }
+
+  function parseManualGroupList(value) {
+    return uniqueSorted(String(value || "")
+      .split(/[;,]/)
+      .map(cleanCell)
+      .filter(Boolean));
+  }
+
+  function refreshAuthorizedManagersDerivedFields(output) {
+    const managers = (output.authorizedManagers || []).map(manager => ({
+      ...manager,
+      nameKey: manager.nameKey || normalizePersonKey(manager.name),
+      groups: uniqueSorted(manager.groups || []),
+      groupKeys: uniqueSorted((manager.groups || []).map(normalizeKey))
+    })).sort((left, right) => alphaSort(left.name, right.name));
+    output.authorizedManagers = managers;
+
+    const activeManagers = managers.filter(manager => manager.active);
+    const canOwnManagers = activeManagers.filter(manager => manager.canOwn && manager.groups.length);
+    const canViewManagers = activeManagers.filter(manager => manager.canView);
+    const industryGroups = uniqueSorted(managers.flatMap(manager => manager.groups));
+    const groupLookup = {};
+    industryGroups.forEach(group => {
+      const groupKey = normalizeKey(group);
+      groupLookup[groupKey] = canOwnManagers
+        .filter(manager => manager.groupKeys.includes(groupKey) || manager.groupKeys.includes("all") || manager.groups.includes("*"))
+        .map(manager => manager.name);
+    });
+
+    output.generatedAt = new Date().toISOString();
+    output.counts = {
+      ...(output.counts || {}),
+      managers: managers.length,
+      activeManagers: activeManagers.length,
+      canOwn: canOwnManagers.length,
+      canView: canViewManagers.length,
+      industryGroups: industryGroups.length
+    };
+    output.industryGroups = industryGroups;
+    output.canOwnManagers = canOwnManagers.map(manager => manager.name);
+    output.canViewManagers = canViewManagers.map(manager => manager.name);
+    output.managerLookup = Object.fromEntries(managers.map(manager => [manager.nameKey, manager]));
+    output.groupLookup = groupLookup;
+  }
+
+  function refreshProductsScmDerivedFields(output) {
+    const relationships = (output.relationships || []).map(row => ({
+      ...row,
+      salesRegionKey: normalizeKey(row.salesRegion),
+      requestTypeKey: normalizeKey(row.requestType),
+      regionalDirectorKey: normalizePersonKey(row.regionalDirector),
+      scmKey: normalizePersonKey(row.scm),
+      directors: cleanPersonList((row.directors || []).join(", ")),
+      directorKeys: cleanPersonList((row.directors || []).join(", ")).map(normalizePersonKey)
+    }));
+    output.relationships = relationships;
+
+    const exactLookup = {};
+    const directorLookup = {};
+    const scmLookup = {};
+    const salesRegions = new Set();
+    const requestTypes = new Set();
+    const regionalDirectors = new Set();
+    const scms = new Set();
+    const authorizedDirectors = new Set();
+    relationships.forEach(row => {
+      if (row.salesRegion) salesRegions.add(row.salesRegion);
+      if (row.requestType) requestTypes.add(row.requestType);
+      if (row.regionalDirector) regionalDirectors.add(row.regionalDirector);
+      if (row.scm) scms.add(row.scm);
+      (row.directors || []).forEach(director => authorizedDirectors.add(director));
+      addProductsLookupRecord(exactLookup, productsExactLookupKey(row), row);
+      addProductsLookupRecord(directorLookup, productsDirectorLookupKey(row), row);
+      addProductsLookupRecord(scmLookup, row.scmKey, row);
+    });
+    const duplicateExactKeys = productsLookupGroupsWithMultipleOwners(exactLookup);
+    const ambiguousDirectorKeys = productsLookupGroupsWithMultipleOwners(directorLookup);
+    const scmSummaries = buildProductsScmSummaries(scmLookup);
+
+    output.counts = {
+      ...(output.counts || {}),
+      relationships: relationships.length,
+      scms: scms.size,
+      authorizedDirectors: authorizedDirectors.size,
+      regionalDirectors: regionalDirectors.size,
+      salesRegions: salesRegions.size,
+      requestTypes: requestTypes.size,
+      duplicateExactKeys: duplicateExactKeys.length,
+      ambiguousDirectorKeys: ambiguousDirectorKeys.length
+    };
+    output.scms = scmSummaries;
+    output.authorizedScms = scmSummaries.map(item => item.scm);
+    output.authorizedDirectors = [...authorizedDirectors].sort(alphaSort);
+    output.regionalDirectors = [...regionalDirectors].sort(alphaSort);
+    output.salesRegions = [...salesRegions].sort(alphaSort);
+    output.requestTypes = [...requestTypes].sort(alphaSort);
+    output.lookup = exactLookup;
+    output.directorLookup = directorLookup;
+    output.scmLookup = scmLookup;
+    output.review = {
+      ...(output.review || {}),
+      duplicateExactKeys,
+      ambiguousDirectorKeys
+    };
+  }
+
+  function refreshProductsTerritoryDerivedFields(output) {
+    const rules = (output.rules || []).map(row => ({
+      ...row,
+      industryFamily: row.industryFamily || output.industryFamily || "Products",
+      industryKey: normalizeKey(row.industryFamily || output.industryFamily || "Products"),
+      territoryKey: normalizeKey(row.territory),
+      scmKey: normalizePersonKey(row.scm),
+      stateKey: row.state
+    })).sort((left, right) => left.priority - right.priority || alphaSort(left.territory, right.territory) || alphaSort(left.state, right.state));
+    output.rules = rules;
+
+    const scms = new Set();
+    const territories = new Set();
+    const states = new Set();
+    const industries = new Set();
+    rules.forEach(row => {
+      if (row.scm) scms.add(row.scm);
+      if (row.territory) territories.add(row.territory);
+      if (row.state) states.add(row.state);
+      if (row.industryFamily) industries.add(row.industryFamily);
+    });
+    output.industryFamily = industries.size === 1 ? [...industries][0] : output.industryFamily || "Products";
+    output.counts = {
+      ...(output.counts || {}),
+      rules: rules.length,
+      territories: territories.size,
+      scms: scms.size,
+      states: states.size,
+      industryGroups: industries.size
+    };
+    output.territories = buildProductsScmTerritorySummaries(rules);
+  }
+
+  function renderComparison(output) {
+    const panel = elements["compare-panel"];
+    if (!panel) return;
+    const baseline = state.baselineJson;
+    if (!baseline || state.baselineMappingType !== state.mappingType || output === baseline) {
+      panel.hidden = true;
+      return;
+    }
+
+    const diff = compareMappingJson(baseline, output);
+    panel.hidden = false;
+    elements["compare-summary"].textContent = `Comparing new ${outputFileNameForOutput(output)} to the currently loaded GitHub JSON.`;
+    elements["compare-status"].textContent = diff.totalChanges
+      ? `${diff.totalChanges.toLocaleString()} change${diff.totalChanges === 1 ? "" : "s"}`
+      : "No changes";
+    elements["compare-status"].classList.toggle("is-clean", !diff.totalChanges);
+    elements["compare-stats"].innerHTML = [
+      ["Added", diff.added.length],
+      ["Removed", diff.removed.length],
+      ["Changed", diff.changed.length],
+      ["Unchanged", diff.unchanged],
+      ["Old Rows", diff.oldCount],
+      ["New Rows", diff.newCount]
+    ].map(([label, value]) => `
+      <div class="stat">
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(String(value))}</strong>
+      </div>
+    `).join("");
+
+    const rows = []
+      .concat(diff.added.slice(0, 12).map(row => ["Added", row.label, "", row.summary]))
+      .concat(diff.removed.slice(0, 12).map(row => ["Removed", row.label, row.summary, ""]))
+      .concat(diff.changed.slice(0, 16).map(row => ["Changed", row.label, row.before, row.after]));
+    elements["compare-details"].innerHTML = rows.length
+      ? renderTable(["Change", "Record", "Before", "After"], rows)
+      : renderTable(["Status"], [["No row-level changes detected"]]);
+  }
+
+  function compareMappingJson(oldJson, newJson) {
+    const oldRows = comparableRows(oldJson);
+    const newRows = comparableRows(newJson);
+    const oldMap = new Map(oldRows.map(row => [row.key, row]));
+    const newMap = new Map(newRows.map(row => [row.key, row]));
+    const added = [];
+    const removed = [];
+    const changed = [];
+    let unchanged = 0;
+
+    newMap.forEach((newRow, key) => {
+      const oldRow = oldMap.get(key);
+      if (!oldRow) {
+        added.push(newRow);
+      } else if (oldRow.fingerprint !== newRow.fingerprint) {
+        changed.push({
+          label: newRow.label,
+          before: oldRow.summary,
+          after: newRow.summary
+        });
+      } else {
+        unchanged += 1;
+      }
+    });
+    oldMap.forEach((oldRow, key) => {
+      if (!newMap.has(key)) removed.push(oldRow);
+    });
+
+    return {
+      added,
+      removed,
+      changed,
+      unchanged,
+      oldCount: oldRows.length,
+      newCount: newRows.length,
+      totalChanges: added.length + removed.length + changed.length
+    };
+  }
+
+  function comparableRows(json) {
+    if (!json || typeof json !== "object") return [];
+    if (json.schema === AUTHORIZED_MANAGERS_SCHEMA) {
+      return (json.authorizedManagers || []).map(row => comparableRow(
+        normalizeKey(row.name),
+        row.name,
+        [
+          row.email || "",
+          row.role || "",
+          (row.groups || []).join(", "),
+          row.canOwn ? "Can own" : "Cannot own",
+          row.canView ? "Can view" : "Cannot view",
+          row.active ? "Active" : "Inactive"
+        ].join(" | "),
+        row
+      ));
+    }
+    if (json.schema === PRODUCTS_SCM_SCHEMA) {
+      return (json.relationships || []).map(row => comparableRow(
+        [row.requestTypeKey, row.salesRegionKey, row.regionalDirectorKey, row.scmKey].join("|"),
+        `${row.requestType} | ${row.salesRegion || "Any"} | ${row.regionalDirector}`,
+        `${row.scm} | ${(row.directors || []).join(", ") || "No directors"}`,
+        row
+      ));
+    }
+    if (json.schema === PRODUCTS_SCM_TERRITORY_SCHEMA) {
+      return (json.rules || []).map(row => comparableRow(
+        [row.priority, row.action, row.territoryKey, row.scmKey, row.state, row.zipMin, row.zipMax].join("|"),
+        `${row.priority}. ${row.action} ${row.territory} ${row.state}`,
+        `${row.scm} | ${row.zipMin || "00000"}-${row.zipMax || "99999"}`,
+        row
+      ));
+    }
+    if (json.schema === GTM_SC_INDUSTRY_SCHEMA) {
+      return (json.rows || []).map(row => comparableRow(
+        [normalizeKey(row.scIndustryGroup), normalizeKey(row.gtmIndustry), normalizeKey(row.gtmIndustrySubgroup)].join("|"),
+        `${row.gtmIndustry} | ${row.gtmIndustrySubgroup}`,
+        `${row.scIndustryGroup} | ${row.scIndustryGroupEmoji || ""} ${row.gtmIndustrySubgroupEmoji || ""}`,
+        row
+      ));
+    }
+    return (json.rows || []).map(row => comparableRow(
+      [row.industryKey, row.amoDirectKey, row.stateKey, row.sourceIndustryKey].join("|"),
+      `${row.stateKey} | ${row.industryFamily} | ${row.amoDirect}`,
+      `${row.staffingRegion} | source ${row.sourceIndustryFamily}`,
+      row
+    ));
+  }
+
+  function comparableRow(key, label, summary, raw) {
+    return {
+      key,
+      label,
+      summary,
+      fingerprint: JSON.stringify(raw)
+    };
   }
 
   function renderIndustryMappingPanel() {
@@ -1779,6 +2877,10 @@
     }
   }
 
+  function isCsvFile(fileName) {
+    return /\.csv(?:$|\?)/i.test(String(fileName || ""));
+  }
+
   function positiveInteger(value, fallback) {
     const number = Number.parseInt(value, 10);
     return Number.isFinite(number) && number > 0 ? number : fallback;
@@ -1805,7 +2907,34 @@
   }
 
   function cleanPersonName(value) {
-    return cleanCell(value).replace(/\s+,/g, ",").replace(/,\s+/g, ", ");
+    const cleaned = cleanCell(value).replace(/\s+,/g, ",").replace(/,\s+/g, ", ");
+    return normalizePersonNameCase(cleaned);
+  }
+
+  function normalizePersonNameCase(value) {
+    const text = cleanCell(value);
+    if (!text || /[a-z]/.test(text) || !/[A-Z]/.test(text)) return text;
+    return text.split(",").map(displayCasePersonNamePart).join(", ");
+  }
+
+  function displayCasePersonNamePart(value) {
+    return cleanCell(value).split(/\s+/g).map(displayCasePersonNameToken).join(" ");
+  }
+
+  function displayCasePersonNameToken(value) {
+    const token = cleanCell(value);
+    if (!token) return "";
+    if (/^[A-Z]\.?$/i.test(token)) return token.charAt(0).toUpperCase();
+    if (/^(?:II|III|IV|V|VI|VII|VIII|IX|JR|SR)$/i.test(token)) return token.toUpperCase();
+    return token
+      .toLowerCase()
+      .split(/([-'’])/g)
+      .map(part => {
+        if (!part || /^[-'’]$/.test(part)) return part;
+        return part.charAt(0).toUpperCase() + part.slice(1);
+      })
+      .join("")
+      .replace(/\bMc([a-z])/g, (_, letter) => `Mc${letter.toUpperCase()}`);
   }
 
   function cleanPersonList(value) {
