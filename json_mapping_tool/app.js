@@ -6,7 +6,7 @@
   const PRODUCTS_SCM_TERRITORY_SCHEMA = "ns-scm-tools.products-scm-territories.v1";
   const AUTHORIZED_MANAGERS_SCHEMA = "ns-scm-tools.authorized-managers.v1";
   const GTM_SC_INDUSTRY_SCHEMA = "ns-scm-tools.gtm-sc-industry.v1";
-  const TOOL_VERSION = "27.0.13";
+  const TOOL_VERSION = "27.0.14";
   const TOOL_NAME = "FY27 Queue Mapping JSON Maker";
   const CONFIG_STORAGE_KEY = "ns-scm-tools-region-map-industry-config-v1";
   const EMOJI_CONFIG_STORAGE_KEY = "ns-scm-tools-emoji-config-v1";
@@ -332,7 +332,8 @@
   }
 
   async function handleJsonUrlLoad() {
-    const url = (elements["json-url"].value || "").trim();
+    const rawUrl = (elements["json-url"].value || "").trim();
+    const url = normalizeJsonSourceUrl(rawUrl);
     if (!url) {
       setStatus("Paste a JSON URL first", true);
       return;
@@ -340,9 +341,11 @@
 
     setStatus("Loading existing JSON...");
     try {
+      if (elements["json-url"].value !== url) elements["json-url"].value = url;
       const response = await fetch(url, { cache: "no-store" });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const output = await response.json();
+      const text = await response.text();
+      const output = parseFetchedJson(text, url);
       applyImportedJson(output, fileNameFromUrl(url) || outputFileNameForMode(), "GitHub JSON");
     } catch (error) {
       setStatus(error.message ? `JSON load failed: ${error.message}` : "JSON load failed", true);
@@ -408,6 +411,43 @@
       setStatus("Edited JSON is valid");
     } catch (error) {
       setStatus("Edited JSON is not valid yet", true);
+    }
+  }
+
+  function normalizeJsonSourceUrl(value) {
+    let url = String(value || "").trim();
+    url = url.replace(/[),.;\s]+$/g, "");
+    if (!url) return "";
+
+    try {
+      const parsed = new URL(url);
+      if (parsed.hostname === "github.com") {
+        const parts = parsed.pathname.split("/").filter(Boolean);
+        const blobIndex = parts.indexOf("blob");
+        if (parts.length >= 5 && blobIndex === 2) {
+          const owner = parts[0];
+          const repo = parts[1];
+          const branch = parts[3];
+          const filePath = parts.slice(4).map(encodeURIComponent).join("/");
+          return `https://raw.githubusercontent.com/${owner}/${repo}/refs/heads/${branch}/${filePath}`;
+        }
+      }
+      return parsed.href.replace(/[),.;\s]+$/g, "");
+    } catch (error) {
+      return url;
+    }
+  }
+
+  function parseFetchedJson(text, url) {
+    const trimmed = String(text || "").trim();
+    if (!trimmed) throw new Error("The URL returned an empty response.");
+    if (/^<!doctype html/i.test(trimmed) || /^<html[\s>]/i.test(trimmed)) {
+      throw new Error("The URL returned a GitHub page, not raw JSON. Open a specific JSON file and use Raw, or use the default GitHub URL.");
+    }
+    try {
+      return JSON.parse(trimmed);
+    } catch (error) {
+      throw new Error(`The URL did not return valid JSON (${fileNameFromUrl(url) || "selected URL"}).`);
     }
   }
 
