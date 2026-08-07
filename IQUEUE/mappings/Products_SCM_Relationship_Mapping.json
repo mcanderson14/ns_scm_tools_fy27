@@ -4,7 +4,7 @@
     "name": "FY27 Queue Mapping JSON Maker",
     "version": "27.0.9"
   },
-  "generatedAt": "2026-06-10T23:08:36.126Z",
+  "generatedAt": "2026-08-07T21:14:08.283Z",
   "outputFileName": "Products_SCM_Relationship_Mapping.json",
   "source": {
     "fileName": "RD-RSMtoSCM Mapping.xlsx",
@@ -358,28 +358,6 @@
       ]
     },
     {
-      "scm": "Schwandt, Brad",
-      "scmKey": "schwandtbrad",
-      "relationshipCount": 4,
-      "requestTypes": [
-        "AMO",
-        "Direct"
-      ],
-      "salesRegions": [
-        "Any/blank",
-        "Central"
-      ],
-      "regionalDirectors": [
-        "Alberto, Michael",
-        "Alves, Douglas",
-        "Cano, Tyler",
-        "Clark, Kyle"
-      ],
-      "directors": [
-        "Underdahl, Jeffrey"
-      ]
-    },
-    {
       "scm": "Simon, Meagan",
       "scmKey": "simonmeagan",
       "relationshipCount": 4,
@@ -423,6 +401,28 @@
       ]
     },
     {
+      "scm": "Walz, Andrew",
+      "scmKey": "walzandrew",
+      "relationshipCount": 4,
+      "requestTypes": [
+        "AMO",
+        "Direct"
+      ],
+      "salesRegions": [
+        "Any/blank",
+        "Central"
+      ],
+      "regionalDirectors": [
+        "Alberto, Michael",
+        "Alves, Douglas",
+        "Cano, Tyler",
+        "Clark, Kyle"
+      ],
+      "directors": [
+        "Underdahl, Jeffrey"
+      ]
+    },
+    {
       "scm": "Yazbeck, David",
       "scmKey": "yazbeckdavid",
       "relationshipCount": 3,
@@ -459,9 +459,9 @@
     "Malone, Moira",
     "Mumford, Tyler J",
     "Recht, Frank R",
-    "Schwandt, Brad",
     "Simon, Meagan",
     "Sunshine, Aaron F",
+    "Walz, Andrew",
     "Yazbeck, David"
   ],
   "authorizedDirectors": [
@@ -805,8 +805,8 @@
       "requestTypeKey": "direct",
       "regionalDirector": "Cano, Tyler",
       "regionalDirectorKey": "canotyler",
-      "scm": "Schwandt, Brad",
-      "scmKey": "schwandtbrad",
+      "scm": "Walz, Andrew",
+      "scmKey": "walzandrew",
       "directors": [
         "Underdahl, Jeffrey"
       ],
@@ -941,8 +941,8 @@
       "requestTypeKey": "direct",
       "regionalDirector": "Clark, Kyle",
       "regionalDirectorKey": "clarkkyle",
-      "scm": "Schwandt, Brad",
-      "scmKey": "schwandtbrad",
+      "scm": "Walz, Andrew",
+      "scmKey": "walzandrew",
       "directors": [
         "Underdahl, Jeffrey"
       ],
@@ -1026,8 +1026,8 @@
       "requestTypeKey": "amo",
       "regionalDirector": "Alves, Douglas",
       "regionalDirectorKey": "alvesdouglas",
-      "scm": "Schwandt, Brad",
-      "scmKey": "schwandtbrad",
+      "scm": "Walz, Andrew",
+      "scmKey": "walzandrew",
       "directors": [
         "Underdahl, Jeffrey"
       ],
@@ -1043,8 +1043,8 @@
       "requestTypeKey": "amo",
       "regionalDirector": "Alberto, Michael",
       "regionalDirectorKey": "albertomichael",
-      "scm": "Schwandt, Brad",
-      "scmKey": "schwandtbrad",
+      "scm": "Walz, Andrew",
+      "scmKey": "walzandrew",
       "directors": [
         "Underdahl, Jeffrey"
       ],
@@ -2127,8 +2127,8 @@
         "requestTypeKey": "direct",
         "regionalDirector": "Cano, Tyler",
         "regionalDirectorKey": "canotyler",
-        "scm": "Schwandt, Brad",
-        "scmKey": "schwandtbrad",
+        "scm": "Walz, Andrew",
+        "scmKey": "walzandrew",
         "directors": [
           "Underdahl, Jeffrey"
         ],
@@ -2279,8 +2279,8 @@
         "requestTypeKey": "direct",
         "regionalDirector": "Clark, Kyle",
         "regionalDirectorKey": "clarkkyle",
-        "scm": "Schwandt, Brad",
-        "scmKey": "schwandtbrad",
+        "scm": "Walz, Andrew",
+        "scmKey": "walzandrew",
         "directors": [
           "Underdahl, Jeffrey"
         ],
@@ -2374,8 +2374,8 @@
         "requestTypeKey": "amo",
         "regionalDirector": "Alves, Douglas",
         "regionalDirectorKey": "alvesdouglas",
-        "scm": "Schwandt, Brad",
-        "scmKey": "schwandtbrad",
+        "scm": "Walz, Andrew",
+        "scmKey": "walzandrew",
         "directors": [
           "Underdahl, Jeffrey"
         ],
@@ -2393,8 +2393,8 @@
         "requestTypeKey": "amo",
         "regionalDirector": "Alberto, Michael",
         "regionalDirectorKey": "albertomichael",
-        "scm": "Schwandt, Brad",
-        "scmKey": "schwandtbrad",
+        "scm": "Walz, Andrew",
+        "scmKey": "walzandrew",
         "directors": [
           "Underdahl, Jeffrey"
         ],
@@ -3573,8 +3573,8 @@
         "requestTypeKey": "direct",
         "regionalDirector": "Cano, Tyler",
         "regionalDirectorKey": "canotyler",
-        "scm": "Schwandt, Brad",
-        "scmKey": "schwandtbrad",
+        "scm": "Walz, Andrew",
+        "scmKey": "walzandrew",
         "directors": [
           "Underdahl, Jeffrey"
         ],
@@ -3725,8 +3725,8 @@
         "requestTypeKey": "direct",
         "regionalDirector": "Clark, Kyle",
         "regionalDirectorKey": "clarkkyle",
-        "scm": "Schwandt, Brad",
-        "scmKey": "schwandtbrad",
+        "scm": "Walz, Andrew",
+        "scmKey": "walzandrew",
         "directors": [
           "Underdahl, Jeffrey"
         ],
@@ -3820,8 +3820,8 @@
         "requestTypeKey": "amo",
         "regionalDirector": "Alves, Douglas",
         "regionalDirectorKey": "alvesdouglas",
-        "scm": "Schwandt, Brad",
-        "scmKey": "schwandtbrad",
+        "scm": "Walz, Andrew",
+        "scmKey": "walzandrew",
         "directors": [
           "Underdahl, Jeffrey"
         ],
@@ -3839,8 +3839,8 @@
         "requestTypeKey": "amo",
         "regionalDirector": "Alberto, Michael",
         "regionalDirectorKey": "albertomichael",
-        "scm": "Schwandt, Brad",
-        "scmKey": "schwandtbrad",
+        "scm": "Walz, Andrew",
+        "scmKey": "walzandrew",
         "directors": [
           "Underdahl, Jeffrey"
         ],
@@ -5165,7 +5165,7 @@
         "sourceRow": 38
       }
     ],
-    "schwandtbrad": [
+    "walzandrew": [
       {
         "salesRegion": "Central",
         "salesRegionKey": "central",
@@ -5173,8 +5173,8 @@
         "requestTypeKey": "direct",
         "regionalDirector": "Cano, Tyler",
         "regionalDirectorKey": "canotyler",
-        "scm": "Schwandt, Brad",
-        "scmKey": "schwandtbrad",
+        "scm": "Walz, Andrew",
+        "scmKey": "walzandrew",
         "directors": [
           "Underdahl, Jeffrey"
         ],
@@ -5190,8 +5190,8 @@
         "requestTypeKey": "direct",
         "regionalDirector": "Clark, Kyle",
         "regionalDirectorKey": "clarkkyle",
-        "scm": "Schwandt, Brad",
-        "scmKey": "schwandtbrad",
+        "scm": "Walz, Andrew",
+        "scmKey": "walzandrew",
         "directors": [
           "Underdahl, Jeffrey"
         ],
@@ -5207,8 +5207,8 @@
         "requestTypeKey": "amo",
         "regionalDirector": "Alves, Douglas",
         "regionalDirectorKey": "alvesdouglas",
-        "scm": "Schwandt, Brad",
-        "scmKey": "schwandtbrad",
+        "scm": "Walz, Andrew",
+        "scmKey": "walzandrew",
         "directors": [
           "Underdahl, Jeffrey"
         ],
@@ -5224,8 +5224,8 @@
         "requestTypeKey": "amo",
         "regionalDirector": "Alberto, Michael",
         "regionalDirectorKey": "albertomichael",
-        "scm": "Schwandt, Brad",
-        "scmKey": "schwandtbrad",
+        "scm": "Walz, Andrew",
+        "scmKey": "walzandrew",
         "directors": [
           "Underdahl, Jeffrey"
         ],
