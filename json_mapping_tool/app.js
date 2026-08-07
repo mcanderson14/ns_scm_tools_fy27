@@ -6,7 +6,7 @@
   const PRODUCTS_SCM_TERRITORY_SCHEMA = "ns-scm-tools.products-scm-territories.v1";
   const AUTHORIZED_MANAGERS_SCHEMA = "ns-scm-tools.authorized-managers.v1";
   const GTM_SC_INDUSTRY_SCHEMA = "ns-scm-tools.gtm-sc-industry.v1";
-  const TOOL_VERSION = "27.0.16";
+  const TOOL_VERSION = "27.0.18";
   const TOOL_NAME = "FY27 Queue Mapping JSON Maker";
   const CONFIG_STORAGE_KEY = "ns-scm-tools-region-map-industry-config-v1";
   const EMOJI_CONFIG_STORAGE_KEY = "ns-scm-tools-emoji-config-v1";
@@ -191,7 +191,10 @@
     emojiConfig: loadEmojiConfig(),
     jsonText: "",
     outputFileName: REGION_OUTPUT_FILE_NAME,
-    jsonLoadToken: 0
+    jsonLoadToken: 0,
+    baselineJson: null,
+    baselineJsonText: "",
+    baselineMappingType: REGION_MAPPING_TYPE
   };
 
   const elements = {};
@@ -231,6 +234,14 @@
       "results-panel",
       "summary-text",
       "stats-grid",
+      "compare-panel",
+      "compare-summary",
+      "compare-status",
+      "compare-stats",
+      "compare-details",
+      "manual-edit-panel",
+      "manual-edit-summary",
+      "manual-edit-table",
       "columns-preview-title",
       "columns-preview",
       "spot-checks-title",
@@ -262,6 +273,7 @@
     elements["emoji-map-filter"].addEventListener("input", renderEmojiMappingTable);
     elements["emoji-map-missing-only"].addEventListener("change", renderEmojiMappingTable);
     elements["emoji-map-table"].addEventListener("change", handleEmojiMappingChange);
+    elements["manual-edit-table"].addEventListener("change", handleManualEditChange);
     ["industry-row", "mode-row", "data-row", "state-column"].forEach(id => {
       elements[id].addEventListener("change", reprocessWorkbook);
     });
@@ -377,7 +389,7 @@
       const text = await response.text();
       const output = parseFetchedJson(text, url);
       if (loadToken !== state.jsonLoadToken) return;
-      applyImportedJson(output, fileNameFromUrl(url) || outputFileNameForMode(), "GitHub JSON");
+      applyImportedJson(output, fileNameFromUrl(url) || outputFileNameForMode(), "GitHub JSON", { setBaseline: true });
     } catch (error) {
       if (loadToken !== state.jsonLoadToken) return;
       setStatus(error.message ? `JSON load failed: ${error.message}` : "JSON load failed", true);
@@ -405,7 +417,7 @@
     }
   }
 
-  function applyImportedJson(output, fileName, sourceLabel) {
+  function applyImportedJson(output, fileName, sourceLabel, options = {}) {
     if (!output || typeof output !== "object" || Array.isArray(output)) {
       throw new Error("JSON file did not contain a mapping object.");
     }
@@ -422,7 +434,13 @@
     state.workbookName = sourceLabel || fileName || "";
     state.outputFileName = outputFileNameForOutput(output);
     state.jsonText = JSON.stringify(output, null, 2);
+    if (options.setBaseline) {
+      state.baselineJson = output;
+      state.baselineJsonText = state.jsonText;
+      state.baselineMappingType = state.mappingType;
+    }
     renderOutput(output);
+    renderComparison(output);
     setStatus(`${sourceLabel || "JSON"} loaded`);
   }
 
@@ -446,6 +464,7 @@
       if (detectedType) {
         setMappingType(detectedType);
       }
+      renderComparison(parsed);
       setStatus("Edited JSON is valid");
     } catch (error) {
       setStatus("Edited JSON is not valid yet", true);
@@ -549,6 +568,7 @@
       const output = buildJsonForCurrentMode(state.workbook, state.workbookName);
       state.jsonText = JSON.stringify(output, null, 2);
       renderOutput(output);
+      renderComparison(output);
       if (output.schema === AUTHORIZED_MANAGERS_SCHEMA && (output.counts.incompleteRows || output.counts.duplicateManagers || output.counts.missingGroups)) {
         const reviewCount = output.counts.incompleteRows + output.counts.duplicateManagers + output.counts.missingGroups;
         setStatus(`Review ${reviewCount} manager issue${reviewCount === 1 ? "" : "s"}`, true);
@@ -1697,6 +1717,7 @@
     elements["results-panel"].hidden = false;
     elements["json-output"].value = state.jsonText;
     updateMappingTypeUi();
+    renderManualEditPanel(output);
 
     if (output.schema === PRODUCTS_SCM_SCHEMA) {
       renderProductsScmOutput(output);
@@ -1924,6 +1945,260 @@
         <strong>${escapeHtml(String(value))}</strong>
       </div>
     `).join("");
+  }
+
+  function renderManualEditPanel(output) {
+    const panel = elements["manual-edit-panel"];
+    const table = elements["manual-edit-table"];
+    if (!panel || !table) return;
+    if (!output || output.schema !== AUTHORIZED_MANAGERS_SCHEMA) {
+      panel.hidden = true;
+      table.innerHTML = "";
+      return;
+    }
+
+    panel.hidden = false;
+    elements["manual-edit-summary"].textContent = "Adjust manager groups, role, email, and ownership flags before downloading the JSON.";
+    table.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Manager</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>SC Industry Groups</th>
+            <th>Can Own</th>
+            <th>Can View</th>
+            <th>Active</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${(output.authorizedManagers || []).map(manager => `
+            <tr>
+              <td>${escapeHtml(manager.name)}</td>
+              <td><input data-auth-manager="${escapeHtml(manager.nameKey)}" data-auth-field="email" type="email" value="${escapeHtml(manager.email || "")}"></td>
+              <td><input data-auth-manager="${escapeHtml(manager.nameKey)}" data-auth-field="role" type="text" value="${escapeHtml(manager.role || "")}"></td>
+              <td><input data-auth-manager="${escapeHtml(manager.nameKey)}" data-auth-field="groups" type="text" value="${escapeHtml((manager.groups || []).join(", "))}" placeholder="EPM, Products"></td>
+              <td class="center-cell"><input data-auth-manager="${escapeHtml(manager.nameKey)}" data-auth-field="canOwn" type="checkbox"${manager.canOwn ? " checked" : ""}></td>
+              <td class="center-cell"><input data-auth-manager="${escapeHtml(manager.nameKey)}" data-auth-field="canView" type="checkbox"${manager.canView ? " checked" : ""}></td>
+              <td class="center-cell"><input data-auth-manager="${escapeHtml(manager.nameKey)}" data-auth-field="active" type="checkbox"${manager.active ? " checked" : ""}></td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+  }
+
+  function handleManualEditChange(event) {
+    const input = event.target && event.target.matches("[data-auth-manager][data-auth-field]")
+      ? event.target
+      : null;
+    if (!input) return;
+    const output = currentOutputJson();
+    if (!output || output.schema !== AUTHORIZED_MANAGERS_SCHEMA) return;
+    const manager = (output.authorizedManagers || []).find(row => row.nameKey === input.dataset.authManager);
+    if (!manager) return;
+
+    const field = input.dataset.authField;
+    if (field === "groups") {
+      manager.groups = parseManualGroupList(input.value);
+      manager.groupKeys = manager.groups.map(normalizeKey);
+    } else if (field === "canOwn" || field === "canView" || field === "active") {
+      manager[field] = Boolean(input.checked);
+    } else if (field === "email") {
+      manager.email = cleanEmail(input.value);
+      input.value = manager.email;
+    } else if (field === "role") {
+      manager.role = cleanCell(input.value);
+      input.value = manager.role;
+    }
+
+    refreshAuthorizedManagersDerivedFields(output);
+    state.jsonText = JSON.stringify(output, null, 2);
+    elements["json-output"].value = state.jsonText;
+    renderOutput(output);
+    renderComparison(output);
+    setStatus("Manual adjustment applied");
+  }
+
+  function parseManualGroupList(value) {
+    return uniqueSorted(String(value || "")
+      .split(/[;,]/)
+      .map(cleanCell)
+      .filter(Boolean));
+  }
+
+  function refreshAuthorizedManagersDerivedFields(output) {
+    const managers = (output.authorizedManagers || []).map(manager => ({
+      ...manager,
+      nameKey: manager.nameKey || normalizePersonKey(manager.name),
+      groups: uniqueSorted(manager.groups || []),
+      groupKeys: uniqueSorted((manager.groups || []).map(normalizeKey))
+    })).sort((left, right) => alphaSort(left.name, right.name));
+    output.authorizedManagers = managers;
+
+    const activeManagers = managers.filter(manager => manager.active);
+    const canOwnManagers = activeManagers.filter(manager => manager.canOwn && manager.groups.length);
+    const canViewManagers = activeManagers.filter(manager => manager.canView);
+    const industryGroups = uniqueSorted(managers.flatMap(manager => manager.groups));
+    const groupLookup = {};
+    industryGroups.forEach(group => {
+      const groupKey = normalizeKey(group);
+      groupLookup[groupKey] = canOwnManagers
+        .filter(manager => manager.groupKeys.includes(groupKey) || manager.groupKeys.includes("all") || manager.groups.includes("*"))
+        .map(manager => manager.name);
+    });
+
+    output.generatedAt = new Date().toISOString();
+    output.counts = {
+      ...(output.counts || {}),
+      managers: managers.length,
+      activeManagers: activeManagers.length,
+      canOwn: canOwnManagers.length,
+      canView: canViewManagers.length,
+      industryGroups: industryGroups.length
+    };
+    output.industryGroups = industryGroups;
+    output.canOwnManagers = canOwnManagers.map(manager => manager.name);
+    output.canViewManagers = canViewManagers.map(manager => manager.name);
+    output.managerLookup = Object.fromEntries(managers.map(manager => [manager.nameKey, manager]));
+    output.groupLookup = groupLookup;
+  }
+
+  function renderComparison(output) {
+    const panel = elements["compare-panel"];
+    if (!panel) return;
+    const baseline = state.baselineJson;
+    if (!baseline || state.baselineMappingType !== state.mappingType || output === baseline) {
+      panel.hidden = true;
+      return;
+    }
+
+    const diff = compareMappingJson(baseline, output);
+    panel.hidden = false;
+    elements["compare-summary"].textContent = `Comparing new ${outputFileNameForOutput(output)} to the currently loaded GitHub JSON.`;
+    elements["compare-status"].textContent = diff.totalChanges
+      ? `${diff.totalChanges.toLocaleString()} change${diff.totalChanges === 1 ? "" : "s"}`
+      : "No changes";
+    elements["compare-status"].classList.toggle("is-clean", !diff.totalChanges);
+    elements["compare-stats"].innerHTML = [
+      ["Added", diff.added.length],
+      ["Removed", diff.removed.length],
+      ["Changed", diff.changed.length],
+      ["Unchanged", diff.unchanged],
+      ["Old Rows", diff.oldCount],
+      ["New Rows", diff.newCount]
+    ].map(([label, value]) => `
+      <div class="stat">
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(String(value))}</strong>
+      </div>
+    `).join("");
+
+    const rows = []
+      .concat(diff.added.slice(0, 12).map(row => ["Added", row.label, "", row.summary]))
+      .concat(diff.removed.slice(0, 12).map(row => ["Removed", row.label, row.summary, ""]))
+      .concat(diff.changed.slice(0, 16).map(row => ["Changed", row.label, row.before, row.after]));
+    elements["compare-details"].innerHTML = rows.length
+      ? renderTable(["Change", "Record", "Before", "After"], rows)
+      : renderTable(["Status"], [["No row-level changes detected"]]);
+  }
+
+  function compareMappingJson(oldJson, newJson) {
+    const oldRows = comparableRows(oldJson);
+    const newRows = comparableRows(newJson);
+    const oldMap = new Map(oldRows.map(row => [row.key, row]));
+    const newMap = new Map(newRows.map(row => [row.key, row]));
+    const added = [];
+    const removed = [];
+    const changed = [];
+    let unchanged = 0;
+
+    newMap.forEach((newRow, key) => {
+      const oldRow = oldMap.get(key);
+      if (!oldRow) {
+        added.push(newRow);
+      } else if (oldRow.fingerprint !== newRow.fingerprint) {
+        changed.push({
+          label: newRow.label,
+          before: oldRow.summary,
+          after: newRow.summary
+        });
+      } else {
+        unchanged += 1;
+      }
+    });
+    oldMap.forEach((oldRow, key) => {
+      if (!newMap.has(key)) removed.push(oldRow);
+    });
+
+    return {
+      added,
+      removed,
+      changed,
+      unchanged,
+      oldCount: oldRows.length,
+      newCount: newRows.length,
+      totalChanges: added.length + removed.length + changed.length
+    };
+  }
+
+  function comparableRows(json) {
+    if (!json || typeof json !== "object") return [];
+    if (json.schema === AUTHORIZED_MANAGERS_SCHEMA) {
+      return (json.authorizedManagers || []).map(row => comparableRow(
+        normalizeKey(row.name),
+        row.name,
+        [
+          row.email || "",
+          row.role || "",
+          (row.groups || []).join(", "),
+          row.canOwn ? "Can own" : "Cannot own",
+          row.canView ? "Can view" : "Cannot view",
+          row.active ? "Active" : "Inactive"
+        ].join(" | "),
+        row
+      ));
+    }
+    if (json.schema === PRODUCTS_SCM_SCHEMA) {
+      return (json.relationships || []).map(row => comparableRow(
+        [row.requestTypeKey, row.salesRegionKey, row.regionalDirectorKey, row.scmKey].join("|"),
+        `${row.requestType} | ${row.salesRegion || "Any"} | ${row.regionalDirector}`,
+        `${row.scm} | ${(row.directors || []).join(", ") || "No directors"}`,
+        row
+      ));
+    }
+    if (json.schema === PRODUCTS_SCM_TERRITORY_SCHEMA) {
+      return (json.rules || []).map(row => comparableRow(
+        [row.priority, row.action, row.territoryKey, row.scmKey, row.state, row.zipMin, row.zipMax].join("|"),
+        `${row.priority}. ${row.action} ${row.territory} ${row.state}`,
+        `${row.scm} | ${row.zipMin || "00000"}-${row.zipMax || "99999"}`,
+        row
+      ));
+    }
+    if (json.schema === GTM_SC_INDUSTRY_SCHEMA) {
+      return (json.rows || []).map(row => comparableRow(
+        [normalizeKey(row.scIndustryGroup), normalizeKey(row.gtmIndustry), normalizeKey(row.gtmIndustrySubgroup)].join("|"),
+        `${row.gtmIndustry} | ${row.gtmIndustrySubgroup}`,
+        `${row.scIndustryGroup} | ${row.scIndustryGroupEmoji || ""} ${row.gtmIndustrySubgroupEmoji || ""}`,
+        row
+      ));
+    }
+    return (json.rows || []).map(row => comparableRow(
+      [row.industryKey, row.amoDirectKey, row.stateKey, row.sourceIndustryKey].join("|"),
+      `${row.stateKey} | ${row.industryFamily} | ${row.amoDirect}`,
+      `${row.staffingRegion} | source ${row.sourceIndustryFamily}`,
+      row
+    ));
+  }
+
+  function comparableRow(key, label, summary, raw) {
+    return {
+      key,
+      label,
+      summary,
+      fingerprint: JSON.stringify(raw)
+    };
   }
 
   function renderIndustryMappingPanel() {

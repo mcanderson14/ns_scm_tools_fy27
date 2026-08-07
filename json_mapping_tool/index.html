@@ -12,7 +12,7 @@
       <div>
         <p class="eyebrow">NetSuite SCM Tools</p>
         <h1>FY27 Queue Mapping JSON Maker</h1>
-        <div id="app-version" class="app-version">Version 27.0.16</div>
+        <div id="app-version" class="app-version">Version 27.0.18</div>
       </div>
       <span id="status-pill" class="status-pill">Waiting for source</span>
     </header>
@@ -187,6 +187,28 @@
       </div>
 
       <div class="stats-grid" id="stats-grid"></div>
+
+      <section class="compare-panel" id="compare-panel" hidden>
+        <div class="compare-head">
+          <div>
+            <h3>Compare to GitHub JSON</h3>
+            <p id="compare-summary"></p>
+          </div>
+          <span id="compare-status" class="compare-status"></span>
+        </div>
+        <div class="stats-grid compare-stats" id="compare-stats"></div>
+        <div id="compare-details" class="table-wrap compare-details"></div>
+      </section>
+
+      <section class="manual-edit-panel" id="manual-edit-panel" hidden>
+        <div class="panel-head row compact-head">
+          <div>
+            <h3>Manual Adjustments</h3>
+            <p id="manual-edit-summary"></p>
+          </div>
+        </div>
+        <div id="manual-edit-table" class="table-wrap manual-edit-table"></div>
+      </section>
 
       <div class="preview-grid">
         <section>

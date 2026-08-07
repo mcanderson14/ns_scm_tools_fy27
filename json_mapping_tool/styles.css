@@ -427,6 +427,81 @@ small {
   padding: 0 16px 16px;
 }
 
+.compare-panel {
+  margin: 0 16px 16px;
+  border: 1px solid var(--slate-50);
+  border-radius: 8px;
+  background: var(--ns-ocean-10);
+}
+
+.compare-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+}
+
+.compare-head h3,
+.compare-head p {
+  margin-bottom: 0;
+}
+
+.compare-status {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: var(--ns-yellow-160);
+  color: var(--ns-ocean-180);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.compare-status.is-clean {
+  background: var(--ns-green);
+}
+
+.compare-stats {
+  padding: 0 12px 12px;
+}
+
+.compare-details {
+  margin: 0 12px 12px;
+  max-height: 240px;
+}
+
+.manual-edit-panel {
+  margin: 0 16px 16px;
+  border: 1px solid var(--slate-50);
+  border-radius: 8px;
+  background: var(--white);
+}
+
+.compact-head {
+  padding: 12px;
+}
+
+.manual-edit-table {
+  margin: 0 12px 12px;
+  max-height: 420px;
+}
+
+.manual-edit-table input[type="text"],
+.manual-edit-table input[type="email"] {
+  min-width: 180px;
+  min-height: 30px;
+  padding: 5px 7px;
+}
+
+.manual-edit-table input[type="checkbox"] {
+  width: auto;
+  min-height: 0;
+}
+
+.center-cell {
+  text-align: center;
+}
+
 .stat {
   border: 1px solid var(--slate-50);
   border-left: 4px solid var(--ns-yellow-160);
