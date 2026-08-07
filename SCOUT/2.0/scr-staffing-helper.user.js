@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SCOUT
 // @namespace    https://github.com/mcanderson14/ns_scm_tools_fy27
-// @version      27.2.27
+// @version      27.2.30
 // @description  SC Operations Utility Tool for NetSuite SC Request pages (rectype=2840)
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/custom/custrecordentry.nl*
@@ -22,7 +22,7 @@
 // ==/UserScript==
 
 /* ================================================================
-   SCOUT — SC Operations Utility Tool  27.2.27
+   SCOUT — SC Operations Utility Tool  27.2.30
    Dashboard opened via GM_openInTab.
    Full roster metadata is passed as URL parameters — no external
    helper script required.
@@ -32,7 +32,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '27.2.27';
+  const SCRIPT_VERSION = '27.2.30';
   const SCOUT_LOGO_URL = 'https://raw.githubusercontent.com/mcanderson14/ns_scm_logos/main/SCOUT_logo.png';
   const SCOUT_FEEDBACK_URL = 'https://slack.com/shortcuts/Ft0B439JNJEA/0c6d2d2866e87677d53ba9c6b9083054';
   const SCOUT_SLACK_OPEN_URL = 'slack://open';
@@ -5686,6 +5686,20 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     const existing = getRequestDetails();
     return existing ? `${wrappedNote}${existing}` : wrappedNote;
   }
+  function buildOriginalScrShadowInviteNote(shadowScName) {
+    const shadowName = String(shadowScName || '').trim();
+    if (!shadowName) return '';
+    return `NOTE: Please include ${shadowName} in all meeting invites. They have been added to shadow this opportunity.`;
+  }
+  function mergeOriginalScrShadowInviteNote(requestDetailsNote, shadowRequest) {
+    const shadowName = String(shadowRequest && shadowRequest.name || '').trim();
+    const shadowNote = buildOriginalScrShadowInviteNote(shadowName);
+    const existing = String(requestDetailsNote || '').trim();
+    if (!shadowNote) return existing;
+    if (!existing) return shadowNote;
+    if (existing.includes(shadowNote)) return existing;
+    return `${shadowNote}\n\n${existing}`;
+  }
   function buildShadowScrPrefillUrl(shadowMember, leadScName, empName) {
     const member = shadowMember || {};
     const rosterId = String(member.employeeId || '').trim();
@@ -6789,11 +6803,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       const notes = dialog.staffingNotes;
       const assignAsLead = dialog.assignAsLead;
       const assignAsShadow = dialog.assignAsShadow;
-      const requestDetailsNote = dialog.requestDetailsNote;
       const shadowRequest = dialog.shadowRequest ? {
         url: dialog.shadowRequest.url,
         name: dialog.shadowRequest.member && dialog.shadowRequest.member.employee,
       } : null;
+      const requestDetailsNote = mergeOriginalScrShadowInviteNote(dialog.requestDetailsNote, shadowRequest);
       const assignmentLabel = assignAsLead ? 'Lead SC' : 'Secondary SC';
       if (!isScrEditMode()) {
         storePendingStaffAction({ type: 'direct', scId, scName, empName, hasLeadOnOpp, notes, requestDetailsNote, shadowRequest, assignAsLead, assignAsShadow, noAutoSave, productIds: getProductsForStaffing(sourceIds.productSelectId || 'sc-products', sourceIds.productSkillSelectId || 'sc-product-skills') });
@@ -6860,11 +6874,11 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
       const notes = dialog.staffingNotes;
       const assignAsLead = dialog.assignAsLead;
       const assignAsShadow = dialog.assignAsShadow;
-      const requestDetailsNote = dialog.requestDetailsNote;
       const shadowRequest = dialog.shadowRequest ? {
         url: dialog.shadowRequest.url,
         name: dialog.shadowRequest.member && dialog.shadowRequest.member.employee,
       } : null;
+      const requestDetailsNote = mergeOriginalScrShadowInviteNote(dialog.requestDetailsNote, shadowRequest);
       const deliverable = getSelectedAmoDeliverable({ requirePickerSelection: true, deliverablePickerId: sourceIds.deliverablePickerId || 'sc-amo-deliverable' });
       const assignmentLabel = assignAsLead ? 'Lead SC' : 'Secondary SC';
       const continueStaffing = function () {
@@ -11330,6 +11344,7 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
   }
 
   let _scoutStaffingHandoffListenerInstalled = false;
+  const SCOUT_STAFFING_HANDOFF_OUTCOMES = new Map();
   function installStaffingHandoffListener(empName) {
     if (_scoutStaffingHandoffListenerInstalled) return;
     _scoutStaffingHandoffListenerInstalled = true;
@@ -11337,15 +11352,57 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
     window.addEventListener('message', function (event) {
       if (event.origin !== window.location.origin) return;
       const data = event.data || {};
-      if (!data || data.type !== 'scout:staffing-handoff') return;
+      if (!data || !/^scout:staffing-(probe|handoff)$/.test(String(data.type || ''))) return;
+
+      function reply(type, requestId, extra = {}) {
+        try {
+          event.source?.postMessage({
+            type,
+            requestId: requestId || '',
+            scrId: getCurrentScrId(),
+            version: SCRIPT_VERSION,
+            ...extra,
+          }, event.origin);
+        } catch (e) {
+          console.warn('[SCOUT] Could not reply to staffing handoff sender:', e);
+        }
+      }
+
+      if (data.type === 'scout:staffing-probe') {
+        reply('scout:staffing-ready', data.requestId, {
+          ready: true,
+          canStaff: Boolean(getCurrentScrId()),
+        });
+        return;
+      }
 
       const openScrId = String(getCurrentScrId() || '').trim();
       const handoffScrId = String(data.scrId || '').trim();
       const scName = String(data.scName || '').trim();
+      const requestId = String(data.requestId || '').trim();
 
       function reject(message) {
+        const outcome = {
+          status: 'rejected',
+          message,
+          scName,
+        };
+        if (requestId) SCOUT_STAFFING_HANDOFF_OUTCOMES.set(requestId, outcome);
+        reply('scout:staffing-rejected', requestId, outcome);
         showToast(message, 'error', 9000);
         showPageToast(message, 'error', 9000);
+      }
+
+      if (!requestId) {
+        reject('SCOUT handoff rejected: missing requestId.');
+        return;
+      }
+
+      if (SCOUT_STAFFING_HANDOFF_OUTCOMES.has(requestId)) {
+        const prior = SCOUT_STAFFING_HANDOFF_OUTCOMES.get(requestId);
+        const type = prior.status === 'accepted' ? 'scout:staffing-accepted' : 'scout:staffing-rejected';
+        reply(type, requestId, prior);
+        return;
       }
 
       if (!openScrId || !handoffScrId || openScrId !== handoffScrId) {
@@ -11382,6 +11439,14 @@ option:checked { background-color: #f9e5e3; } /* fallback hint; overridden below
         ...getStaffingSourceIds(activeStaffingContainerId(), cardMode),
         noAutoSave: true,
       };
+      const acceptedOutcome = {
+        status: 'accepted',
+        message: `SCOUT handoff accepted: ${member.employee}.`,
+        scName: member.employee,
+        cardMode,
+      };
+      SCOUT_STAFFING_HANDOFF_OUTCOMES.set(requestId, acceptedOutcome);
+      reply('scout:staffing-accepted', requestId, acceptedOutcome);
       showToast(`SCOUT handoff accepted: ${member.employee}. Complete the staffing dialog, then review and click NetSuite Save.`, 'info', 9000);
       if (cardMode === 'amo') {
         staffSCWithDeliverable(member.employeeId, member.employee, empName, _hasLeadOnOpp, sourceIds);
