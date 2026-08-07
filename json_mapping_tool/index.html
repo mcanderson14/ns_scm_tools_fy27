@@ -12,15 +12,16 @@
       <div>
         <p class="eyebrow">NetSuite SCM Tools</p>
         <h1>FY27 Queue Mapping JSON Maker</h1>
-        <div id="app-version" class="app-version">Version 27.0.11</div>
+        <div id="app-version" class="app-version">Version 27.0.13</div>
       </div>
-      <span id="status-pill" class="status-pill">Waiting for Excel</span>
+      <span id="status-pill" class="status-pill">Waiting for source</span>
     </header>
 
     <section class="panel input-panel">
       <div class="panel-head">
         <h2>Source</h2>
         <p id="source-description">Use an Excel workbook where row 1 contains SC industry groups, row 2 contains Direct/AMO, and column A contains state/province codes.</p>
+        <div id="mapping-type-links" class="mapping-type-links"></div>
       </div>
 
       <div class="mode-grid" role="radiogroup" aria-label="Mapping type">
@@ -75,6 +76,23 @@
             <button id="load-url" type="button">Try URL</button>
           </div>
           <small>Works only when the URL allows browser download access from this page. Manual upload is the reliable fallback.</small>
+        </label>
+      </div>
+
+      <div class="json-import-grid">
+        <label class="url-box">
+          <span>Existing JSON</span>
+          <div class="url-row">
+            <input id="json-url" type="url" placeholder="Current GitHub JSON URL">
+            <button id="load-json" type="button">Load GitHub JSON</button>
+          </div>
+          <small>Loads the current GitHub mapping so you can edit the JSON and download the replacement file.</small>
+        </label>
+
+        <label class="file-drop json-file-drop" for="json-file">
+          <span>Upload JSON File</span>
+          <strong id="json-file-name">Choose .json file</strong>
+          <input id="json-file" type="file" accept=".json,application/json">
         </label>
       </div>
 

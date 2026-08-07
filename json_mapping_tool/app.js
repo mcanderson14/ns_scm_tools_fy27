@@ -6,7 +6,7 @@
   const PRODUCTS_SCM_TERRITORY_SCHEMA = "ns-scm-tools.products-scm-territories.v1";
   const AUTHORIZED_MANAGERS_SCHEMA = "ns-scm-tools.authorized-managers.v1";
   const GTM_SC_INDUSTRY_SCHEMA = "ns-scm-tools.gtm-sc-industry.v1";
-  const TOOL_VERSION = "27.0.11";
+  const TOOL_VERSION = "27.0.13";
   const TOOL_NAME = "FY27 Queue Mapping JSON Maker";
   const CONFIG_STORAGE_KEY = "ns-scm-tools-region-map-industry-config-v1";
   const EMOJI_CONFIG_STORAGE_KEY = "ns-scm-tools-emoji-config-v1";
@@ -21,6 +21,21 @@
   const AUTHORIZED_MANAGERS_OUTPUT_FILE_NAME = "Authorized_Managers.json";
   const GTM_SC_INDUSTRY_OUTPUT_FILE_NAME = "GTM_to_SC_Industry_Mapping.json";
   const AUTHORIZED_MANAGERS_SEARCH_URL = "https://nlcorp.app.netsuite.com/app/common/search/savedsearchresults.nl?searchid=1319617";
+  const GITHUB_MAPPING_BASE_URL = "https://raw.githubusercontent.com/mcanderson14/ns_scm_tools_fy27/refs/heads/main/IQUEUE/mappings/";
+  const GITHUB_JSON_URLS = {
+    [REGION_MAPPING_TYPE]: `${GITHUB_MAPPING_BASE_URL}${REGION_OUTPUT_FILE_NAME}`,
+    [PRODUCTS_SCM_MAPPING_TYPE]: `${GITHUB_MAPPING_BASE_URL}${PRODUCTS_SCM_OUTPUT_FILE_NAME}`,
+    [PRODUCTS_SCM_TERRITORY_MAPPING_TYPE]: `${GITHUB_MAPPING_BASE_URL}${PRODUCTS_SCM_TERRITORY_OUTPUT_FILE_NAME}`,
+    [AUTHORIZED_MANAGERS_MAPPING_TYPE]: `${GITHUB_MAPPING_BASE_URL}${AUTHORIZED_MANAGERS_OUTPUT_FILE_NAME}`,
+    [GTM_SC_INDUSTRY_MAPPING_TYPE]: `${GITHUB_MAPPING_BASE_URL}${GTM_SC_INDUSTRY_OUTPUT_FILE_NAME}`
+  };
+  const SCHEMA_TO_MAPPING_TYPE = {
+    [SCHEMA]: REGION_MAPPING_TYPE,
+    [PRODUCTS_SCM_SCHEMA]: PRODUCTS_SCM_MAPPING_TYPE,
+    [PRODUCTS_SCM_TERRITORY_SCHEMA]: PRODUCTS_SCM_TERRITORY_MAPPING_TYPE,
+    [AUTHORIZED_MANAGERS_SCHEMA]: AUTHORIZED_MANAGERS_MAPPING_TYPE,
+    [GTM_SC_INDUSTRY_SCHEMA]: GTM_SC_INDUSTRY_MAPPING_TYPE
+  };
   const SOURCE_DESCRIPTIONS = {
     [REGION_MAPPING_TYPE]: "Use an Excel workbook where row 1 contains SC industry groups, row 2 contains Direct/AMO, and column A contains state/province codes.",
     [PRODUCTS_SCM_MAPPING_TYPE]: "Use an Excel workbook with columns for Sales Region, AMO/Direct, Regional Director or RSM, SCM owner or Raw SCM Name, and optional SCM Director. SCM ownership applies across SC Industry Groups.",
@@ -186,8 +201,13 @@
       "app-version",
       "file-name",
       "source-description",
+      "mapping-type-links",
       "sharepoint-url",
       "load-url",
+      "json-url",
+      "load-json",
+      "json-file",
+      "json-file-name",
       "region-parsing-settings",
       "industry-row",
       "mode-row",
@@ -223,6 +243,8 @@
     elements["workbook-file"].addEventListener("change", handleFileInput);
     if (elements["app-version"]) elements["app-version"].textContent = `Version ${TOOL_VERSION}`;
     elements["load-url"].addEventListener("click", handleUrlLoad);
+    elements["load-json"].addEventListener("click", handleJsonUrlLoad);
+    elements["json-file"].addEventListener("change", handleJsonFileInput);
     document.querySelectorAll("input[name='mapping-type']").forEach(input => {
       input.addEventListener("change", handleMappingTypeChange);
     });
@@ -243,6 +265,7 @@
     });
     elements["copy-json"].addEventListener("click", copyJson);
     elements["download-json"].addEventListener("click", downloadJson);
+    elements["json-output"].addEventListener("input", handleJsonOutputEdit);
     updateMappingTypeUi();
   });
 
@@ -279,6 +302,10 @@
     if (elements["source-description"]) {
       elements["source-description"].textContent = SOURCE_DESCRIPTIONS[state.mappingType] || SOURCE_DESCRIPTIONS[REGION_MAPPING_TYPE];
     }
+    if (elements["json-url"]) {
+      elements["json-url"].value = GITHUB_JSON_URLS[state.mappingType] || "";
+    }
+    renderMappingTypeLinks();
     if (elements["region-parsing-settings"]) {
       elements["region-parsing-settings"].hidden = usesFlatWorkbook;
     }
@@ -287,6 +314,100 @@
     }
     if (elements["emoji-map-panel"] && state.mappingType !== GTM_SC_INDUSTRY_MAPPING_TYPE) {
       elements["emoji-map-panel"].hidden = true;
+    }
+  }
+
+  function renderMappingTypeLinks() {
+    const target = elements["mapping-type-links"];
+    if (!target) return;
+    const links = [];
+    const githubUrl = GITHUB_JSON_URLS[state.mappingType];
+    if (githubUrl) {
+      links.push(`<a href="${escapeHtml(githubUrl)}" target="_blank" rel="noopener noreferrer">Open current GitHub JSON</a>`);
+    }
+    if (state.mappingType === AUTHORIZED_MANAGERS_MAPPING_TYPE) {
+      links.push(`<a href="${escapeHtml(AUTHORIZED_MANAGERS_SEARCH_URL)}" target="_blank" rel="noopener noreferrer">Open NetSuite saved search 1319617</a>`);
+    }
+    target.innerHTML = links.join("");
+  }
+
+  async function handleJsonUrlLoad() {
+    const url = (elements["json-url"].value || "").trim();
+    if (!url) {
+      setStatus("Paste a JSON URL first", true);
+      return;
+    }
+
+    setStatus("Loading existing JSON...");
+    try {
+      const response = await fetch(url, { cache: "no-store" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const output = await response.json();
+      applyImportedJson(output, fileNameFromUrl(url) || outputFileNameForMode(), "GitHub JSON");
+    } catch (error) {
+      setStatus(error.message ? `JSON load failed: ${error.message}` : "JSON load failed", true);
+      console.warn("JSON URL load failed", error);
+    }
+  }
+
+  async function handleJsonFileInput(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    elements["json-file-name"].textContent = file.name;
+    setStatus("Reading JSON file...");
+    try {
+      const output = JSON.parse(await file.text());
+      applyImportedJson(output, file.name, "Uploaded JSON");
+    } catch (error) {
+      setStatus(error.message ? `JSON file failed: ${error.message}` : "JSON file failed", true);
+      console.warn("JSON file load failed", error);
+    }
+  }
+
+  function applyImportedJson(output, fileName, sourceLabel) {
+    if (!output || typeof output !== "object" || Array.isArray(output)) {
+      throw new Error("JSON file did not contain a mapping object.");
+    }
+
+    const detectedType = SCHEMA_TO_MAPPING_TYPE[output.schema];
+    if (detectedType && detectedType !== state.mappingType) {
+      setMappingType(detectedType);
+    } else {
+      state.outputFileName = fileName || outputFileNameForMode();
+      updateMappingTypeUi();
+    }
+
+    state.workbook = null;
+    state.workbookName = sourceLabel || fileName || "";
+    state.outputFileName = outputFileNameForOutput(output);
+    state.jsonText = JSON.stringify(output, null, 2);
+    renderOutput(output);
+    setStatus(`${sourceLabel || "JSON"} loaded`);
+  }
+
+  function setMappingType(mappingType) {
+    state.mappingType = mappingType || REGION_MAPPING_TYPE;
+    state.outputFileName = outputFileNameForMode();
+    const radio = document.querySelector(`input[name='mapping-type'][value='${state.mappingType}']`);
+    if (radio) radio.checked = true;
+    updateMappingTypeUi();
+  }
+
+  function handleJsonOutputEdit(event) {
+    state.jsonText = event.target.value;
+    if (!state.jsonText.trim()) {
+      setStatus("JSON output cleared", true);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(state.jsonText);
+      const detectedType = SCHEMA_TO_MAPPING_TYPE[parsed.schema];
+      if (detectedType) {
+        setMappingType(detectedType);
+      }
+      setStatus("Edited JSON is valid");
+    } catch (error) {
+      setStatus("Edited JSON is not valid yet", true);
     }
   }
 
@@ -1444,9 +1565,6 @@
   }
 
   function defaultCanOwnForRole(role) {
-    const text = cleanCell(role);
-    if (!text) return true;
-    if (/\b(?:director|avp|vp|vice\s*president|leader|executive)\b/i.test(text)) return false;
     return true;
   }
 

@@ -1,11 +1,22 @@
 :root {
-  --ns-ocean: #36677d;
-  --ns-ocean-soft: #e7f2f5;
-  --slate-150: #3c4545;
-  --slate-100: #697778;
-  --slate-50: #c2d4d4;
-  --neutral-30: #f1efed;
-  --oracle-red: #c74634;
+  --ns-ocean-180: #15212c;
+  --ns-ocean-150: #264759;
+  --ns-ocean-120: #36677d;
+  --ns-ocean-60: #94bfce;
+  --ns-ocean-40: #d0e5ed;
+  --ns-ocean-30: #e7f2f5;
+  --ns-ocean-10: #f5fafc;
+  --ns-yellow-160: #e2c06b;
+  --ns-coral: #ff8675;
+  --ns-green: #86b596;
+  --ns-ocean: var(--ns-ocean-120);
+  --ns-ocean-soft: var(--ns-ocean-30);
+  --slate-150: var(--ns-ocean-180);
+  --slate-100: var(--ns-ocean-150);
+  --slate-50: var(--ns-ocean-40);
+  --neutral-30: var(--ns-ocean-10);
+  --oracle-red: var(--ns-coral);
+  --focus-ring: rgba(148, 191, 206, 0.55);
   --white: #ffffff;
 }
 
@@ -31,19 +42,28 @@ button {
   border: 0;
   border-radius: 4px;
   padding: 9px 12px;
-  background: var(--ns-ocean);
+  background: var(--ns-ocean-120);
   color: var(--white);
   cursor: pointer;
   font-weight: 700;
 }
 
 button:hover {
-  background: #24495a;
+  background: var(--ns-ocean-150);
 }
 
 button:disabled {
-  background: var(--slate-50);
+  background: var(--ns-ocean-40);
+  color: var(--ns-ocean-150);
   cursor: not-allowed;
+}
+
+button:focus-visible,
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .app-shell {
@@ -59,14 +79,14 @@ button:disabled {
   gap: 16px;
   margin-bottom: 16px;
   padding: 18px;
-  border-bottom: 4px solid var(--slate-50);
-  background: var(--ns-ocean);
+  border-bottom: 4px solid var(--ns-yellow-160);
+  background: var(--ns-ocean-180);
   color: var(--white);
 }
 
 .eyebrow {
   margin: 0 0 4px;
-  color: var(--slate-50);
+  color: var(--ns-yellow-160);
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
@@ -80,7 +100,7 @@ p {
 }
 
 .app-version {
-  color: var(--slate-50);
+  color: var(--ns-ocean-40);
   font-size: 13px;
   font-weight: 700;
 }
@@ -103,7 +123,7 @@ h3 {
 
 .status-pill {
   flex: 0 0 auto;
-  border: 1px solid rgba(255, 255, 255, 0.45);
+  border: 1px solid var(--ns-ocean-60);
   border-radius: 999px;
   padding: 6px 10px;
   color: var(--white);
@@ -112,8 +132,9 @@ h3 {
 }
 
 .status-pill.is-error {
-  border-color: #f4b6ad;
+  border-color: var(--ns-coral);
   background: var(--oracle-red);
+  color: var(--ns-ocean-180);
 }
 
 .panel {
@@ -174,9 +195,9 @@ h3 {
 }
 
 .mode-card:has(input:checked) {
-  border-color: var(--ns-ocean);
+  border-color: var(--ns-ocean-120);
   background: var(--ns-ocean-soft);
-  box-shadow: inset 0 0 0 1px var(--ns-ocean);
+  box-shadow: inset 0 0 0 1px var(--ns-ocean-120);
 }
 
 .mode-card input {
@@ -194,9 +215,16 @@ h3 {
   margin-bottom: 4px;
 }
 
-.input-grid {
+.input-grid,
+.json-import-grid {
   grid-template-columns: minmax(260px, 0.8fr) minmax(320px, 1.2fr);
   padding: 0 16px 16px;
+}
+
+.json-import-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(320px, 1.2fr) minmax(260px, 0.8fr);
 }
 
 .file-drop,
@@ -229,6 +257,33 @@ h3 {
 
 .file-drop input {
   display: none;
+}
+
+.json-file-drop {
+  min-height: 92px;
+}
+
+.mapping-type-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.mapping-type-links a {
+  border: 1px solid var(--slate-50);
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: var(--ns-ocean-soft);
+  color: var(--ns-ocean-150);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.mapping-type-links a:hover {
+  border-color: var(--ns-ocean-120);
+  background: var(--white);
 }
 
 .url-row {
@@ -314,11 +369,11 @@ small {
 }
 
 .needs-clarification td {
-  background: #fff6f4;
+  background: #fff1ef;
 }
 
 .needs-clarification td:last-child {
-  color: var(--oracle-red);
+  color: var(--ns-ocean-180);
   font-weight: 700;
 }
 
@@ -329,7 +384,7 @@ small {
 
 .stat {
   border: 1px solid var(--slate-50);
-  border-left: 4px solid var(--ns-ocean);
+  border-left: 4px solid var(--ns-yellow-160);
   border-radius: 6px;
   padding: 10px;
 }
@@ -399,6 +454,7 @@ th {
   }
 
   .input-grid,
+  .json-import-grid,
   .mode-grid,
   .settings-grid,
   .stats-grid,
