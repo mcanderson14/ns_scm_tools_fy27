@@ -3,7 +3,7 @@
 // Copyright (c) 2026. Internal use only. No third-party license granted.
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.86
+// @version      27.0.87
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -46,7 +46,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.86";
+  const HELPER_VERSION = "27.0.87";
   const HELPER_RESTORE_OVERLAY_ID = "scr-helper-restore-overlay";
   const HELPER_RESTORE_STYLE_ID = "scr-helper-restore-overlay-styles";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
@@ -1321,6 +1321,8 @@ Health & Hospitality	DIRECT	NL	West	West
   let pageIsSuspended = false;
   let pageWasSuspended = false;
   let startupDeferredForVisibility = false;
+  let restoreOverlayTimer = 0;
+  let resumeSequence = 0;
   let helperState = readHelperState();
   if (!Object.prototype.hasOwnProperty.call(helperState, "maximized")) helperState.maximized = true;
   let filtersCollapsed = Boolean(helperState.filtersCollapsed);
@@ -12008,6 +12010,14 @@ Health & Hospitality	DIRECT	NL	West	West
   }
 
   function showRestoreOverlay(message = `Restoring ${CURRENT_QUEUE.loadingLabel}...`) {
+    if (helperHasRenderedRows()) {
+      hideRestoreOverlay();
+      return;
+    }
+    if (restoreOverlayTimer) {
+      window.clearTimeout(restoreOverlayTimer);
+      restoreOverlayTimer = 0;
+    }
     installRestoreOverlayStyles();
     let overlay = document.getElementById(HELPER_RESTORE_OVERLAY_ID);
     if (!overlay) {
@@ -12029,7 +12039,21 @@ Health & Hospitality	DIRECT	NL	West	West
     overlay.hidden = false;
   }
 
+  function scheduleRestoreOverlay(message = `Restoring ${CURRENT_QUEUE.loadingLabel}...`, delay = 900) {
+    if (restoreOverlayTimer) window.clearTimeout(restoreOverlayTimer);
+    const token = resumeSequence;
+    restoreOverlayTimer = window.setTimeout(() => {
+      restoreOverlayTimer = 0;
+      if (token !== resumeSequence || pageShouldPauseWork() || helperHasRenderedRows()) return;
+      showRestoreOverlay(message);
+    }, delay);
+  }
+
   function hideRestoreOverlay() {
+    if (restoreOverlayTimer) {
+      window.clearTimeout(restoreOverlayTimer);
+      restoreOverlayTimer = 0;
+    }
     const overlay = document.getElementById(HELPER_RESTORE_OVERLAY_ID);
     if (overlay) overlay.hidden = true;
   }
@@ -12049,7 +12073,9 @@ Health & Hospitality	DIRECT	NL	West	West
         z-index: 2147483647;
         display: grid;
         place-items: center;
-        background: #f7fbfc;
+        pointer-events: none;
+        background: rgba(247, 251, 252, 0.72);
+        backdrop-filter: blur(1px);
         color: #3c4545;
         font-family: Arial, Helvetica, sans-serif;
       }
@@ -14775,6 +14801,7 @@ Health & Hospitality	DIRECT	NL	West	West
 
   function suspendHelperForVisibility() {
     if (!pageIsSuspended) refreshSequence += 1;
+    resumeSequence += 1;
     pageIsSuspended = true;
     pageWasSuspended = true;
     startupDeferredForVisibility = true;
@@ -14782,8 +14809,9 @@ Health & Hospitality	DIRECT	NL	West	West
   }
 
   function resumeHelperWork(message = `Resuming ${CURRENT_QUEUE.loadingLabel}.`) {
+    const token = ++resumeSequence;
     const canPreserveRenderedRows = helperHasRenderedRows();
-    if (!canPreserveRenderedRows) showRestoreOverlay(message);
+    if (!canPreserveRenderedRows) scheduleRestoreOverlay(message, 900);
     pageIsSuspended = false;
     pageWasSuspended = false;
     startupDeferredForVisibility = false;
@@ -14804,20 +14832,30 @@ Health & Hospitality	DIRECT	NL	West	West
       hideRestoreOverlay();
       const staleRows = !lastQueueRefreshAt || Date.now() - lastQueueRefreshAt > RESUME_ROW_REFRESH_STALE_MS;
       if (staleRows) {
-        scheduleBackgroundTask(() => refreshRows({ quiet: true, preserveRendered: true }), 4000);
+        afterNextPaint(() => {
+          if (token !== resumeSequence || pageShouldPauseWork()) return;
+          scheduleBackgroundTask(() => refreshRows({ quiet: true, preserveRendered: true }), 4000);
+        });
       }
       return;
     }
 
-    renderStartupSplash(message);
-    applyStartupCachedData();
-    refreshRows();
-    scheduleBackgroundTask(loadStartupBackgroundData, 250);
+    afterNextPaint(() => {
+      if (token !== resumeSequence || pageShouldPauseWork()) return;
+      renderStartupSplash(message);
+      applyStartupCachedData();
+      scheduleBackgroundTask(() => {
+        if (token !== resumeSequence || pageShouldPauseWork()) return;
+        refreshRows();
+      }, 350);
+      scheduleBackgroundTask(loadStartupBackgroundData, 900);
+    });
   }
 
   function handlePageHide() {
     pageIsSuspended = true;
     pageWasSuspended = true;
+    resumeSequence += 1;
     refreshSequence += 1;
     saveHelperLayoutState();
   }
@@ -14827,7 +14865,7 @@ Health & Hospitality	DIRECT	NL	West	West
     if (helperHasRenderedRows()) {
       hideRestoreOverlay();
     } else {
-      showRestoreOverlay(`Restoring ${CURRENT_QUEUE.loadingLabel}.`);
+      scheduleRestoreOverlay(`Restoring ${CURRENT_QUEUE.loadingLabel}.`, 900);
     }
     if (pageShouldPauseWork()) {
       suspendHelperForVisibility();
@@ -14846,7 +14884,7 @@ Health & Hospitality	DIRECT	NL	West	West
       if (helperHasRenderedRows()) {
         hideRestoreOverlay();
       } else {
-        showRestoreOverlay(`Restoring ${CURRENT_QUEUE.loadingLabel}.`);
+        scheduleRestoreOverlay(`Restoring ${CURRENT_QUEUE.loadingLabel}.`, 900);
       }
       resumeHelperWork(`Resuming ${CURRENT_QUEUE.loadingLabel}.`);
     }
@@ -14903,6 +14941,6 @@ Health & Hospitality	DIRECT	NL	West	West
   document.addEventListener("visibilitychange", handleVisibilityChange);
 
   installRestoreOverlayStyles();
-  showRestoreOverlay(`Preparing ${CURRENT_QUEUE.loadingLabel}.`);
+  scheduleRestoreOverlay(`Preparing ${CURRENT_QUEUE.loadingLabel}.`, 1200);
   runWhenBodyReady(startHelper);
 })();
