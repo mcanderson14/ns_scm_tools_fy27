@@ -3,7 +3,7 @@
 // Copyright (c) 2026. Internal use only. No third-party license granted.
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.85
+// @version      27.0.86
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -46,7 +46,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.85";
+  const HELPER_VERSION = "27.0.86";
   const HELPER_RESTORE_OVERLAY_ID = "scr-helper-restore-overlay";
   const HELPER_RESTORE_STYLE_ID = "scr-helper-restore-overlay-styles";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
@@ -10306,7 +10306,9 @@ Health & Hospitality	DIRECT	NL	West	West
   async function refreshRows(options = {}) {
     if (pageShouldPauseWork()) {
       suspendHelperForVisibility();
-      renderStartupSplash(`Paused ${CURRENT_QUEUE.loadingLabel} until this tab is visible.`);
+      if (!options.preserveRendered && !searchRows.length) {
+        renderStartupSplash(`Paused ${CURRENT_QUEUE.loadingLabel} until this tab is visible.`);
+      }
       return;
     }
     const sequence = ++refreshSequence;
@@ -14764,7 +14766,7 @@ Health & Hospitality	DIRECT	NL	West	West
 
   function helperHasRenderedRows() {
     const list = document.getElementById("scr-helper-results");
-    return Boolean(helperShellIsPresent() && searchRows.length && list && list.children.length);
+    return Boolean(helperShellIsPresent() && searchRows.length && list && list.querySelector(".scr-helper-card"));
   }
 
   function pageShouldPauseWork() {
@@ -14822,7 +14824,11 @@ Health & Hospitality	DIRECT	NL	West	West
 
   function handlePageShow(event) {
     if (!pageWasSuspended && !(event && event.persisted)) return;
-    if (!helperHasRenderedRows()) showRestoreOverlay(`Restoring ${CURRENT_QUEUE.loadingLabel}.`);
+    if (helperHasRenderedRows()) {
+      hideRestoreOverlay();
+    } else {
+      showRestoreOverlay(`Restoring ${CURRENT_QUEUE.loadingLabel}.`);
+    }
     if (pageShouldPauseWork()) {
       suspendHelperForVisibility();
       return;
@@ -14837,7 +14843,11 @@ Health & Hospitality	DIRECT	NL	West	West
       return;
     }
     if (startupDeferredForVisibility || pageWasSuspended || pageIsSuspended) {
-      if (!helperHasRenderedRows()) showRestoreOverlay(`Restoring ${CURRENT_QUEUE.loadingLabel}.`);
+      if (helperHasRenderedRows()) {
+        hideRestoreOverlay();
+      } else {
+        showRestoreOverlay(`Restoring ${CURRENT_QUEUE.loadingLabel}.`);
+      }
       resumeHelperWork(`Resuming ${CURRENT_QUEUE.loadingLabel}.`);
     }
   }
