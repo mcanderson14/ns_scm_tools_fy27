@@ -487,10 +487,16 @@ small {
 }
 
 .manual-edit-table input[type="text"],
-.manual-edit-table input[type="email"] {
+.manual-edit-table input[type="email"],
+.manual-edit-table input[type="number"],
+.manual-edit-table select {
   min-width: 180px;
   min-height: 30px;
   padding: 5px 7px;
+  border: 1px solid var(--slate-50);
+  border-radius: 4px;
+  background: var(--white);
+  color: var(--slate-150);
 }
 
 .manual-edit-table input[type="checkbox"] {

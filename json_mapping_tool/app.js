@@ -6,7 +6,7 @@
   const PRODUCTS_SCM_TERRITORY_SCHEMA = "ns-scm-tools.products-scm-territories.v1";
   const AUTHORIZED_MANAGERS_SCHEMA = "ns-scm-tools.authorized-managers.v1";
   const GTM_SC_INDUSTRY_SCHEMA = "ns-scm-tools.gtm-sc-industry.v1";
-  const TOOL_VERSION = "27.0.18";
+  const TOOL_VERSION = "27.0.19";
   const TOOL_NAME = "FY27 Queue Mapping JSON Maker";
   const CONFIG_STORAGE_KEY = "ns-scm-tools-region-map-industry-config-v1";
   const EMOJI_CONFIG_STORAGE_KEY = "ns-scm-tools-emoji-config-v1";
@@ -194,7 +194,9 @@
     jsonLoadToken: 0,
     baselineJson: null,
     baselineJsonText: "",
-    baselineMappingType: REGION_MAPPING_TYPE
+    baselineMappingType: REGION_MAPPING_TYPE,
+    referenceAuthorizedManagers: [],
+    referenceScIndustryGroups: []
   };
 
   const elements = {};
@@ -281,6 +283,7 @@
     elements["download-json"].addEventListener("click", downloadJson);
     elements["json-output"].addEventListener("input", handleJsonOutputEdit);
     updateMappingTypeUi();
+    loadReferenceJsons();
     loadCurrentGitHubJson();
   });
 
@@ -403,6 +406,26 @@
     handleJsonUrlLoad();
   }
 
+  async function loadReferenceJsons() {
+    await Promise.all([
+      loadReferenceJson(AUTHORIZED_MANAGERS_MAPPING_TYPE),
+      loadReferenceJson(GTM_SC_INDUSTRY_MAPPING_TYPE)
+    ]);
+  }
+
+  async function loadReferenceJson(mappingType) {
+    const url = GITHUB_JSON_URLS[mappingType];
+    if (!url) return;
+    try {
+      const response = await fetch(url, { cache: "no-store" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const output = parseFetchedJson(await response.text(), url);
+      updateReferenceData(output);
+    } catch (error) {
+      console.warn("Reference JSON load failed", mappingType, error);
+    }
+  }
+
   async function handleJsonFileInput(event) {
     const file = event.target.files && event.target.files[0];
     if (!file) return;
@@ -439,6 +462,7 @@
       state.baselineJsonText = state.jsonText;
       state.baselineMappingType = state.mappingType;
     }
+    updateReferenceData(output);
     renderOutput(output);
     renderComparison(output);
     setStatus(`${sourceLabel || "JSON"} loaded`);
@@ -450,6 +474,27 @@
     const radio = document.querySelector(`input[name='mapping-type'][value='${state.mappingType}']`);
     if (radio) radio.checked = true;
     updateMappingTypeUi();
+  }
+
+  function updateReferenceData(output) {
+    if (!output || typeof output !== "object") return;
+    if (output.schema === AUTHORIZED_MANAGERS_SCHEMA) {
+      state.referenceAuthorizedManagers = (output.authorizedManagers || [])
+        .filter(manager => manager && manager.active !== false)
+        .map(manager => cleanPersonName(manager.name))
+        .filter(Boolean)
+        .sort(alphaSort);
+    }
+    if (output.schema === GTM_SC_INDUSTRY_SCHEMA) {
+      state.referenceScIndustryGroups = uniqueSorted((output.scIndustryGroups || [])
+        .concat((output.rows || []).map(row => row.scIndustryGroup))
+        .map(cleanCell)
+        .filter(Boolean));
+    }
+    const current = currentOutputJson();
+    if (current && [PRODUCTS_SCM_SCHEMA, PRODUCTS_SCM_TERRITORY_SCHEMA].includes(current.schema)) {
+      renderManualEditPanel(current);
+    }
   }
 
   function handleJsonOutputEdit(event) {
@@ -1951,13 +1996,21 @@
     const panel = elements["manual-edit-panel"];
     const table = elements["manual-edit-table"];
     if (!panel || !table) return;
-    if (!output || output.schema !== AUTHORIZED_MANAGERS_SCHEMA) {
+    if (!output || ![AUTHORIZED_MANAGERS_SCHEMA, PRODUCTS_SCM_SCHEMA, PRODUCTS_SCM_TERRITORY_SCHEMA].includes(output.schema)) {
       panel.hidden = true;
       table.innerHTML = "";
       return;
     }
 
     panel.hidden = false;
+    if (output.schema === PRODUCTS_SCM_SCHEMA) {
+      renderProductsScmManualEdit(output);
+      return;
+    }
+    if (output.schema === PRODUCTS_SCM_TERRITORY_SCHEMA) {
+      renderProductsTerritoryManualEdit(output);
+      return;
+    }
     elements["manual-edit-summary"].textContent = "Adjust manager groups, role, email, and ownership flags before downloading the JSON.";
     table.innerHTML = `
       <table>
@@ -1989,7 +2042,76 @@
     `;
   }
 
+  function renderProductsScmManualEdit(output) {
+    elements["manual-edit-summary"].textContent = "Adjust relationship rows before downloading the JSON. SCM Owner uses the Authorized Managers list.";
+    const scmOptions = managerOptionsForSelect(output.authorizedScms || []);
+    elements["manual-edit-table"].innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Sales Region</th>
+            <th>Regional Director/RSM</th>
+            <th>SCM Owner</th>
+            <th>SCM Director(s)</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${(output.relationships || []).map((row, index) => `
+            <tr>
+              <td><select data-products-scm-row="${index}" data-products-scm-field="requestType">${optionHtml(["Direct", "AMO"], row.requestType)}</select></td>
+              <td><input data-products-scm-row="${index}" data-products-scm-field="salesRegion" type="text" value="${escapeHtml(row.salesRegion || "")}"></td>
+              <td><input data-products-scm-row="${index}" data-products-scm-field="regionalDirector" type="text" value="${escapeHtml(row.regionalDirector || "")}"></td>
+              <td><select data-products-scm-row="${index}" data-products-scm-field="scm">${optionHtml(scmOptions, row.scm)}</select></td>
+              <td><input data-products-scm-row="${index}" data-products-scm-field="directors" type="text" value="${escapeHtml((row.directors || []).join(", "))}"></td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+  }
+
+  function renderProductsTerritoryManualEdit(output) {
+    elements["manual-edit-summary"].textContent = "Adjust Products territory rules before downloading the JSON. SCM Owner uses Authorized Managers; Industry uses the GTM mapping.";
+    const rules = output.rules || [];
+    const scmOptions = managerOptionsForSelect(output.authorizedScms || rules.map(row => row.scm));
+    const industryOptions = industryOptionsForSelect([output.industryFamily].concat(rules.map(row => row.industryFamily)));
+    elements["manual-edit-table"].innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Priority</th>
+            <th>Industry</th>
+            <th>Action</th>
+            <th>Territory</th>
+            <th>State</th>
+            <th>ZIP Min</th>
+            <th>ZIP Max</th>
+            <th>SCM Owner</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rules.map((row, index) => `
+            <tr>
+              <td><input data-territory-row="${index}" data-territory-field="priority" type="number" min="1" value="${escapeHtml(row.priority || "")}"></td>
+              <td><select data-territory-row="${index}" data-territory-field="industryFamily">${optionHtml(industryOptions, row.industryFamily || output.industryFamily || "Products")}</select></td>
+              <td><select data-territory-row="${index}" data-territory-field="action">${optionHtml(["include", "exclude"], row.action)}</select></td>
+              <td><input data-territory-row="${index}" data-territory-field="territory" type="text" value="${escapeHtml(row.territory || "")}"></td>
+              <td><input data-territory-row="${index}" data-territory-field="state" type="text" maxlength="6" value="${escapeHtml(row.state || "")}"></td>
+              <td><input data-territory-row="${index}" data-territory-field="zipMin" type="text" maxlength="10" value="${escapeHtml(row.zipMin || "")}"></td>
+              <td><input data-territory-row="${index}" data-territory-field="zipMax" type="text" maxlength="10" value="${escapeHtml(row.zipMax || "")}"></td>
+              <td><select data-territory-row="${index}" data-territory-field="scm">${optionHtml(scmOptions, row.scm)}</select></td>
+              <td><input data-territory-row="${index}" data-territory-field="notes" type="text" value="${escapeHtml(row.notes || "")}"></td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+  }
+
   function handleManualEditChange(event) {
+    if (handleProductsScmEditChange(event) || handleProductsTerritoryEditChange(event)) return;
     const input = event.target && event.target.matches("[data-auth-manager][data-auth-field]")
       ? event.target
       : null;
@@ -2014,11 +2136,114 @@
     }
 
     refreshAuthorizedManagersDerivedFields(output);
+    applyManualOutputUpdate(output);
+  }
+
+  function handleProductsScmEditChange(event) {
+    const input = event.target && event.target.matches("[data-products-scm-row][data-products-scm-field]")
+      ? event.target
+      : null;
+    if (!input) return false;
+    const output = currentOutputJson();
+    if (!output || output.schema !== PRODUCTS_SCM_SCHEMA) return true;
+    const row = (output.relationships || [])[Number(input.dataset.productsScmRow)];
+    if (!row) return true;
+    const field = input.dataset.productsScmField;
+    const value = cleanCell(input.value);
+
+    if (field === "requestType") {
+      row.requestType = normalizeAmoDirect(value);
+      row.requestTypeKey = normalizeKey(row.requestType);
+    } else if (field === "salesRegion") {
+      row.salesRegion = value;
+      row.salesRegionKey = normalizeKey(value);
+      input.value = row.salesRegion;
+    } else if (field === "regionalDirector") {
+      row.regionalDirector = cleanPersonName(value);
+      row.regionalDirectorKey = normalizePersonKey(row.regionalDirector);
+      input.value = row.regionalDirector;
+    } else if (field === "scm") {
+      row.scm = cleanPersonName(value);
+      row.scmKey = normalizePersonKey(row.scm);
+    } else if (field === "directors") {
+      row.directors = cleanPersonList(value);
+      row.directorKeys = row.directors.map(normalizePersonKey);
+      input.value = row.directors.join(", ");
+    }
+
+    refreshProductsScmDerivedFields(output);
+    applyManualOutputUpdate(output);
+    return true;
+  }
+
+  function handleProductsTerritoryEditChange(event) {
+    const input = event.target && event.target.matches("[data-territory-row][data-territory-field]")
+      ? event.target
+      : null;
+    if (!input) return false;
+    const output = currentOutputJson();
+    if (!output || output.schema !== PRODUCTS_SCM_TERRITORY_SCHEMA) return true;
+    const row = (output.rules || [])[Number(input.dataset.territoryRow)];
+    if (!row) return true;
+    const field = input.dataset.territoryField;
+    const value = cleanCell(input.value);
+
+    if (field === "priority") {
+      row.priority = positiveInteger(value, row.priority || 100);
+    } else if (field === "industryFamily") {
+      row.industryFamily = value || "Products";
+      row.industryKey = normalizeKey(row.industryFamily);
+    } else if (field === "action") {
+      row.action = normalizeTerritoryAction(value);
+    } else if (field === "territory") {
+      row.territory = value;
+      row.territoryKey = normalizeKey(value);
+      input.value = row.territory;
+    } else if (field === "state") {
+      row.state = normalizeStateCode(value);
+      row.stateKey = row.state;
+      input.value = row.state;
+    } else if (field === "zipMin" || field === "zipMax") {
+      row[field] = normalizeZipValue(value);
+      input.value = row[field];
+    } else if (field === "scm") {
+      row.scm = cleanPersonName(value);
+      row.scmKey = normalizePersonKey(row.scm);
+    } else if (field === "notes") {
+      row.notes = value;
+      input.value = row.notes;
+    }
+
+    refreshProductsTerritoryDerivedFields(output);
+    applyManualOutputUpdate(output);
+    return true;
+  }
+
+  function applyManualOutputUpdate(output) {
+    output.generatedAt = new Date().toISOString();
     state.jsonText = JSON.stringify(output, null, 2);
     elements["json-output"].value = state.jsonText;
     renderOutput(output);
     renderComparison(output);
     setStatus("Manual adjustment applied");
+  }
+
+  function optionHtml(options, selectedValue) {
+    const selectedKey = normalizeKey(selectedValue);
+    const cleanOptions = uniqueSorted((options || []).map(cleanCell).filter(Boolean));
+    if (selectedValue && !cleanOptions.some(option => normalizeKey(option) === selectedKey)) {
+      cleanOptions.unshift(cleanCell(selectedValue));
+    }
+    return cleanOptions.map(option => `<option value="${escapeHtml(option)}"${normalizeKey(option) === selectedKey ? " selected" : ""}>${escapeHtml(option)}</option>`).join("");
+  }
+
+  function managerOptionsForSelect(extraNames = []) {
+    return uniqueSorted(state.referenceAuthorizedManagers.concat(extraNames || []).map(cleanPersonName).filter(Boolean));
+  }
+
+  function industryOptionsForSelect(extraIndustries = []) {
+    const fallback = ["Business Services", "Construction & Energy", "Consumer Services", "EPM", "Health & Hospitality", "Life Science", "Products", "Software", "Tech COE"];
+    return uniqueSorted(state.referenceScIndustryGroups.concat(extraIndustries || []).concat(fallback).map(cleanCell).filter(Boolean));
   }
 
   function parseManualGroupList(value) {
@@ -2063,6 +2288,100 @@
     output.canViewManagers = canViewManagers.map(manager => manager.name);
     output.managerLookup = Object.fromEntries(managers.map(manager => [manager.nameKey, manager]));
     output.groupLookup = groupLookup;
+  }
+
+  function refreshProductsScmDerivedFields(output) {
+    const relationships = (output.relationships || []).map(row => ({
+      ...row,
+      salesRegionKey: normalizeKey(row.salesRegion),
+      requestTypeKey: normalizeKey(row.requestType),
+      regionalDirectorKey: normalizePersonKey(row.regionalDirector),
+      scmKey: normalizePersonKey(row.scm),
+      directors: cleanPersonList((row.directors || []).join(", ")),
+      directorKeys: cleanPersonList((row.directors || []).join(", ")).map(normalizePersonKey)
+    }));
+    output.relationships = relationships;
+
+    const exactLookup = {};
+    const directorLookup = {};
+    const scmLookup = {};
+    const salesRegions = new Set();
+    const requestTypes = new Set();
+    const regionalDirectors = new Set();
+    const scms = new Set();
+    const authorizedDirectors = new Set();
+    relationships.forEach(row => {
+      if (row.salesRegion) salesRegions.add(row.salesRegion);
+      if (row.requestType) requestTypes.add(row.requestType);
+      if (row.regionalDirector) regionalDirectors.add(row.regionalDirector);
+      if (row.scm) scms.add(row.scm);
+      (row.directors || []).forEach(director => authorizedDirectors.add(director));
+      addProductsLookupRecord(exactLookup, productsExactLookupKey(row), row);
+      addProductsLookupRecord(directorLookup, productsDirectorLookupKey(row), row);
+      addProductsLookupRecord(scmLookup, row.scmKey, row);
+    });
+    const duplicateExactKeys = productsLookupGroupsWithMultipleOwners(exactLookup);
+    const ambiguousDirectorKeys = productsLookupGroupsWithMultipleOwners(directorLookup);
+    const scmSummaries = buildProductsScmSummaries(scmLookup);
+
+    output.counts = {
+      ...(output.counts || {}),
+      relationships: relationships.length,
+      scms: scms.size,
+      authorizedDirectors: authorizedDirectors.size,
+      regionalDirectors: regionalDirectors.size,
+      salesRegions: salesRegions.size,
+      requestTypes: requestTypes.size,
+      duplicateExactKeys: duplicateExactKeys.length,
+      ambiguousDirectorKeys: ambiguousDirectorKeys.length
+    };
+    output.scms = scmSummaries;
+    output.authorizedScms = scmSummaries.map(item => item.scm);
+    output.authorizedDirectors = [...authorizedDirectors].sort(alphaSort);
+    output.regionalDirectors = [...regionalDirectors].sort(alphaSort);
+    output.salesRegions = [...salesRegions].sort(alphaSort);
+    output.requestTypes = [...requestTypes].sort(alphaSort);
+    output.lookup = exactLookup;
+    output.directorLookup = directorLookup;
+    output.scmLookup = scmLookup;
+    output.review = {
+      ...(output.review || {}),
+      duplicateExactKeys,
+      ambiguousDirectorKeys
+    };
+  }
+
+  function refreshProductsTerritoryDerivedFields(output) {
+    const rules = (output.rules || []).map(row => ({
+      ...row,
+      industryFamily: row.industryFamily || output.industryFamily || "Products",
+      industryKey: normalizeKey(row.industryFamily || output.industryFamily || "Products"),
+      territoryKey: normalizeKey(row.territory),
+      scmKey: normalizePersonKey(row.scm),
+      stateKey: row.state
+    })).sort((left, right) => left.priority - right.priority || alphaSort(left.territory, right.territory) || alphaSort(left.state, right.state));
+    output.rules = rules;
+
+    const scms = new Set();
+    const territories = new Set();
+    const states = new Set();
+    const industries = new Set();
+    rules.forEach(row => {
+      if (row.scm) scms.add(row.scm);
+      if (row.territory) territories.add(row.territory);
+      if (row.state) states.add(row.state);
+      if (row.industryFamily) industries.add(row.industryFamily);
+    });
+    output.industryFamily = industries.size === 1 ? [...industries][0] : output.industryFamily || "Products";
+    output.counts = {
+      ...(output.counts || {}),
+      rules: rules.length,
+      territories: territories.size,
+      scms: scms.size,
+      states: states.size,
+      industryGroups: industries.size
+    };
+    output.territories = buildProductsScmTerritorySummaries(rules);
   }
 
   function renderComparison(output) {
