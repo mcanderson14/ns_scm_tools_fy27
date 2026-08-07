@@ -333,6 +333,37 @@ small {
   font-weight: 700;
 }
 
+.export-guidance {
+  margin-top: 10px;
+}
+
+.guidance-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  border: 1px solid var(--slate-50);
+  border-left: 4px solid var(--ns-yellow-160);
+  border-radius: 6px;
+  padding: 10px;
+  background: var(--ns-ocean-soft);
+  color: var(--slate-100);
+}
+
+.guidance-card strong {
+  color: var(--slate-150);
+}
+
+.guidance-card span {
+  flex: 1 1 360px;
+}
+
+.guidance-card a {
+  flex: 0 0 auto;
+  color: var(--ns-ocean-150);
+  font-weight: 700;
+}
+
 .settings-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-top: 12px;

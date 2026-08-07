@@ -12,7 +12,7 @@
       <div>
         <p class="eyebrow">NetSuite SCM Tools</p>
         <h1>FY27 Queue Mapping JSON Maker</h1>
-        <div id="app-version" class="app-version">Version 27.0.15</div>
+        <div id="app-version" class="app-version">Version 27.0.16</div>
       </div>
       <span id="status-pill" class="status-pill">Waiting for source</span>
     </header>
@@ -81,11 +81,12 @@
 
       <details class="advanced rebuild-section">
         <summary>Rebuild from spreadsheet</summary>
+        <div id="export-guidance" class="export-guidance"></div>
         <div class="input-grid">
           <label class="file-drop" for="workbook-file">
-            <span>Upload Excel File</span>
-            <strong id="file-name">Choose .xlsx file</strong>
-            <input id="workbook-file" type="file" accept=".xlsx,.xls,.xlsm,.xlsb">
+            <span>Upload Export File</span>
+            <strong id="file-name">Choose .xlsx or .csv file</strong>
+            <input id="workbook-file" type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.csv,text/csv">
           </label>
 
           <label class="url-box">

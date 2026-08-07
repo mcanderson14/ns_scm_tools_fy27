@@ -6,7 +6,7 @@
   const PRODUCTS_SCM_TERRITORY_SCHEMA = "ns-scm-tools.products-scm-territories.v1";
   const AUTHORIZED_MANAGERS_SCHEMA = "ns-scm-tools.authorized-managers.v1";
   const GTM_SC_INDUSTRY_SCHEMA = "ns-scm-tools.gtm-sc-industry.v1";
-  const TOOL_VERSION = "27.0.15";
+  const TOOL_VERSION = "27.0.16";
   const TOOL_NAME = "FY27 Queue Mapping JSON Maker";
   const CONFIG_STORAGE_KEY = "ns-scm-tools-region-map-industry-config-v1";
   const EMOJI_CONFIG_STORAGE_KEY = "ns-scm-tools-emoji-config-v1";
@@ -209,6 +209,7 @@
       "load-json",
       "json-file",
       "json-file-name",
+      "export-guidance",
       "region-parsing-settings",
       "industry-row",
       "mode-row",
@@ -277,6 +278,10 @@
     elements["file-name"].textContent = file.name;
     state.workbookName = file.name;
     state.outputFileName = outputFileNameForMode();
+    if (isCsvFile(file.name)) {
+      await parseWorkbookText(await file.text());
+      return;
+    }
     await parseArrayBuffer(await file.arrayBuffer());
   }
 
@@ -308,6 +313,7 @@
       elements["json-url"].value = GITHUB_JSON_URLS[state.mappingType] || "";
     }
     renderMappingTypeLinks();
+    renderExportGuidance();
     if (elements["region-parsing-settings"]) {
       elements["region-parsing-settings"].hidden = usesFlatWorkbook;
     }
@@ -331,6 +337,27 @@
       links.push(`<a href="${escapeHtml(AUTHORIZED_MANAGERS_SEARCH_URL)}" target="_blank" rel="noopener noreferrer">Open NetSuite saved search 1319617</a>`);
     }
     target.innerHTML = links.join("");
+  }
+
+  function renderExportGuidance() {
+    const target = elements["export-guidance"];
+    if (!target) return;
+    if (state.mappingType === AUTHORIZED_MANAGERS_MAPPING_TYPE) {
+      target.innerHTML = `
+        <div class="guidance-card">
+          <strong>Authorized Managers NetSuite refresh</strong>
+          <span>Open saved search 1319617, export CSV or Excel, then upload that export here to regenerate Authorized_Managers.json.</span>
+          <a href="${escapeHtml(AUTHORIZED_MANAGERS_SEARCH_URL)}" target="_blank" rel="noopener noreferrer">Open saved search 1319617</a>
+        </div>
+      `;
+      return;
+    }
+    target.innerHTML = `
+      <div class="guidance-card">
+        <strong>Spreadsheet rebuild</strong>
+        <span>Upload the current source spreadsheet or CSV export for this mapping tab to regenerate the JSON.</span>
+      </div>
+    `;
   }
 
   async function handleJsonUrlLoad() {
@@ -473,10 +500,13 @@
     try {
       const response = await fetch(url, { credentials: "include" });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const buffer = await response.arrayBuffer();
       state.workbookName = fileNameFromUrl(url) || "linked-workbook.xlsx";
       state.outputFileName = outputFileNameForMode();
-      await parseArrayBuffer(buffer);
+      if (isCsvFile(state.workbookName)) {
+        await parseWorkbookText(await response.text());
+        return;
+      }
+      await parseArrayBuffer(await response.arrayBuffer());
     } catch (error) {
       setStatus("URL load blocked. Use manual upload.", true);
       console.warn("Workbook URL load failed", error);
@@ -494,6 +524,21 @@
       reprocessWorkbook();
     } catch (error) {
       setStatus("Could not read Excel workbook", true);
+      console.error(error);
+    }
+  }
+
+  async function parseWorkbookText(text) {
+    if (!window.XLSX) {
+      setStatus("XLSX library did not load", true);
+      return;
+    }
+
+    try {
+      state.workbook = window.XLSX.read(text, { type: "string" });
+      reprocessWorkbook();
+    } catch (error) {
+      setStatus("Could not read CSV export", true);
       console.error(error);
     }
   }
@@ -2236,6 +2281,10 @@
     } catch (error) {
       return "";
     }
+  }
+
+  function isCsvFile(fileName) {
+    return /\.csv(?:$|\?)/i.test(String(fileName || ""));
   }
 
   function positiveInteger(value, fallback) {
