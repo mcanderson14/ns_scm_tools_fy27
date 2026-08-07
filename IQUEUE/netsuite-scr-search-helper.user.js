@@ -1,7 +1,9 @@
 // ==UserScript==
+// SPDX-License-Identifier: LicenseRef-Oracle-Internal-Use-Only
+// Copyright (c) 2026. Internal use only. No third-party license granted.
 // @name         IQUEUE
 // @namespace    ns-scm-tools-fy27
-// @version      27.0.83
+// @version      27.0.85
 // @description  Adds the IQUEUE SCR portlet to NetSuite SCR queue saved searches with spreadsheet-based SC staffing region overrides.
 // @author       Michael Anderson
 // @match        https://nlcorp.app.netsuite.com/app/common/search/searchresults.nl*
@@ -44,7 +46,7 @@
   const ROSTER_SALES_REGION_ID = "4";
   const HELPER_ID = "scr-search-helper-portlet";
   const HELPER_STYLE_ID = "scr-search-helper-portlet-styles";
-  const HELPER_VERSION = "27.0.83";
+  const HELPER_VERSION = "27.0.85";
   const HELPER_RESTORE_OVERLAY_ID = "scr-helper-restore-overlay";
   const HELPER_RESTORE_STYLE_ID = "scr-helper-restore-overlay-styles";
   const SCRIPT_UPDATE_URL = "https://github.com/mcanderson14/ns_scm_tools_fy27/raw/refs/heads/main/IQUEUE/netsuite-scr-search-helper.user.js";
@@ -10228,6 +10230,16 @@ Health & Hospitality	DIRECT	NL	West	West
     return totals.length ? Math.max(...totals) : 0;
   }
 
+  function searchPageStillLoading(root = document) {
+    const text = normalizeSpaces(root.body ? root.body.textContent : "");
+    if (!text) return true;
+    if (/please\s+wait|loading|processing|retrieving|search\s+is\s+running/i.test(text)) return true;
+    if (/no\s+search\s+results|no\s+results\s+found/i.test(text)) return false;
+    const total = findSearchResultTotal(root);
+    if (total > 0) return false;
+    return Boolean(findResultTable(root));
+  }
+
   function rowIdentity(row) {
     if (row.internalId) return `id:${row.internalId}`;
     if (row.editUrl) return `url:${row.editUrl}`;
@@ -10315,7 +10327,31 @@ Health & Hospitality	DIRECT	NL	West	West
     }
 
     const currentRows = parseSearchResults(document, "scr-row");
-    searchResultTotal = Math.max(findSearchResultTotal(document), currentRows.length);
+    const currentTotal = Math.max(findSearchResultTotal(document), currentRows.length);
+    if (!currentRows.length && retryCount < 16 && (searchPageStillLoading(document) || searchRows.length || currentTotal > 0)) {
+      const message = searchRows.length
+        ? `Waiting for NetSuite search results to finish refreshing; preserving ${searchRows.length} loaded SCRs.`
+        : `Waiting for NetSuite search rows (${SAVED_SEARCH_ID}).`;
+      if (status) status.textContent = message;
+      if (!preserveRendered || !searchRows.length) renderStartupSplash(message);
+      window.setTimeout(() => {
+        if (sequence === refreshSequence) refreshRows({ ...options, retryCount: retryCount + 1, preserveRendered: true });
+      }, 350);
+      return;
+    }
+    if (!currentRows.length && searchRows.length) {
+      const message = `NetSuite returned no parseable rows; preserving ${searchRows.length} loaded SCRs. Refresh again if the saved search is truly empty.`;
+      if (status) status.textContent = message;
+      renderResults();
+      return;
+    }
+    if (!currentRows.length && currentTotal > 0) {
+      const message = `NetSuite reports ${currentTotal} results, but IQUEUE could not parse the rows yet. Refresh the search if this persists.`;
+      if (status) status.textContent = message;
+      renderStartupSplash(message);
+      return;
+    }
+    searchResultTotal = currentTotal;
     searchRows = currentRows;
     updateSalesRegionFilterOptions();
     updateGtmIndustryFilterOptions();
