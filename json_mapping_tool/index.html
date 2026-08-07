@@ -12,7 +12,7 @@
       <div>
         <p class="eyebrow">NetSuite SCM Tools</p>
         <h1>FY27 Queue Mapping JSON Maker</h1>
-        <div id="app-version" class="app-version">Version 27.0.14</div>
+        <div id="app-version" class="app-version">Version 27.0.15</div>
       </div>
       <span id="status-pill" class="status-pill">Waiting for source</span>
     </header>
@@ -24,69 +24,52 @@
         <div id="mapping-type-links" class="mapping-type-links"></div>
       </div>
 
-      <div class="mode-grid" role="radiogroup" aria-label="Mapping type">
+      <div class="mode-tabs" role="radiogroup" aria-label="Mapping type">
         <label class="mode-card">
           <input type="radio" name="mapping-type" value="region" checked>
           <span>
-            <strong>SC Industry State Region Mapping</strong>
-            <small>Generates the queue staffing-region JSON used by IQUEUE.</small>
+            <strong>State Regions</strong>
+            <small>SC Industry by state</small>
           </span>
         </label>
         <label class="mode-card">
           <input type="radio" name="mapping-type" value="productsScm">
           <span>
             <strong>SCM Relationships</strong>
-            <small>Generates the SCM owner mapping for regional relationships.</small>
+            <small>RD/RSM ownership</small>
           </span>
         </label>
         <label class="mode-card">
           <input type="radio" name="mapping-type" value="productsScmTerritories">
           <span>
-            <strong>Products SCM Territories</strong>
-            <small>Generates Products SCM owner rules by state and ZIP range.</small>
+            <strong>Products Territories</strong>
+            <small>State/ZIP ownership</small>
           </span>
         </label>
         <label class="mode-card">
           <input type="radio" name="mapping-type" value="authorizedManagers">
           <span>
             <strong>Authorized Managers</strong>
-            <small>Generates the SCM owner/viewer list from saved search 1319617.</small>
+            <small>Can view / can own</small>
           </span>
         </label>
         <label class="mode-card">
           <input type="radio" name="mapping-type" value="gtmScIndustry">
           <span>
             <strong>GTM to SC Industry</strong>
-            <small>Generates the FY27 GTM Industry/Subgroup to SC Industry Group mapping.</small>
+            <small>FY27 GTM mapping</small>
           </span>
-        </label>
-      </div>
-
-      <div class="input-grid">
-        <label class="file-drop" for="workbook-file">
-          <span>Upload Excel File</span>
-          <strong id="file-name">Choose .xlsx file</strong>
-          <input id="workbook-file" type="file" accept=".xlsx,.xls,.xlsm,.xlsb">
-        </label>
-
-        <label class="url-box">
-          <span>Workbook URL</span>
-          <div class="url-row">
-            <input id="sharepoint-url" type="url" placeholder="Paste a workbook link">
-            <button id="load-url" type="button">Try URL</button>
-          </div>
-          <small>Works only when the URL allows browser download access from this page. Manual upload is the reliable fallback.</small>
         </label>
       </div>
 
       <div class="json-import-grid">
         <label class="url-box">
-          <span>Existing JSON</span>
+          <span>GitHub JSON Source</span>
           <div class="url-row">
             <input id="json-url" type="url" placeholder="Current GitHub JSON URL">
-            <button id="load-json" type="button">Load GitHub JSON</button>
+            <button id="load-json" type="button">Reload JSON</button>
           </div>
-          <small>Loads the current GitHub mapping so you can edit the JSON and download the replacement file.</small>
+          <small>The selected mapping tab loads from the GitHub mappings folder automatically. Reload uses this exact URL.</small>
         </label>
 
         <label class="file-drop json-file-drop" for="json-file">
@@ -96,8 +79,28 @@
         </label>
       </div>
 
+      <details class="advanced rebuild-section">
+        <summary>Rebuild from spreadsheet</summary>
+        <div class="input-grid">
+          <label class="file-drop" for="workbook-file">
+            <span>Upload Excel File</span>
+            <strong id="file-name">Choose .xlsx file</strong>
+            <input id="workbook-file" type="file" accept=".xlsx,.xls,.xlsm,.xlsb">
+          </label>
+
+          <label class="url-box">
+            <span>Workbook URL</span>
+            <div class="url-row">
+              <input id="sharepoint-url" type="url" placeholder="Paste a workbook link">
+              <button id="load-url" type="button">Try URL</button>
+            </div>
+            <small>Works only when the URL allows browser download access from this page. Manual upload is the reliable fallback.</small>
+          </label>
+        </div>
+      </details>
+
       <details id="region-parsing-settings" class="advanced">
-        <summary>Parsing settings</summary>
+        <summary>Region spreadsheet parsing settings</summary>
         <div class="settings-grid">
           <label>
             <span>Industry header row</span>

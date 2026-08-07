@@ -6,7 +6,7 @@
   const PRODUCTS_SCM_TERRITORY_SCHEMA = "ns-scm-tools.products-scm-territories.v1";
   const AUTHORIZED_MANAGERS_SCHEMA = "ns-scm-tools.authorized-managers.v1";
   const GTM_SC_INDUSTRY_SCHEMA = "ns-scm-tools.gtm-sc-industry.v1";
-  const TOOL_VERSION = "27.0.14";
+  const TOOL_VERSION = "27.0.15";
   const TOOL_NAME = "FY27 Queue Mapping JSON Maker";
   const CONFIG_STORAGE_KEY = "ns-scm-tools-region-map-industry-config-v1";
   const EMOJI_CONFIG_STORAGE_KEY = "ns-scm-tools-emoji-config-v1";
@@ -190,7 +190,8 @@
     industryConfig: loadIndustryConfig(),
     emojiConfig: loadEmojiConfig(),
     jsonText: "",
-    outputFileName: REGION_OUTPUT_FILE_NAME
+    outputFileName: REGION_OUTPUT_FILE_NAME,
+    jsonLoadToken: 0
   };
 
   const elements = {};
@@ -267,6 +268,7 @@
     elements["download-json"].addEventListener("click", downloadJson);
     elements["json-output"].addEventListener("input", handleJsonOutputEdit);
     updateMappingTypeUi();
+    loadCurrentGitHubJson();
   });
 
   async function handleFileInput(event) {
@@ -283,7 +285,7 @@
     state.mappingType = event.target.value || REGION_MAPPING_TYPE;
     state.outputFileName = outputFileNameForMode();
     updateMappingTypeUi();
-    reprocessWorkbook();
+    loadCurrentGitHubJson();
   }
 
   function outputFileNameForMode() {
@@ -340,17 +342,26 @@
     }
 
     setStatus("Loading existing JSON...");
+    const loadToken = ++state.jsonLoadToken;
     try {
       if (elements["json-url"].value !== url) elements["json-url"].value = url;
       const response = await fetch(url, { cache: "no-store" });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const text = await response.text();
       const output = parseFetchedJson(text, url);
+      if (loadToken !== state.jsonLoadToken) return;
       applyImportedJson(output, fileNameFromUrl(url) || outputFileNameForMode(), "GitHub JSON");
     } catch (error) {
+      if (loadToken !== state.jsonLoadToken) return;
       setStatus(error.message ? `JSON load failed: ${error.message}` : "JSON load failed", true);
       console.warn("JSON URL load failed", error);
     }
+  }
+
+  function loadCurrentGitHubJson() {
+    if (!elements["json-url"]) return;
+    elements["json-url"].value = GITHUB_JSON_URLS[state.mappingType] || "";
+    handleJsonUrlLoad();
   }
 
   async function handleJsonFileInput(event) {

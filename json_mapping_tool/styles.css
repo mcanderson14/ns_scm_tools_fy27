@@ -168,7 +168,7 @@ h3 {
 }
 
 .input-grid,
-.mode-grid,
+.mode-tabs,
 .settings-grid,
 .stats-grid,
 .preview-grid {
@@ -176,34 +176,42 @@ h3 {
   gap: 12px;
 }
 
-.mode-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.mode-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
   padding: 0 16px 16px;
 }
 
 .mode-card {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 10px;
-  align-items: start;
+  display: block;
   border: 1px solid var(--slate-50);
-  border-radius: 6px;
-  padding: 12px;
+  border-right: 0;
+  padding: 9px 12px;
   background: var(--white);
   color: var(--slate-150);
   cursor: pointer;
 }
 
+.mode-card:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
+.mode-card:last-child {
+  border-right: 1px solid var(--slate-50);
+  border-radius: 0 6px 6px 0;
+}
+
 .mode-card:has(input:checked) {
   border-color: var(--ns-ocean-120);
   background: var(--ns-ocean-soft);
-  box-shadow: inset 0 0 0 1px var(--ns-ocean-120);
+  box-shadow: inset 0 -3px 0 var(--ns-ocean-120);
 }
 
 .mode-card input {
-  width: auto;
-  min-height: 0;
-  margin-top: 2px;
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .mode-card strong,
@@ -212,7 +220,13 @@ h3 {
 }
 
 .mode-card strong {
-  margin-bottom: 4px;
+  margin-bottom: 2px;
+  white-space: nowrap;
+}
+
+.mode-card small {
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .input-grid,
@@ -455,11 +469,22 @@ th {
 
   .input-grid,
   .json-import-grid,
-  .mode-grid,
+  .mode-tabs,
   .settings-grid,
   .stats-grid,
   .preview-grid {
     grid-template-columns: 1fr;
+  }
+
+  .mode-tabs {
+    display: grid;
+  }
+
+  .mode-card,
+  .mode-card:first-child,
+  .mode-card:last-child {
+    border: 1px solid var(--slate-50);
+    border-radius: 6px;
   }
 
   .actions {
